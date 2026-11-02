@@ -5,8 +5,8 @@ import {PLATFORM_VERSION_RETRY_MS} from '../../src/main/platform/constants'
 
 type Resolve = typeof import('../../src/main/platform/operations/platformVersion').platformVersion
 
-// The resolver caches per network for the life of the process, so each case
-// loads a fresh copy of it.
+// The resolver caches per SDK for the life of the process, so each case loads a
+// fresh copy of it.
 let platformVersion: Resolve
 
 beforeEach(async () => {
@@ -34,21 +34,30 @@ describe('platformVersion', () => {
   // Offline, every keystroke's quote would otherwise wait on a timeout first.
   it('keeps a failed lookup for the retry window, then asks again', async () => {
     const lookup = vi.fn(async (): Promise<Array<{protocolVersion: number}>> => { throw new Error('offline') })
+    const ctx = context(lookup)
     const now = vi.spyOn(Date, 'now').mockReturnValue(0)
-    expect(await platformVersion(context(lookup))).toBe(LATEST_PLATFORM_VERSION)
-    await platformVersion(context(lookup))
+    expect(await platformVersion(ctx)).toBe(LATEST_PLATFORM_VERSION)
+    await platformVersion(ctx)
     expect(lookup).toHaveBeenCalledTimes(1)
 
     now.mockReturnValue(PLATFORM_VERSION_RETRY_MS)
-    await platformVersion(context(lookup))
+    await platformVersion(ctx)
     expect(lookup).toHaveBeenCalledTimes(2)
     now.mockRestore()
   })
 
   it('asks the network once per window, sharing a lookup in flight', async () => {
     const lookup = vi.fn(async () => [{protocolVersion: 13}])
-    await Promise.all([platformVersion(context(lookup)), platformVersion(context(lookup))])
-    await platformVersion(context(lookup))
+    const ctx = context(lookup)
+    await Promise.all([platformVersion(ctx), platformVersion(ctx)])
+    await platformVersion(ctx)
     expect(lookup).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks again once the pool is replaced', async () => {
+    const lookup = vi.fn(async () => [{protocolVersion: 13}])
+    await platformVersion(context(lookup))
+    await platformVersion(context(lookup))
+    expect(lookup).toHaveBeenCalledTimes(2)
   })
 })

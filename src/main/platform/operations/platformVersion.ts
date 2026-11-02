@@ -1,24 +1,25 @@
 import {PlatformVersionWASM} from 'pshenmic-dpp'
+import {DashPlatformSDK} from 'dash-platform-sdk'
 import {LATEST_PLATFORM_VERSION} from 'dash-platform-sdk/src/constants.js'
 import {Logger} from '../../src/utils/logger'
-import {Network} from '../../src/types/Network'
 import {PLATFORM_VERSION_RETRY_MS, PLATFORM_VERSION_TTL_MS} from '../constants'
 import {PlatformVersionLookup, ResolvedPlatformVersion} from '../types/service'
 import {OperationContext} from './types'
 
 const log = new Logger('platform')
 
-const resolved = new Map<Network, ResolvedPlatformVersion>()
+// Keyed by SDK: the registry replaces it when the pool moves to another protocol version.
+const resolved = new WeakMap<DashPlatformSDK, ResolvedPlatformVersion>()
 
-// Fees are versioned, and consensus charges at the version the network runs,
-// not the newest one this dpp build knows.
+// Fees and document ids are versioned, and consensus checks them at the version
+// the network runs, not the newest one this dpp build knows.
 export function platformVersion(ctx: OperationContext): Promise<PlatformVersionWASM> {
-  const cached = resolved.get(ctx.network)
+  const cached = resolved.get(ctx.sdk)
   if (cached != null && Date.now() < cached.expiresAt) return cached.version
 
   const lookup = lookUp(ctx)
   const entry: ResolvedPlatformVersion = {version: lookup.then(({version}) => version), expiresAt: Infinity}
-  resolved.set(ctx.network, entry)
+  resolved.set(ctx.sdk, entry)
   void lookup.then(({answered}) => {
     entry.expiresAt = Date.now() + (answered ? PLATFORM_VERSION_TTL_MS : PLATFORM_VERSION_RETRY_MS)
   })

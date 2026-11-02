@@ -5,6 +5,7 @@ import {PlatformOperations} from '../../types/messages'
 import {OperationContext, OperationError} from '../types'
 import {broadcast} from '../broadcast'
 import {dashPayContactRequestFee} from '../fee'
+import {platformVersion} from '../platformVersion'
 import {DASHPAY_CONTRACT_ID} from '../../../src/constants/credits'
 import {accountReference, dashPayAccountPath, dashPaySharedKey, deriveDashPayContactKey, encryptDashPayContactKey} from '../../../src/utils/dashPayKeys'
 import {applySignature, signingKey} from '../identity/signingKey'
@@ -48,7 +49,7 @@ export async function dashPayContactRequestSend(payload: Payload, ctx: Operation
     senderKeyIndex: encryption.publicKey.keyId,
     recipientKeyIndex: recipientKey.keyId,
     accountReference: accountReference(encryption.privateKey.bytes(), contactKey),
-  }, identifier, nonce)
+  }, identifier, nonce, undefined, await platformVersion(ctx))
   ctx.progress('signing', 0, 0)
   const st = sdk.documents.createStateTransition(document, 'create', {identityContractNonce: nonce})
   applySignature(st, auth.privateKey, auth.publicKey)

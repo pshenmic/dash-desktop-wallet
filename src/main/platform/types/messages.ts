@@ -82,6 +82,7 @@ export interface DapiUrlStatus {
   proTxHash: string | null
   pingMs: number | null
   driveVersion: string | null
+  protocolVersion: number | null
   blockHeight: bigint | null
   error: string | null
 }

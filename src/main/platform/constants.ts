@@ -16,6 +16,12 @@ export const DAPI_POOL_READY = 15
 // than waiting out the hour until p2p fetches the next one.
 export const DAPI_REPROBE_MS = 30_000
 
+export const DAPI_WATCHDOG_MS = 60_000
+
+// The SDK's own seed discovery otherwise admits only nodes on its newest
+// protocol version, which is none of them until the network activates it.
+export const SEED_MIN_PROTOCOL_VERSION = 1
+
 // Platform commits an empty block every 3 minutes, so a node whose last block is
 // older than this has a stalled chain.
 export const DAPI_MAX_BLOCK_AGE_MS = 10 * 60_000

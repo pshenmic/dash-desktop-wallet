@@ -4,12 +4,13 @@ import {Network} from '../../src/types/Network'
 import {DAPI_MAX_BLOCK_AGE_MS, DAPI_POOL_READY, DAPI_PROBE_BATCH, DAPI_STATUS_TIMEOUT_MS} from '../constants'
 import {DapiUrlStatus} from '../types/messages'
 import {Logger} from '../../src/utils/logger'
+import {majorityVersionNodes} from '../../src/utils/majorityVersionNodes'
 
 const log = new Logger('platform')
 
-// Every candidate that answers; `onReady` gets the first DAPI_POOL_READY so the
-// SDK does not wait out the slowest probes.
-export async function reachableDapiUrls(candidates: string[], network: Network, onReady: (reachable: string[]) => void): Promise<string[]> {
+// Every candidate that answers on the protocol version most of them run; `onReady`
+// gets the first DAPI_POOL_READY so the SDK does not wait out the slowest probes.
+export async function reachableDapiUrls(candidates: string[], network: Network, onReady?: (reachable: string[]) => void): Promise<string[]> {
   const shuffled = [...candidates]
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
@@ -18,16 +19,18 @@ export async function reachableDapiUrls(candidates: string[], network: Network, 
     shuffled[j] = swap
   }
   const found: string[] = []
+  const byVersion = new Map<number, string[]>()
   for (let start = 0; start < shuffled.length; start += DAPI_PROBE_BATCH) {
     await Promise.all(shuffled.slice(start, start + DAPI_PROBE_BATCH).map(async dapiUrl => {
-      const {error, pingMs} = await probeDapiUrl(dapiUrl, network)
-      log.debug(`probe ${dapiUrl}: ${error ?? `${pingMs}ms`}`)
-      if (error != null) return
+      const {error, pingMs, protocolVersion} = await probeDapiUrl(dapiUrl, network)
+      log.debug(`probe ${dapiUrl}: ${error ?? `${pingMs}ms, protocol ${protocolVersion}`}`)
+      if (error != null || protocolVersion == null) return
       found.push(dapiUrl)
-      if (found.length === DAPI_POOL_READY) onReady([...found])
+      byVersion.set(protocolVersion, [...byVersion.get(protocolVersion) ?? [], dapiUrl])
+      if (found.length === DAPI_POOL_READY) onReady?.([...found])
     }))
   }
-  return found
+  return majorityVersionNodes(byVersion)
 }
 
 export function probeActiveDapiUrls(dapiUrls: string[], network: Network): Promise<DapiUrlStatus[]> {
@@ -53,6 +56,7 @@ export async function probeDapiUrl(dapiUrl: string, network: Network): Promise<D
       proTxHash: nodeStatus.node?.proTxHash ?? null,
       pingMs: Math.round(performance.now() - started),
       driveVersion: nodeStatus.version?.software?.drive ?? null,
+      protocolVersion: nodeStatus.version?.protocol?.drive?.current ?? null,
       blockHeight: nodeStatus.chain != null ? BigInt(nodeStatus.chain.latestBlockHeight) : null,
       error: issue,
     }
@@ -60,7 +64,7 @@ export async function probeDapiUrl(dapiUrl: string, network: Network): Promise<D
     const error = abortController.signal.aborted
       ? `no getStatus answer within ${DAPI_STATUS_TIMEOUT_MS}ms`
       : err instanceof Error ? err.message : String(err)
-    return {dapiUrl, proTxHash: null, pingMs: null, driveVersion: null, blockHeight: null, error}
+    return {dapiUrl, proTxHash: null, pingMs: null, driveVersion: null, protocolVersion: null, blockHeight: null, error}
   } finally {
     clearTimeout(timer)
   }

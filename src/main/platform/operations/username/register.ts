@@ -3,6 +3,7 @@ import {OperationContext, OperationError} from '../types'
 import {CONTEST_JOIN_WINDOW_MS, DPNS_PARENT_DOMAIN, VOTE_POLL_DURATION_MS} from '../../constants'
 import {usernameRegisterFee} from '../fee'
 import {signingKey} from '../identity/signingKey'
+import {platformVersion} from '../platformVersion'
 import {usernameStatus} from './status'
 import {Logger} from '../../../src/utils/logger'
 
@@ -39,6 +40,6 @@ export async function usernameRegister(payload: Payload, ctx: OperationContext):
 
   const {privateKey} = await signingKey(sdk, seed, network, identifier, identityIndex, 'AUTHENTICATION', 'HIGH')
   ctx.progress('broadcasting', 0, 0)
-  await sdk.names.registerName(name, identifier, privateKey)
+  await sdk.names.registerName(name, identifier, privateKey, undefined, await platformVersion(ctx))
   return usernameStatus({identifier, label}, ctx)
 }

@@ -3,7 +3,7 @@ import {ShieldedBuilderWASM} from 'pshenmic-dpp'
 import {Network} from '../src/types/Network'
 import {Logger} from '../src/utils/logger'
 
-import {DAPI_POOL_READY, DAPI_REPROBE_MS, NETWORKS} from './constants'
+import {DAPI_POOL_READY, DAPI_REPROBE_MS, DAPI_WATCHDOG_MS, NETWORKS, SEED_MIN_PROTOCOL_VERSION} from './constants'
 import {reachableDapiUrls} from './operations/dapi'
 import {P2PQuorumKeyProvider} from './P2PQuorumKeyProvider'
 import {Dapi, PlatformEvent} from './types/messages'
@@ -29,8 +29,11 @@ export class SdkRegistry implements SdkSource {
   private builder: ShieldedBuilderWASM | null = null
   private warming: Promise<void> | null = null
   private dapi: Dapi = {mode: 'dynamic', mainnet: [], testnet: []}
+  private watching = false
 
-  constructor(private readonly emit: (event: PlatformEvent) => void) {}
+  constructor(private readonly emit: (event: PlatformEvent) => void) {
+    setInterval(() => void this.watch(), DAPI_WATCHDOG_MS).unref?.()
+  }
 
   setDapi(dapi: Dapi): void {
     this.dapi = dapi
@@ -49,7 +52,7 @@ export class SdkRegistry implements SdkSource {
     const dapiUrls = this.dapi.mode === 'static' && own.length > 0 ? own : pinned === null ? null : pinned ?? []
     const sdk = new DashPlatformSDK({
       network,
-      grpc: {dapiUrl: dapiUrls == null ? undefined : [...dapiUrls]},
+      grpc: {dapiUrl: dapiUrls == null ? undefined : [...dapiUrls], minProtocolVersion: SEED_MIN_PROTOCOL_VERSION},
       quorumKeyProvider: this.quorumKeyProviders.get(network),
     })
     // init assigns the builder before its first await; the warmed builder's
@@ -99,16 +102,33 @@ export class SdkRegistry implements SdkSource {
   // Pins the first DAPI_POOL_READY to answer, then every one that did.
   private async probe(network: Network, dapiUrls: string[]): Promise<string[]> {
     log.info(`${network}: probing ${dapiUrls.length} evonode(s)`)
-    const started = Date.now()
-    const pin = (reachable: string[]): void => {
-      log.info(`${network}: pinned to ${reachable.length} of ${dapiUrls.length} evonode(s) in ${Date.now() - started}ms: ${reachable.join(', ')}`)
-      this.pinnedDapiUrls.set(network, reachable)
-      this.sdks.delete(network)
-      this.emit({type: 'pinnedDapiUrls', network, dapiUrls: reachable})
-    }
-    const reachable = await reachableDapiUrls(dapiUrls, network, pin)
-    if (reachable.length > 0 && reachable.length !== DAPI_POOL_READY) pin(reachable)
+    const reachable = await reachableDapiUrls(dapiUrls, network, urls => this.pin(network, urls))
+    if (reachable.length > 0 && reachable.length !== DAPI_POOL_READY) this.pin(network, reachable)
     return reachable
+  }
+
+  // A protocol upgrade activates at an epoch boundary; re-pinning when a pinned
+  // node leaves the majority version follows it.
+  private async watch(): Promise<void> {
+    if (this.watching) return
+    this.watching = true
+    try {
+      for (const [network, dapiUrls] of this.latestDapiUrls) {
+        const reachable = await reachableDapiUrls(dapiUrls, network)
+        const pinned = this.pinnedDapiUrls.get(network)
+        if (reachable.length === 0 || this.latestDapiUrls.get(network) !== dapiUrls || pinned?.every(url => reachable.includes(url))) continue
+        this.pin(network, reachable)
+      }
+    } finally {
+      this.watching = false
+    }
+  }
+
+  private pin(network: Network, reachable: string[]): void {
+    log.info(`${network}: pinned to ${reachable.length} evonode(s): ${reachable.join(', ')}`)
+    this.pinnedDapiUrls.set(network, reachable)
+    this.sdks.delete(network)
+    this.emit({type: 'pinnedDapiUrls', network, dapiUrls: reachable})
   }
 
   activeDapiUrls(network: Network): string[] {
