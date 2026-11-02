@@ -16,7 +16,11 @@ export const DAPI_POOL_READY = 15
 // than waiting out the hour until p2p fetches the next one.
 export const DAPI_REPROBE_MS = 30_000
 
-export const DAPI_WATCHDOG_MS = 60_000
+// Mainnet epoch lengths drift by minutes and the first block of an epoch can
+// lag its start by up to 3 minutes, so the boundary is polled this far either side.
+export const EPOCH_BOUNDARY_GAP_MS = 10 * 60_000
+export const EPOCH_BOUNDARY_POLL_MS = 60_000
+export const VERSION_CHECK_MS = 30 * 60_000
 
 // The SDK's own seed discovery otherwise admits only nodes on its newest
 // protocol version, which is none of them until the network activates it.
@@ -82,11 +86,6 @@ export const FUNDING_REMAINDER_STAND_IN = 255
 // Drive caps a proved query at max_returned_elements, and rejects the request
 // rather than truncating it. Versioned, so it can move under a protocol bump.
 export const PROVED_QUERY_LIMIT = 100
-
-// A protocol upgrade activates at an epoch boundary, so the version fees are
-// priced at can be this stale for a while after one.
-export const PLATFORM_VERSION_TTL_MS = 10 * 60_000
-export const PLATFORM_VERSION_RETRY_MS = 30_000
 
 // Prover-lane work saturates the single thread this process has, so serialising
 // it costs nothing and guarantees a spend sees what the sync before it

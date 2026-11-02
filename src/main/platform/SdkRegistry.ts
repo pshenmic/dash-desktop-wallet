@@ -1,11 +1,19 @@
 import {DashPlatformSDK, GRPCConnectionPool} from 'dash-platform-sdk'
 import {LATEST_PLATFORM_VERSION} from 'dash-platform-sdk/src/constants.js'
-import {ShieldedBuilderWASM} from 'pshenmic-dpp'
+import {PlatformVersionWASM, ShieldedBuilderWASM} from 'pshenmic-dpp'
 import {Network} from '../src/types/Network'
 import {Logger} from '../src/utils/logger'
-import {majorityVersion} from '../src/utils/majorityVersion'
+import {versionCheckDelay} from '../src/utils/versionCheckDelay'
 
-import {DAPI_POOL_READY, DAPI_REPROBE_MS, DAPI_WATCHDOG_MS, NETWORKS, SEED_MIN_PROTOCOL_VERSION} from './constants'
+import {
+  DAPI_POOL_READY,
+  DAPI_REPROBE_MS,
+  EPOCH_BOUNDARY_GAP_MS,
+  EPOCH_BOUNDARY_POLL_MS,
+  NETWORKS,
+  SEED_MIN_PROTOCOL_VERSION,
+  VERSION_CHECK_MS,
+} from './constants'
 import {reachableDapiUrls} from './operations/dapi'
 import {P2PQuorumKeyProvider} from './P2PQuorumKeyProvider'
 import {Dapi, PlatformEvent} from './types/messages'
@@ -26,17 +34,14 @@ export class SdkRegistry implements SdkSource {
   private readonly pinnedDapiUrls = new Map<Network, string[] | null>()
   // The list each network was last asked to probe, so only the latest is retried.
   private readonly latestDapiUrls = new Map<Network, string[]>()
-  private readonly protocolVersions = new Map<Network, number>()
+  private readonly platformVersions = new Map<Network, Promise<PlatformVersionWASM>>()
   private readonly refills = new Set<Network>()
   private readonly quorumKeyProviders = new Map(NETWORKS.map(network => [network, new P2PQuorumKeyProvider(network)]))
   private builder: ShieldedBuilderWASM | null = null
   private warming: Promise<void> | null = null
   private dapi: Dapi = {mode: 'dynamic', mainnet: [], testnet: []}
-  private watching = false
 
-  constructor(private readonly emit: (event: PlatformEvent) => void) {
-    setInterval(() => void this.watch(), DAPI_WATCHDOG_MS).unref?.()
-  }
+  constructor(private readonly emit: (event: PlatformEvent) => void) {}
 
   setDapi(dapi: Dapi): void {
     this.dapi = dapi
@@ -105,42 +110,45 @@ export class SdkRegistry implements SdkSource {
   // Pins the first DAPI_POOL_READY to answer, then every one that did.
   private async probe(network: Network, dapiUrls: string[]): Promise<string[]> {
     log.info(`${network}: probing ${dapiUrls.length} evonode(s)`)
-    const reachable = this.follow(network, await reachableDapiUrls(dapiUrls, network, urls => this.pin(network, urls)))
+    const reachable = await reachableDapiUrls(dapiUrls, network, urls => this.pin(network, urls))
     if (reachable.length > 0 && reachable.length !== DAPI_POOL_READY) this.pin(network, reachable)
     return reachable
   }
 
-  // A protocol upgrade activates at an epoch boundary; nodes left on the old
-  // version drop out of the pool.
-  private async watch(): Promise<void> {
-    if (this.watching) return
-    this.watching = true
-    try {
-      for (const [network, dapiUrls] of this.latestDapiUrls) {
-        const reachable = this.follow(network, await reachableDapiUrls(dapiUrls, network))
-        const pinned = this.pinnedDapiUrls.get(network)
-        if (reachable.length === 0 || this.latestDapiUrls.get(network) !== dapiUrls || pinned?.every(url => reachable.includes(url))) continue
-        this.pin(network, reachable)
-      }
-    } finally {
-      this.watching = false
-    }
+  // The first operation on a network starts its checks; they then run in the background.
+  platformVersion(network: Network): Promise<PlatformVersionWASM> {
+    if (!this.platformVersions.has(network)) this.checkPlatformVersion(network)
+    return this.platformVersions.get(network)!
   }
 
-  // Records the version most nodes run and answers the nodes on it. One newer than
-  // this SDK knows is followed too: upgrades are mostly backward compatible.
-  private follow(network: Network, nodesByVersion: Map<number, string[]>): string[] {
-    const version = majorityVersion(nodesByVersion)
-    if (version == null) return []
-    if (version > LATEST_PLATFORM_VERSION && version !== this.protocolVersions.get(network)) {
-      log.warn(`${network} runs protocol ${version}, newer than this SDK's ${LATEST_PLATFORM_VERSION}`)
-    }
-    this.protocolVersions.set(network, version)
-    return nodesByVersion.get(version)!
-  }
+  // The version the network runs, capped at the newest this SDK knows: upgrades
+  // are mostly backward compatible. A failed check keeps the version already known.
+  private checkPlatformVersion(network: Network): void {
+    const known = this.platformVersions.get(network)
+    const epochs = this.get(network).node.getEpochsInfo(2, false).then(([a, b]) => a.number < b.number ? [a, b] : [b, a])
+    const running = epochs.then(([, current]) => {
+      const version = Number(current.protocolVersion)
+      if (!Number.isInteger(version)) throw new Error(`epoch reports protocol version ${String(current.protocolVersion)}`)
+      return version
+    })
+    this.platformVersions.set(network, running.then(version => Math.min(version, LATEST_PLATFORM_VERSION), () => known ?? LATEST_PLATFORM_VERSION))
 
-  protocolVersion(network: Network): number | null {
-    return this.protocolVersions.get(network) ?? null
+    Promise.all([epochs, running])
+      .then(async ([[last, current], version]) => {
+        if (known == null || version !== await known) {
+          log.info(`${network} runs protocol ${version}${version > LATEST_PLATFORM_VERSION ? `, newer than this SDK's ${LATEST_PLATFORM_VERSION}` : ''}`)
+          // Nodes that did not follow the upgrade drop out of the pool.
+          const dapiUrls = this.latestDapiUrls.get(network)
+          if (known != null && dapiUrls != null) void this.probe(network, dapiUrls)
+        }
+        const boundary = 2 * Number(current.startTime) - Number(last.startTime)
+        return versionCheckDelay(Date.now(), boundary, EPOCH_BOUNDARY_GAP_MS, EPOCH_BOUNDARY_POLL_MS, VERSION_CHECK_MS)
+      })
+      .catch(err => {
+        log.warn(`${network}: protocol version check failed:`, err)
+        return EPOCH_BOUNDARY_POLL_MS
+      })
+      .then(delay => setTimeout(() => this.checkPlatformVersion(network), delay).unref?.())
   }
 
   private pin(network: Network, reachable: string[]): void {

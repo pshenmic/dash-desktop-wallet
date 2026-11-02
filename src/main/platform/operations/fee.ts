@@ -31,7 +31,6 @@ import type {ChainAssetLockProofParams} from 'dash-core-sdk/src/utils.js'
 import {BuiltTransitionOperation, FeeQuoteParams, PlatformOperations, TransitionFeeOperation} from '../types/messages'
 import {OperationContext} from './types'
 import {buildAssetLockProof} from './assetLockProof'
-import {platformVersion} from './platformVersion'
 import {DEDUCT_FROM_FIRST} from './address/signInputs'
 import {minimumFee} from './shielded/spend/fee'
 import {contractBoundsWASM, sdkContractBounds} from './identity/contractBounds'
@@ -68,7 +67,7 @@ type CurveResult = PlatformOperations['spendFeeCurve']['result']
 // Notes spent and addresses paid both land on the action count, and the fee
 // follows only that, so one curve over every action count answers for both.
 export async function spendFeeCurve(payload: CurvePayload, ctx: OperationContext): Promise<CurveResult> {
-  const version = await platformVersion(ctx)
+  const version = await ctx.platformVersion
   return {
     feeCredits: Array.from({length: MAX_BUNDLE_ACTIONS}, (_, index) => minimumFee(payload.kind, index + 1, version)),
   }
@@ -90,7 +89,7 @@ export async function transitionFee(payload: Payload, ctx: OperationContext): Pr
     return identityUpdateKeysFee(update, await ctx.sdk.identities.getIdentityPublicKeys(params.identityId ?? ''))
   }
   return {
-    feeCredits: protocolFee(operation, params, ctx, await platformVersion(ctx)),
+    feeCredits: protocolFee(operation, params, ctx, await ctx.platformVersion),
     metered: operation !== 'shield' && operation !== 'assetLockShield',
   }
 }

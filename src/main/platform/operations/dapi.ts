@@ -4,16 +4,13 @@ import {Network} from '../../src/types/Network'
 import {DAPI_MAX_BLOCK_AGE_MS, DAPI_POOL_READY, DAPI_PROBE_BATCH, DAPI_STATUS_TIMEOUT_MS} from '../constants'
 import {DapiUrlStatus} from '../types/messages'
 import {Logger} from '../../src/utils/logger'
+import {majorityVersionNodes} from '../../src/utils/majorityVersionNodes'
 
 const log = new Logger('platform')
 
-// Every candidate that answers, by the protocol version it runs; `onReady` gets
-// the first DAPI_POOL_READY so the SDK does not wait out the slowest probes.
-export async function reachableDapiUrls(
-  candidates: string[],
-  network: Network,
-  onReady?: (reachable: string[]) => void,
-): Promise<Map<number, string[]>> {
+// Every candidate that answers on the protocol version most of them run; `onReady`
+// gets the first DAPI_POOL_READY so the SDK does not wait out the slowest probes.
+export async function reachableDapiUrls(candidates: string[], network: Network, onReady: (reachable: string[]) => void): Promise<string[]> {
   const shuffled = [...candidates]
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
@@ -30,10 +27,10 @@ export async function reachableDapiUrls(
       if (error != null || protocolVersion == null) return
       found.push(dapiUrl)
       byVersion.set(protocolVersion, [...byVersion.get(protocolVersion) ?? [], dapiUrl])
-      if (found.length === DAPI_POOL_READY) onReady?.([...found])
+      if (found.length === DAPI_POOL_READY) onReady([...found])
     }))
   }
-  return byVersion
+  return majorityVersionNodes(byVersion)
 }
 
 export function probeActiveDapiUrls(dapiUrls: string[], network: Network): Promise<DapiUrlStatus[]> {

@@ -35,7 +35,7 @@ function contextWithTaken(taken: number[]): OperationContext {
       },
     } as never,
     network: 'testnet',
-    protocolVersion: null,
+    platformVersion: Promise.resolve(13),
     signal: new AbortController().signal,
     progress: () => undefined,
     notesSpent: () => undefined,

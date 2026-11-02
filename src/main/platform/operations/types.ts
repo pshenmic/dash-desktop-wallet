@@ -1,4 +1,5 @@
 import {DashPlatformSDK} from 'dash-platform-sdk'
+import {PlatformVersionWASM} from 'pshenmic-dpp'
 import {Network} from '../../src/types/Network'
 import {PlatformErrorCode, PlatformPhase} from '../types/messages'
 
@@ -7,8 +8,9 @@ import {PlatformErrorCode, PlatformPhase} from '../types/messages'
 export interface OperationContext {
   sdk: DashPlatformSDK
   network: Network
-  // The version most evonodes run; null until the first probe answers.
-  protocolVersion: number | null
+  // Fees and document ids are versioned, and consensus checks them at the version
+  // the network runs, not the newest one this dpp build knows.
+  platformVersion: Promise<PlatformVersionWASM>
   signal: AbortSignal
   progress: (phase: PlatformPhase, fetched: number, total: number) => void
   notesSpent: (indexes: number[]) => void

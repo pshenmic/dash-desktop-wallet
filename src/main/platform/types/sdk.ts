@@ -1,4 +1,5 @@
 import type {DashPlatformSDK} from 'dash-platform-sdk'
+import type {PlatformVersionWASM} from 'pshenmic-dpp'
 import type {Network} from '../../src/types/Network'
 
 // What the dispatcher needs from an SDK source. Narrow on purpose: it is the
@@ -8,5 +9,5 @@ export interface SdkSource {
   warmup: () => Promise<void>
   activeDapiUrls: (network: Network) => string[]
   refillBannedPool: (network: Network) => void
-  protocolVersion: (network: Network) => number | null
+  platformVersion: (network: Network) => Promise<PlatformVersionWASM>
 }
