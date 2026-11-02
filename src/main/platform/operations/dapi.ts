@@ -8,9 +8,9 @@ import {majorityVersionNodes} from '../../src/utils/majorityVersionNodes'
 
 const log = new Logger('platform')
 
-// Every candidate that answers on the protocol version most of them run; `onReady`
-// gets the first DAPI_POOL_READY so the SDK does not wait out the slowest probes.
-export async function reachableDapiUrls(candidates: string[], network: Network, onReady: (reachable: string[]) => void): Promise<string[]> {
+// Shuffled batches of candidates, until DAPI_POOL_READY answer on the protocol
+// version most of them run.
+export async function reachableDapiUrls(candidates: string[], network: Network): Promise<string[]> {
   const shuffled = [...candidates]
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
@@ -18,16 +18,13 @@ export async function reachableDapiUrls(candidates: string[], network: Network, 
     shuffled[i] = shuffled[j]!
     shuffled[j] = swap
   }
-  const found: string[] = []
   const byVersion = new Map<number, string[]>()
-  for (let start = 0; start < shuffled.length; start += DAPI_PROBE_BATCH) {
+  for (let start = 0; start < shuffled.length && majorityVersionNodes(byVersion).length < DAPI_POOL_READY; start += DAPI_PROBE_BATCH) {
     await Promise.all(shuffled.slice(start, start + DAPI_PROBE_BATCH).map(async dapiUrl => {
       const {error, pingMs, protocolVersion} = await probeDapiUrl(dapiUrl, network)
       log.debug(`probe ${dapiUrl}: ${error ?? `${pingMs}ms, protocol ${protocolVersion}`}`)
       if (error != null || protocolVersion == null) return
-      found.push(dapiUrl)
       byVersion.set(protocolVersion, [...byVersion.get(protocolVersion) ?? [], dapiUrl])
-      if (found.length === DAPI_POOL_READY) onReady([...found])
     }))
   }
   return majorityVersionNodes(byVersion)

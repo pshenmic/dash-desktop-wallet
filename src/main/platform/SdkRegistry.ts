@@ -6,7 +6,6 @@ import {Logger} from '../src/utils/logger'
 import {versionCheckDelay} from '../src/utils/versionCheckDelay'
 
 import {
-  DAPI_POOL_READY,
   DAPI_REPROBE_MS,
   EPOCH_BOUNDARY_GAP_MS,
   EPOCH_BOUNDARY_POLL_MS,
@@ -35,6 +34,7 @@ export class SdkRegistry implements SdkSource {
   // The list each network was last asked to probe, so only the latest is retried.
   private readonly latestDapiUrls = new Map<Network, string[]>()
   private readonly platformVersions = new Map<Network, Promise<PlatformVersionWASM>>()
+  private readonly epochNumbers = new Map<Network, number>()
   private readonly refills = new Set<Network>()
   private readonly quorumKeyProviders = new Map(NETWORKS.map(network => [network, new P2PQuorumKeyProvider(network)]))
   private builder: ShieldedBuilderWASM | null = null
@@ -107,11 +107,10 @@ export class SdkRegistry implements SdkSource {
     void this.probe(network, dapiUrls).finally(() => this.refills.delete(network))
   }
 
-  // Pins the first DAPI_POOL_READY to answer, then every one that did.
   private async probe(network: Network, dapiUrls: string[]): Promise<string[]> {
-    log.info(`${network}: probing ${dapiUrls.length} evonode(s)`)
-    const reachable = await reachableDapiUrls(dapiUrls, network, urls => this.pin(network, urls))
-    if (reachable.length > 0 && reachable.length !== DAPI_POOL_READY) this.pin(network, reachable)
+    log.info(`${network}: probing evonodes out of ${dapiUrls.length}`)
+    const reachable = await reachableDapiUrls(dapiUrls, network)
+    if (reachable.length > 0) this.pin(network, reachable)
     return reachable
   }
 
@@ -127,6 +126,10 @@ export class SdkRegistry implements SdkSource {
     const known = this.platformVersions.get(network)
     const epochs = this.get(network).node.getEpochsInfo(2, false).then(([a, b]) => a.number < b.number ? [a, b] : [b, a])
     const running = epochs.then(([, current]) => {
+      // A node still catching up answers an epoch the network has left.
+      const seen = this.epochNumbers.get(network) ?? 0
+      if (current.number < seen) throw new Error(`a node answered epoch ${current.number}, behind ${seen}`)
+      this.epochNumbers.set(network, current.number)
       const version = Number(current.protocolVersion)
       if (!Number.isInteger(version)) throw new Error(`epoch reports protocol version ${String(current.protocolVersion)}`)
       return version
