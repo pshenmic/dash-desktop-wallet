@@ -9,6 +9,11 @@ describe('quorumFirst', () => {
     expect(new Set(quorumFirst(urls, quorum).slice(0, 3).map(url => new URL(url).hostname))).toEqual(quorum)
   })
 
+  it('matches an IPv6 validator to its bracketed url', () => {
+    const v6 = 'https://[2001:db8::7]:443'
+    expect(quorumFirst([...urls, v6], new Set(['2001:db8::7']))[0]).toBe(v6)
+  })
+
   it('keeps every evonode exactly once', () => {
     expect([...quorumFirst(urls, quorum)].sort()).toEqual([...urls].sort())
   })

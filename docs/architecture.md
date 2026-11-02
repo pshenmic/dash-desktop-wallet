@@ -90,9 +90,10 @@ numbers in `src/constants/credits`, `src/constants/fee/platform` and
 `src/constants/addresses` (`COIN_TYPE`, `PLATFORM_ACCOUNT`, `SHIELDED_ACCOUNT`),
 all read by `platform/`, plus `src/types/IdentityKeys` in the identity-key
 operations. Separately, `platform/` reaches into a few `src/utils/` helpers —
-`addressOrder`, `coreScript`, `dashPayKeys`, `identityKeys`, `majorityVersionNodes`, `quorumFirst`, `versionCheckDelay`,
-`sdkErrors`, `shieldedNoteSelection`. That is pure shared logic, not the rule's subject, but
-do not read the rule as "nothing crosses".
+`addressOrder`, `coreScript`, `dashPayKeys`, `identityKeys`,
+`majorityVersionNodes`, `quorumFirst`, `sdkErrors`, `shieldedNoteSelection`,
+`versionCheckDelay`. That is pure shared logic, not the rule's subject, but do
+not read the rule as "nothing crosses".
 
 ### Declarations that legitimately stay in the file that uses them
 

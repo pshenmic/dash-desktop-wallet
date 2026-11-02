@@ -1,6 +1,10 @@
-// A protocol version moves only at an epoch boundary. Its time is an estimate, so
-// the gap either side of it is polled, and the rest of the epoch is checked idly.
-export function versionCheckDelay(now: number, boundary: number, gap: number, poll: number, idle: number): number {
-  if (now < boundary - gap) return Math.min(idle, boundary - gap - now)
-  return now <= boundary + gap ? poll : idle
+// A protocol version moves only when an epoch starts, which is its scheduled
+// time or, at most `lag` later, the first block after it.
+export function inEpochStartWindow(now: number, epochStart: number, lag: number): boolean {
+  return now >= epochStart && now <= epochStart + lag
+}
+
+export function versionCheckDelay(now: number, epochStart: number, lag: number, poll: number, idle: number): number {
+  if (now < epochStart) return Math.min(idle, epochStart - now)
+  return inEpochStartWindow(now, epochStart, lag) ? poll : idle
 }

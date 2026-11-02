@@ -4,13 +4,13 @@ import {PlatformVersionWASM, ShieldedBuilderWASM} from 'pshenmic-dpp'
 import {Network} from '../src/types/Network'
 import {Logger} from '../src/utils/logger'
 import {majorityVersionNodes} from '../src/utils/majorityVersionNodes'
-import {versionCheckDelay} from '../src/utils/versionCheckDelay'
+import {inEpochStartWindow, versionCheckDelay} from '../src/utils/versionCheckDelay'
 
 import {
   DAPI_POOL_READY,
   DAPI_REPROBE_MS,
-  EPOCH_BOUNDARY_GAP_MS,
-  EPOCH_BOUNDARY_POLL_MS,
+  EPOCH_START_LAG_MS,
+  EPOCH_START_POLL_MS,
   NETWORKS,
   SEED_MIN_PROTOCOL_VERSION,
   VERSION_CHECK_MS,
@@ -36,9 +36,14 @@ export class SdkRegistry implements SdkSource {
   // The list each network was last asked to probe, so only the latest is retried.
   private readonly latestDapiUrls = new Map<Network, string[]>()
   private readonly platformVersions = new Map<Network, Promise<PlatformVersionWASM>>()
+  // When an operation last asked each network's version.
+  private readonly versionsAskedAt = new Map<Network, number>()
   private readonly epochNumbers = new Map<Network, number>()
-  private readonly epochBoundaries = new Map<Network, number>()
-  private readonly refills = new Set<Network>()
+  private readonly epochZeroStarts = new Map<Network, number>()
+  private readonly nextEpochStarts = new Map<Network, number>()
+  // Node clock minus this machine's, so a wrong local clock cannot move an epoch start.
+  private readonly clockOffsets = new Map<Network, number>()
+  private readonly probing = new Set<Network>()
   private readonly quorumKeyProviders = new Map(NETWORKS.map(network => [network, new P2PQuorumKeyProvider(network)]))
   private builder: ShieldedBuilderWASM | null = null
   private warming: Promise<void> | null = null
@@ -99,88 +104,133 @@ export class SdkRegistry implements SdkSource {
   // The SDK lifts a ban only after a request succeeds, which none can once every
   // node is banned; a fresh probe builds a pool without them.
   refillBannedPool(network: Network): void {
-    if ((this.dapi.mode === 'static' && this.dapi[network].length > 0) || this.refills.has(network)) return
+    if ((this.dapi.mode === 'static' && this.dapi[network].length > 0) || this.probing.has(network)) return
     const dapiUrls = this.latestDapiUrls.get(network)
     log.warn(`${network}: every evonode is banned, refilling the pool`)
     if (dapiUrls == null) {
       this.sdks.delete(network)
       return
     }
-    this.refills.add(network)
-    void this.probe(network, dapiUrls).finally(() => this.refills.delete(network))
+    void this.probe(network, dapiUrls)
   }
 
   // Pins the first batches that fill a pool, then every evonode that answered, to
   // spread requests across all of them.
   private async probe(network: Network, dapiUrls: string[]): Promise<string[]> {
     log.info(`${network}: probing ${dapiUrls.length} evonode(s)`)
-    let ready: string[] = []
-    const reachable = majorityVersionNodes(await dapiUrlsByProtocolVersion(dapiUrls, network, byVersion => {
-      const majority = majorityVersionNodes(byVersion)
-      if (ready.length === 0 && majority.length >= DAPI_POOL_READY) {
-        ready = majority
-        this.pin(network, majority)
-      }
-      return false
-    }))
-    if (reachable.length > ready.length) this.pin(network, reachable)
-    return reachable
+    this.probing.add(network)
+    try {
+      let ready: string[] = []
+      const reachable = majorityVersionNodes(await dapiUrlsByProtocolVersion(dapiUrls, network, byVersion => {
+        const majority = majorityVersionNodes(byVersion)
+        if (ready.length === 0 && majority.length >= DAPI_POOL_READY) {
+          ready = majority
+          this.pin(network, majority)
+        }
+        return false
+      }))
+      // Pinned again if the pool grew, or if the majority moved to another version meanwhile.
+      if (reachable.length > ready.length || !ready.every(dapiUrl => reachable.includes(dapiUrl))) this.pin(network, reachable)
+      return reachable
+    } finally {
+      this.probing.delete(network)
+    }
   }
 
-  // The first operation on a network starts its checks; they then run in the background.
+  // The first request on a network starts its checks. They go on in the
+  // background while the network is in use and stop once it sits idle for a whole
+  // check interval, so the next request checks afresh rather than trusting a
+  // version gone stale.
   platformVersion(network: Network): Promise<PlatformVersionWASM> {
+    this.versionsAskedAt.set(network, Date.now())
     if (!this.platformVersions.has(network)) this.checkPlatformVersion(network)
     return this.platformVersions.get(network)!
   }
 
   // The version the network runs, capped at the newest this SDK knows: upgrades
-  // are mostly backward compatible. A failed check keeps the version already known.
+  // are mostly backward compatible. A failed check keeps the version already
+  // known; with none, the operations waiting on it fail rather than guess one.
   private checkPlatformVersion(network: Network): void {
     const known = this.platformVersions.get(network)
     const dapiUrls = this.latestDapiUrls.get(network)
-    const boundary = this.epochBoundaries.get(network)
-    const atBoundary = dapiUrls != null && boundary != null && Math.abs(Date.now() - boundary) <= EPOCH_BOUNDARY_GAP_MS
-    const running = atBoundary ? this.quorumProtocolVersion(network, dapiUrls) : this.epochProtocolVersion(network)
-    const capped = running.then(version => Math.min(version, LATEST_PLATFORM_VERSION), () => known ?? LATEST_PLATFORM_VERSION)
+    const nextEpochStart = this.nextEpochStarts.get(network)
+    const atEpochStart = dapiUrls != null && nextEpochStart != null && inEpochStartWindow(this.chainNow(network), nextEpochStart, EPOCH_START_LAG_MS)
+    const running = atEpochStart ? this.quorumProtocolVersion(network, dapiUrls, known) : this.epochProtocolVersion(network)
+    const capped = running.then(version => Math.min(version, LATEST_PLATFORM_VERSION), err => {
+      if (known == null) throw err
+      return known
+    })
     this.platformVersions.set(network, capped)
+    // Every request carries it and most never await it; an operation that does
+    // still sees the failure.
+    capped.catch(() => undefined)
 
     running
       .then(async version => {
-        if (known == null || await capped !== await known) {
-          log.info(`${network} runs protocol ${version}${version > LATEST_PLATFORM_VERSION ? `, newer than this SDK's ${LATEST_PLATFORM_VERSION}` : ''}`)
-          // Nodes that did not follow the upgrade drop out of the pool.
-          if (known != null && dapiUrls != null) void this.probe(network, dapiUrls)
-        }
-        return versionCheckDelay(Date.now(), this.epochBoundaries.get(network)!, EPOCH_BOUNDARY_GAP_MS, EPOCH_BOUNDARY_POLL_MS, VERSION_CHECK_MS)
-      })
-      .catch(err => {
+        if (known != null && await capped === await known) return
+        log.info(`${network} runs protocol ${version}${version > LATEST_PLATFORM_VERSION ? `, newer than this SDK's ${LATEST_PLATFORM_VERSION}` : ''}`)
+        // Nodes that did not follow the upgrade drop out of the pool.
+        if (known != null && dapiUrls != null && !this.probing.has(network)) void this.probe(network, dapiUrls)
+      }, err => {
         log.warn(`${network}: protocol version check failed:`, err)
-        return EPOCH_BOUNDARY_POLL_MS
+        if (known == null) this.platformVersions.delete(network)
       })
-      .then(delay => setTimeout(() => this.checkPlatformVersion(network), delay).unref?.())
+      .then(() => {
+        if (!this.platformVersions.has(network)) return
+        if (Date.now() - this.versionsAskedAt.get(network)! > VERSION_CHECK_MS) {
+          this.platformVersions.delete(network)
+          return
+        }
+        setTimeout(() => this.checkPlatformVersion(network), this.nextCheckDelay(network)).unref?.()
+      })
   }
 
-  // Also estimates the next epoch boundary from the length of the last epoch.
+  // Also schedules the next epoch start: epochs start on a fixed schedule from
+  // epoch 0, so its start and the current one give the length of every epoch.
   private async epochProtocolVersion(network: Network): Promise<number> {
-    const [last, current] = (await this.get(network).node.getEpochsInfo(2, false)).sort((a, b) => a.number - b.number)
+    const sdk = this.get(network)
+    const [[current], status] = await Promise.all([sdk.node.getEpochsInfo(1, false), sdk.node.status().catch(() => null)])
+    if (current == null) throw new Error('no epoch info answered')
     // A node still catching up answers an epoch the network has left.
     const seen = this.epochNumbers.get(network) ?? 0
-    if (current!.number < seen) throw new Error(`a node answered epoch ${current!.number}, behind ${seen}`)
-    this.epochNumbers.set(network, current!.number)
-    this.epochBoundaries.set(network, 2 * Number(current!.startTime) - Number(last!.startTime))
-    const version = Number(current!.protocolVersion)
-    if (!Number.isInteger(version)) throw new Error(`epoch reports protocol version ${String(current!.protocolVersion)}`)
+    if (current.number < seen) throw new Error(`a node answered epoch ${current.number}, behind ${seen}`)
+    const version = Number(current.protocolVersion)
+    if (!Number.isInteger(version)) throw new Error(`epoch reports protocol version ${String(current.protocolVersion)}`)
+    this.epochNumbers.set(network, current.number)
+
+    // time.local is in seconds.
+    const nodeNow = Number(status?.time?.local) * 1000
+    if (nodeNow > 0) this.clockOffsets.set(network, nodeNow - Date.now())
+    if (current.number > 0) {
+      const zeroStart = this.epochZeroStarts.get(network) ?? Number((await sdk.node.getEpochsInfo(1, true, 0))[0]!.startTime)
+      this.epochZeroStarts.set(network, zeroStart)
+      const epochLength = (Number(current.startTime) - zeroStart) / current.number
+      // Whole milliseconds: a timer set for a fraction early would fire before the window.
+      this.nextEpochStarts.set(network, Math.ceil(zeroStart + (current.number + 1) * epochLength))
+    }
     return version
   }
 
-  // At an epoch boundary the version is read from the validators executing the
-  // blocks, not from a single node of the pool that may lag behind them.
-  private async quorumProtocolVersion(network: Network, dapiUrls: string[]): Promise<number> {
+  // At an epoch start the version is read from the validators executing the
+  // blocks. A change they report is taken only from the proved epoch info, which
+  // also moves the schedule on to the following epoch.
+  private async quorumProtocolVersion(network: Network, dapiUrls: string[], known: Promise<PlatformVersionWASM> | undefined): Promise<number> {
     const byVersion = await dapiUrlsByProtocolVersion(dapiUrls, network, found => majorityVersionNodes(found).length >= DAPI_POOL_READY)
     const majority = majorityVersionNodes(byVersion)
     const version = [...byVersion].find(([, nodes]) => nodes === majority)?.[0]
     if (version == null) throw new Error(`none of ${dapiUrls.length} evonode(s) answered`)
-    return version
+    if (known != null && Math.min(version, LATEST_PLATFORM_VERSION) === await known) return version
+    return this.epochProtocolVersion(network)
+  }
+
+  private chainNow(network: Network): number {
+    return Date.now() + (this.clockOffsets.get(network) ?? 0)
+  }
+
+  private nextCheckDelay(network: Network): number {
+    const nextEpochStart = this.nextEpochStarts.get(network)
+    if (nextEpochStart == null) return VERSION_CHECK_MS
+    return versionCheckDelay(this.chainNow(network), nextEpochStart, EPOCH_START_LAG_MS, EPOCH_START_POLL_MS, VERSION_CHECK_MS)
   }
 
   private pin(network: Network, reachable: string[]): void {

@@ -16,10 +16,11 @@ export const DAPI_POOL_READY = 15
 // than waiting out the hour until p2p fetches the next one.
 export const DAPI_REPROBE_MS = 30_000
 
-// An epoch boundary estimated from the last epoch's length has missed by up to
-// 4 minutes on both networks, so it is polled this far either side.
-export const EPOCH_BOUNDARY_GAP_MS = 3 * 60_000
-export const EPOCH_BOUNDARY_POLL_MS = 15_000
+// Epochs start on a fixed schedule from epoch 0, each with the first block after
+// its slot: 5-175 s late on both networks, as Platform commits a block at least
+// every 3 minutes.
+export const EPOCH_START_LAG_MS = 4 * 60_000
+export const EPOCH_START_POLL_MS = 15_000
 export const VERSION_CHECK_MS = 30 * 60_000
 
 // The SDK's own seed discovery otherwise admits only nodes on its newest
