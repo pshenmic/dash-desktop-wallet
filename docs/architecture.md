@@ -91,7 +91,7 @@ numbers in `src/constants/credits`, `src/constants/fee/platform` and
 all read by `platform/`, plus `src/types/IdentityKeys` in the identity-key
 operations. Separately, `platform/` reaches into a few `src/utils/` helpers —
 `addressOrder`, `coreScript`, `dashPayKeys`, `identityKeys`,
-`majorityVersionNodes`, `quorumFirst`, `sdkErrors`, `shieldedNoteSelection`,
+`majorityVersion`, `quorumFirst`, `sdkErrors`, `shieldedNoteSelection`,
 `versionCheckDelay`. That is pure shared logic, not the rule's subject, but do
 not read the rule as "nothing crosses".
 
