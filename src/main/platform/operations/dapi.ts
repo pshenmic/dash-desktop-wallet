@@ -1,33 +1,54 @@
 import {createClient} from 'dash-platform-sdk'
 import status from 'dash-platform-sdk/src/node/status.js'
+import getCurrentQuorumsInfo from 'dash-platform-sdk/src/node/getCurrentQuorumsInfo.js'
 import {Network} from '../../src/types/Network'
 import {DAPI_MAX_BLOCK_AGE_MS, DAPI_POOL_READY, DAPI_PROBE_BATCH, DAPI_STATUS_TIMEOUT_MS} from '../constants'
 import {DapiUrlStatus} from '../types/messages'
 import {Logger} from '../../src/utils/logger'
 import {majorityVersionNodes} from '../../src/utils/majorityVersionNodes'
+import {quorumFirst} from '../../src/utils/quorumFirst'
 
 const log = new Logger('platform')
 
-// Shuffled batches of candidates, until DAPI_POOL_READY answer on the protocol
-// version most of them run.
-export async function reachableDapiUrls(candidates: string[], network: Network): Promise<string[]> {
-  const shuffled = [...candidates]
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    const swap = shuffled[i]!
-    shuffled[i] = shuffled[j]!
-    shuffled[j] = swap
-  }
+// Every candidate on the protocol version most of them run, probed one batch at
+// a time, quorum first. `onReady` gets the first batches that fill a pool, so
+// the SDK does not wait out the rest.
+export async function reachableDapiUrls(candidates: string[], network: Network, onReady: (reachable: string[]) => void): Promise<string[]> {
+  const shuffled = quorumFirst(candidates, await quorumHosts(candidates, network))
   const byVersion = new Map<number, string[]>()
-  for (let start = 0; start < shuffled.length && majorityVersionNodes(byVersion).length < DAPI_POOL_READY; start += DAPI_PROBE_BATCH) {
+  let ready = false
+  for (let start = 0; start < shuffled.length; start += DAPI_PROBE_BATCH) {
     await Promise.all(shuffled.slice(start, start + DAPI_PROBE_BATCH).map(async dapiUrl => {
       const {error, pingMs, protocolVersion} = await probeDapiUrl(dapiUrl, network)
       log.debug(`probe ${dapiUrl}: ${error ?? `${pingMs}ms, protocol ${protocolVersion}`}`)
       if (error != null || protocolVersion == null) return
       byVersion.set(protocolVersion, [...byVersion.get(protocolVersion) ?? [], dapiUrl])
     }))
+    const majority = majorityVersionNodes(byVersion)
+    if (!ready && majority.length >= DAPI_POOL_READY) {
+      ready = true
+      onReady(majority)
+    }
   }
   return majorityVersionNodes(byVersion)
+}
+
+// Asked of one random candidate; without an answer every evonode ranks alike.
+async function quorumHosts(candidates: string[], network: Network): Promise<Set<string>> {
+  const asked = candidates[Math.floor(Math.random() * candidates.length)]
+  if (asked == null) return new Set()
+  const abortController = new AbortController()
+  const timer = setTimeout(() => abortController.abort(), DAPI_STATUS_TIMEOUT_MS)
+  try {
+    const {currentQuorumHash, validatorSets} = await getCurrentQuorumsInfo({network, getClient: () => createClient(asked, abortController)})
+    const current = validatorSets.find(validatorSet => validatorSet.quorumHash === currentQuorumHash)
+    return new Set(current?.members.filter(member => !member.isBanned).map(member => member.nodeIp))
+  } catch (err) {
+    log.debug(`quorum from ${asked}: ${err instanceof Error ? err.message : String(err)}`)
+    return new Set()
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 export function probeActiveDapiUrls(dapiUrls: string[], network: Network): Promise<DapiUrlStatus[]> {

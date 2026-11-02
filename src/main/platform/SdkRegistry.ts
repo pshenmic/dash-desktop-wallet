@@ -107,10 +107,16 @@ export class SdkRegistry implements SdkSource {
     void this.probe(network, dapiUrls).finally(() => this.refills.delete(network))
   }
 
+  // Pins the first batches that fill a pool, then every evonode that answered, to
+  // spread requests across all of them.
   private async probe(network: Network, dapiUrls: string[]): Promise<string[]> {
-    log.info(`${network}: probing evonodes out of ${dapiUrls.length}`)
-    const reachable = await reachableDapiUrls(dapiUrls, network)
-    if (reachable.length > 0) this.pin(network, reachable)
+    log.info(`${network}: probing ${dapiUrls.length} evonode(s)`)
+    let ready: string[] = []
+    const reachable = await reachableDapiUrls(dapiUrls, network, urls => {
+      ready = urls
+      this.pin(network, urls)
+    })
+    if (reachable.length > ready.length) this.pin(network, reachable)
     return reachable
   }
 
@@ -134,11 +140,12 @@ export class SdkRegistry implements SdkSource {
       if (!Number.isInteger(version)) throw new Error(`epoch reports protocol version ${String(current.protocolVersion)}`)
       return version
     })
-    this.platformVersions.set(network, running.then(version => Math.min(version, LATEST_PLATFORM_VERSION), () => known ?? LATEST_PLATFORM_VERSION))
+    const capped = running.then(version => Math.min(version, LATEST_PLATFORM_VERSION), () => known ?? LATEST_PLATFORM_VERSION)
+    this.platformVersions.set(network, capped)
 
     Promise.all([epochs, running])
       .then(async ([[last, current], version]) => {
-        if (known == null || version !== await known) {
+        if (known == null || await capped !== await known) {
           log.info(`${network} runs protocol ${version}${version > LATEST_PLATFORM_VERSION ? `, newer than this SDK's ${LATEST_PLATFORM_VERSION}` : ''}`)
           // Nodes that did not follow the upgrade drop out of the pool.
           const dapiUrls = this.latestDapiUrls.get(network)
