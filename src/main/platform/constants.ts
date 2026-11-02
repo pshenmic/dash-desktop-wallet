@@ -18,7 +18,7 @@ export const DAPI_REPROBE_MS = 30_000
 
 // An epoch boundary estimated from the last epoch's length has missed by up to
 // 4 minutes on both networks, so it is polled this far either side.
-export const EPOCH_BOUNDARY_GAP_MS = 5 * 60_000
+export const EPOCH_BOUNDARY_GAP_MS = 3 * 60_000
 export const EPOCH_BOUNDARY_POLL_MS = 15_000
 export const VERSION_CHECK_MS = 30 * 60_000
 
