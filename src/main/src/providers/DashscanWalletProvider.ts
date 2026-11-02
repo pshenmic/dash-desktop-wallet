@@ -9,9 +9,12 @@ import {TransactionDAO} from '../database/TransactionDAO'
 import {WalletDAO} from '../database/WalletDAO'
 import {dashscanToWalletTransactions} from '../utils/dashscanTransactions'
 import {dedupeTransactions} from '../utils/dedupeTransactions'
+import {networkMasternode} from '../utils/masternodes'
+import {MasternodeKeyFilter, NetworkMasternode} from '../types/Masternode'
 import {
   DashscanAddressInfo,
   DashscanCursorPage,
+  DashscanMasternode,
   DashscanPage,
   DashscanTransaction,
   DashscanUTXO,
@@ -30,6 +33,7 @@ import {PENDING_SPEND_TTL_MS} from '../constants/chain'
 import {
   DASHSCAN_ADDRESS_CHUNK,
   DASHSCAN_BASE_URLS,
+  DASHSCAN_MASTERNODE_FILTER,
   DASHSCAN_REQUEST_TIMEOUT_MS,
   DASHSCAN_RETRY_DELAYS_MS,
   DASHSCAN_STATUS_INTERVAL_MS,
@@ -313,6 +317,14 @@ export class DashscanWalletProvider implements WalletProvider {
 
     const infos = await this.addressInfo(addresses)
     return infos.filter(info => info.txCount > 0).map(info => info.address)
+  }
+
+  // Without a limit the endpoint answers every match in one page.
+  async getMasternodes(filter: MasternodeKeyFilter, values: string[]): Promise<NetworkMasternode[]> {
+    const pages = await Promise.all(this.chunkAddresses(values).map(chunk =>
+      requestJson<DashscanPage<DashscanMasternode>>(this.request, `/masternodes?${DASHSCAN_MASTERNODE_FILTER[filter]}=${chunk.join(',')}`)
+    ))
+    return pages.flatMap(({resultSet}) => resultSet.map(networkMasternode))
   }
 
   // A provider instance serves one operation, and getTransactions runs once per

@@ -106,6 +106,16 @@ async function widen(
   return added
 }
 
+// For a walk whose outcome is kept elsewhere, so its window lives for one run.
+export function memoryWindowStore(): AddressWindowStore {
+  const entries = new Map<number, boolean>()
+  return {
+    known: async () => [...entries].map(([index, isUsed]) => ({index, isUsed})),
+    reveal: async addresses => { for (const {index} of addresses) entries.set(index, false) },
+    markUsed: async indexes => { for (const index of indexes) entries.set(index, true) },
+  }
+}
+
 // One gap walk for one chain of one key class. Everything that differs between
 // L1, platform and any future class is behind the three collaborators.
 export async function runAddressWindow(

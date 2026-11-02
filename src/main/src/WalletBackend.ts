@@ -27,6 +27,7 @@ import { GetStatusHandler } from './api/getStatus'
 import { GetAllWalletsHandler } from './api/wallet/getAllWallets'
 import { GetTransactionsHandler } from './api/wallet/getTransactions'
 import { GetIdentitiesHandler } from './api/wallet/getIdentities'
+import { GetMasternodesHandler } from './api/masternodes/getMasternodes'
 import { GetUsernamesHandler } from './api/wallet/getUsernames'
 import { RefreshDashPayHandler } from './api/wallet/refreshDashPay'
 import { RegisterUsernameHandler } from './api/wallet/registerUsername'
@@ -129,6 +130,8 @@ import {ResetWalletSyncHandler} from './api/walletSync/resetWalletSync'
 import {GetUtxosHandler} from './api/wallet/getUtxos'
 import {DISCOVERY_INTERVAL_MS} from './constants/addresses'
 import {CoreDiscoveryService} from './services/core/CoreDiscoveryService'
+import {MasternodeService} from './services/core/MasternodeService'
+import {MasternodeDAO} from './database/MasternodeDAO'
 import {CorePrevOutService} from './services/core/CorePrevOutService'
 import {WalletCredentialsService} from './services/wallet/WalletCredentialsService'
 import {IdentityService} from './services/platform/IdentityService'
@@ -166,6 +169,7 @@ export class WalletBackend {
   private assetLockService?: AssetLockService
   private coreDiscoveryService?: CoreDiscoveryService
   private coreLockService?: CoreLockService
+  private masternodeService?: MasternodeService
   private walletCredentialsService?: WalletCredentialsService
   private identityService?: IdentityService
   private logService?: LogService
@@ -175,7 +179,7 @@ export class WalletBackend {
   private identityDAO?: IdentityDAO
 
   private initHandlers(): void {
-    if (!this.walletService || !this.platformAddressService || !this.platformHistoryService || !this.platformTransferService || !this.feeService || !this.applicationService || !this.walletSyncService || !this.ratesService || !this.contactService || !this.shieldedService || !this.assetLockService || !this.addressDAO || !this.walletDAO || !this.identityDAO || !this.identityRegistrationService || !this.coreDiscoveryService || !this.coreLockService || !this.walletCredentialsService || !this.identityService || !this.logService || !this.platformWorkerService) {
+    if (!this.walletService || !this.platformAddressService || !this.platformHistoryService || !this.platformTransferService || !this.feeService || !this.applicationService || !this.walletSyncService || !this.ratesService || !this.contactService || !this.shieldedService || !this.assetLockService || !this.addressDAO || !this.walletDAO || !this.identityDAO || !this.identityRegistrationService || !this.coreDiscoveryService || !this.coreLockService || !this.walletCredentialsService || !this.identityService || !this.logService || !this.platformWorkerService || !this.masternodeService) {
       throw new Error('Services not initialized. Call start() first.')
     }
 
@@ -192,6 +196,7 @@ export class WalletBackend {
     registerHandler('getBalance', new GetBalance(this.walletService).handle)
     registerHandler("getTransactionByHash", new GetTransactionByHashHandler(this.walletService).handle)
     registerHandler('getIdentities', new GetIdentitiesHandler(this.identityService).handle)
+    registerHandler('getMasternodes', new GetMasternodesHandler(this.masternodeService).handle)
     registerHandler('getUsernames', new GetUsernamesHandler(this.identityService).handle)
     registerHandler('refreshDashPay', new RefreshDashPayHandler(this.walletService).handle)
     registerHandler('registerUsername', new RegisterUsernameHandler(this.identityService).handle)
@@ -327,6 +332,7 @@ export class WalletBackend {
     this.coreDiscoveryService = new CoreDiscoveryService(walletDAO, addressDAO, identityDAO, dashPayCache, transactionDAO, this.walletSyncService, providers)
     this.coreLockService = new CoreLockService(walletDAO, addressDAO, this.walletSyncService, coreTransactionService, providers, preferences)
     const masternodeKeyDAO = new MasternodeKeyDAO(knex)
+    this.masternodeService = new MasternodeService(walletDAO, masternodeKeyDAO, new MasternodeDAO(knex), providers)
     this.walletCredentialsService = new WalletCredentialsService(walletDAO, addressDAO, masternodeKeyDAO, calibratedIterations)
     this.identityService = new IdentityService(walletDAO, identityDAO, dashPayCache, this.platformWorkerService)
     const platformAddressDAO = new PlatformAddressDAO(knex)
@@ -348,6 +354,7 @@ export class WalletBackend {
     this.initHandlers()
 
     const discovery = this.coreDiscoveryService
+    const masternodeService = this.masternodeService
     const walletService = this.walletService
     const walletSyncService = this.walletSyncService
     const applicationService = this.applicationService
@@ -378,6 +385,8 @@ export class WalletBackend {
       // is watched within one interval of its request.
       await walletService.fetchContactRequestsAndDiscover(selected.walletId)
       resolvePrevOuts(selected.walletId)
+      masternodeService.discover(selected.walletId).catch(err =>
+        discoveryLog.error('masternode discovery failed:', err))
     }
     this.walletSyncService.onWalletActivity = (walletId) => {
       discovery.discoverCoreAddresses(walletId).catch(err =>

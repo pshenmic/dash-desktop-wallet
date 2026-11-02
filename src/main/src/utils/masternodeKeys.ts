@@ -3,8 +3,9 @@ import {ed25519} from '@noble/curves/ed25519.js'
 import {numberToBytesBE} from '@noble/curves/utils.js'
 import {hmac} from '@noble/hashes/hmac.js'
 import {sha256, sha512} from '@noble/hashes/sha2.js'
-import {concatBytes, utf8ToBytes} from '@noble/hashes/utils.js'
+import {bytesToHex, concatBytes, utf8ToBytes} from '@noble/hashes/utils.js'
 import {HARDENED_OFFSET, HDKey} from '@scure/bip32'
+import {KeyPairController} from 'dash-platform-sdk/src/keyPair/index.js'
 import {
   BLS_HD_SEED_KEY,
   COIN_TYPE,
@@ -14,10 +15,12 @@ import {
   MASTERNODE_KEY_ROLE,
   MASTERNODE_PLATFORM_KEY_BATCH,
 } from '../constants/addresses'
-import {ExtendedSecretKey, MasternodeKeyRole, MasternodeKeys} from '../types/Masternode'
+import {AddressDeriver} from '../types/AddressWindow'
+import {ExtendedSecretKey, MasternodeKeyChain, MasternodeKeyRole, MasternodeKeys} from '../types/Masternode'
 import {Network} from '../types/Network'
 
 const G1 = bls12_381.G1.Point
+const keyPair = new KeyPairController()
 
 function accountLevels(network: Network, role: MasternodeKeyRole): number[] {
   return [9, COIN_TYPE[network], MASTERNODE_FEATURE, MASTERNODE_KEY_ROLE[role]]
@@ -42,9 +45,12 @@ function blsHardenedChild({privateKey, chainCode}: ExtendedSecretKey, level: num
 }
 
 // Dash's pre-basic-scheme G1 encoding: the y-sign flag moves to the top bit and
-// the compression flag is dropped. dashbls hashes this form for operator keys.
-function legacyG1(publicKey: Uint8Array): Uint8Array {
-  const legacy = publicKey.slice()
+// the compression flag is dropped. dashbls hashes this form for operator keys,
+// and registrations made before the switch still carry it.
+export function legacyG1(publicKey: Uint8Array): Uint8Array {
+  // Not slice(): on a Buffer read back from SQLite that is a view, and the
+  // caller's key would be rewritten.
+  const legacy = Uint8Array.from(publicKey)
   legacy[0] = (publicKey[0] & 0x1f) | ((publicKey[0] & 0x20) << 2)
   return legacy
 }
@@ -78,5 +84,21 @@ export function masternodeKeys(seed: Uint8Array, network: Network): MasternodeKe
     operatorChainCode: operator.chainCode,
     platformNodeKeys: Array.from({length: MASTERNODE_PLATFORM_KEY_BATCH},
       (_, index) => ed25519.getPublicKey(slip10Child(platformAccount, index).privateKey)),
+  }
+}
+
+// One provider key chain of the stored account keys. Owner and voting keys are
+// listed by their P2PKH address, operator keys by their hex public key.
+export function masternodeKeyDeriver(keys: MasternodeKeys, network: Network, chain: MasternodeKeyChain): AddressDeriver {
+  const accountPath = masternodeAccountPath(network, chain)
+  const account = chain === 'operator' ? null : HDKey.fromExtendedKey(chain === 'owner' ? keys.ownerXpub : keys.votingXpub, HD_VERSIONS[network])
+  return {
+    derive: index => ({
+      index,
+      address: account == null
+        ? bytesToHex(operatorPublicKey(keys.operatorPublicKey, keys.operatorChainCode, index))
+        : keyPair.p2pkhAddress(account.deriveChild(index).publicKey!, network),
+      derivationPath: `${accountPath}/${index}`,
+    }),
   }
 }

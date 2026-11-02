@@ -20,9 +20,20 @@ export async function up(knex: Knex): Promise<void> {
     table.binary('public_key').notNullable()
     table.primary(['wallet_id', 'key_index'])
   })
+
+  // Only the collateral of the wallet's masternodes: it must stay unspendable
+  // while the list cannot be reached. Everything else is live network state.
+  await knex.schema.createTable('masternodes', table => {
+    table.text('wallet_id').notNullable().references('wallet_id').inTable('wallet')
+    table.text('pro_tx_hash').notNullable()
+    table.text('collateral_txid').notNullable()
+    table.integer('collateral_vout').notNullable()
+    table.primary(['wallet_id', 'pro_tx_hash'])
+  })
 }
 
 export async function down(knex: Knex): Promise<void> {
+  await knex.schema.dropTableIfExists('masternodes')
   await knex.schema.dropTableIfExists('masternode_platform_keys')
   await knex.schema.dropTableIfExists('masternode_keys')
 }
