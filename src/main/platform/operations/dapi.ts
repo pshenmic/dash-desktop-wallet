@@ -2,21 +2,22 @@ import {createClient} from 'dash-platform-sdk'
 import status from 'dash-platform-sdk/src/node/status.js'
 import getCurrentQuorumsInfo from 'dash-platform-sdk/src/node/getCurrentQuorumsInfo.js'
 import {Network} from '../../src/types/Network'
-import {DAPI_MAX_BLOCK_AGE_MS, DAPI_POOL_READY, DAPI_PROBE_BATCH, DAPI_STATUS_TIMEOUT_MS} from '../constants'
+import {DAPI_MAX_BLOCK_AGE_MS, DAPI_PROBE_BATCH, DAPI_STATUS_TIMEOUT_MS} from '../constants'
 import {DapiUrlStatus} from '../types/messages'
 import {Logger} from '../../src/utils/logger'
-import {majorityVersionNodes} from '../../src/utils/majorityVersionNodes'
 import {quorumFirst} from '../../src/utils/quorumFirst'
 
 const log = new Logger('platform')
 
-// Every candidate on the protocol version most of them run, probed one batch at
-// a time, quorum first. `onReady` gets the first batches that fill a pool, so
-// the SDK does not wait out the rest.
-export async function reachableDapiUrls(candidates: string[], network: Network, onReady: (reachable: string[]) => void): Promise<string[]> {
+// Answering candidates by the protocol version they run, probed one batch at a
+// time, quorum first and shuffled; `afterBatch` stops it by answering true.
+export async function dapiUrlsByProtocolVersion(
+  candidates: string[],
+  network: Network,
+  afterBatch: (byVersion: Map<number, string[]>) => boolean,
+): Promise<Map<number, string[]>> {
   const shuffled = quorumFirst(candidates, await quorumHosts(candidates, network))
   const byVersion = new Map<number, string[]>()
-  let ready = false
   for (let start = 0; start < shuffled.length; start += DAPI_PROBE_BATCH) {
     await Promise.all(shuffled.slice(start, start + DAPI_PROBE_BATCH).map(async dapiUrl => {
       const {error, pingMs, protocolVersion} = await probeDapiUrl(dapiUrl, network)
@@ -24,13 +25,9 @@ export async function reachableDapiUrls(candidates: string[], network: Network, 
       if (error != null || protocolVersion == null) return
       byVersion.set(protocolVersion, [...byVersion.get(protocolVersion) ?? [], dapiUrl])
     }))
-    const majority = majorityVersionNodes(byVersion)
-    if (!ready && majority.length >= DAPI_POOL_READY) {
-      ready = true
-      onReady(majority)
-    }
+    if (afterBatch(byVersion)) break
   }
-  return majorityVersionNodes(byVersion)
+  return byVersion
 }
 
 // Asked of one random candidate; without an answer every evonode ranks alike.

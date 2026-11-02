@@ -3,9 +3,11 @@ import {LATEST_PLATFORM_VERSION} from 'dash-platform-sdk/src/constants.js'
 import {PlatformVersionWASM, ShieldedBuilderWASM} from 'pshenmic-dpp'
 import {Network} from '../src/types/Network'
 import {Logger} from '../src/utils/logger'
+import {majorityVersionNodes} from '../src/utils/majorityVersionNodes'
 import {versionCheckDelay} from '../src/utils/versionCheckDelay'
 
 import {
+  DAPI_POOL_READY,
   DAPI_REPROBE_MS,
   EPOCH_BOUNDARY_GAP_MS,
   EPOCH_BOUNDARY_POLL_MS,
@@ -13,7 +15,7 @@ import {
   SEED_MIN_PROTOCOL_VERSION,
   VERSION_CHECK_MS,
 } from './constants'
-import {reachableDapiUrls} from './operations/dapi'
+import {dapiUrlsByProtocolVersion} from './operations/dapi'
 import {P2PQuorumKeyProvider} from './P2PQuorumKeyProvider'
 import {Dapi, PlatformEvent} from './types/messages'
 import {SdkSource} from './types/sdk'
@@ -35,6 +37,7 @@ export class SdkRegistry implements SdkSource {
   private readonly latestDapiUrls = new Map<Network, string[]>()
   private readonly platformVersions = new Map<Network, Promise<PlatformVersionWASM>>()
   private readonly epochNumbers = new Map<Network, number>()
+  private readonly epochBoundaries = new Map<Network, number>()
   private readonly refills = new Set<Network>()
   private readonly quorumKeyProviders = new Map(NETWORKS.map(network => [network, new P2PQuorumKeyProvider(network)]))
   private builder: ShieldedBuilderWASM | null = null
@@ -112,10 +115,14 @@ export class SdkRegistry implements SdkSource {
   private async probe(network: Network, dapiUrls: string[]): Promise<string[]> {
     log.info(`${network}: probing ${dapiUrls.length} evonode(s)`)
     let ready: string[] = []
-    const reachable = await reachableDapiUrls(dapiUrls, network, urls => {
-      ready = urls
-      this.pin(network, urls)
-    })
+    const reachable = majorityVersionNodes(await dapiUrlsByProtocolVersion(dapiUrls, network, byVersion => {
+      const majority = majorityVersionNodes(byVersion)
+      if (ready.length === 0 && majority.length >= DAPI_POOL_READY) {
+        ready = majority
+        this.pin(network, majority)
+      }
+      return false
+    }))
     if (reachable.length > ready.length) this.pin(network, reachable)
     return reachable
   }
@@ -130,35 +137,50 @@ export class SdkRegistry implements SdkSource {
   // are mostly backward compatible. A failed check keeps the version already known.
   private checkPlatformVersion(network: Network): void {
     const known = this.platformVersions.get(network)
-    const epochs = this.get(network).node.getEpochsInfo(2, false).then(([a, b]) => a.number < b.number ? [a, b] : [b, a])
-    const running = epochs.then(([, current]) => {
-      // A node still catching up answers an epoch the network has left.
-      const seen = this.epochNumbers.get(network) ?? 0
-      if (current.number < seen) throw new Error(`a node answered epoch ${current.number}, behind ${seen}`)
-      this.epochNumbers.set(network, current.number)
-      const version = Number(current.protocolVersion)
-      if (!Number.isInteger(version)) throw new Error(`epoch reports protocol version ${String(current.protocolVersion)}`)
-      return version
-    })
+    const dapiUrls = this.latestDapiUrls.get(network)
+    const boundary = this.epochBoundaries.get(network)
+    const atBoundary = dapiUrls != null && boundary != null && Math.abs(Date.now() - boundary) <= EPOCH_BOUNDARY_GAP_MS
+    const running = atBoundary ? this.quorumProtocolVersion(network, dapiUrls) : this.epochProtocolVersion(network)
     const capped = running.then(version => Math.min(version, LATEST_PLATFORM_VERSION), () => known ?? LATEST_PLATFORM_VERSION)
     this.platformVersions.set(network, capped)
 
-    Promise.all([epochs, running])
-      .then(async ([[last, current], version]) => {
+    running
+      .then(async version => {
         if (known == null || await capped !== await known) {
           log.info(`${network} runs protocol ${version}${version > LATEST_PLATFORM_VERSION ? `, newer than this SDK's ${LATEST_PLATFORM_VERSION}` : ''}`)
           // Nodes that did not follow the upgrade drop out of the pool.
-          const dapiUrls = this.latestDapiUrls.get(network)
           if (known != null && dapiUrls != null) void this.probe(network, dapiUrls)
         }
-        const boundary = 2 * Number(current.startTime) - Number(last.startTime)
-        return versionCheckDelay(Date.now(), boundary, EPOCH_BOUNDARY_GAP_MS, EPOCH_BOUNDARY_POLL_MS, VERSION_CHECK_MS)
+        return versionCheckDelay(Date.now(), this.epochBoundaries.get(network)!, EPOCH_BOUNDARY_GAP_MS, EPOCH_BOUNDARY_POLL_MS, VERSION_CHECK_MS)
       })
       .catch(err => {
         log.warn(`${network}: protocol version check failed:`, err)
         return EPOCH_BOUNDARY_POLL_MS
       })
       .then(delay => setTimeout(() => this.checkPlatformVersion(network), delay).unref?.())
+  }
+
+  // Also estimates the next epoch boundary from the length of the last epoch.
+  private async epochProtocolVersion(network: Network): Promise<number> {
+    const [last, current] = (await this.get(network).node.getEpochsInfo(2, false)).sort((a, b) => a.number - b.number)
+    // A node still catching up answers an epoch the network has left.
+    const seen = this.epochNumbers.get(network) ?? 0
+    if (current!.number < seen) throw new Error(`a node answered epoch ${current!.number}, behind ${seen}`)
+    this.epochNumbers.set(network, current!.number)
+    this.epochBoundaries.set(network, 2 * Number(current!.startTime) - Number(last!.startTime))
+    const version = Number(current!.protocolVersion)
+    if (!Number.isInteger(version)) throw new Error(`epoch reports protocol version ${String(current!.protocolVersion)}`)
+    return version
+  }
+
+  // At an epoch boundary the version is read from the validators executing the
+  // blocks, not from a single node of the pool that may lag behind them.
+  private async quorumProtocolVersion(network: Network, dapiUrls: string[]): Promise<number> {
+    const byVersion = await dapiUrlsByProtocolVersion(dapiUrls, network, found => majorityVersionNodes(found).length >= DAPI_POOL_READY)
+    const majority = majorityVersionNodes(byVersion)
+    const version = [...byVersion].find(([, nodes]) => nodes === majority)?.[0]
+    if (version == null) throw new Error(`none of ${dapiUrls.length} evonode(s) answered`)
+    return version
   }
 
   private pin(network: Network, reachable: string[]): void {
