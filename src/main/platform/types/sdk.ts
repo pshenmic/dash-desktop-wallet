@@ -8,4 +8,5 @@ export interface SdkSource {
   warmup: () => Promise<void>
   activeDapiUrls: (network: Network) => string[]
   refillBannedPool: (network: Network) => void
+  protocolVersion: (network: Network) => number | null
 }

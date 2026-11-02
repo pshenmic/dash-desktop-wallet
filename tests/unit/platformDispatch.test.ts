@@ -24,6 +24,7 @@ const hangingRegistry = (): SdkSource => ({
   warmup: async () => undefined,
   activeDapiUrls: () => [],
   refillBannedPool: () => undefined,
+  protocolVersion: () => null,
 })
 
 const balanceRequest = (requestId: string): PlatformRequestMessage => ({

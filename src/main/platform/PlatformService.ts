@@ -203,6 +203,7 @@ export class PlatformService {
     const ctx: OperationContext = {
       sdk,
       network,
+      protocolVersion: this.registry.protocolVersion(network),
       signal,
       progress: (phase, fetched, total) => this.emit({type: 'progress', requestId, phase, fetched, total}),
       notesSpent: indexes => this.emit({type: 'notesSpent', requestId, indexes}),

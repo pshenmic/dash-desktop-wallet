@@ -7,6 +7,8 @@ import {PlatformErrorCode, PlatformPhase} from '../types/messages'
 export interface OperationContext {
   sdk: DashPlatformSDK
   network: Network
+  // The version most evonodes run; null until the first probe answers.
+  protocolVersion: number | null
   signal: AbortSignal
   progress: (phase: PlatformPhase, fetched: number, total: number) => void
   notesSpent: (indexes: number[]) => void

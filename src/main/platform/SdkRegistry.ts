@@ -1,7 +1,9 @@
 import {DashPlatformSDK, GRPCConnectionPool} from 'dash-platform-sdk'
+import {LATEST_PLATFORM_VERSION} from 'dash-platform-sdk/src/constants.js'
 import {ShieldedBuilderWASM} from 'pshenmic-dpp'
 import {Network} from '../src/types/Network'
 import {Logger} from '../src/utils/logger'
+import {majorityVersion} from '../src/utils/majorityVersion'
 
 import {DAPI_POOL_READY, DAPI_REPROBE_MS, DAPI_WATCHDOG_MS, NETWORKS, SEED_MIN_PROTOCOL_VERSION} from './constants'
 import {reachableDapiUrls} from './operations/dapi'
@@ -24,6 +26,7 @@ export class SdkRegistry implements SdkSource {
   private readonly pinnedDapiUrls = new Map<Network, string[] | null>()
   // The list each network was last asked to probe, so only the latest is retried.
   private readonly latestDapiUrls = new Map<Network, string[]>()
+  private readonly protocolVersions = new Map<Network, number>()
   private readonly refills = new Set<Network>()
   private readonly quorumKeyProviders = new Map(NETWORKS.map(network => [network, new P2PQuorumKeyProvider(network)]))
   private builder: ShieldedBuilderWASM | null = null
@@ -102,19 +105,19 @@ export class SdkRegistry implements SdkSource {
   // Pins the first DAPI_POOL_READY to answer, then every one that did.
   private async probe(network: Network, dapiUrls: string[]): Promise<string[]> {
     log.info(`${network}: probing ${dapiUrls.length} evonode(s)`)
-    const reachable = await reachableDapiUrls(dapiUrls, network, urls => this.pin(network, urls))
+    const reachable = this.follow(network, await reachableDapiUrls(dapiUrls, network, urls => this.pin(network, urls)))
     if (reachable.length > 0 && reachable.length !== DAPI_POOL_READY) this.pin(network, reachable)
     return reachable
   }
 
-  // A protocol upgrade activates at an epoch boundary; re-pinning when a pinned
-  // node leaves the majority version follows it.
+  // A protocol upgrade activates at an epoch boundary; nodes left on the old
+  // version drop out of the pool.
   private async watch(): Promise<void> {
     if (this.watching) return
     this.watching = true
     try {
       for (const [network, dapiUrls] of this.latestDapiUrls) {
-        const reachable = await reachableDapiUrls(dapiUrls, network)
+        const reachable = this.follow(network, await reachableDapiUrls(dapiUrls, network))
         const pinned = this.pinnedDapiUrls.get(network)
         if (reachable.length === 0 || this.latestDapiUrls.get(network) !== dapiUrls || pinned?.every(url => reachable.includes(url))) continue
         this.pin(network, reachable)
@@ -122,6 +125,22 @@ export class SdkRegistry implements SdkSource {
     } finally {
       this.watching = false
     }
+  }
+
+  // Records the version most nodes run and answers the nodes on it. One newer than
+  // this SDK knows is followed too: upgrades are mostly backward compatible.
+  private follow(network: Network, nodesByVersion: Map<number, string[]>): string[] {
+    const version = majorityVersion(nodesByVersion)
+    if (version == null) return []
+    if (version > LATEST_PLATFORM_VERSION && version !== this.protocolVersions.get(network)) {
+      log.warn(`${network} runs protocol ${version}, newer than this SDK's ${LATEST_PLATFORM_VERSION}`)
+    }
+    this.protocolVersions.set(network, version)
+    return nodesByVersion.get(version)!
+  }
+
+  protocolVersion(network: Network): number | null {
+    return this.protocolVersions.get(network) ?? null
   }
 
   private pin(network: Network, reachable: string[]): void {

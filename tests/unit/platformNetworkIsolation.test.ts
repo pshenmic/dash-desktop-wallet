@@ -66,6 +66,7 @@ const setup = (): {
     warmup,
     activeDapiUrls: () => [],
     refillBannedPool: () => undefined,
+    protocolVersion: () => null,
   }
   const service = new PlatformService(registry, event => events.push(event))
   return {service, sdks, events, warmup}
