@@ -157,21 +157,23 @@ export default async function Home() {
     <>
       <header className="nav">
         <div className="nav-inner">
-          <a href="#top" className="flex items-center gap-2.5 text-[color:var(--color-text)]">
-            <DashLogo width={28} height={28} />
-            <span className="text-[13px] font-semibold leading-tight">
-              Desktop
-              <br />
-              Wallet
-            </span>
-          </a>
-          <nav className="nav-links">
-            {NAV_LINKS.map((link) => (
-              <a key={link.href} href={link.href}>
-                {link.label}
-              </a>
-            ))}
-          </nav>
+          <div className="flex items-center gap-8">
+            <a href="#top" className="flex items-center gap-2.5 text-[color:var(--color-text)]">
+              <DashLogo width={28} height={28} />
+              <span className="text-[13px] font-semibold leading-tight">
+                Desktop
+                <br />
+                Wallet
+              </span>
+            </a>
+            <nav className="nav-links">
+              {NAV_LINKS.map((link) => (
+                <a key={link.href} href={link.href}>
+                  {link.label}
+                </a>
+              ))}
+            </nav>
+          </div>
           <a className="btn-brand btn-sm" href={primary?.url ?? '#download'}>
             Download
           </a>
