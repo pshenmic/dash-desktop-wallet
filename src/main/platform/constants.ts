@@ -77,11 +77,6 @@ export const FUNDING_REMAINDER_STAND_IN = 255
 // rather than truncating it. Versioned, so it can move under a protocol bump.
 export const PROVED_QUERY_LIMIT = 100
 
-// A protocol upgrade activates at an epoch boundary, so the version fees are
-// priced at can be this stale for a while after one.
-export const PLATFORM_VERSION_TTL_MS = 10 * 60_000
-export const PLATFORM_VERSION_RETRY_MS = 30_000
-
 // Prover-lane work saturates the single thread this process has, so serialising
 // it costs nothing and guarantees a spend sees what the sync before it
 // recovered. Reads get no lane: they are socket waits.

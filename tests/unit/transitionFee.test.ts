@@ -83,7 +83,7 @@ function assetLockTransaction(inputCount: number): SDKTransaction {
 // The protocol version is the one network read a quote makes; stood in so the
 // suite stays offline.
 const sdk = new DashPlatformSDK({network: 'testnet'})
-Object.assign(sdk.node, {getEpochsInfo: async () => [{protocolVersion: 13}]})
+Object.assign(sdk.node, {getProtocolVersion: async () => 13})
 // A registration's two state reads: has the identity written to DPNS, and does
 // it already own a name.
 const dpnsState = {contractNonce: 1n, named: true}
