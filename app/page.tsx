@@ -1,5 +1,5 @@
 import { headers } from 'next/headers'
-import { CopyButton } from './CopyButton'
+import { Heading, Text, Badge, Accordion, DashLogo, CopyButton } from 'dash-ui-kit/react'
 import {
   ARCH_NAMES,
   LATEST_URL,
@@ -13,7 +13,7 @@ import {
   getLatestRelease,
   pickPrimary,
   type Download,
-  type Platform
+  type Platform,
 } from '@/lib/releases'
 
 const APT_COMMANDS = `curl -fsSL https://pshenmic.github.io/dash-desktop/key.asc \\
@@ -26,41 +26,142 @@ sudo apt update && sudo apt install dash-desktop`
 
 const SNAP_COMMAND = 'sudo snap install dash-desktop-wallet'
 
-// Shown before release data loads or if GitHub is unreachable
-const FALLBACK_LINK: Record<Platform, string> = {
-  mac: 'Download .dmg',
-  windows: 'Download .exe',
-  linux: 'Download from GitHub'
-}
+const NAV_LINKS = [
+  { label: 'Home', href: '#top' },
+  { label: 'Features', href: '#features' },
+  { label: 'Download', href: '#download' },
+  { label: 'Support', href: '#faq' },
+  { label: 'Developers', href: REPO_URL },
+]
+
+const FEATURE_CARDS = [
+  {
+    badge: 'Layer 1',
+    title: 'Dash Core',
+    items: [
+      'Send DASH with fee preview and coin control',
+      'InstantSend and ChainLock status on every transaction',
+      'Full history with incoming and outgoing detection',
+      'Receive with QR code, label any address',
+      'Contacts for the people you pay often',
+    ],
+  },
+  {
+    badge: 'Layer 2',
+    title: 'Dash Platform',
+    items: [
+      'Register identities, funded from L1 or Platform addresses',
+      'Top up, transfer and withdraw credits back to L1',
+      'DPNS usernames like alice.dash resolved automatically',
+      'Platform addresses for direct credit transfers',
+    ],
+  },
+  {
+    badge: 'Privacy',
+    title: 'Shielded Transactions',
+    items: [
+      'Shield credits into the Orchard pool',
+      'Send privately between shielded addresses',
+      'Unshield or withdraw back out when you need to',
+    ],
+  },
+  {
+    badge: 'Network',
+    title: 'Connect Your Way',
+    items: [
+      'Mainnet and testnet',
+      'Dashscan mode: instant start, no sync',
+      'P2P mode: SPV sync with BIP157/158 compact filters',
+      'Manage peers, DNS seeds and fee multipliers',
+    ],
+  },
+]
+
+const SECURITY_CARDS = [
+  {
+    title: 'Non-custodial',
+    body: 'Keys are derived on your machine. Nobody else can move your funds.',
+  },
+  {
+    title: 'Encrypted at rest',
+    body: 'Your recovery phrase is encrypted with AES-256-GCM using a key derived from your password with PBKDF2-SHA-512.',
+  },
+  {
+    title: 'No tracking',
+    body: 'No accounts, analytics, ads or crash reporting.',
+  },
+  {
+    title: 'Verified sync',
+    body: 'In P2P mode, headers are checked against difficulty rules and blocks against their merkle roots before anything is trusted.',
+  },
+]
+
+const FAQ_ITEMS = [
+  {
+    question: 'What Is Dash Desktop Wallet?',
+    answer:
+      'Dash Desktop Wallet is a non-custodial desktop application for the Dash network. It supports both Layer 1 (core payments) and Layer 2 (Dash Platform identities, DPNS, and credits), plus shielded Orchard transactions — all from a single recovery phrase.',
+  },
+  {
+    question: 'Is Dash Desktop free to use?',
+    answer:
+      'Yes, Dash Desktop Wallet is free and open source (MIT license). There are no fees for the wallet itself — only standard Dash network transaction fees apply.',
+  },
+  {
+    question: 'Can I use Dash Platform with Dash Desktop?',
+    answer:
+      'Yes. You can register identities, top up and transfer Platform credits, resolve DPNS names, and withdraw credits back to L1 — all from within the wallet.',
+  },
+  {
+    question: 'Does it support shielded transactions?',
+    answer:
+      'Yes. Dash Desktop supports the Orchard shielded pool. You can shield funds, send privately between shielded addresses, and unshield back to transparent addresses.',
+  },
+  {
+    question: 'Where can I get help or report a bug?',
+    answer: 'Visit the GitHub issues page or the Dash community forums. Links are available in the footer.',
+  },
+  {
+    question: 'Is Dash Desktop a non-custodial wallet?',
+    answer:
+      'Yes. Your keys are derived and stored on your device. No third party — including the developers — can access or recover your funds. Keep your recovery phrase safe.',
+  },
+]
+
+const TEAM_MEMBERS = [
+  { name: 'Mikhail Pshenichnikov', role: 'Team Lead' },
+  { name: 'Roman 1337', role: 'Frontend Developer' },
+  { name: 'Alexey Yakushin', role: 'Fullstack Developer' },
+  { name: '', role: '' },
+  { name: '', role: '' },
+]
 
 const PLATFORM_NOTES: Record<Platform, string> = {
   mac: 'Universal build for Apple silicon and Intel. Signed and notarized.',
   windows: '64-bit installer for Windows 10 and 11.',
-  linux: 'AppImage, .deb and Snap for x64 and arm64.'
+  linux: 'AppImage, .deb and Snap for x64 and arm64.',
 }
 
 function AssetList({ platform, downloads }: { platform: Platform; downloads: Download[] }) {
   const items = downloads.filter((d) => d.platform === platform)
 
   return (
-    <ul className="assets">
+    <div className="flex flex-col gap-2 mt-5">
       {items.length === 0 ? (
-        <li>
-          <a href={LATEST_URL}>{FALLBACK_LINK[platform]}</a>
-        </li>
+        <a href={LATEST_URL} className="download-asset">
+          <span className="text-[15px]">Download</span>
+        </a>
       ) : (
         items.map((d) => (
-          <li key={d.name}>
-            <a href={d.url}>
-              <span className="asset-label">{d.label}</span>
-              <span className="asset-meta">
-                {ARCH_NAMES[d.arch]} · {formatSize(d.size)}
-              </span>
-            </a>
-          </li>
+          <a key={d.name} href={d.url} className="download-asset" target="_blank" rel="noopener">
+            <span className="text-[15px]">{d.label}</span>
+            <span className="text-[13px] text-[color:var(--color-muted)]">
+              {ARCH_NAMES[d.arch]} · {formatSize(d.size)}
+            </span>
+          </a>
         ))
       )}
-    </ul>
+    </div>
   )
 }
 
@@ -68,7 +169,7 @@ export default async function Home() {
   const requestHeaders = await headers()
   const { platform, arch } = detectPlatform(
     requestHeaders.get('user-agent') ?? '',
-    requestHeaders.get('sec-ch-ua-platform') ?? ''
+    requestHeaders.get('sec-ch-ua-platform') ?? '',
   )
 
   const release = await getLatestRelease()
@@ -77,213 +178,201 @@ export default async function Home() {
 
   return (
     <>
+      {/* Header */}
       <header className="nav">
-        <div className="wrap nav-inner">
-          <a className="brand" href="#top">
-            <img src="/icon.png" alt="" width={28} height={28} />
-            <span>Dash Desktop</span>
+        <div className="max-w-[1344px] mx-auto px-12 flex items-center justify-between h-[72px]">
+          <a href="#top" className="flex items-center gap-3 text-[color:var(--color-text)] font-semibold no-underline">
+            <DashLogo width={32} height={32} />
+            <span className="text-lg whitespace-nowrap">
+              Desktop<br />Wallet
+            </span>
           </a>
-          <nav className="nav-links">
-            <a href="#features">Features</a>
-            <a href="#security">Security</a>
-            <a href="#download">Download</a>
-            <a href={REPO_URL} className="nav-gh">
-              GitHub
-            </a>
+          <nav className="flex gap-7 text-[15px] nav-links">
+            {NAV_LINKS.map((link) => (
+              <a key={link.href} href={link.href}>
+                {link.label}
+              </a>
+            ))}
           </nav>
         </div>
       </header>
 
       <main id="top">
-        <section className="hero">
-          <div className="wrap hero-inner">
-            <img className="hero-icon" src="/icon.png" alt="Dash Desktop Wallet icon" width={112} height={112} />
-            <h1>Dash Desktop Wallet</h1>
-            <p className="lede">
-              Desktop wallet app supporting both layers of <a href="https://dash.org">Dash</a> network. Core payments,
-              Platform identities and shielded transactions in a single desktop app, built on one recovery phrase. Your
-              keys never leave your computer.
-            </p>
+        {/* Hero */}
+        <section className="pt-[120px] pb-24 text-center" style={{
+          background: 'radial-gradient(60% 60% at 50% 0%, color-mix(in srgb, var(--color-brand) 10%, transparent), transparent 70%)',
+        }}>
+          <div className="max-w-[1344px] mx-auto px-12">
+            <Badge color="blue" className="mb-6">
+              Your Dash. Your Desktop Wallet.
+            </Badge>
+            <Heading as="h1" size="3xl" className="text-[56px] font-extrabold tracking-[-0.03em]">
+              Dash Desktop Wallet
+            </Heading>
+            <Text size="lg" className="max-w-[620px] mx-auto mt-6 text-[color:var(--color-muted)]">
+              Core payments, Platform identities and shielded transactions in a single desktop app, built on one recovery phrase. Your keys never leave your computer.
+            </Text>
 
-            <div className="cta">
-              <a className="btn btn-primary" href={primary?.url ?? LATEST_URL}>
+            <div className="flex flex-wrap justify-center gap-3 mt-10">
+              <a className="btn-brand" href={primary?.url ?? LATEST_URL}>
                 {primary && platform ? `Download for ${PLATFORM_NAMES[platform]}` : 'Download'}
               </a>
-              <a className="btn btn-ghost" href="#download">
-                All platforms
+              <a className="btn-ghost" href="#download">
+                All Platforms
               </a>
             </div>
-            <p className="meta">
+
+            <Text size="sm" className="mt-5 text-[color:var(--color-muted)]">
               {primary && release
                 ? `${release.tag}${release.prerelease ? ' (pre-release)' : ''} · ${primary.label} · ${formatSize(primary.size)}`
-                : 'macOS · Windows · Linux  ·  Free and open source (MIT)'}
-            </p>
-          </div>
-        </section>
+                : release
+                  ? `${release.tag} · macOS · Windows · Linux · Free and open source (MIT)`
+                  : 'macOS · Windows · Linux · Free and open source (MIT)'}
+            </Text>
 
-        <section className="pillars">
-          <div className="wrap pillars-grid">
-            <div className="pillar">
-              <h3>Both layers, one seed</h3>
-              <p>Send DASH, register an identity, top it up and withdraw back to L1 without switching apps.</p>
-            </div>
-            <div className="pillar">
-              <h3>Private by choice</h3>
-              <p>Move credits into the shielded pool and transact between shielded addresses.</p>
-            </div>
-            <div className="pillar">
-              <h3>Your node, if you want it</h3>
-              <p>
-                Start instantly through Dashscan, or switch to a built-in SPV client that syncs from the Dash P2P network.
-              </p>
+            {/* Hero image */}
+            <div className="mt-16 relative mx-auto max-w-[985px]">
+              <img
+                src="/icon.png"
+                alt="Dash Desktop Wallet"
+                className="w-[112px] h-[112px] mx-auto rounded-[24px] shadow-lg"
+              />
             </div>
           </div>
         </section>
 
-        <section id="features" className="section">
-          <div className="wrap">
-            <h2>Features</h2>
-            <div className="features">
-              <article className="feature">
-                <span className="tag">L1</span>
-                <h3>Dash Core</h3>
-                <ul>
-                  <li>Send DASH with fee preview and coin control</li>
-                  <li>InstantSend and ChainLock status on every transaction</li>
-                  <li>Full history with incoming and outgoing detection</li>
-                  <li>Receive with QR code, label any address</li>
-                  <li>Contacts for the people you pay often</li>
-                </ul>
-              </article>
-              <article className="feature">
-                <span className="tag">L2</span>
-                <h3>Dash Platform</h3>
-                <ul>
-                  <li>Register identities, funded from L1 or Platform addresses</li>
-                  <li>Top up, transfer and withdraw credits back to L1</li>
-                  <li>
-                    DPNS usernames like <code>alice.dash</code> resolved automatically
-                  </li>
-                  <li>Platform addresses for direct credit transfers</li>
-                </ul>
-              </article>
-              <article className="feature">
-                <span className="tag">Privacy</span>
-                <h3>Shielded transactions</h3>
-                <ul>
-                  <li>Shield credits into the Orchard pool</li>
-                  <li>Send privately between shielded addresses</li>
-                  <li>Unshield or withdraw back out when you need to</li>
-                </ul>
-              </article>
-              <article className="feature">
-                <span className="tag">Network</span>
-                <h3>Connect your way</h3>
-                <ul>
-                  <li>Mainnet and testnet</li>
-                  <li>Dashscan mode: instant start, no sync</li>
-                  <li>P2P mode: SPV sync with BIP157/158 compact filters</li>
-                  <li>Manage peers, DNS seeds and fee multipliers</li>
-                </ul>
-              </article>
-              <article className="feature feature-wide">
-                <span className="tag">Wallets</span>
-                <h3>As many wallets as you need</h3>
-                <p>
-                  Create or import BIP39 wallets, keep several and switch at any time, export your recovery phrase,
-                  change a wallet&apos;s password, and see balances in USD, EUR, BTC or RUB.
-                </p>
-              </article>
+        {/* Features */}
+        <section id="features" className="py-[88px]">
+          <div className="max-w-[1344px] mx-auto px-12">
+            <div className="mb-12">
+              <Heading as="h2" size="2xl" className="text-[40px] font-semibold tracking-[-0.03em]">
+                Two Layers. One Dash Desktop
+              </Heading>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+              {FEATURE_CARDS.map((card) => (
+                <div key={card.title} className="feature-card p-8 flex flex-col">
+                  <Badge color="blue" className="w-fit mb-4">
+                    {card.badge}
+                  </Badge>
+                  <Heading as="h3" size="xl" className="text-2xl font-bold mb-4">
+                    {card.title}
+                  </Heading>
+                  <ul className="list-disc pl-5 space-y-2 text-[color:var(--color-muted)] text-[15px]">
+                    {card.items.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
-        <section id="security" className="section section-alt">
-          <div className="wrap">
-            <h2>Security &amp; privacy</h2>
-            <div className="security">
-              <div>
-                <h3>Non-custodial</h3>
-                <p>Keys are derived on your machine. Nobody else can move your funds.</p>
-              </div>
-              <div>
-                <h3>Encrypted at rest</h3>
-                <p>
-                  Your recovery phrase is encrypted with AES-256-GCM using a key derived from your password with
-                  PBKDF2-SHA-512.
-                </p>
-              </div>
-              <div>
-                <h3>No tracking</h3>
-                <p>No accounts, analytics, ads or crash reporting.</p>
-              </div>
-              <div>
-                <h3>Verified sync</h3>
-                <p>
-                  In P2P mode, headers are checked against difficulty rules and blocks against their merkle roots before
-                  anything is trusted.
-                </p>
-              </div>
-            </div>
-            <p className="callout">
-              <strong>Write down your recovery phrase and keep it offline.</strong> It is the only way to restore your
-              wallet. Nobody, including the developers, can recover it for you.
-            </p>
-          </div>
-        </section>
+        {/* Security */}
+        <section id="security" className="py-[88px]" style={{ background: 'var(--color-bg-alt)' }}>
+          <div className="max-w-[1344px] mx-auto px-12">
+            <Heading as="h2" size="2xl" className="text-[40px] font-semibold tracking-[-0.03em] mb-12">
+              We Believe in Security and Privacy
+            </Heading>
 
-        <section id="download" className="section">
-          <div className="wrap">
-            <h2>Download</h2>
-            <p className="section-sub">
-              {release ? (
-                <>
-                  <span className="version">{release.tag}</span>
-                  {release.prerelease && <span className="pill pill-warn">Pre-release</span>} released{' '}
-                  {formatDate(release.publishedAt)} · <a href={release.url}>Release notes</a>
-                </>
-              ) : (
-                <>
-                  Get the latest version from <a href={LATEST_URL}>GitHub Releases</a>.
-                </>
-              )}
-            </p>
-
-            <div className="platforms">
-              {PLATFORMS.map((p) => (
-                <article key={p} className={`platform${p === platform ? ' is-current' : ''}`}>
-                  <h3>{PLATFORM_NAMES[p]}</h3>
-                  <p className="platform-note">{PLATFORM_NOTES[p]}</p>
-                  <AssetList platform={p} downloads={downloads} />
-                  {p === 'windows' && (
-                    <p className="hint">
-                      The installer is not code-signed yet, so SmartScreen may warn on first launch. Choose{' '}
-                      <em>More info → Run anyway</em>.
-                    </p>
-                  )}
-                </article>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {SECURITY_CARDS.map((card) => (
+                <div key={card.title} className="security-card">
+                  <Heading as="h4" size="lg" className="text-lg font-semibold mb-3">
+                    {card.title}
+                  </Heading>
+                  <Text className="text-[color:var(--color-muted)] text-[15px]">{card.body}</Text>
+                </div>
               ))}
             </div>
 
-            <div className="linux-install">
-              <div className="install-block">
-                <h3>
-                  Debian / Ubuntu: APT repository <span className="pill">Recommended</span>
-                </h3>
-                <p>Signed, and updates with the rest of your system.</p>
-                <div className="code">
+            <div className="mt-10 p-6 border-l-[3px] border-[color:var(--color-brand)] rounded-[0_24px_24px_0] bg-white text-[color:var(--color-muted)] text-[15px]">
+              <strong className="text-[color:var(--color-text)]">Write down your recovery phrase and keep it offline.</strong>{' '}
+              It is the only way to restore your wallet. Nobody, including the developers, can recover it for you.
+            </div>
+          </div>
+        </section>
+
+        {/* Download */}
+        <section id="download" className="py-[88px]">
+          <div className="max-w-[1344px] mx-auto px-12">
+            <Heading as="h2" size="2xl" className="text-[40px] font-semibold tracking-[-0.03em] mb-4">
+              Download
+            </Heading>
+
+            <div className="flex items-center gap-3 mb-10 text-[color:var(--color-muted)] text-[15px]">
+              {release ? (
+                <>
+                  <span className="text-[color:var(--color-text)] font-semibold">{release.tag}</span>
+                  {release.prerelease && (
+                    <Badge color="orange" className="text-xs">
+                      Pre-release
+                    </Badge>
+                  )}
+                  <span>released {formatDate(release.publishedAt)}</span>
+                  <span>·</span>
+                  <a href={release.url} className="text-[color:var(--color-brand)]">
+                    Release notes
+                  </a>
+                </>
+              ) : (
+                <>
+                  Get the latest version from{' '}
+                  <a href={LATEST_URL} className="text-[color:var(--color-brand)]">
+                    GitHub Releases
+                  </a>
+                </>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+              {PLATFORMS.map((p) => (
+                <div key={p} className={`download-card${p === platform ? ' is-current' : ''}`}>
+                  <Heading as="h3" size="xl" className="text-2xl font-bold mb-2">
+                    {PLATFORM_NAMES[p]}
+                  </Heading>
+                  <Text className="text-[color:var(--color-muted)] text-[15px]">{PLATFORM_NOTES[p]}</Text>
+                  <AssetList platform={p} downloads={downloads} />
+                  {p === 'windows' && (
+                    <Text size="sm" className="mt-4 text-[color:var(--color-muted)]">
+                      The installer is not code-signed yet. SmartScreen may warn — choose{' '}
+                      <em>More info → Run anyway</em>.
+                    </Text>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Linux install */}
+            <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4 mt-4">
+              <div className="min-w-0 p-8 rounded-[var(--radius-card)] border border-[color:var(--color-border)]" style={{ background: 'var(--color-bg-alt)' }}>
+                <Heading as="h4" size="lg" className="text-lg font-semibold mb-2">
+                  Debian / Ubuntu: APT repository{' '}
+                  <Badge color="blue" className="text-xs align-middle">
+                    Recommended
+                  </Badge>
+                </Heading>
+                <Text className="text-[color:var(--color-muted)] text-[15px] mb-4">
+                  Signed, and updates with the rest of your system.
+                </Text>
+                <div className="code-block">
                   <CopyButton text={APT_COMMANDS} />
                   <pre>
                     <code>{APT_COMMANDS}</code>
                   </pre>
                 </div>
               </div>
-              <div className="install-block">
-                <h3>Snap</h3>
-                <p>
-                  Available on the <a href="https://snapcraft.io/dash-desktop-wallet">Snap Store</a>.
-                </p>
-                <div className="code">
+
+              <div className="min-w-0 p-8 rounded-[var(--radius-card)] border border-[color:var(--color-border)]" style={{ background: 'var(--color-bg-alt)' }}>
+                <Heading as="h4" size="lg" className="text-lg font-semibold mb-2">
+                  Snap
+                </Heading>
+                <Text className="text-[color:var(--color-muted)] text-[15px] mb-4">
+                  Available on the <a href="https://snapcraft.io/dash-desktop-wallet" className="text-[color:var(--color-brand)]">Snap Store</a>.
+                </Text>
+                <div className="code-block">
                   <CopyButton text={SNAP_COMMAND} />
                   <pre>
                     <code>{SNAP_COMMAND}</code>
@@ -292,22 +381,80 @@ export default async function Home() {
               </div>
             </div>
 
-            <p className="section-foot">
-              Looking for an older version or a pre-release? See <a href={RELEASES_URL}>all releases</a>. Prefer to build
-              it yourself? Follow the <a href={`${REPO_URL}#build-from-source`}>build instructions</a>.
-            </p>
+            <Text size="sm" className="mt-10 text-[color:var(--color-muted)] text-center">
+              Looking for an older version or a pre-release? See <a href={RELEASES_URL} className="text-[color:var(--color-brand)]">all releases</a>. Prefer to build it yourself? Follow the{' '}
+              <a href={`${REPO_URL}#build-from-source`} className="text-[color:var(--color-brand)]">build instructions</a>.
+            </Text>
+          </div>
+        </section>
+
+        {/* Team */}
+        <section className="py-[88px]" style={{ background: 'var(--color-bg-alt)' }}>
+          <div className="max-w-[1344px] mx-auto px-12">
+            <Heading as="h2" size="2xl" className="text-[40px] font-semibold tracking-[-0.03em] mb-12 text-center">
+              Team
+            </Heading>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {TEAM_MEMBERS.filter((m) => m.name).map((member) => (
+                <div key={member.name} className="security-card text-center">
+                  <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-[color:color-mix(in_srgb,var(--color-brand)_12%,transparent)] flex items-center justify-center">
+                    <span className="text-2xl font-bold text-[color:var(--color-brand)]">
+                      {member.name.charAt(0)}
+                    </span>
+                  </div>
+                  <Heading as="h5" size="md" className="text-base font-semibold">
+                    {member.name}
+                  </Heading>
+                  <Text size="sm" className="text-[color:var(--color-muted)]">
+                    {member.role}
+                  </Text>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* FAQ */}
+        <section id="faq" className="py-[88px]">
+          <div className="max-w-[1344px] mx-auto px-12">
+            <Heading as="h2" size="2xl" className="text-[40px] font-semibold tracking-[-0.03em] mb-12">
+              Help & FAQ
+            </Heading>
+
+            <div className="flex flex-col gap-4">
+              {FAQ_ITEMS.map((item) => (
+                <Accordion key={item.question} title={item.question}>
+                  <Text className="text-[color:var(--color-muted)] leading-relaxed">{item.answer}</Text>
+                </Accordion>
+              ))}
+            </div>
           </div>
         </section>
       </main>
 
-      <footer className="footer">
-        <div className="wrap footer-inner">
-          <span>MIT © pshenmic</span>
-          <nav>
-            <a href={REPO_URL}>Source</a>
-            <a href={`${REPO_URL}/blob/master/PRIVACY.md`}>Privacy policy</a>
-            <a href={`${REPO_URL}/issues`}>Report an issue</a>
-          </nav>
+      {/* Footer */}
+      <footer className="py-8">
+        <div className="max-w-[1344px] mx-auto px-12">
+          <div className="footer-card flex flex-wrap items-center justify-between gap-4 px-8 py-6">
+            <div className="flex items-center gap-3">
+              <DashLogo width={24} height={24} />
+              <Text size="sm" className="text-[color:var(--color-muted)]">
+                @2026 Dash Desktop Wallet
+              </Text>
+            </div>
+            <nav className="flex gap-6 text-[14px]">
+              <a href={`${REPO_URL}`} className="text-[color:var(--color-muted)] hover:text-[color:var(--color-text)]">
+                Source
+              </a>
+              <a href="#" className="text-[color:var(--color-muted)] hover:text-[color:var(--color-text)]">
+                Terms
+              </a>
+              <a href={`${REPO_URL}/blob/master/PRIVACY.md`} className="text-[color:var(--color-muted)] hover:text-[color:var(--color-text)]">
+                Privacy
+              </a>
+            </nav>
+          </div>
         </div>
       </footer>
     </>
