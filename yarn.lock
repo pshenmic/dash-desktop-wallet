@@ -2841,10 +2841,10 @@ dash-core-sdk@1.1.5-dev.1:
     typescript "^5.9.2"
     ws "^8.18.3"
 
-dash-platform-sdk@1.6.0-dev.5:
-  version "1.6.0-dev.5"
-  resolved "https://registry.yarnpkg.com/dash-platform-sdk/-/dash-platform-sdk-1.6.0-dev.5.tgz#6225e1a8cb66ae0bfd95ab9541bd566692f7aa18"
-  integrity sha512-Sw/xS8VN/8rM+JNE27juR8C0GH+EG0X1LQVROkUVmSNqMKiH/4CEti0HFdQFpp+H3x0kqjUI2H17DlYMQlfE+A==
+dash-platform-sdk@1.6.0-dev.8:
+  version "1.6.0-dev.8"
+  resolved "https://registry.yarnpkg.com/dash-platform-sdk/-/dash-platform-sdk-1.6.0-dev.8.tgz#4d333def5666dc4d6ca2b33eb181b575fe958e0b"
+  integrity sha512-jH8yaktAg1AWlTZgTXyKD8LkxqeZGaGeUHgYgePD+5Nru4jut5Vie1FJWXZAMhRcT9+SsIjcdF1gnMzNJGdzDQ==
   dependencies:
     "@bufbuild/protobuf" "^2.6.0"
     "@protobuf-ts/grpcweb-transport" "^2.11.1"
