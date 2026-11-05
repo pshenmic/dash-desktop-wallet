@@ -25,7 +25,6 @@ export class ProviderRegistry {
   private fetcher: BlockFetcher | null = null
   // Block hash (display) → height and the registrations it holds.
   private wanted = new Map<string, {height: number; proTxHashes: string[]}>()
-  private queue: string[] = []
   // Not where confirmedHash says, so not asked again this session.
   private unresolvable = new Set<string>()
   // The last list held a node whose registration could not be read yet.
@@ -88,7 +87,6 @@ export class ProviderRegistry {
     }
     const indexing = [...this.wanted.values()].reduce((n, {proTxHashes}) => n + proTxHashes.length, 0)
     if (indexing > 0) log.info(`indexing ${indexing} masternode registration(s) from ${this.wanted.size} block(s)`)
-    this.queue = [...this.wanted.keys()]
     this.pump()
     this.emitIfSettled()
   }
@@ -149,7 +147,6 @@ export class ProviderRegistry {
     this.fetcher?.stop()
     this.fetcher = null
     this.wanted.clear()
-    this.queue = []
     this.acceptedAt = 0
   }
 
@@ -158,7 +155,6 @@ export class ProviderRegistry {
     this.registrations = new Map()
     this.entries = null
     this.wanted.clear()
-    this.queue = []
     this.acceptedAt = 0
     this.fetcher?.reset()
   }
@@ -175,14 +171,18 @@ export class ProviderRegistry {
     return true
   }
 
+  // A delivered block leaves `wanted` before this runs and request() skips one in
+  // flight, so the walk stops a few entries in.
   private pump(): void {
     const pool = this.opts.pool()
     if (this.fetcher == null && pool != null) {
       this.fetcher = new BlockFetcher({rotation: new PeerRotation(() => pool.readyPeers), messages: pool.messages})
     }
-    while (this.fetcher != null && this.fetcher.size < REGISTRATION_BLOCKS_INFLIGHT && this.queue.length > 0) {
-      const blockHash = this.queue.shift()!
-      this.fetcher.request(this.wanted.get(blockHash)!.height, displayHexToWire(blockHash))
+    const fetcher = this.fetcher
+    if (fetcher == null) return
+    for (const [blockHash, {height}] of this.wanted) {
+      if (fetcher.size >= REGISTRATION_BLOCKS_INFLIGHT) return
+      fetcher.request(height, displayHexToWire(blockHash))
     }
   }
 

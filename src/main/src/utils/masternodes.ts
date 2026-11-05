@@ -90,17 +90,21 @@ export function collateralsToStore(owned: Masternode[], stored: MasternodeCollat
   })
 }
 
+// By outpoint: another output of the same transaction is an ordinary coin.
+function collateralOutpoints(collaterals: MasternodeCollateral[]): Set<string> {
+  return new Set(collaterals.map(({txid, vout}) => `${txid}:${vout}`))
+}
+
 // A selection never takes a collateral on its own, since spending it drops the
 // node; a coin-control pick of one is the user's call and stays.
 export function withoutCollaterals(utxos: UTXO[], collaterals: MasternodeCollateral[], source?: CoreSpendSource): UTXO[] {
   if (source?.kind === 'outpoints') return utxos
-  const locked = new Set(collaterals.map(({txid, vout}) => `${txid}:${vout}`))
+  const locked = collateralOutpoints(collaterals)
   return utxos.filter(({txId, vOut}) => !locked.has(`${txId}:${vOut}`))
 }
 
-// By outpoint: another output of the same transaction is an ordinary coin.
 export function withCollateralFlag(utxos: SelectableUtxo[], collaterals: MasternodeCollateral[]): ListedUtxo[] {
-  const locked = new Set(collaterals.map(({txid, vout}) => `${txid}:${vout}`))
+  const locked = collateralOutpoints(collaterals)
   return utxos.map(utxo => ({...utxo, collateral: locked.has(`${utxo.txid}:${utxo.vout}`)}))
 }
 
