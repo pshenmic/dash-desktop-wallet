@@ -3,7 +3,6 @@ import {PlatformOperations} from '../../types/messages'
 import {OperationContext, OperationError} from '../types'
 import {broadcast} from '../broadcast'
 import {buildAssetLockProof} from '../assetLockProof'
-import {platformVersion} from '../platformVersion'
 import {SHIELD_FUNDING_DUMMY_OUTPUTS} from '../../../src/constants/fee/platform'
 import {SHIELDED_ACCOUNT} from '../../../src/constants/addresses'
 
@@ -30,7 +29,7 @@ export async function shieldFromAssetLock(payload: Payload, ctx: OperationContex
     memo: ShieldedMemoWASM.empty() as unknown as string,
     dummyOutputs: SHIELD_FUNDING_DUMMY_OUTPUTS,
     senderOvk,
-    platformVersion: await platformVersion(ctx),
+    platformVersion: await ctx.sdk.node.getProtocolVersion(),
     ...(payload.surplusAddress != null ? {surplusOutput: payload.surplusAddress} : {}),
   })
 
