@@ -62,7 +62,15 @@ interface SelectableUtxoDTO {
   confirmations: number
 }
 
-// Mirrors Masternode in src/main/src/types/Masternode.
+// Mirrors MasternodeKeyChain, ImportedMasternodeKey and Masternode in
+// src/main/src/types/Masternode.
+type MasternodeKeyRole = 'owner' | 'voting' | 'operator'
+
+interface ImportedMasternodeKeyDTO {
+  role: MasternodeKeyRole
+  publicKey: string
+}
+
 interface MasternodeDTO {
   proTxHash: string
   type: string
@@ -79,6 +87,7 @@ interface MasternodeDTO {
   ownerKeyIndex: number | null
   votingKeyIndex: number | null
   operatorKeyIndex: number | null
+  importedRoles: MasternodeKeyRole[]
   platformNodeId: string | null
   platformP2PPort: number | null
   platformHttpPort: number | null
@@ -178,7 +187,10 @@ declare global {
       getTransactionByHash: (hash: string, network: Network) => Promise<TransactionDTO>
       getBalance: (address: string | string[], network: Network) => Promise<unknown>
       getIdentities: (walletId: string) => Promise<unknown>
-      getMasternodes: (walletId: string) => Promise<MasternodeDTO[]>
+      getMasternodes: (walletId: string) => Promise<MasternodeDTO[] | null>
+      getImportedMasternodeKeys: (walletId: string) => Promise<ImportedMasternodeKeyDTO[]>
+      importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => Promise<MasternodeDTO[]>
+      removeMasternodeKey: (walletId: string, key: ImportedMasternodeKeyDTO) => Promise<void>
       getUsernames: (walletId: string) => Promise<unknown>
       refreshDashPay: (walletId: string) => Promise<void>
       registerUsername: (walletId: string, identifier: string, label: string, password: string) => Promise<unknown>

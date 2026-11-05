@@ -1,9 +1,9 @@
 import {beforeEach, describe, expect, it} from 'vitest'
-import {Script} from 'dash-core-sdk'
+import {PrivateKey, Script} from 'dash-core-sdk'
 import {MasternodeDAO} from '../../src/main/src/database/MasternodeDAO'
 import {WalletProviderFactory} from '../../src/main/src/providers/WalletProviderFactory'
 import {MasternodeService} from '../../src/main/src/services/core/MasternodeService'
-import {MasternodeKeyFilter, MasternodeKeys, NetworkMasternode} from '../../src/main/src/types/Masternode'
+import {Masternode, MasternodeKeyFilter, MasternodeKeys, NetworkMasternode} from '../../src/main/src/types/Masternode'
 import {UTXO} from '../../src/main/src/types/UTXO'
 import {masternodeKeyDeriver} from '../../src/main/src/utils/masternodeKeys'
 import {Harness, harness, PASSWORD, VALID_SEEDPHRASE} from './harness'
@@ -59,8 +59,12 @@ describe('MasternodeService.discover', () => {
     await masternodes.discover(walletId)
   }
 
+  async function owned(): Promise<Masternode[]> {
+    return (await masternodes.getMasternodes(walletId))!
+  }
+
   async function listed(): Promise<string[]> {
-    return (await masternodes.getMasternodes(walletId)).map(({proTxHash}) => proTxHash).sort()
+    return (await owned()).map(({proTxHash}) => proTxHash).sort()
   }
 
   async function storedCollaterals(): Promise<string[]> {
@@ -76,8 +80,7 @@ describe('MasternodeService.discover', () => {
       node('d', {votingAddress: key('voting', 1)}),
     ]))
 
-    const owned = await masternodes.getMasternodes(walletId)
-    expect(owned.map(({proTxHash, ownerKeyIndex, votingKeyIndex}) => [proTxHash, ownerKeyIndex, votingKeyIndex]))
+    expect((await owned()).map(({proTxHash, ownerKeyIndex, votingKeyIndex}) => [proTxHash, ownerKeyIndex, votingKeyIndex]))
       .toEqual([['a', 3, null], ['b', 7, null], ['d', null, 1]])
   })
 
@@ -92,8 +95,7 @@ describe('MasternodeService.discover', () => {
       node('e', {type: 'Evo', collateralAddress: 'Xours'}),
     ], [collateral]))
 
-    const owned = await masternodes.getMasternodes(walletId)
-    expect(owned.find(({proTxHash}) => proTxHash === 'a')?.operatorKeyIndex).toBe(0)
+    expect((await owned()).find(({proTxHash}) => proTxHash === 'a')?.operatorKeyIndex).toBe(0)
     expect(await storedCollaterals()).toEqual(['a:aa:0', 'e:ee:0'])
   })
 
@@ -113,5 +115,30 @@ describe('MasternodeService.discover', () => {
 
     expect(await listed()).toEqual(['a'])
     expect(await storedCollaterals()).toEqual(['a:aa:0'])
+  })
+
+  it('answers null, not an empty list, before the first run', async () => {
+    expect(await masternodes.getMasternodes(walletId)).toBeNull()
+  })
+
+  it('finds a node by an imported key, keeps a key no node carries yet, and forgets a removed one', async () => {
+    const voting = PrivateKey.fromBytes(new Uint8Array(32).fill(7), 'mainnet')
+    const unregistered = PrivateKey.fromBytes(new Uint8Array(32).fill(8), 'mainnet')
+    current = source([node('f', {votingAddress: voting.getAddress()})])
+
+    const found = await masternodes.importKey(walletId, 'voting', ` ${voting.toWIF()}\n`)
+    expect(found.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['f', ['voting']]])
+    expect(await masternodes.importKey(walletId, 'owner', unregistered.toWIF())).toEqual([])
+    expect(await masternodes.getImportedKeys(walletId)).toHaveLength(2)
+
+    await masternodes.removeKey(walletId, {role: 'voting', publicKey: voting.getAddress()})
+    expect(await listed()).toEqual([])
+    expect(await masternodes.getImportedKeys(walletId)).toEqual([{role: 'owner', publicKey: unregistered.getAddress()}])
+  })
+
+  it('refuses a key that does not parse, and stores nothing for it', async () => {
+    current = source([])
+    await expect(masternodes.importKey(walletId, 'operator', 'not hex')).rejects.toThrow()
+    expect(await masternodes.getImportedKeys(walletId)).toEqual([])
   })
 })

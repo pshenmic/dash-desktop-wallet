@@ -83,14 +83,28 @@ describe('ownedMasternodes', () => {
   it('owns a node by collateral outpoint, not by collateral address alone', () => {
     const ours = node('ours', {collateralTxid: 'aa', collateralVout: 1})
     const sameAddress = node('theirs', {collateralTxid: 'aa', collateralVout: 2})
-    const owned = ownedMasternodes([ours, sameAddress], none, [utxo('aa', 1, 100_000_000_000n)])
+    const owned = ownedMasternodes([ours, sameAddress], none, [], [utxo('aa', 1, 100_000_000_000n)])
     expect(owned.map(({proTxHash}) => proTxHash)).toEqual(['ours'])
-    expect(owned[0]).toMatchObject({ownerKeyIndex: null, votingKeyIndex: null, operatorKeyIndex: null})
+    expect(owned[0]).toMatchObject({ownerKeyIndex: null, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: []})
   })
 
   it('records each matched key index once per node and drops unmatched nodes', () => {
     const matches = {owner: new Map([['a', 2]]), voting: new Map([['a', 4]]), operator: new Map()}
-    const owned = ownedMasternodes([node('a'), node('a'), node('b')], matches, [])
+    const owned = ownedMasternodes([node('a'), node('a'), node('b')], matches, [], [])
     expect(owned).toHaveLength(1)
-    expect(owned[0]).toMatchObject({proTxHash: 'a', ownerKeyIndex: 2, votingKeyIndex: 4, operatorKeyIndex: null})  })
+    expect(owned[0]).toMatchObject({proTxHash: 'a', ownerKeyIndex: 2, votingKeyIndex: 4, operatorKeyIndex: null})
+  })
+
+  it('owns a node by an imported key, in either operator encoding, only in that role', () => {
+    const owned = ownedMasternodes([
+      node('a', {votingAddress: 'Ximported'}),
+      node('b', {operatorPublicKey: OPERATOR_0_LEGACY}),
+      node('c', {ownerAddress: 'Xother'}),
+    ], none, [
+      {role: 'voting', publicKey: 'Ximported'},
+      {role: 'owner', publicKey: OPERATOR_0},
+      {role: 'operator', publicKey: OPERATOR_0},
+    ], [])
+    expect(owned.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['a', ['voting']], ['b', ['operator']]])
+  })
 })

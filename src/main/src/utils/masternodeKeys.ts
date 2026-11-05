@@ -1,10 +1,11 @@
 import {bls12_381, bls12_381_Fr as Fr} from '@noble/curves/bls12-381.js'
 import {ed25519} from '@noble/curves/ed25519.js'
-import {numberToBytesBE} from '@noble/curves/utils.js'
+import {bytesToNumberBE, numberToBytesBE} from '@noble/curves/utils.js'
 import {hmac} from '@noble/hashes/hmac.js'
 import {sha256, sha512} from '@noble/hashes/sha2.js'
-import {bytesToHex, concatBytes, utf8ToBytes} from '@noble/hashes/utils.js'
+import {bytesToHex, concatBytes, hexToBytes, utf8ToBytes} from '@noble/hashes/utils.js'
 import {HARDENED_OFFSET, HDKey} from '@scure/bip32'
+import {PrivateKey} from 'dash-core-sdk'
 import {KeyPairController} from 'dash-platform-sdk/src/keyPair/index.js'
 import {
   BLS_HD_SEED_KEY,
@@ -101,4 +102,20 @@ export function masternodeKeyDeriver(keys: MasternodeKeys, network: Network, cha
       derivationPath: `${accountPath}/${index}`,
     }),
   }
+}
+
+// An imported provider key in the form the list is searched by: an owner or
+// voting WIF becomes its address, an operator's hex secret its public key.
+export function masternodePublicKey(role: MasternodeKeyChain, privateKey: string, network: Network): string {
+  if (role === 'operator') {
+    const secret = hexToBytes(privateKey)
+    if (secret.length !== 32 || !Fr.isValidNot0(bytesToNumberBE(secret))) throw new Error('Not a BLS secret key')
+    return bytesToHex(G1.BASE.multiply(bytesToNumberBE(secret)).toBytes(true))
+  }
+  const key = PrivateKey.fromWIF(privateKey)
+  // A WIF re-encodes to itself only on the network it was made for.
+  if (PrivateKey.fromBytes(key.bytes(), network, key.compressed).toWIF() !== privateKey) {
+    throw new Error(`Not a ${network} private key`)
+  }
+  return key.getAddress()
 }

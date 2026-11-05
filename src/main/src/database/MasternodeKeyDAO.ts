@@ -1,5 +1,5 @@
 import type {Knex} from 'knex'
-import {MasternodeKeys} from '../types/Masternode'
+import {ImportedMasternodeKey, MasternodeKeys} from '../types/Masternode'
 
 export class MasternodeKeyDAO {
   knex: Knex
@@ -57,5 +57,25 @@ export class MasternodeKeyDAO {
         .onConflict(['wallet_id', 'key_index'])
         .ignore()
     })
+  }
+
+  getImportedKeys = async (walletId: string): Promise<ImportedMasternodeKey[]> => {
+    const rows = await this.knex('masternode_imported_keys')
+      .select('role', 'public_key')
+      .where('wallet_id', walletId)
+    return rows.map(({role, public_key}) => ({role, publicKey: public_key}))
+  }
+
+  saveImportedKey = async (walletId: string, {role, publicKey}: ImportedMasternodeKey): Promise<void> => {
+    await this.knex('masternode_imported_keys')
+      .insert({wallet_id: walletId, role, public_key: publicKey})
+      .onConflict(['wallet_id', 'role', 'public_key'])
+      .ignore()
+  }
+
+  removeImportedKey = async (walletId: string, {role, publicKey}: ImportedMasternodeKey): Promise<void> => {
+    await this.knex('masternode_imported_keys')
+      .where({wallet_id: walletId, role, public_key: publicKey})
+      .delete()
   }
 }

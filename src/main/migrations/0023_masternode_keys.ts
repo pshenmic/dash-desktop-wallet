@@ -30,9 +30,19 @@ export async function up(knex: Knex): Promise<void> {
     table.integer('collateral_vout').notNullable()
     table.primary(['wallet_id', 'pro_tx_hash'])
   })
+
+  // Provider keys imported by private key, kept in the form the list is
+  // searched by: the address for owner and voting, the hex public key for operator.
+  await knex.schema.createTable('masternode_imported_keys', table => {
+    table.text('wallet_id').notNullable().references('wallet_id').inTable('wallet')
+    table.text('role').notNullable()
+    table.text('public_key').notNullable()
+    table.primary(['wallet_id', 'role', 'public_key'])
+  })
 }
 
 export async function down(knex: Knex): Promise<void> {
+  await knex.schema.dropTableIfExists('masternode_imported_keys')
   await knex.schema.dropTableIfExists('masternodes')
   await knex.schema.dropTableIfExists('masternode_platform_keys')
   await knex.schema.dropTableIfExists('masternode_keys')

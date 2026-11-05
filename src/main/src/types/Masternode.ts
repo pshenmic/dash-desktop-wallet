@@ -25,11 +25,19 @@ export interface NetworkMasternode {
 }
 
 // A masternode this wallet holds a key or the collateral of. A null index is a
-// key that is not ours.
+// key the seed does not derive; importedRoles are the ones held by an imported key.
 export interface Masternode extends NetworkMasternode {
   ownerKeyIndex: number | null
   votingKeyIndex: number | null
   operatorKeyIndex: number | null
+  importedRoles: MasternodeKeyChain[]
+}
+
+// publicKey is what the list carries for the role: the address for owner and
+// voting, the hex public key for operator.
+export interface ImportedMasternodeKey {
+  role: MasternodeKeyChain
+  publicKey: string
 }
 
 // What outlives the list: the coin a send must not spend.

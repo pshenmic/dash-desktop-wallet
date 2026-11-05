@@ -3,7 +3,7 @@ import {MASTERNODE_KEY_CHAINS} from '../constants/addresses'
 import {MASTERNODE_COLLATERAL_DUFFS} from '../constants/chain'
 import {DerivedAddress} from '../types/AddressWindow'
 import {DashscanMasternode} from '../types/Dashscan'
-import {Masternode, MasternodeKeyChain, NetworkMasternode} from '../types/Masternode'
+import {ImportedMasternodeKey, Masternode, MasternodeKeyChain, NetworkMasternode} from '../types/Masternode'
 import {UTXO} from '../types/UTXO'
 import {legacyG1} from './masternodeKeys'
 
@@ -53,26 +53,33 @@ export function matchMasternodeKeys(chain: MasternodeKeyChain, derived: DerivedA
   return matches
 }
 
+export function carriesKey(node: NetworkMasternode, {role, publicKey}: ImportedMasternodeKey): boolean {
+  return masternodeFilterValues(role, publicKey).includes(nodeKey(role, node))
+}
+
 export function collateralUtxos(utxos: UTXO[]): UTXO[] {
   return utxos.filter(utxo => MASTERNODE_COLLATERAL_DUFFS.includes(utxo.satoshis))
 }
 
-// A node is ours when it carries one of our keys or spends from one of our
-// collateral outpoints; one listed by several searches appears once.
+// A node is ours when it carries one of our derived or imported keys, or spends
+// from one of our collateral outpoints; one listed by several searches appears once.
 export function ownedMasternodes(
   nodes: NetworkMasternode[],
   matches: Record<MasternodeKeyChain, Map<string, number>>,
+  imported: ImportedMasternodeKey[],
   collateral: UTXO[],
 ): Masternode[] {
   const outpoints = new Set(collateral.map(({txId, vOut}) => `${txId}:${vOut}`))
   const unique = new Map(nodes.map(node => [node.proTxHash, node]))
   return [...unique.values()]
-    .filter(node => outpoints.has(`${node.collateralTxid}:${node.collateralVout}`)
-      || MASTERNODE_KEY_CHAINS.some(chain => matches[chain].has(node.proTxHash)))
     .map(node => ({
       ...node,
       ownerKeyIndex: matches.owner.get(node.proTxHash) ?? null,
       votingKeyIndex: matches.voting.get(node.proTxHash) ?? null,
       operatorKeyIndex: matches.operator.get(node.proTxHash) ?? null,
+      importedRoles: MASTERNODE_KEY_CHAINS.filter(role => imported.some(key => key.role === role && carriesKey(node, key))),
     }))
+    .filter(node => outpoints.has(`${node.collateralTxid}:${node.collateralVout}`)
+      || node.importedRoles.length > 0
+      || MASTERNODE_KEY_CHAINS.some(chain => matches[chain].has(node.proTxHash)))
 }

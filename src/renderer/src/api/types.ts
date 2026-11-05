@@ -201,9 +201,19 @@ export interface SelectableUtxo {
   confirmations: number
 }
 
+export type MasternodeKeyRole = 'owner' | 'voting' | 'operator'
+
+// publicKey is what the list carries for the role: the address for owner and
+// voting, the hex public key for operator.
+export interface ImportedMasternodeKeyDto {
+  role: MasternodeKeyRole
+  publicKey: string
+}
+
 // getMasternodes — a masternode this wallet holds a key or the collateral of, as
-// last listed; empty until the first discovery run after startup. A null key
-// index is a key that is not ours; times are unix seconds, 0 = never.
+// last listed; null until the first discovery run after startup. A null key
+// index is a key the seed does not derive; importedRoles are held by an imported
+// key. Times are unix seconds, 0 = never.
 export interface MasternodeDto {
   proTxHash: string
   type: string
@@ -220,6 +230,7 @@ export interface MasternodeDto {
   ownerKeyIndex: number | null
   votingKeyIndex: number | null
   operatorKeyIndex: number | null
+  importedRoles: MasternodeKeyRole[]
   platformNodeId: string | null
   platformP2PPort: number | null
   platformHttpPort: number | null

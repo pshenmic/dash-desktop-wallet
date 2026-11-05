@@ -9,7 +9,7 @@ export class GetMasternodesHandler {
     this.masternodes = masternodes
   }
 
-  handle = async (_event: IpcMainInvokeEvent, walletId: string): Promise<Masternode[]> => {
+  handle = async (_event: IpcMainInvokeEvent, walletId: string): Promise<Masternode[] | null> => {
     return this.masternodes.getMasternodes(walletId)
   }
 }

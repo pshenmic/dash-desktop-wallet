@@ -1,8 +1,16 @@
 import {describe, expect, it} from 'vitest'
 import {bytesToHex, hexToBytes} from '@noble/hashes/utils.js'
 import {HDKey} from '@scure/bip32'
+import {PrivateKey} from 'dash-core-sdk'
 import {HD_VERSIONS} from '../../src/main/src/constants/addresses'
-import {masternodeAccountPath, masternodeKeys, operatorPublicKey, platformNodeId} from '../../src/main/src/utils/masternodeKeys'
+import {
+  masternodeAccountPath,
+  masternodeKeyDeriver,
+  masternodeKeys,
+  masternodePublicKey,
+  operatorPublicKey,
+  platformNodeId,
+} from '../../src/main/src/utils/masternodeKeys'
 
 // BIP39 seed of "abandon … about"; expected bytes are the dashbls and SLIP-10
 // reference vectors pinned in rust-dashcore key-wallet.
@@ -46,5 +54,31 @@ describe('masternodeKeys', () => {
     }
     expect(masternodeAccountPath('mainnet', 'voting')).toBe("m/9'/5'/3'/1'")
     expect(masternodeAccountPath('testnet', 'owner')).toBe("m/9'/1'/3'/2'")
+  })
+})
+
+describe('masternodePublicKey', () => {
+  const testnet = masternodeKeys(SEED, 'testnet')
+  const ownerSecret = HDKey.fromMasterSeed(SEED, HD_VERSIONS.testnet).derive(`${masternodeAccountPath('testnet', 'owner')}/0`).privateKey!
+
+  it('lists an owner WIF by the address the seed derives for it', () => {
+    const wif = PrivateKey.fromBytes(ownerSecret, 'testnet').toWIF()
+    expect(masternodePublicKey('owner', wif, 'testnet')).toBe(masternodeKeyDeriver(testnet, 'testnet', 'owner').derive(0).address)
+  })
+
+  it('refuses a WIF made for the other network', () => {
+    const wif = PrivateKey.fromBytes(ownerSecret, 'mainnet').toWIF()
+    expect(() => masternodePublicKey('voting', wif, 'testnet')).toThrow('Not a testnet private key')
+  })
+
+  it('lists an operator secret by its basic-scheme public key', () => {
+    expect(masternodePublicKey('operator', `${'00'.repeat(31)}01`, 'mainnet'))
+      .toBe('97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb')
+  })
+
+  it('refuses an operator secret outside the scalar field', () => {
+    for (const secret of ['00'.repeat(32), 'ff'.repeat(32), '01'.repeat(31)]) {
+      expect(() => masternodePublicKey('operator', secret, 'mainnet')).toThrow('Not a BLS secret key')
+    }
   })
 })
