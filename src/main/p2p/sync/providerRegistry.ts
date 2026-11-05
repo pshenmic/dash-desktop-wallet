@@ -30,19 +30,31 @@ export class ProviderRegistry {
   private unresolvable = new Set<string>()
   // The last list held a node whose registration could not be read yet.
   private pending = false
+  private offering = false
 
   constructor(private readonly opts: MasternodeListOptions) {}
 
   get due(): boolean {
-    return this.wanted.size === 0 && Date.now() - this.acceptedAt >= (this.pending ? MNLIST_PENDING_REFRESH_MS : MNLIST_REFRESH_MS)
+    return !this.offering && this.wanted.size === 0 &&
+      Date.now() - this.acceptedAt >= (this.pending ? MNLIST_PENDING_REFRESH_MS : MNLIST_REFRESH_MS)
   }
 
   // A full list only counts once our own chain proves it; one the header sync has
-  // not reached yet is dropped, and the next tip asks again.
+  // not reached yet is dropped, and the next tip asks again. Several peers answer
+  // the same request, so a second list arriving mid-offer is turned away.
   async offer(diff: MnListDiff): Promise<void> {
     const store = this.opts.chain()
     const height = diff.coinbaseHeight
     if (store == null || height == null || !this.due) return
+    this.offering = true
+    try {
+      await this.index(diff, store, height)
+    } finally {
+      this.offering = false
+    }
+  }
+
+  private async index(diff: MnListDiff, store: ChainStore, height: number): Promise<void> {
     const header = await store.getHeaderByHeight(height)
     if (header == null || !listCommitted(diff, header) || !await this.load(store)) return
     this.acceptedAt = Date.now()

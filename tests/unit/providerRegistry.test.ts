@@ -27,11 +27,12 @@ class FakeStore {
   readonly network = 'testnet' as const
   registrations = new Map<string, ProviderRegistration>()
   getHeaderByHeight = async (height: number): Promise<Uint8Array | null> => headerAt(height)
-  // Testnet confirms one block above the registration.
-  findHeights = async (hashes: Set<string>): Promise<Map<string, number>> => {
-    const wire = Buffer.from(displayHexToWire(CONFIRMED_HASH)).toString('hex')
-    return new Map(hashes.has(wire) ? [[wire, REGISTERED + 1]] : [])
-  }
+  // confirmedHash → its height; testnet confirms one block above the registration.
+  confirmed = new Map([[CONFIRMED_HASH, REGISTERED + 1]])
+  findHeights = async (hashes: Set<string>): Promise<Map<string, number>> =>
+    new Map([...this.confirmed]
+      .map(([hash, height]) => [Buffer.from(displayHexToWire(hash)).toString('hex'), height] as const)
+      .filter(([wire]) => hashes.has(wire)))
   getRegistrations = async (): Promise<Map<string, ProviderRegistration>> => new Map(this.registrations)
   writeRegistrations = async (put: Map<string, ProviderRegistration>, del: string[] = []): Promise<void> => {
     put.forEach((registration, proTxHash) => this.registrations.set(proTxHash, registration))
@@ -128,6 +129,26 @@ describe('provider registry', () => {
     await registry.offer(fullList([]))
     vi.advanceTimersByTime(5 * 60_000)
     expect(registry.due).toBe(false)
+  })
+
+  // Several peers answer one getmnlistd; indexing both rebuilt the fetch queue
+  // under blocks already asked, and their arrival crashed the next pump.
+  it('indexes one of two lists that arrive together, and asks each block once', async () => {
+    // More registration blocks than are fetched at once, so some wait in the queue.
+    const others = Array.from({length: 8}, (_, i) => {
+      const confirmedHash = (i + 16).toString(16).repeat(32)
+      store.confirmed.set(confirmedHash, REGISTERED + 10 * (i + 1))
+      return entry((i + 16).toString(16).repeat(32).replace(/^../, 'ee'), confirmedHash)
+    })
+    const list = [entry(EVO, CONFIRMED_HASH), ...others]
+    await Promise.all([registry.offer(fullList(list)), registry.offer(fullList(list))])
+    expect(peer.sent).toHaveLength(8)
+
+    const warn = vi.mocked(console.warn)
+    registry.onBlock(peer as never, {block: registrationBlock()} as never)
+    await vi.waitFor(() => expect(store.registrations.has(EVO)).toBe(true))
+    await vi.waitFor(() => expect(peer.sent).toHaveLength(9))
+    expect(warn.mock.calls.flat().join(' ')).not.toContain('index write failed')
   })
 
   it('passes on a block it never asked for', () => {
