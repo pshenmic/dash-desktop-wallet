@@ -146,8 +146,8 @@ describe('block verification against the header merkle root', () => {
     expect((matched().get(HEIGHT) as Block | undefined)?.txs).toHaveLength(TXS.length)
   })
 
-  // A ProRegTx paying this wallet sits in a block the registry indexed first;
-  // dropping it as the registry's left the scan waiting on it forever.
+  // A ProRegTx paying this wallet sits in a block the registry may have fetched
+  // first; the scan's own request still owns it.
   it('takes a block it asked for even when the registry fetched it too', () => {
     foreign = true
     deliver(honest())

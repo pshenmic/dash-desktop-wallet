@@ -28,7 +28,7 @@ export interface ProviderRegistration {
   platformP2PPort: number | null
 }
 
-// A payout a ProUpRegTx for a watched node set, found by the wallet's filter scan.
+// The payout a ProUpRegTx set for a watched node, found by the wallet's filter scan.
 export interface PayoutUpdate {
   proTxHash: string
   payoutAddress: string | null

@@ -8,9 +8,9 @@ import {memoryWindowStore, runAddressWindow} from '../../utils/addressWindow'
 import {masternodeKeyDeriver, masternodePublicKey} from '../../utils/masternodeKeys'
 import {
   carriesKey,
+  collateralsToStore,
   collateralUtxos,
   masternodeFilterValues,
-  masternodeRows,
   matchMasternodeKeys,
   ownedMasternodes,
 } from '../../utils/masternodes'
@@ -105,7 +105,7 @@ export class MasternodeService {
     const stored = await this.masternodeDAO.getCollaterals(walletId)
     const followed = new Set(stored.filter(row => row.followed).map(({proTxHash}) => proTxHash))
     const followedNow = await provider.watchMasternodes(owned, owned.filter(({proTxHash}) => !followed.has(proTxHash)))
-    await this.masternodeDAO.replaceCollaterals(walletId, masternodeRows(owned, stored, followedNow))
+    await this.masternodeDAO.replaceCollaterals(walletId, collateralsToStore(owned, stored, followedNow))
     this.listed.set(walletId, owned)
     log.debug(`wallet ${walletId}: ${owned.length} masternode(s)`)
   }

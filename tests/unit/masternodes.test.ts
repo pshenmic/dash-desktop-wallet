@@ -11,7 +11,7 @@ import {
   matchMasternodeKeys,
   networkMasternode,
   ownedMasternodes,
-  masternodeRows,
+  collateralsToStore,
   withCollateralFlag,
   withoutCollaterals,
 } from '../../src/main/src/utils/masternodes'
@@ -111,7 +111,7 @@ describe('ownedMasternodes', () => {
       {...node('b'), ownerKeyIndex: 0, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: []},
       {...node('c', {collateralTxid: null, collateralVout: null}), ownerKeyIndex: 1, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: []},
     ]
-    expect(masternodeRows(owned, stored, ['b'])).toEqual([
+    expect(collateralsToStore(owned, stored, ['b'])).toEqual([
       {proTxHash: 'a', txid: 'aa', vout: 0, followed: true},
       {proTxHash: 'b', txid: 'c'.repeat(64), vout: 0, followed: true},
     ])

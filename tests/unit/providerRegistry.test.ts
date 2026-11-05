@@ -94,7 +94,7 @@ describe('provider registry', () => {
     expect(lists).toEqual([])
     expect(peer.sent).toHaveLength(1)
 
-    expect(registry.onBlock(peer as never, {block: registrationBlock()} as never)).toBe(true)
+    registry.onBlock(peer as never, {block: registrationBlock()} as never)
     await vi.waitFor(() => expect(lists).toHaveLength(1))
 
     expect(lists[0][0]).toMatchObject({proTxHash: EVO, ownerAddress: 'yLMWYiFxCpPwim9YuosKAozkqsGf283XCa', registeredHeight: REGISTERED})
@@ -131,8 +131,7 @@ describe('provider registry', () => {
     expect(registry.due).toBe(false)
   })
 
-  // Several peers answer one getmnlistd; indexing both rebuilt the fetch queue
-  // under blocks already asked, and their arrival crashed the next pump.
+  // Several peers answer one getmnlistd; only one of their lists is indexed at a time.
   it('indexes one of two lists that arrive together, and asks each block once', async () => {
     // More registration blocks than are fetched at once, so some wait in the queue.
     const others = Array.from({length: 8}, (_, i) => {
@@ -151,8 +150,10 @@ describe('provider registry', () => {
     expect(warn.mock.calls.flat().join(' ')).not.toContain('index write failed')
   })
 
-  it('passes on a block it never asked for', () => {
-    expect(registry.onBlock(peer as never, {block: registrationBlock()} as never)).toBe(false)
+  it('ignores a block it never asked for', async () => {
+    registry.onBlock(peer as never, {block: registrationBlock()} as never)
+    await Promise.resolve()
+    expect(store.registrations.size).toBe(0)
   })
 
   // A peer that answers with a block whose transactions are not under its root.
@@ -160,7 +161,7 @@ describe('provider registry', () => {
     await registry.offer(fullList([entry(EVO, CONFIRMED_HASH)]))
     const forged = {...registrationBlock(), blockHeader: {merkleRoot: 'ff'.repeat(32)}}
 
-    expect(registry.onBlock(peer as never, {block: forged} as never)).toBe(true)
+    registry.onBlock(peer as never, {block: forged} as never)
     await Promise.resolve()
     expect(store.registrations.size).toBe(0)
     expect(lists).toEqual([])
@@ -188,7 +189,7 @@ describe('provider registry', () => {
     expect(lists.at(-1)![0].payeeAddress).toBe('ySecond')
   })
 
-  // Deleting the registration lost the change the rescan then found, for good.
+  // The registration outlives a reorg that only crosses its payout changes.
   it('drops only the payout changes above a rewind, and takes the rescan\'s again', async () => {
     await registry.offer(fullList([entry(EVO, CONFIRMED_HASH)]))
     registry.onBlock(peer as never, {block: registrationBlock()} as never)
@@ -214,7 +215,7 @@ describe('provider registry', () => {
     expect(store.registrations.has(EVO)).toBe(false)
   })
 
-  // A quorum diff from followTip used to hold the slot while it read a header.
+  // followTip's quorum diffs race the full list, and only a full list is indexed.
   it('lets a full list through while a quorum diff is being received', async () => {
     const quorumDiff = Object.assign(fullList([]), {baseBlockHash: '11'.repeat(32)})
     await Promise.all([registry.offer(quorumDiff), registry.offer(fullList([entry(EVO, CONFIRMED_HASH)]))])

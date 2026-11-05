@@ -32,9 +32,8 @@ function stateKey(network: Network): string {
 // Single-owner facade over chain storage — workers never open LevelDB directly.
 //
 // Holds network-scoped data only (headers, hash cache, filter headers, provider
-// registrations); wallet
-// state lives in SQL. The split keeps chain storage free of anything that will
-// need encrypting under the user's key when SQLCipher lands.
+// registrations); wallet state lives in SQL. The split keeps chain storage free
+// of anything that will need encrypting under the user's key when SQLCipher lands.
 export class ChainStore {
   private db: ClassicLevel<string, Uint8Array>
   private opened = false

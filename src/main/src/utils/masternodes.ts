@@ -45,11 +45,12 @@ export function masternodeFilterValues(chain: MasternodeKeyChain, address: strin
   return chain === 'operator' ? [address, bytesToHex(legacyG1(hexToBytes(address)))] : [address]
 }
 
-// Null for an owner key not yet known, which matches nothing.
-export function nodeKey(chain: MasternodeKeyFilter, node: NetworkMasternode): string | null {
-  if (chain === 'owner') return node.ownerAddress
-  if (chain === 'collateral') return node.collateralAddress
-  return chain === 'voting' ? node.votingAddress : node.operatorPublicKey
+// The value a filter searches the node by. Null where the list does not know it
+// yet (p2p, before the registration is indexed), which matches nothing.
+export function nodeKey(filter: MasternodeKeyFilter, node: NetworkMasternode): string | null {
+  if (filter === 'owner') return node.ownerAddress
+  if (filter === 'collateral') return node.collateralAddress
+  return filter === 'voting' ? node.votingAddress : node.operatorPublicKey
 }
 
 // proTxHash → the index of our key that the node carries for this chain.
@@ -77,7 +78,7 @@ export function collateralUtxos(utxos: UTXO[]): UTXO[] {
 // What a discovery run stores for each owned node. A p2p list knows a node's
 // collateral only once its registration is indexed, so a stored one is kept until
 // then; followed, once set, stays set.
-export function masternodeRows(owned: Masternode[], stored: MasternodeCollateral[], followedNow: string[]): MasternodeCollateral[] {
+export function collateralsToStore(owned: Masternode[], stored: MasternodeCollateral[], followedNow: string[]): MasternodeCollateral[] {
   const storedByProTxHash = new Map(stored.map(row => [row.proTxHash, row]))
   const followed = new Set(followedNow)
   return owned.flatMap(({proTxHash, collateralTxid, collateralVout}) => {
@@ -102,6 +103,7 @@ export function withCollateralFlag(utxos: SelectableUtxo[], collaterals: Mastern
   const locked = new Set(collaterals.map(({txid, vout}) => `${txid}:${vout}`))
   return utxos.map(utxo => ({...utxo, collateral: locked.has(`${utxo.txid}:${utxo.vout}`)}))
 }
+
 // A node is ours when it carries one of our derived or imported keys, or spends
 // from one of our collateral outpoints; one listed by several searches appears once.
 export function ownedMasternodes(

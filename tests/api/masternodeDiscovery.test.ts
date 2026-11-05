@@ -166,7 +166,8 @@ describe('MasternodeService.discover', () => {
     expect(watched).toEqual([[['a'], ['a']], [['a', 'b'], ['b']]])
   })
 
-  // An outage of the index must not unlock the coin, as a deleted row did.
+  // Until a node's registration is indexed the p2p list has no collateral for it,
+  // and the coin stays locked meanwhile.
   it('keeps a stored collateral while the list cannot give it yet', async () => {
     await discover(source([node('a', {ownerAddress: key('owner', 0)})]))
     await discover(source([node('a', {ownerAddress: key('owner', 0), collateralTxid: null, collateralVout: null})]))
@@ -174,7 +175,8 @@ describe('MasternodeService.discover', () => {
     expect(await storedCollaterals()).toEqual(['a:aa:0'])
   })
 
-  // Found in rpc mode, a node was never rescanned from its registration in p2p.
+  // A node found where payouts are read live (rpc) still needs one rescan from its
+  // registration once a p2p scan takes over.
   it('keeps a node fresh until a source that rescans has followed it', async () => {
     await discover(source([node('a', {ownerAddress: key('owner', 0)})], [], false))
     await discover(source([node('a', {ownerAddress: key('owner', 0)})], [], false))

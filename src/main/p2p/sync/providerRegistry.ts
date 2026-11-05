@@ -93,19 +93,17 @@ export class ProviderRegistry {
     this.emitIfSettled()
   }
 
-  // False for a block this registry never asked for, so the caller can pass it on.
-  onBlock = (peer: Peer, msg: Message & {block?: unknown}): boolean => {
+  onBlock = (peer: Peer, msg: Message & {block?: unknown}): void => {
     const block = msg.block as Block | undefined
+    const hashWire = block == null ? null : displayHexToWire(block.hash())
     const fetcher = this.fetcher
-    if (block == null || fetcher == null || !fetcher.owns(displayHexToWire(block.hash()))) return false
-    const hashWire = displayHexToWire(block.hash())
+    if (block == null || hashWire == null || fetcher == null || !fetcher.owns(hashWire)) return
     if (!txsMatchMerkleRoot(block)) {
       fetcher.reject(hashWire)
-      return true
+      return
     }
-    if (fetcher.receive(peer, hashWire) == null) return true
+    if (fetcher.receive(peer, hashWire) == null) return
     this.apply(block).catch(err => log.warn('registration index write failed:', err))
-    return true
   }
 
   owns(hashWire: Uint8Array): boolean {

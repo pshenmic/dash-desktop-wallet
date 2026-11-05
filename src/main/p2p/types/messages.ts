@@ -27,8 +27,8 @@ export interface P2PStartMessage {
   unconfirmedInputOutpoints: UnconfirmedInputOutpoint[]
   // null = never synced. Worker resumes from max(birthday, cfilterCursor + 1).
   cfilterCursor: number | null
-  // The wallet's masternodes, so a payout change in a block scanned before
-  // discovery runs again is still matched.
+  // The wallet's masternodes the scan already follows from registration, so a
+  // payout change in a block scanned before discovery runs again is still matched.
   watchedProviders: string[]
   peerOverrides?: PeerOverrides
 }
