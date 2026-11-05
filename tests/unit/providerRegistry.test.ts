@@ -167,24 +167,71 @@ describe('provider registry', () => {
   })
 
   it('drops a node that left the list', async () => {
-    store.registrations.set('cd'.repeat(32), {...{} as ProviderRegistration, height: 1, payoutHeight: 1})
+    store.registrations.set('cd'.repeat(32), {...{} as ProviderRegistration, height: 1, payouts: [{height: 1, address: null}]})
     await registry.offer(fullList([]))
 
     expect(store.registrations.size).toBe(0)
     expect(lists).toEqual([[]])
   })
 
-  it('applies a payout from a later block only, and reads a rewound one again', async () => {
+  it('keeps payout changes in height order, ignoring one replayed by a rescan', async () => {
     await registry.offer(fullList([entry(EVO, CONFIRMED_HASH)]))
     registry.onBlock(peer as never, {block: registrationBlock()} as never)
     await vi.waitFor(() => expect(lists).toHaveLength(1))
 
-    await registry.applyPayouts([{proTxHash: EVO, payoutAddress: 'yNew', height: REGISTERED + 10}])
-    await registry.applyPayouts([{proTxHash: EVO, payoutAddress: 'yOlder', height: REGISTERED + 5}])
-    expect(store.registrations.get(EVO)).toMatchObject({payoutAddress: 'yNew', payoutHeight: REGISTERED + 10})
-    expect(lists.at(-1)![0].payeeAddress).toBe('yNew')
+    await registry.applyPayouts([{proTxHash: EVO, payoutAddress: 'yFirst', height: REGISTERED + 5}])
+    await registry.applyPayouts([{proTxHash: EVO, payoutAddress: 'ySecond', height: REGISTERED + 10}])
+    await registry.applyPayouts([{proTxHash: EVO, payoutAddress: 'yFirst', height: REGISTERED + 5}])
+
+    expect(store.registrations.get(EVO)!.payouts.map(({address}) => address))
+      .toEqual(['yeRZBWYfeNE4yVUHV4ZLs83Ppn9aMRH57A', 'yFirst', 'ySecond'])
+    expect(lists.at(-1)![0].payeeAddress).toBe('ySecond')
+  })
+
+  // Deleting the registration lost the change the rescan then found, for good.
+  it('drops only the payout changes above a rewind, and takes the rescan\'s again', async () => {
+    await registry.offer(fullList([entry(EVO, CONFIRMED_HASH)]))
+    registry.onBlock(peer as never, {block: registrationBlock()} as never)
+    await vi.waitFor(() => expect(lists).toHaveLength(1))
+    await registry.applyPayouts([
+      {proTxHash: EVO, payoutAddress: 'yKept', height: REGISTERED + 5},
+      {proTxHash: EVO, payoutAddress: 'yOrphaned', height: REGISTERED + 10},
+    ])
 
     await registry.rewound(REGISTERED + 9)
+    expect(store.registrations.get(EVO)!.payouts.at(-1)!.address).toBe('yKept')
+
+    await registry.applyPayouts([{proTxHash: EVO, payoutAddress: 'yRemined', height: REGISTERED + 11}])
+    expect(store.registrations.get(EVO)!.payouts.at(-1)!.address).toBe('yRemined')
+  })
+
+  it('reads again a registration whose own block was rewound', async () => {
+    await registry.offer(fullList([entry(EVO, CONFIRMED_HASH)]))
+    registry.onBlock(peer as never, {block: registrationBlock()} as never)
+    await vi.waitFor(() => expect(lists).toHaveLength(1))
+
+    await registry.rewound(REGISTERED - 1)
     expect(store.registrations.has(EVO)).toBe(false)
+  })
+
+  // A quorum diff from followTip used to hold the slot while it read a header.
+  it('lets a full list through while a quorum diff is being received', async () => {
+    const quorumDiff = Object.assign(fullList([]), {baseBlockHash: '11'.repeat(32)})
+    await Promise.all([registry.offer(quorumDiff), registry.offer(fullList([entry(EVO, CONFIRMED_HASH)]))])
+    expect(peer.sent).toHaveLength(1)
+  })
+
+  // An all-zero confirmedHash can never be found, so the walk could not stop early.
+  it('does not look up the height of a node that is not confirmed yet', async () => {
+    const asked = vi.spyOn(store, 'findHeights')
+    await registry.offer(fullList([entry(EVO, CONFIRMED_HASH), entry('cd'.repeat(32), '00'.repeat(32))]))
+
+    expect([...asked.mock.calls[0][0]]).toEqual([Buffer.from(displayHexToWire(CONFIRMED_HASH)).toString('hex')])
+  })
+
+  it('reads again an entry stored without a payout history', async () => {
+    store.registrations.set(EVO, {height: REGISTERED} as ProviderRegistration)
+    await registry.offer(fullList([entry(EVO, CONFIRMED_HASH)]))
+    expect(peer.sent).toHaveLength(1)
   })
 })

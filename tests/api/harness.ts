@@ -76,7 +76,8 @@ export async function harness(): Promise<Harness> {
   const shieldedService = {getAddresses: vi.fn().mockResolvedValue([])} as unknown as ShieldedService
 
   const prevOutService = new CorePrevOutService(walletDAO, transactionDAO)
-  const providers = new WalletProviderFactory(walletDAO, addressDAO, transactionDAO, applicationService, walletSyncService, prevOutService)
+  const masternodeDAO = new MasternodeDAO(knex)
+  const providers = new WalletProviderFactory(walletDAO, addressDAO, transactionDAO, applicationService, walletSyncService, prevOutService, masternodeDAO)
   const coreTransactionService = new CoreTransactionService()
   const coreDiscoveryService = new CoreDiscoveryService(walletDAO, addressDAO, identityDAO, dashPayCache, transactionDAO, walletSyncService, providers)
   const coreLockService = new CoreLockService(walletDAO, addressDAO, walletSyncService, coreTransactionService, providers, preferences)
@@ -93,7 +94,7 @@ export async function harness(): Promise<Harness> {
   } as unknown as PlatformHistoryService
 
   const walletService = new WalletService(
-    walletDAO, addressDAO, identityDAO, new PlatformTransactionDAO(knex), masternodeKeyDAO, new MasternodeDAO(knex), identityService, platformHistoryService, walletSyncService, platform,
+    walletDAO, addressDAO, identityDAO, new PlatformTransactionDAO(knex), masternodeKeyDAO, masternodeDAO, identityService, platformHistoryService, walletSyncService, platform,
     providers, coreDiscoveryService, coreTransactionService, preferences, TEST_PBKDF2_ITERATIONS,
   )
 

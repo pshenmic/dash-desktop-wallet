@@ -44,11 +44,13 @@ export interface ImportedMasternodeKey {
   publicKey: string
 }
 
-// What outlives the list: the coin a send must not spend.
+// What outlives the list: the coin a send must not spend, and whether the p2p
+// scan already covers the node's payout changes from its registration.
 export interface MasternodeCollateral {
   proTxHash: string
   txid: string
   vout: number
+  followed: boolean
 }
 
 // What a wallet persists to derive its provider keys without the seed. The

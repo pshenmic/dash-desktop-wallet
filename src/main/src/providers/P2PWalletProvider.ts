@@ -143,10 +143,12 @@ export class P2PWalletProvider implements WalletProvider {
       })
   }
 
-  async watchMasternodes(owned: Masternode[], fresh: Masternode[]): Promise<void> {
-    const heights = fresh.flatMap(({registeredHeight}) => registeredHeight == null ? [] : [registeredHeight])
+  // A fresh node not indexed yet has no height to rewind to, so it stays fresh.
+  async watchMasternodes(owned: Masternode[], fresh: Masternode[]): Promise<string[]> {
+    const rewound = fresh.filter(({registeredHeight}) => registeredHeight != null)
     await this.walletSyncService.watchProviders(this.walletId, owned.map(({proTxHash}) => proTxHash),
-      heights.length > 0 ? Math.min(...heights) : undefined)
+      rewound.length > 0 ? Math.min(...rewound.map(({registeredHeight}) => registeredHeight!)) : undefined)
+    return rewound.map(({proTxHash}) => proTxHash)
   }
 
   private p2pkhScript(address: string): Script {

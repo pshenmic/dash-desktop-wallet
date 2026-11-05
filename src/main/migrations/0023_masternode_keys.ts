@@ -28,6 +28,9 @@ export async function up(knex: Knex): Promise<void> {
     table.text('pro_tx_hash').notNullable()
     table.text('collateral_txid').notNullable()
     table.integer('collateral_vout').notNullable()
+    // The p2p scan was rewound to this node's registration, so no payout change
+    // before it was missed. Rows from rpc mode stay false and are rescanned once.
+    table.boolean('followed').notNullable().defaultTo(false)
     table.primary(['wallet_id', 'pro_tx_hash'])
   })
 

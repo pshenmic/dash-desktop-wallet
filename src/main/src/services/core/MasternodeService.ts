@@ -6,7 +6,14 @@ import {MASTERNODE_KEY_CHAINS, MASTERNODE_KEY_WINDOW} from '../../constants/addr
 import {ImportedMasternodeKey, Masternode, MasternodeKeyChain, NetworkMasternode} from '../../types/Masternode'
 import {memoryWindowStore, runAddressWindow} from '../../utils/addressWindow'
 import {masternodeKeyDeriver, masternodePublicKey} from '../../utils/masternodeKeys'
-import {carriesKey, collateralUtxos, masternodeFilterValues, matchMasternodeKeys, ownedMasternodes} from '../../utils/masternodes'
+import {
+  carriesKey,
+  collateralUtxos,
+  masternodeFilterValues,
+  masternodeRows,
+  matchMasternodeKeys,
+  ownedMasternodes,
+} from '../../utils/masternodes'
 import {requireWallet} from '../../utils/requireWallet'
 import {bytesToHex} from '@noble/hashes/utils.js'
 import createCoreClient from 'dash-core-sdk/src/createCoreClient.js'
@@ -95,10 +102,10 @@ export class MasternodeService {
 
     const owned = await Promise.all(ownedMasternodes(nodes, matches, imported, collateral)
       .map(node => this.withEvonodeStatus(node, wallet.network)))
-    const followed = new Set(await this.masternodeDAO.getProTxHashes(walletId))
-    await provider.watchMasternodes(owned, owned.filter(({proTxHash}) => !followed.has(proTxHash)))
-    await this.masternodeDAO.replaceCollaterals(walletId, owned.flatMap(({proTxHash, collateralTxid, collateralVout}) =>
-      collateralTxid == null || collateralVout == null ? [] : [{proTxHash, txid: collateralTxid, vout: collateralVout}]))
+    const stored = await this.masternodeDAO.getCollaterals(walletId)
+    const followed = new Set(stored.filter(row => row.followed).map(({proTxHash}) => proTxHash))
+    const followedNow = await provider.watchMasternodes(owned, owned.filter(({proTxHash}) => !followed.has(proTxHash)))
+    await this.masternodeDAO.replaceCollaterals(walletId, masternodeRows(owned, stored, followedNow))
     this.listed.set(walletId, owned)
     log.debug(`wallet ${walletId}: ${owned.length} masternode(s)`)
   }

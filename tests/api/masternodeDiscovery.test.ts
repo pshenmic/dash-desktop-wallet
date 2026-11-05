@@ -23,7 +23,9 @@ function node(proTxHash: string, fields: Partial<NetworkMasternode> = {}): Netwo
 let watched: string[][][] = []
 
 // A masternode list answering the same OR-of-values search the Dashscan filters run.
-function source(list: NetworkMasternode[] | null | Error, utxos: UTXO[] = []): WalletProviderFactory {
+// `follows` is a source that rescans a fresh node from its registration (p2p),
+// rather than reading payouts live (rpc).
+function source(list: NetworkMasternode[] | null | Error, utxos: UTXO[] = [], follows = true): WalletProviderFactory {
   const provider = {
     getWalletUtxos: async () => utxos,
     getMasternodes: async (filter: MasternodeKeyFilter, values: string[]) => {
@@ -32,6 +34,7 @@ function source(list: NetworkMasternode[] | null | Error, utxos: UTXO[] = []): W
     },
     watchMasternodes: async (owned: Masternode[], fresh: Masternode[]) => {
       watched.push([owned.map(({proTxHash}) => proTxHash), fresh.map(({proTxHash}) => proTxHash)])
+      return follows ? fresh.map(({proTxHash}) => proTxHash) : []
     },
   }
   return {forWallet: () => provider} as unknown as WalletProviderFactory
@@ -161,6 +164,24 @@ describe('MasternodeService.discover', () => {
     await discover(source([node('a', {ownerAddress: key('owner', 0)}), node('b', {ownerAddress: key('owner', 1)})]))
 
     expect(watched).toEqual([[['a'], ['a']], [['a', 'b'], ['b']]])
+  })
+
+  // An outage of the index must not unlock the coin, as a deleted row did.
+  it('keeps a stored collateral while the list cannot give it yet', async () => {
+    await discover(source([node('a', {ownerAddress: key('owner', 0)})]))
+    await discover(source([node('a', {ownerAddress: key('owner', 0), collateralTxid: null, collateralVout: null})]))
+
+    expect(await storedCollaterals()).toEqual(['a:aa:0'])
+  })
+
+  // Found in rpc mode, a node was never rescanned from its registration in p2p.
+  it('keeps a node fresh until a source that rescans has followed it', async () => {
+    await discover(source([node('a', {ownerAddress: key('owner', 0)})], [], false))
+    await discover(source([node('a', {ownerAddress: key('owner', 0)})], [], false))
+    await discover(source([node('a', {ownerAddress: key('owner', 0)})]))
+    await discover(source([node('a', {ownerAddress: key('owner', 0)})]))
+
+    expect(watched.map(([, fresh]) => fresh)).toEqual([['a'], ['a'], ['a'], []])
   })
 
   it('refuses a key that does not parse, and stores nothing for it', async () => {

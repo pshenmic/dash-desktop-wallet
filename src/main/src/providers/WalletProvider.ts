@@ -35,6 +35,7 @@ export interface WalletProvider {
   // the source has no masternode list.
   getMasternodes(filter: MasternodeKeyFilter, values: string[]): Promise<NetworkMasternode[] | null>
   // Keeps the source following the wallet's nodes for the updates its list
-  // does not carry; `fresh` are ones it has never followed.
-  watchMasternodes(owned: Masternode[], fresh: Masternode[]): Promise<void>
+  // does not carry; `fresh` are ones it has never followed. Answers the
+  // proTxHashes it now follows from their registration on.
+  watchMasternodes(owned: Masternode[], fresh: Masternode[]): Promise<string[]>
 }

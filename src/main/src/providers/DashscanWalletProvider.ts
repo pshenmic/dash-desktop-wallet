@@ -328,7 +328,9 @@ export class DashscanWalletProvider implements WalletProvider {
   }
 
   // Each list answer carries the live payout, so there is nothing to follow.
-  async watchMasternodes(): Promise<void> {}
+  async watchMasternodes(): Promise<string[]> {
+    return []
+  }
 
   // A provider instance serves one operation, and getTransactions runs once per
   // address within it.

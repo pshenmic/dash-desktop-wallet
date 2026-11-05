@@ -63,8 +63,7 @@ export function providerRegistration(tx: Transaction, proTxHash: string, height:
     collateralVout: vOut,
     collateralAddress: internal ? tx.outputs[vOut]?.getAddress(network) ?? null : null,
     ownerAddress: payload.getOwnerAddress(network),
-    payoutAddress: payload.getPayoutAddress(network) ?? null,
-    payoutHeight: height,
+    payouts: [{height, address: payload.getPayoutAddress(network) ?? null}],
     platformP2PPort: payload.platformP2PPort ?? null,
   }
 }
@@ -95,7 +94,7 @@ export function listedMasternode(entry: SimplifiedMNListEntry, registration: Pro
     collateralVout: registration?.collateralVout ?? null,
     collateralAddress: registration?.collateralAddress ?? null,
     serviceAddress: entry.address == null ? null : hostPort(entry.address),
-    payeeAddress: registration?.payoutAddress ?? null,
+    payeeAddress: registration?.payouts.at(-1)?.address ?? null,
     ownerAddress: registration?.ownerAddress ?? null,
     votingAddress: sdkUtils.publicKeyHashToAddress(hexToBytes(entry.keyIDVoting), network),
     operatorPublicKey: entry.pubKeyOperator.toLowerCase(),

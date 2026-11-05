@@ -10,13 +10,13 @@ export class MasternodeDAO {
 
   getCollaterals = async (walletId: string): Promise<MasternodeCollateral[]> => {
     const rows = await this.knex('masternodes')
-      .select('pro_tx_hash', 'collateral_txid', 'collateral_vout')
+      .select('pro_tx_hash', 'collateral_txid', 'collateral_vout', 'followed')
       .where('wallet_id', walletId)
-    return rows.map(row => ({proTxHash: row.pro_tx_hash, txid: row.collateral_txid, vout: row.collateral_vout}))
+    return rows.map(row => ({proTxHash: row.pro_tx_hash, txid: row.collateral_txid, vout: row.collateral_vout, followed: Boolean(row.followed)}))
   }
 
-  getProTxHashes = async (walletId: string): Promise<string[]> => {
-    const rows = await this.knex('masternodes').select('pro_tx_hash').where('wallet_id', walletId)
+  getFollowedProTxHashes = async (walletId: string): Promise<string[]> => {
+    const rows = await this.knex('masternodes').select('pro_tx_hash').where({wallet_id: walletId, followed: true})
     return rows.map(({pro_tx_hash}) => pro_tx_hash)
   }
 
@@ -25,11 +25,12 @@ export class MasternodeDAO {
     await this.knex.transaction(async trx => {
       await trx('masternodes').where('wallet_id', walletId).delete()
       if (collaterals.length === 0) return
-      await trx('masternodes').insert(collaterals.map(({proTxHash, txid, vout}) => ({
+      await trx('masternodes').insert(collaterals.map(({proTxHash, txid, vout, followed}) => ({
         wallet_id: walletId,
         pro_tx_hash: proTxHash,
         collateral_txid: txid,
         collateral_vout: vout,
+        followed,
       })))
     })
   }

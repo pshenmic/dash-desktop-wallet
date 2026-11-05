@@ -333,14 +333,14 @@ export class WalletBackend {
     // CoreLockService funds the L1 lock, AssetLockService turns it into a proof,
     // and each consumer settles that proof into its own transition.
     const prevOuts = new CorePrevOutService(walletDAO, transactionDAO)
-    const providers = new WalletProviderFactory(walletDAO, addressDAO, transactionDAO, this.applicationService, this.walletSyncService, prevOuts)
+    const masternodeDAO = new MasternodeDAO(knex)
+    const providers = new WalletProviderFactory(walletDAO, addressDAO, transactionDAO, this.applicationService, this.walletSyncService, prevOuts, masternodeDAO)
     const coreTransactionService = new CoreTransactionService()
     this.coreDiscoveryService = new CoreDiscoveryService(walletDAO, addressDAO, identityDAO, dashPayCache, transactionDAO, this.walletSyncService, providers)
     this.coreLockService = new CoreLockService(walletDAO, addressDAO, this.walletSyncService, coreTransactionService, providers, preferences)
     const masternodeKeyDAO = new MasternodeKeyDAO(knex)
-    const masternodeDAO = new MasternodeDAO(knex)
     this.masternodeService = new MasternodeService(walletDAO, masternodeKeyDAO, masternodeDAO, providers)
-    this.walletSyncService.watchedProvidersOf = masternodeDAO.getProTxHashes
+    this.walletSyncService.watchedProvidersOf = masternodeDAO.getFollowedProTxHashes
     this.walletCredentialsService = new WalletCredentialsService(walletDAO, addressDAO, masternodeKeyDAO, calibratedIterations)
     this.identityService = new IdentityService(walletDAO, identityDAO, dashPayCache, this.platformWorkerService)
     const platformAddressDAO = new PlatformAddressDAO(knex)

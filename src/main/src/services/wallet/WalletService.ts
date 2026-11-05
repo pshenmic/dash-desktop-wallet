@@ -482,7 +482,7 @@ export class WalletService {
       const {transferInputs, inputTotal, changeAddress, feeDuffs} =
         selectTransferInputs(
           grouped,
-          await provider.getWalletUtxos(),
+          await this.providers.spendableUtxos(walletId, network, source),
           amountDuffs,
           inputsCount => coreFeeDuffsFor(coreFeeMultiplier, inputsCount, outputs.length, true),
           source,

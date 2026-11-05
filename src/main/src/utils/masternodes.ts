@@ -3,7 +3,7 @@ import {MASTERNODE_KEY_CHAINS} from '../constants/addresses'
 import {MASTERNODE_COLLATERAL_DUFFS} from '../constants/chain'
 import {DerivedAddress} from '../types/AddressWindow'
 import {DashscanMasternode} from '../types/Dashscan'
-import {ListedUtxo, SelectableUtxo} from '../types/CoinSelection'
+import {CoreSpendSource, ListedUtxo, SelectableUtxo} from '../types/CoinSelection'
 import {
   ImportedMasternodeKey,
   Masternode,
@@ -72,6 +72,29 @@ export function carriesKey(node: NetworkMasternode, {role, publicKey}: ImportedM
 
 export function collateralUtxos(utxos: UTXO[]): UTXO[] {
   return utxos.filter(utxo => MASTERNODE_COLLATERAL_DUFFS.includes(utxo.satoshis))
+}
+
+// What a discovery run stores for each owned node. A p2p list knows a node's
+// collateral only once its registration is indexed, so a stored one is kept until
+// then; followed, once set, stays set.
+export function masternodeRows(owned: Masternode[], stored: MasternodeCollateral[], followedNow: string[]): MasternodeCollateral[] {
+  const storedByProTxHash = new Map(stored.map(row => [row.proTxHash, row]))
+  const followed = new Set(followedNow)
+  return owned.flatMap(({proTxHash, collateralTxid, collateralVout}) => {
+    const row = storedByProTxHash.get(proTxHash)
+    const txid = collateralTxid ?? row?.txid
+    const vout = collateralVout ?? row?.vout
+    if (txid == null || vout == null) return []
+    return [{proTxHash, txid, vout, followed: (row?.followed ?? false) || followed.has(proTxHash)}]
+  })
+}
+
+// A selection never takes a collateral on its own, since spending it drops the
+// node; a coin-control pick of one is the user's call and stays.
+export function withoutCollaterals(utxos: UTXO[], collaterals: MasternodeCollateral[], source?: CoreSpendSource): UTXO[] {
+  if (source?.kind === 'outpoints') return utxos
+  const locked = new Set(collaterals.map(({txid, vout}) => `${txid}:${vout}`))
+  return utxos.filter(({txId, vOut}) => !locked.has(`${txId}:${vOut}`))
 }
 
 // By outpoint: another output of the same transaction is an ordinary coin.

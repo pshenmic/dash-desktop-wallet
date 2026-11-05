@@ -11,8 +11,8 @@ export interface MasternodeListOptions {
 }
 
 // What a list entry lacks and only the ProRegTx carries. Fixed at registration
-// except the payout, which a ProUpRegTx at payoutHeight replaced. collateralAddress
-// is null for a collateral created outside the ProRegTx.
+// except the payout, which each ProUpRegTx may replace. collateralAddress is null
+// for a collateral created outside the ProRegTx.
 export interface ProviderRegistration {
   height: number
   // A banned evonode's list entry falls back to version 1, which has no type.
@@ -21,8 +21,9 @@ export interface ProviderRegistration {
   collateralVout: number
   collateralAddress: string | null
   ownerAddress: string
-  payoutAddress: string | null
-  payoutHeight: number
+  // The ProRegTx's payout, then each change in height order; the last one is
+  // current. Kept whole so a rewind drops only the changes above the fork.
+  payouts: Array<{height: number; address: string | null}>
   // An evonode's, which a list entry older than ExtAddr does not carry.
   platformP2PPort: number | null
 }

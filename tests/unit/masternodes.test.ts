@@ -11,7 +11,9 @@ import {
   matchMasternodeKeys,
   networkMasternode,
   ownedMasternodes,
+  masternodeRows,
   withCollateralFlag,
+  withoutCollaterals,
 } from '../../src/main/src/utils/masternodes'
 
 const SEED = hexToBytes('5eb00bbddcf069084889a8ab9155568165f5c453ccb85e70811aaed6f6da5fc19a5ac40b389cd370d086206dec8aa6c43daea6690f20ad3d8d48b2d2ce9e38e4')
@@ -85,8 +87,34 @@ describe('ownedMasternodes', () => {
   it('flags a collateral by its outpoint, not by its amount or address', () => {
     const coin = (txid: string, vout: number) =>
       ({txid, vout, satoshis: 100_000_000_000n, address: 'Xcollateral', height: 1, timestamp: null, confirmations: 1})
-    expect(withCollateralFlag([coin('aa', 0), coin('aa', 1)], [{proTxHash: 'p', txid: 'aa', vout: 0}]).map(({collateral}) => collateral))
+    expect(withCollateralFlag([coin('aa', 0), coin('aa', 1)], [{proTxHash: 'p', txid: 'aa', vout: 0, followed: false}]).map(({collateral}) => collateral))
       .toEqual([true, false])
+  })
+
+  // An automatic send that took it would drop the masternode.
+  it('keeps a collateral out of a selection unless coin control picked it', () => {
+    const coins = [utxo('aa', 0, 100_000_000_000n), utxo('aa', 1, 5n)]
+    const collaterals = [{proTxHash: 'p', txid: 'aa', vout: 0, followed: false}]
+    expect(withoutCollaterals(coins, collaterals).map(({vOut}) => vOut)).toEqual([1])
+    expect(withoutCollaterals(coins, collaterals, {kind: 'address', address: 'Xcollateral'}).map(({vOut}) => vOut)).toEqual([1])
+    expect(withoutCollaterals(coins, collaterals, {kind: 'outpoints', outpoints: [{txid: 'aa', vout: 0}]})).toHaveLength(2)
+  })
+
+  // A p2p list knows a node's collateral only once its registration is indexed.
+  it('keeps a stored collateral the list cannot give yet, and never unsets followed', () => {
+    const stored = [
+      {proTxHash: 'a', txid: 'aa', vout: 0, followed: true},
+      {proTxHash: 'b', txid: 'bb', vout: 1, followed: false},
+    ]
+    const owned = [
+      {...node('a', {collateralTxid: null, collateralVout: null}), ownerKeyIndex: 0, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: []},
+      {...node('b'), ownerKeyIndex: 0, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: []},
+      {...node('c', {collateralTxid: null, collateralVout: null}), ownerKeyIndex: 1, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: []},
+    ]
+    expect(masternodeRows(owned, stored, ['b'])).toEqual([
+      {proTxHash: 'a', txid: 'aa', vout: 0, followed: true},
+      {proTxHash: 'b', txid: 'c'.repeat(64), vout: 0, followed: true},
+    ])
   })
 
   it('keeps only regular and evo collateral amounts', () => {

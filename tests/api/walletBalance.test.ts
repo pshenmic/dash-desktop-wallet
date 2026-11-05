@@ -23,7 +23,7 @@ const providerStub = (walletBalance: bigint): WalletProvider => ({
   getTxLockStatus: async () => ({instantLocked: false, chainlocked: false, confirmed: false}),
   nextUnusedAddress: async () => '',
   getMasternodes: async () => null,
-  watchMasternodes: async () => undefined,
+  watchMasternodes: async () => [],
 })
 
 describe('wallet balance', () => {

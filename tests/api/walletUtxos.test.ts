@@ -32,7 +32,7 @@ const providerStub = (utxos: UTXO[], ready = true): WalletProvider => ({
   getTxLockStatus: async () => ({instantLocked: false, chainlocked: false, confirmed: false}),
   nextUnusedAddress: async () => '',
   getMasternodes: async () => null,
-  watchMasternodes: async () => undefined,
+  watchMasternodes: async () => [],
 })
 
 describe('listing the coins a send can draw on', () => {

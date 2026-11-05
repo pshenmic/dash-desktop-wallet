@@ -67,7 +67,7 @@ describe('provider registrations', () => {
       height: 1154851, isEvo: false,
       collateralTxid: INTERNAL, collateralVout: 1, collateralAddress: '8oTdW2sryrLioQQv3BBGPTf7aKLT6LfbGr',
       ownerAddress: 'yLrHr1jPSrAi5bVk3Bij8T2iVAu2mHHeqw',
-      payoutAddress: 'yeP7dbbKCZHhzrEHP6goTsPVqXJ91E2Bdy', payoutHeight: 1154851, platformP2PPort: null,
+      payouts: [{height: 1154851, address: 'yeP7dbbKCZHhzrEHP6goTsPVqXJ91E2Bdy'}], platformP2PPort: null,
     })
   })
 
@@ -76,7 +76,7 @@ describe('provider registrations', () => {
       height: 850334, isEvo: true,
       collateralTxid: '6ce8545e25d4f03aba1527062d9583ae01827c65b234bd979aca5954c6ae3a59', collateralVout: 32, collateralAddress: null,
       ownerAddress: 'yLMWYiFxCpPwim9YuosKAozkqsGf283XCa',
-      payoutAddress: 'yeRZBWYfeNE4yVUHV4ZLs83Ppn9aMRH57A', payoutHeight: 850334, platformP2PPort: 36656,
+      payouts: [{height: 850334, address: 'yeRZBWYfeNE4yVUHV4ZLs83Ppn9aMRH57A'}], platformP2PPort: 36656,
     })
   })
 

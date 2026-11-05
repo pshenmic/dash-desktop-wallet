@@ -45,7 +45,8 @@ export class ProviderRegistry {
   async offer(diff: MnListDiff): Promise<void> {
     const store = this.opts.chain()
     const height = diff.coinbaseHeight
-    if (store == null || height == null || !this.due) return
+    // A quorum diff from followTip races the full list; it must not hold the slot.
+    if (store == null || height == null || /[^0]/.test(diff.baseBlockHash) || !this.due) return
     this.offering = true
     try {
       await this.index(diff, store, height)
@@ -66,10 +67,13 @@ export class ProviderRegistry {
     await store.writeRegistrations(new Map(), gone)
 
     const missing = diff.mnList.filter(({proRegTxHash}) => !this.registrations.has(proRegTxHash) && !this.unresolvable.has(proRegTxHash))
+    // Not confirmed yet: no block to look for, and a hash the walk down the chain
+    // could never find would stop it ending early.
+    const confirmed = missing.filter(({confirmedHash}) => /[^0]/.test(confirmedHash))
     const confirmedWire = (entry: SimplifiedMNListEntry): string => Buffer.from(displayHexToWire(entry.confirmedHash)).toString('hex')
-    const heights = await store.findHeights(new Set(missing.map(confirmedWire)), height)
-    this.pending = false
-    for (const entry of missing) {
+    const heights = await store.findHeights(new Set(confirmed.map(confirmedWire)), height)
+    this.pending = confirmed.length < missing.length
+    for (const entry of confirmed) {
       const confirmedAt = heights.get(confirmedWire(entry))
       const registeredAt = confirmedAt == null ? null : confirmedAt - MASTERNODE_MIN_CONFIRMATIONS[store.network]
       const registeredHeader = registeredAt == null ? null : await store.getHeaderByHeight(registeredAt)
@@ -112,10 +116,11 @@ export class ProviderRegistry {
     const store = this.opts.chain()
     if (store == null || !await this.load(store)) return
     const changed = new Map<string, ProviderRegistration>()
+    // A rescan replays changes already kept, so only one above the last is new.
     for (const {proTxHash, payoutAddress, height} of updates) {
-      const registration = this.registrations.get(proTxHash)
-      if (registration == null || height < registration.payoutHeight) continue
-      changed.set(proTxHash, {...registration, payoutAddress, payoutHeight: height})
+      const registration = changed.get(proTxHash) ?? this.registrations.get(proTxHash)
+      if (registration == null || height <= registration.payouts.at(-1)!.height) continue
+      changed.set(proTxHash, {...registration, payouts: [...registration.payouts, {height, address: payoutAddress}]})
     }
     if (changed.size === 0) return
     changed.forEach((registration, proTxHash) => this.registrations.set(proTxHash, registration))
@@ -123,12 +128,22 @@ export class ProviderRegistry {
     this.emitIfSettled()
   }
 
-  // A registration or payout from a block that left our chain is read again.
+  // A registration from a block that left our chain is read again; a payout
+  // change from one is dropped, and the scan re-applies it if it was mined again.
   async rewound(height: number): Promise<void> {
-    const gone = [...this.registrations].filter(([, r]) => r.height > height || r.payoutHeight > height).map(([proTxHash]) => proTxHash)
+    const gone: string[] = []
+    const trimmed = new Map<string, ProviderRegistration>()
+    for (const [proTxHash, registration] of this.registrations) {
+      if (registration.height > height) {
+        gone.push(proTxHash)
+      } else if (registration.payouts.at(-1)!.height > height) {
+        trimmed.set(proTxHash, {...registration, payouts: registration.payouts.filter(payout => payout.height <= height)})
+      }
+    }
     for (const proTxHash of gone) this.registrations.delete(proTxHash)
+    trimmed.forEach((registration, proTxHash) => this.registrations.set(proTxHash, registration))
     this.acceptedAt = 0
-    await this.store?.writeRegistrations(new Map(), gone)
+    await this.store?.writeRegistrations(trimmed, gone)
   }
 
   // Called before the new pool exists, so the next fetch builds its fetcher.
@@ -156,7 +171,8 @@ export class ProviderRegistry {
       const registrations = await store.getRegistrations()
       if (store !== this.opts.chain()) return false
       this.store = store
-      this.registrations = registrations
+      // An entry without a payout history is from an older layout: read it again.
+      this.registrations = new Map([...registrations].filter(([, registration]) => Array.isArray(registration.payouts)))
     }
     return true
   }

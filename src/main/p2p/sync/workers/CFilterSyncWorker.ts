@@ -314,8 +314,10 @@ export class CFilterSyncWorker extends Worker {
     this.resumeScan()
   }
 
+  // Rewinds even for a node already watched: it may have been watched before its
+  // registration was indexed, with no height to rewind to.
   watchProviders = (proTxHashes: string[], rewindToHeight?: number): void => {
-    if (this.stopped || this.watchSet.watchProviders(proTxHashes) === 0) return
+    if (this.stopped || (this.watchSet.watchProviders(proTxHashes) === 0 && rewindToHeight == null)) return
     if (rewindToHeight != null) this.rewindCursor(rewindToHeight, `watching ${proTxHashes.length} masternode(s)`)
     this.resumeScan()
   }
