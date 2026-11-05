@@ -4,24 +4,28 @@ export type MasternodeKeyChain = 'owner' | 'voting' | 'operator'
 export type MasternodeKeyFilter = MasternodeKeyChain | 'collateral'
 
 // One entry of the network's masternode list. Times are unix seconds, 0 = never.
+// Null is a field the source cannot give: the p2p list carries no PoSe score or
+// payments, and the ProRegTx fields stay null until the registration is indexed.
 export interface NetworkMasternode {
   proTxHash: string
   type: string
   status: string
-  posePenaltyScore: number
-  collateralTxid: string
-  collateralVout: number
-  collateralAddress: string
-  serviceAddress: string
-  payeeAddress: string
-  ownerAddress: string
+  posePenaltyScore: number | null
+  collateralTxid: string | null
+  collateralVout: number | null
+  collateralAddress: string | null
+  serviceAddress: string | null
+  payeeAddress: string | null
+  ownerAddress: string | null
   votingAddress: string
   operatorPublicKey: string
   platformNodeId: string | null
   platformP2PPort: number | null
   platformHttpPort: number | null
-  lastPaidBlock: number
-  lastPaidTime: number
+  lastPaidBlock: number | null
+  lastPaidTime: number | null
+  // Known only to the p2p index, which read the ProRegTx at this height.
+  registeredHeight: number | null
 }
 
 // A masternode this wallet holds a key or the collateral of. A null index is a

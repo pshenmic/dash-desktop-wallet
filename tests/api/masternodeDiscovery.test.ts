@@ -6,6 +6,7 @@ import {MasternodeService} from '../../src/main/src/services/core/MasternodeServ
 import {Masternode, MasternodeKeyFilter, MasternodeKeys, NetworkMasternode} from '../../src/main/src/types/Masternode'
 import {UTXO} from '../../src/main/src/types/UTXO'
 import {masternodeKeyDeriver} from '../../src/main/src/utils/masternodeKeys'
+import {nodeKey} from '../../src/main/src/utils/masternodes'
 import {Harness, harness, PASSWORD, VALID_SEEDPHRASE} from './harness'
 
 function node(proTxHash: string, fields: Partial<NetworkMasternode> = {}): NetworkMasternode {
@@ -14,15 +15,12 @@ function node(proTxHash: string, fields: Partial<NetworkMasternode> = {}): Netwo
     collateralTxid: proTxHash.repeat(64).slice(0, 64), collateralVout: 0, collateralAddress: 'Xnobody',
     serviceAddress: '1.2.3.4:9999', payeeAddress: 'Xpayee', ownerAddress: 'Xnobody', votingAddress: 'Xnobody',
     operatorPublicKey: 'ff'.repeat(48), platformNodeId: null, platformP2PPort: null, platformHttpPort: null,
-    lastPaidBlock: 0, lastPaidTime: 0, ...fields,
+    lastPaidBlock: 0, lastPaidTime: 0, registeredHeight: null, ...fields,
   }
 }
 
-function listedBy(filter: MasternodeKeyFilter, listed: NetworkMasternode): string {
-  if (filter === 'owner') return listed.ownerAddress
-  if (filter === 'voting') return listed.votingAddress
-  return filter === 'operator' ? listed.operatorPublicKey : listed.collateralAddress
-}
+// Each watchMasternodes call, as [owned, fresh] proTxHashes.
+let watched: string[][][] = []
 
 // A masternode list answering the same OR-of-values search the Dashscan filters run.
 function source(list: NetworkMasternode[] | null | Error, utxos: UTXO[] = []): WalletProviderFactory {
@@ -30,7 +28,10 @@ function source(list: NetworkMasternode[] | null | Error, utxos: UTXO[] = []): W
     getWalletUtxos: async () => utxos,
     getMasternodes: async (filter: MasternodeKeyFilter, values: string[]) => {
       if (list instanceof Error) throw list
-      return list?.filter(entry => values.includes(listedBy(filter, entry))) ?? null
+      return list?.filter(entry => values.includes(nodeKey(filter, entry) ?? '')) ?? null
+    },
+    watchMasternodes: async (owned: Masternode[], fresh: Masternode[]) => {
+      watched.push([owned.map(({proTxHash}) => proTxHash), fresh.map(({proTxHash}) => proTxHash)])
     },
   }
   return {forWallet: () => provider} as unknown as WalletProviderFactory
@@ -49,6 +50,7 @@ describe('MasternodeService.discover', () => {
     keys = (await wired.masternodeKeyDAO.getKeys(walletId))!
     const providers = {forWallet: (...args) => current.forWallet(...args)} as WalletProviderFactory
     masternodes = new MasternodeService(wired.walletDAO, wired.masternodeKeyDAO, new MasternodeDAO(wired.knex), providers)
+    watched = []
   })
 
   const key = (chain: 'owner' | 'voting' | 'operator', index: number): string =>
@@ -127,13 +129,38 @@ describe('MasternodeService.discover', () => {
     current = source([node('f', {votingAddress: voting.getAddress()})])
 
     const found = await masternodes.importKey(walletId, 'voting', ` ${voting.toWIF()}\n`)
-    expect(found.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['f', ['voting']]])
+    expect(found!.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['f', ['voting']]])
     expect(await masternodes.importKey(walletId, 'owner', unregistered.toWIF())).toEqual([])
     expect(await masternodes.getImportedKeys(walletId)).toHaveLength(2)
 
     await masternodes.removeKey(walletId, {role: 'voting', publicKey: voting.getAddress()})
     expect(await listed()).toEqual([])
     expect(await masternodes.getImportedKeys(walletId)).toEqual([{role: 'owner', publicKey: unregistered.getAddress()}])
+  })
+
+  // Not an empty answer: p2p before its first proven list has searched nothing.
+  it('answers an import with null while the source has no list, and keeps the key', async () => {
+    current = source(null)
+    const voting = PrivateKey.fromBytes(new Uint8Array(32).fill(7), 'mainnet')
+
+    expect(await masternodes.importKey(walletId, 'voting', voting.toWIF())).toBeNull()
+    expect(await masternodes.getImportedKeys(walletId)).toHaveLength(1)
+  })
+
+  // A node the p2p index has not read the ProRegTx of yet has no outpoint to keep.
+  it('lists a node whose collateral is not known yet without storing one', async () => {
+    await discover(source([node('g', {votingAddress: key('voting', 0), collateralTxid: null, collateralVout: null})]))
+
+    expect(await listed()).toEqual(['g'])
+    expect(await storedCollaterals()).toEqual([])
+  })
+
+  // The p2p scan rewinds once per node it has not followed before, never again.
+  it('marks a node fresh only until its collateral is stored', async () => {
+    await discover(source([node('a', {ownerAddress: key('owner', 0)})]))
+    await discover(source([node('a', {ownerAddress: key('owner', 0)}), node('b', {ownerAddress: key('owner', 1)})]))
+
+    expect(watched).toEqual([[['a'], ['a']], [['a', 'b'], ['b']]])
   })
 
   it('refuses a key that does not parse, and stores nothing for it', async () => {

@@ -327,6 +327,9 @@ export class DashscanWalletProvider implements WalletProvider {
     return pages.flatMap(({resultSet}) => resultSet.map(networkMasternode))
   }
 
+  // Each list answer carries the live payout, so there is nothing to follow.
+  async watchMasternodes(): Promise<void> {}
+
   // A provider instance serves one operation, and getTransactions runs once per
   // address within it.
   private ownedAddresses: Promise<string[]> | null = null

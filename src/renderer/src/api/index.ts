@@ -1,6 +1,6 @@
 import { WalletTxDto } from '@renderer/types/WalletTransaction'
 import { TransferOperation } from '../enums/TransferOperation'
-import { UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, SelectableUtxo, MasternodeDto, ImportedMasternodeKeyDto, MasternodeKeyRole} from './types'
+import { UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, ListedUtxo, MasternodeDto, ImportedMasternodeKeyDto, MasternodeKeyRole} from './types'
 
 export class API {
   private static get api() {
@@ -147,7 +147,7 @@ export class API {
     return this.api.getTransactions(walletId) as Promise<WalletHistory>
   }
 
-  static async getUtxos(walletId: string): Promise<SelectableUtxo[]> {
+  static async getUtxos(walletId: string): Promise<ListedUtxo[]> {
     return this.api.getUtxos(walletId)
   }
 
@@ -168,8 +168,9 @@ export class API {
   }
 
   // Owner and voting keys are WIF, an operator key the hex BLS secret. Answers
-  // the nodes the key was found on, which is empty for one not registered yet.
-  static async importMasternodeKey(walletId: string, role: MasternodeKeyRole, privateKey: string): Promise<MasternodeDto[]> {
+  // the nodes the key was found on, which is empty for one not registered yet,
+  // and null while no masternode list has arrived to search (the key is kept).
+  static async importMasternodeKey(walletId: string, role: MasternodeKeyRole, privateKey: string): Promise<MasternodeDto[] | null> {
     return this.api.importMasternodeKey(walletId, role, privateKey)
   }
 

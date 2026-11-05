@@ -3,7 +3,15 @@ import {MASTERNODE_KEY_CHAINS} from '../constants/addresses'
 import {MASTERNODE_COLLATERAL_DUFFS} from '../constants/chain'
 import {DerivedAddress} from '../types/AddressWindow'
 import {DashscanMasternode} from '../types/Dashscan'
-import {ImportedMasternodeKey, Masternode, MasternodeKeyChain, NetworkMasternode} from '../types/Masternode'
+import {ListedUtxo, SelectableUtxo} from '../types/CoinSelection'
+import {
+  ImportedMasternodeKey,
+  Masternode,
+  MasternodeCollateral,
+  MasternodeKeyChain,
+  MasternodeKeyFilter,
+  NetworkMasternode,
+} from '../types/Masternode'
 import {UTXO} from '../types/UTXO'
 import {legacyG1} from './masternodeKeys'
 
@@ -27,6 +35,7 @@ export function networkMasternode(row: DashscanMasternode): NetworkMasternode {
     platformHttpPort: row.platformHTTPPort,
     lastPaidBlock: row.lastPaidBlock,
     lastPaidTime: Math.floor(Date.parse(row.lastPaidTime) / 1000),
+    registeredHeight: null,
   }
 }
 
@@ -36,8 +45,10 @@ export function masternodeFilterValues(chain: MasternodeKeyChain, address: strin
   return chain === 'operator' ? [address, bytesToHex(legacyG1(hexToBytes(address)))] : [address]
 }
 
-function nodeKey(chain: MasternodeKeyChain, node: NetworkMasternode): string {
+// Null for an owner key not yet known, which matches nothing.
+export function nodeKey(chain: MasternodeKeyFilter, node: NetworkMasternode): string | null {
   if (chain === 'owner') return node.ownerAddress
+  if (chain === 'collateral') return node.collateralAddress
   return chain === 'voting' ? node.votingAddress : node.operatorPublicKey
 }
 
@@ -47,20 +58,27 @@ export function matchMasternodeKeys(chain: MasternodeKeyChain, derived: DerivedA
     masternodeFilterValues(chain, address).map(value => [value, index] as const)))
   const matches = new Map<string, number>()
   for (const node of nodes) {
-    const index = indexByValue.get(nodeKey(chain, node))
+    const key = nodeKey(chain, node)
+    const index = key == null ? undefined : indexByValue.get(key)
     if (index != null) matches.set(node.proTxHash, index)
   }
   return matches
 }
 
 export function carriesKey(node: NetworkMasternode, {role, publicKey}: ImportedMasternodeKey): boolean {
-  return masternodeFilterValues(role, publicKey).includes(nodeKey(role, node))
+  const key = nodeKey(role, node)
+  return key != null && masternodeFilterValues(role, publicKey).includes(key)
 }
 
 export function collateralUtxos(utxos: UTXO[]): UTXO[] {
   return utxos.filter(utxo => MASTERNODE_COLLATERAL_DUFFS.includes(utxo.satoshis))
 }
 
+// By outpoint: another output of the same transaction is an ordinary coin.
+export function withCollateralFlag(utxos: SelectableUtxo[], collaterals: MasternodeCollateral[]): ListedUtxo[] {
+  const locked = new Set(collaterals.map(({txid, vout}) => `${txid}:${vout}`))
+  return utxos.map(utxo => ({...utxo, collateral: locked.has(`${utxo.txid}:${utxo.vout}`)}))
+}
 // A node is ours when it carries one of our derived or imported keys, or spends
 // from one of our collateral outpoints; one listed by several searches appears once.
 export function ownedMasternodes(

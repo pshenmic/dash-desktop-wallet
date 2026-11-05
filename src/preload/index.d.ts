@@ -60,6 +60,8 @@ interface SelectableUtxoDTO {
   height: number
   timestamp: Date | null
   confirmations: number
+  // A masternode collateral: spending it drops the node.
+  collateral: boolean
 }
 
 // Mirrors MasternodeKeyChain, ImportedMasternodeKey and Masternode in
@@ -75,13 +77,13 @@ interface MasternodeDTO {
   proTxHash: string
   type: string
   status: string
-  posePenaltyScore: number
-  collateralTxid: string
-  collateralVout: number
-  collateralAddress: string
-  serviceAddress: string
-  payeeAddress: string
-  ownerAddress: string
+  posePenaltyScore: number | null
+  collateralTxid: string | null
+  collateralVout: number | null
+  collateralAddress: string | null
+  serviceAddress: string | null
+  payeeAddress: string | null
+  ownerAddress: string | null
   votingAddress: string
   operatorPublicKey: string
   ownerKeyIndex: number | null
@@ -91,8 +93,9 @@ interface MasternodeDTO {
   platformNodeId: string | null
   platformP2PPort: number | null
   platformHttpPort: number | null
-  lastPaidBlock: number
-  lastPaidTime: number
+  lastPaidBlock: number | null
+  lastPaidTime: number | null
+  registeredHeight: number | null
 }
 
 // Hand-maintained alongside definitions.ts, and deliberately a second
@@ -189,7 +192,7 @@ declare global {
       getIdentities: (walletId: string) => Promise<unknown>
       getMasternodes: (walletId: string) => Promise<MasternodeDTO[] | null>
       getImportedMasternodeKeys: (walletId: string) => Promise<ImportedMasternodeKeyDTO[]>
-      importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => Promise<MasternodeDTO[]>
+      importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => Promise<MasternodeDTO[] | null>
       removeMasternodeKey: (walletId: string, key: ImportedMasternodeKeyDTO) => Promise<void>
       getUsernames: (walletId: string) => Promise<unknown>
       refreshDashPay: (walletId: string) => Promise<void>

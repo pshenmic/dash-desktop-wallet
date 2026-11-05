@@ -39,7 +39,7 @@ const provider = (transactions: Transaction[], tipHeight = TIP): P2PWalletProvid
   const walletSyncService = {getStatus: () => ({tipHeight})} as unknown as WalletSyncService
   const prevOutService = {resolveTransaction: async () => undefined} as unknown as CorePrevOutService
 
-  return new P2PWalletProvider(transactionDAO, 'w1', walletSyncService, {} as AddressDAO, prevOutService)
+  return new P2PWalletProvider(transactionDAO, 'w1', walletSyncService, {} as AddressDAO, prevOutService, 'testnet')
 }
 
 describe('confirmation counts on locally stored transactions', () => {

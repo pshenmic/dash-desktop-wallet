@@ -1,5 +1,14 @@
+import type {Block} from 'dash-core-sdk'
 import {HASH_LEN} from '../constants'
+import {wireToDisplayHex} from './byteOrder'
 import {doubleSHA256} from './hash'
+
+// A txid is the double-SHA256 of the serialised transaction; the SDK's hash()
+// is that digest reversed for display, so the leaves are taken here instead.
+export function txsMatchMerkleRoot(block: Block): boolean {
+  const root = merkleRoot(block.txs.map(tx => doubleSHA256(tx.bytes())))
+  return root != null && wireToDisplayHex(root) === block.blockHeader.merkleRoot
+}
 
 export function merkleRoot(txids: readonly Uint8Array[]): Uint8Array | null {
   if (txids.length === 0) return null

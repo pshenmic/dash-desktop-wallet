@@ -9,7 +9,7 @@ export class ImportMasternodeKeyHandler {
     this.masternodes = masternodes
   }
 
-  handle = async (_event: IpcMainInvokeEvent, walletId: string, role: MasternodeKeyChain, privateKey: string): Promise<Masternode[]> => {
+  handle = async (_event: IpcMainInvokeEvent, walletId: string, role: MasternodeKeyChain, privateKey: string): Promise<Masternode[] | null> => {
     return this.masternodes.importKey(walletId, role, privateKey)
   }
 }

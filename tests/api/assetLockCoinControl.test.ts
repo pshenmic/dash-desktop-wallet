@@ -39,6 +39,7 @@ const providerStub = (utxos: UTXO[]): WalletProvider => ({
   getTxLockStatus: async () => ({instantLocked: false, chainlocked: false, confirmed: false}),
   nextUnusedAddress: async () => '',
   getMasternodes: async () => null,
+  watchMasternodes: async () => undefined,
 })
 
 const txid = (byte: string): string => byte.repeat(32)

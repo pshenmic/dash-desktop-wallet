@@ -11,6 +11,7 @@ import {
   matchMasternodeKeys,
   networkMasternode,
   ownedMasternodes,
+  withCollateralFlag,
 } from '../../src/main/src/utils/masternodes'
 
 const SEED = hexToBytes('5eb00bbddcf069084889a8ab9155568165f5c453ccb85e70811aaed6f6da5fc19a5ac40b389cd370d086206dec8aa6c43daea6690f20ad3d8d48b2d2ce9e38e4')
@@ -23,7 +24,7 @@ function node(proTxHash: string, fields: Partial<NetworkMasternode> = {}): Netwo
     collateralTxid: 'c'.repeat(64), collateralVout: 0, collateralAddress: 'Xcollateral',
     serviceAddress: '1.2.3.4:9999', payeeAddress: 'Xpayee', ownerAddress: 'Xowner', votingAddress: 'Xvoting',
     operatorPublicKey: 'ff'.repeat(48), platformNodeId: null, platformP2PPort: null, platformHttpPort: null,
-    lastPaidBlock: 0, lastPaidTime: 0, ...fields,
+    lastPaidBlock: 0, lastPaidTime: 0, registeredHeight: null, ...fields,
   }
 }
 
@@ -70,10 +71,23 @@ describe('masternode key matching', () => {
     expect([...matchMasternodeKeys('owner', [owner], listed)]).toEqual([['a', 3]])
     expect([...matchMasternodeKeys('voting', [voting], listed)]).toEqual([])
   })
+
+  // The p2p list knows an owner only once the ProRegTx is indexed.
+  it('matches nothing by an owner key not known yet', () => {
+    const owner = masternodeKeyDeriver(keys, 'mainnet', 'owner').derive(0)
+    expect([...matchMasternodeKeys('owner', [owner], [node('a', {ownerAddress: null})])]).toEqual([])
+  })
 })
 
 describe('ownedMasternodes', () => {
   const none = {owner: new Map(), voting: new Map(), operator: new Map()}
+
+  it('flags a collateral by its outpoint, not by its amount or address', () => {
+    const coin = (txid: string, vout: number) =>
+      ({txid, vout, satoshis: 100_000_000_000n, address: 'Xcollateral', height: 1, timestamp: null, confirmations: 1})
+    expect(withCollateralFlag([coin('aa', 0), coin('aa', 1)], [{proTxHash: 'p', txid: 'aa', vout: 0}]).map(({collateral}) => collateral))
+      .toEqual([true, false])
+  })
 
   it('keeps only regular and evo collateral amounts', () => {
     const coins = [utxo('a', 0, 100_000_000_000n), utxo('b', 0, 400_000_000_000n), utxo('c', 0, 100_000_000_001n)]

@@ -1,5 +1,6 @@
 import {describe, it, expect} from 'vitest'
-import {utils as sdkUtils} from 'dash-core-sdk'
+import {Script, Transaction, TransactionType, utils as sdkUtils} from 'dash-core-sdk'
+import {ProUpRegTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRegTx.js'
 import {WatchSet} from '../../src/main/p2p/sync/WatchSet'
 import type {UnconfirmedInputOutpoint, WalletSyncUtxo, WatchAddress} from '../../src/main/p2p/types/walletSync'
 import type {Block} from 'dash-core-sdk'
@@ -223,5 +224,36 @@ describe('WatchSet.setWatchedOutpoints', () => {
 
     expect(set.items).toHaveLength(3)
     expect(set.utxoCount).toBe(1)
+  })
+})
+
+describe('WatchSet watched masternodes', () => {
+  const PRO_TX = 'ab'.repeat(32)
+  const payoutChange = (proTxHash: string): Block => ({
+    hash: () => 'block-hash',
+    blockHeader: {time: 1_760_000_000},
+    txs: [new Transaction([], [], 0, 3, TransactionType.TRANSACTION_PROVIDER_UPDATE_REGISTRAR, new ProUpRegTx(
+      2, proTxHash, 0, '00'.repeat(48), '00'.repeat(20),
+      Script.fromHex('76a914c69a0bda7daaae481be8def95e5f347a1d00a4b488ac'), '00'.repeat(32), ''))],
+  }) as unknown as Block
+
+  // Core keys a ProUpRegTx's filter element on the proTxHash's internal byte order.
+  it('matches on the proTxHash in wire order, once however often it is watched', () => {
+    const set = new WatchSet('testnet', GAP_LIMIT, [])
+    expect(set.watchProviders([PRO_TX, PRO_TX])).toBe(1)
+    expect(set.watchProviders([PRO_TX])).toBe(0)
+    set.setWatchedOutpoints([])
+    expect(set.items.map(item => Buffer.from(item).toString('hex'))).toEqual(['ab'.repeat(32)].map(h => Buffer.from(h, 'hex').reverse().toString('hex')))
+  })
+
+  // Not a wallet transaction: nothing of ours is spent or paid.
+  it('reads a watched node\'s payout change without recording a transaction', () => {
+    const set = new WatchSet('testnet', GAP_LIMIT, [])
+    set.watchProviders([PRO_TX])
+
+    expect(set.applyBlock(payoutChange(PRO_TX), 900)).toEqual({
+      txs: [], spends: [], payouts: [{proTxHash: PRO_TX, payoutAddress: 'yeRZBWYfeNE4yVUHV4ZLs83Ppn9aMRH57A', height: 900}],
+    })
+    expect(set.applyBlock(payoutChange('cd'.repeat(32)), 901)).toBeNull()
   })
 })

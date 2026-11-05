@@ -338,7 +338,9 @@ export class WalletBackend {
     this.coreDiscoveryService = new CoreDiscoveryService(walletDAO, addressDAO, identityDAO, dashPayCache, transactionDAO, this.walletSyncService, providers)
     this.coreLockService = new CoreLockService(walletDAO, addressDAO, this.walletSyncService, coreTransactionService, providers, preferences)
     const masternodeKeyDAO = new MasternodeKeyDAO(knex)
-    this.masternodeService = new MasternodeService(walletDAO, masternodeKeyDAO, new MasternodeDAO(knex), providers)
+    const masternodeDAO = new MasternodeDAO(knex)
+    this.masternodeService = new MasternodeService(walletDAO, masternodeKeyDAO, masternodeDAO, providers)
+    this.walletSyncService.watchedProvidersOf = masternodeDAO.getProTxHashes
     this.walletCredentialsService = new WalletCredentialsService(walletDAO, addressDAO, masternodeKeyDAO, calibratedIterations)
     this.identityService = new IdentityService(walletDAO, identityDAO, dashPayCache, this.platformWorkerService)
     const platformAddressDAO = new PlatformAddressDAO(knex)
@@ -346,7 +348,7 @@ export class WalletBackend {
     const platformTransactionDAO = new PlatformTransactionDAO(knex)
     const shieldedPoolDAO = new ShieldedPoolDAO(knex)
     this.platformHistoryService = new PlatformHistoryService(walletDAO, identityDAO, platformAddressDAO, platformTransactionDAO, shieldedNoteDAO, shieldedPoolDAO)
-    this.walletService = new WalletService(walletDAO, addressDAO, identityDAO, platformTransactionDAO, masternodeKeyDAO, this.identityService, this.platformHistoryService, this.walletSyncService, this.platformWorkerService, providers, this.coreDiscoveryService, coreTransactionService, preferences, calibratedIterations)
+    this.walletService = new WalletService(walletDAO, addressDAO, identityDAO, platformTransactionDAO, masternodeKeyDAO, masternodeDAO, this.identityService, this.platformHistoryService, this.walletSyncService, this.platformWorkerService, providers, this.coreDiscoveryService, coreTransactionService, preferences, calibratedIterations)
     this.assetLockService = new AssetLockService(walletDAO, new AssetLockDAO(knex), this.coreLockService, this.platformWorkerService)
     this.shieldedService = new ShieldedService(walletDAO, identityDAO, shieldedNoteDAO, shieldedPoolDAO, shieldedAddressDAO, this.platformWorkerService, this.assetLockService, this.platformHistoryService, preferences)
     this.platformAddressService = new PlatformAddressService(walletDAO, platformAddressDAO, this.platformWorkerService)
@@ -398,6 +400,12 @@ export class WalletBackend {
       discovery.discoverCoreAddresses(walletId).catch(err =>
         discoveryLog.error('post-sync address discovery failed:', err))
       resolvePrevOuts(walletId)
+    }
+    // A p2p list arrives on its own schedule, hours apart, so it is matched at once.
+    this.walletSyncService.onMasternodeList = (network) => {
+      walletDAO.getSelectedWallet()
+        .then(selected => selected?.network === network ? masternodeService.discover(selected.walletId) : undefined)
+        .catch(err => discoveryLog.error('masternode discovery failed:', err))
     }
     // The scan is stopped until this answers, so it must not join a discovery
     // run that started before the block that exhausted the gap was persisted.

@@ -8,6 +8,10 @@ import {memoryWindowStore, runAddressWindow} from '../../utils/addressWindow'
 import {masternodeKeyDeriver, masternodePublicKey} from '../../utils/masternodeKeys'
 import {carriesKey, collateralUtxos, masternodeFilterValues, matchMasternodeKeys, ownedMasternodes} from '../../utils/masternodes'
 import {requireWallet} from '../../utils/requireWallet'
+import {bytesToHex} from '@noble/hashes/utils.js'
+import createCoreClient from 'dash-core-sdk/src/createCoreClient.js'
+import {EVONODE_STATUS_TIMEOUT_MS} from '../../constants/dapi'
+import {Network} from '../../types/Network'
 import {Logger} from '../../utils/logger'
 
 const log = new Logger('masternodes')
@@ -37,14 +41,15 @@ export class MasternodeService {
   }
 
   // Kept even when no node carries it yet, so a later registration is found.
-  // Answers the listed nodes that carry it.
-  async importKey(walletId: string, role: MasternodeKeyChain, privateKey: string): Promise<Masternode[]> {
+  // Answers the listed nodes that carry it, or null while no list has arrived to
+  // search — p2p before its first proven list — which is not "none".
+  async importKey(walletId: string, role: MasternodeKeyChain, privateKey: string): Promise<Masternode[] | null> {
     if (!MASTERNODE_KEY_CHAINS.includes(role)) throw new Error(`Unknown masternode key role: ${role}`)
     const wallet = await requireWallet(this.walletDAO, walletId)
     const key = {role, publicKey: masternodePublicKey(role, privateKey.trim(), wallet.network)}
     await this.masternodeKeyDAO.saveImportedKey(walletId, key)
     await this.discover(walletId)
-    return (this.listed.get(walletId) ?? []).filter(node => carriesKey(node, key))
+    return this.listed.get(walletId)?.filter(node => carriesKey(node, key)) ?? null
   }
 
   async removeKey(walletId: string, key: ImportedMasternodeKey): Promise<void> {
@@ -88,10 +93,28 @@ export class MasternodeService {
       }, memoryWindowStore(), MASTERNODE_KEY_WINDOW)
     }
 
-    const owned = ownedMasternodes(nodes, matches, imported, collateral)
-    await this.masternodeDAO.replaceCollaterals(walletId, owned.map(({proTxHash, collateralTxid, collateralVout}) =>
-      ({proTxHash, txid: collateralTxid, vout: collateralVout})))
+    const owned = await Promise.all(ownedMasternodes(nodes, matches, imported, collateral)
+      .map(node => this.withEvonodeStatus(node, wallet.network)))
+    const followed = new Set(await this.masternodeDAO.getProTxHashes(walletId))
+    await provider.watchMasternodes(owned, owned.filter(({proTxHash}) => !followed.has(proTxHash)))
+    await this.masternodeDAO.replaceCollaterals(walletId, owned.flatMap(({proTxHash, collateralTxid, collateralVout}) =>
+      collateralTxid == null || collateralVout == null ? [] : [{proTxHash, txid: collateralTxid, vout: collateralVout}]))
     this.listed.set(walletId, owned)
     log.debug(`wallet ${walletId}: ${owned.length} masternode(s)`)
+  }
+
+  // A list without PoSe scores (p2p) leaves an evonode to report its own over
+  // DAPI. Unverifiable, which is acceptable for a node the wallet holds a key of.
+  private async withEvonodeStatus(node: Masternode, network: Network): Promise<Masternode> {
+    if (node.type !== 'Evo' || node.posePenaltyScore != null || node.serviceAddress == null || node.platformHttpPort == null) return node
+    const host = node.serviceAddress.slice(0, node.serviceAddress.lastIndexOf(':'))
+    try {
+      const {response} = await createCoreClient(`https://${host}:${node.platformHttpPort}`)
+        .getMasternodeStatus({}, {timeout: EVONODE_STATUS_TIMEOUT_MS})
+      return bytesToHex(response.proTxHash) === node.proTxHash ? {...node, posePenaltyScore: response.posePenalty} : node
+    } catch (err) {
+      log.debug(`${network} evonode ${node.proTxHash} did not report its status:`, err)
+      return node
+    }
   }
 }

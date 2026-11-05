@@ -4,7 +4,7 @@ import {Transaction} from '../types/Transaction'
 import {TxLockStatus} from '../types/TxLockStatus'
 import {AddressUsage} from '../types/AddressDiscovery'
 import {ConnectionStatus} from '../types/ConnectionStatus'
-import {MasternodeKeyFilter, NetworkMasternode} from '../types/Masternode'
+import {Masternode, MasternodeKeyFilter, NetworkMasternode} from '../types/Masternode'
 
 // Read side only: where a wallet's history, balances and UTXOs come from.
 // Putting a tx on the network and observing its lock belongs to
@@ -34,4 +34,7 @@ export interface WalletProvider {
   // Every listed masternode carrying any of the values for that key. Null when
   // the source has no masternode list.
   getMasternodes(filter: MasternodeKeyFilter, values: string[]): Promise<NetworkMasternode[] | null>
+  // Keeps the source following the wallet's nodes for the updates its list
+  // does not carry; `fresh` are ones it has never followed.
+  watchMasternodes(owned: Masternode[], fresh: Masternode[]): Promise<void>
 }

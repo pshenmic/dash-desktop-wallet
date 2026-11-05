@@ -6,6 +6,7 @@ import {AddressDAO} from '../../database/AddressDAO'
 import {IdentityDAO} from '../../database/IdentityDAO'
 import {PlatformTransactionDAO} from '../../database/PlatformTransactionDAO'
 import {MasternodeKeyDAO} from '../../database/MasternodeKeyDAO'
+import {MasternodeDAO} from '../../database/MasternodeDAO'
 import {WalletProviderFactory} from '../../providers/WalletProviderFactory'
 import {WalletProvider} from '../../providers/WalletProvider'
 import {Network} from '../../types/Network'
@@ -41,7 +42,8 @@ import {
 import {coreFeeDuffsFor} from '../../utils/coreFeeRate'
 import {identityPath} from '../../utils/identityKeys'
 import {coreAccountPath, coreAddressDeriver} from "../../utils/addressDiscovery";
-import {CoreSpendSource, SelectableUtxo} from '../../types/CoinSelection'
+import {CoreSpendSource, ListedUtxo} from '../../types/CoinSelection'
+import {withCollateralFlag} from '../../utils/masternodes'
 import {CoreRecipient} from '../../types/CoreTransaction'
 import {requireCoreRecipients, selectableTransferUtxos, selectTransferInputs} from '../../utils/transferInputs'
 import {Preferences} from '../../preferences'
@@ -57,6 +59,7 @@ export class WalletService {
   private identityDAO: IdentityDAO
   private platformTransactionDAO: PlatformTransactionDAO
   private masternodeKeyDAO: MasternodeKeyDAO
+  private masternodeDAO: MasternodeDAO
   private identities: IdentityService
   private platformHistory: PlatformHistoryService
   private walletSyncService: WalletSyncService
@@ -76,6 +79,7 @@ export class WalletService {
     identityDAO: IdentityDAO,
     platformTransactionDAO: PlatformTransactionDAO,
     masternodeKeyDAO: MasternodeKeyDAO,
+    masternodeDAO: MasternodeDAO,
     identities: IdentityService,
     platformHistory: PlatformHistoryService,
     walletSyncService: WalletSyncService,
@@ -91,6 +95,7 @@ export class WalletService {
     this.identityDAO = identityDAO
     this.platformTransactionDAO = platformTransactionDAO
     this.masternodeKeyDAO = masternodeKeyDAO
+    this.masternodeDAO = masternodeDAO
     this.identities = identities
     this.platformHistory = platformHistory
     this.walletSyncService = walletSyncService
@@ -383,14 +388,18 @@ export class WalletService {
   // Guarded like a send rather than like a read: a picker fed a partial set does
   // not under-display, it narrows what the user can pick to coins they cannot
   // tell are only some of theirs.
-  async getUtxos(walletId: string): Promise<SelectableUtxo[]> {
+  async getUtxos(walletId: string): Promise<ListedUtxo[]> {
     const wallet = await requireWallet(this.walletDAO, walletId)
 
     const provider = this.providers.forWallet(wallet.walletId, wallet.network)
     await provider.ensureReady()
-    const grouped = await this.addressDAO.getAddressesByWalletId(walletId)
+    const [grouped, utxos, collaterals] = await Promise.all([
+      this.addressDAO.getAddressesByWalletId(walletId),
+      provider.getWalletUtxos(),
+      this.masternodeDAO.getCollaterals(walletId),
+    ])
 
-    return selectableTransferUtxos(grouped, await provider.getWalletUtxos())
+    return withCollateralFlag(selectableTransferUtxos(grouped, utxos), collaterals)
   }
 
   async getTransactionByHash(hash: string, network: Network): Promise<Transaction> {

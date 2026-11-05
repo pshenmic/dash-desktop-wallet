@@ -3,6 +3,7 @@ import {Network} from '../../src/types/Network'
 
 import {displayHexToWire} from '../utils/byteOrder'
 import {ChainTipState, PersistedHeader, StoredState} from '../types/chainStore'
+import type {ProviderRegistration} from '../types/masternodeList'
 import {HEIGHT_KEY_WIDTH} from '../constants'
 
 function headerKey(height: number): string {
@@ -19,13 +20,19 @@ function filterHeaderKey(height: number): string {
   return `f:${height.toString().padStart(HEIGHT_KEY_WIDTH, '0')}`
 }
 
+// Network-wide like the headers: what a node's ProRegTx committed to, by proTxHash.
+function registrationKey(proTxHash: string): string {
+  return `r:${proTxHash}`
+}
+
 function stateKey(network: Network): string {
   return `s:${network}`
 }
 
 // Single-owner facade over chain storage — workers never open LevelDB directly.
 //
-// Holds network-scoped data only (headers, hash cache, filter headers); wallet
+// Holds network-scoped data only (headers, hash cache, filter headers, provider
+// registrations); wallet
 // state lives in SQL. The split keeps chain storage free of anything that will
 // need encrypting under the user's key when SQLCipher lands.
 export class ChainStore {
@@ -237,6 +244,45 @@ export class ChainStore {
       await iter.close()
     }
     return out
+  }
+
+  // Heights of the given wire-order hashes, walked down from `top` because the
+  // hashes asked after the first build name recent blocks. Stops once all are found.
+  findHeights = async (hashes: Set<string>, top: number): Promise<Map<string, number>> => {
+    const found = new Map<string, number>()
+    if (hashes.size === 0) return found
+    const iter = this.db.iterator({lte: hashKey(top), gte: hashKey(0), reverse: true})
+    try {
+      for await (const [key, value] of iter) {
+        const hash = Buffer.from(value).toString('hex')
+        if (hashes.has(hash)) found.set(hash, parseInt(key.slice(2), 10))
+        if (found.size === hashes.size) break
+      }
+    } finally {
+      await iter.close()
+    }
+    return found
+  }
+
+  getRegistrations = async (): Promise<Map<string, ProviderRegistration>> => {
+    const registrations = new Map<string, ProviderRegistration>()
+    const iter = this.db.iterator({gte: registrationKey(''), lt: 'r;'})
+    try {
+      for await (const [key, value] of iter) {
+        registrations.set(key.slice(2), JSON.parse(Buffer.from(value).toString('utf8')) as ProviderRegistration)
+      }
+    } finally {
+      await iter.close()
+    }
+    return registrations
+  }
+
+  writeRegistrations = async (put: Map<string, ProviderRegistration>, del: string[] = []): Promise<void> => {
+    if (put.size === 0 && del.length === 0) return
+    const batch = this.db.batch()
+    for (const [proTxHash, registration] of put) batch.put(registrationKey(proTxHash), encodeJson(registration))
+    for (const proTxHash of del) batch.del(registrationKey(proTxHash))
+    await batch.write()
   }
 }
 

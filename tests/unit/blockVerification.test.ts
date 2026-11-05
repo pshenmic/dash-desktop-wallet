@@ -72,6 +72,8 @@ class FakePool extends EventEmitter {
 describe('block verification against the header merkle root', () => {
   let pool: FakePool
   let worker: CFilterSyncWorker
+  // Whether the masternode registry claims the block too.
+  let foreign = false
 
   const fetcher = (): {size: number; request: (h: number, w: Uint8Array) => void} =>
     (worker as unknown as {
@@ -103,7 +105,10 @@ describe('block verification against the header merkle root', () => {
       seedUtxos: [],
       unconfirmedInputOutpoints: [],
       cfilterCursor: TIP,
+      watchedProviders: [],
+      foreignBlock: () => foreign,
     })
+    foreign = false
 
     await worker.start()
     ;(worker as unknown as {phase: string}).phase = 'cfilters'
@@ -139,6 +144,16 @@ describe('block verification against the header merkle root', () => {
 
     expect(fetcher().size).toBe(0)
     expect((matched().get(HEIGHT) as Block | undefined)?.txs).toHaveLength(TXS.length)
+  })
+
+  // A ProRegTx paying this wallet sits in a block the registry indexed first;
+  // dropping it as the registry's left the scan waiting on it forever.
+  it('takes a block it asked for even when the registry fetched it too', () => {
+    foreign = true
+    deliver(honest())
+
+    expect(fetcher().size).toBe(0)
+    expect(matched().has(HEIGHT)).toBe(true)
   })
 
   it('ignores a forged block nobody asked for', () => {

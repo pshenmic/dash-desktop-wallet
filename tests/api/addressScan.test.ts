@@ -29,6 +29,7 @@ const providerStub = (scan: AddressUsage[] | null): WalletProvider => ({
   getConnectionStatus: async () => 'online',
   nextUnusedAddress: async () => '',
   getMasternodes: async () => null,
+  watchMasternodes: async () => undefined,
 })
 
 describe('address discovery from an xpub scan', () => {

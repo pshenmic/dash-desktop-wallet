@@ -96,4 +96,7 @@ export interface CFilterSyncWorkerOptions {
   // Persisted cfilter scan cursor (null = never synced). Worker resumes
   // from max(birthday, cfilterCursor + 1).
   cfilterCursor: number | null
+  watchedProviders: string[]
+  // A block another fetcher sharing this pool asked for, so not unsolicited here.
+  foreignBlock: (hashWire: Uint8Array) => boolean
 }
