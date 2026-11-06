@@ -1,3 +1,5 @@
+import { MASTERNODES_ROUTE } from './masternodes'
+
 export interface NavItem {
   id: string
   label: string
@@ -54,6 +56,11 @@ export const navGroups: NavGroup[] = [
         id: 'dashpay',
         label: 'DashPay',
         to: '/dashpay'
+      },
+      {
+        id: 'masternodes',
+        label: 'Masternodes',
+        to: MASTERNODES_ROUTE
       },
       {
         id: 'shielded',
