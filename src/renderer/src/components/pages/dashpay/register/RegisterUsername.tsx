@@ -13,7 +13,7 @@ import PageHeader from '@renderer/components/ui/PageHeader'
 import RetryButton from '@renderer/components/ui/RetryButton'
 import SensitiveValue from '@renderer/components/ui/SensitiveValue'
 import Spinner from '@renderer/components/ui/Spinner'
-import StatusPill from '@renderer/components/ui/StatusPill'
+import UsernameStatusPill from '@renderer/components/pages/dashpay/usernames/UsernameStatusPill'
 import TxSummary from '@renderer/components/ui/TxSummary'
 import { API } from '@renderer/api'
 import type { UsernameDto } from '@renderer/api/types'
@@ -26,7 +26,6 @@ import {
   USERNAME_DIVIDER_CLASS,
   USERNAMES_TAB_HREF,
 } from '@renderer/constants/dashPayUsernames'
-import { USERNAME_PRESENTATION } from '@renderer/constants/dpns'
 import { PAGE_HEADERS } from '@renderer/constants/pageHeaders'
 import { SURFACE_SECTION } from '@renderer/constants/surfaces'
 import { TX_SUMMARY_PENDING_VALUE } from '@renderer/constants/txSummary'
@@ -198,13 +197,12 @@ export default function RegisterUsername({ walletId }: RegisterUsernameProps): R
 
   const renderDone = (username: UsernameDto): SignedActionDoneView => {
     const presentation = usernamePresentation(username)
-    const spec = USERNAME_PRESENTATION[presentation]
     return {
       headline: fullDpnsName(username.label),
       note: registerDoneNote(username, network, Date.now()),
       details: [
         { label: REGISTER_SIGN_COPY.identity, value: identityLabel(identity) },
-        { label: REGISTER_SIGN_COPY.status, value: <StatusPill tone={spec.tone}>{spec.label}</StatusPill> },
+        { label: REGISTER_SIGN_COPY.status, value: <UsernameStatusPill presentation={presentation} /> },
       ],
       hash: username.documentId == null ? undefined : { value: username.documentId, label: REGISTER_SIGN_COPY.documentId, explorerUrl: null },
     }

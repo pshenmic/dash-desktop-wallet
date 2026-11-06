@@ -9,7 +9,7 @@ import {
   SETUP_STEP_ICONS,
   SETUP_STEP_TITLES,
 } from '@renderer/constants/dashPayOverview'
-import { USERNAME_PRESENTATION } from '@renderer/constants/dpns'
+import UsernameStatusPill from '@renderer/components/pages/dashpay/usernames/UsernameStatusPill'
 import { CHIP_ACTION, SURFACE_SECTION } from '@renderer/constants/surfaces'
 import { DashPaySetupStep, OverviewAction, SetupStepState, UsernamePresentation } from '@renderer/enums/DashPay'
 import { StatusPillTone } from '@renderer/enums/StatusPillTone'
@@ -59,10 +59,7 @@ export default function SetupChecklist({
       return canSwitch ? <ChipButton label={OVERVIEW_COPY.switchIdentity} onClick={onSwitchIdentity} /> : ready
     }
     if (step.state === SetupStepState.Done) return ready
-    if (step.state === SetupStepState.Voting) {
-      const { tone, label } = USERNAME_PRESENTATION[UsernamePresentation.Voting]
-      return <StatusPill tone={tone}>{label}</StatusPill>
-    }
+    if (step.state === SetupStepState.Voting) return <UsernameStatusPill presentation={UsernamePresentation.Voting} />
     if (step.step === DashPaySetupStep.Username) {
       if (!showRegisterUsername) return null
       return (
