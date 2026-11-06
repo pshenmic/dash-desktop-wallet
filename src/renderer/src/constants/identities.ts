@@ -25,6 +25,7 @@ export const IDENTITY_DETAIL_COPY = {
   title: 'Identity',
   balance: 'Balance',
   usernames: 'Usernames',
+  votingUsernames: 'Usernames in vote',
   keys: 'Keys',
   active: 'active',
   explorer: 'Open in explorer',

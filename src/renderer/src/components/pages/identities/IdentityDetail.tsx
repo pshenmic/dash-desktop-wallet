@@ -26,15 +26,18 @@ import { IdentityAvatarSize } from '@renderer/enums/IdentityAvatarSize'
 import { NoResultsTone } from '@renderer/enums/NoResultsTone'
 import { useBalanceVisibility } from '@renderer/hooks/useBalanceVisibility'
 import { useFiat } from '@renderer/hooks/useFiat'
+import { useDashPayUsernames } from '@renderer/hooks/useDashPayUsernames'
+import { usePeriodicDashPayRefresh } from '@renderer/hooks/useDashPayRefresh'
 import { refreshIdentities, useIdentities } from '@renderer/hooks/useIdentities'
 import type { IdentityDetailProps } from '@renderer/types/Identities'
 import { formatApproxFiat } from '@renderer/utils/approxFiat'
 import { creditsToDuffs } from '@renderer/utils/balance'
 import { identityUrl, openExternal } from '@renderer/utils/explorer'
 import { identityName } from '@renderer/utils/identifierFormat'
-import { activeKeysCount, identityAddKeysHref } from '@renderer/utils/identities'
+import { activeKeysCount, identityAddKeysHref, identityVotingNames } from '@renderer/utils/identities'
 import { identityKeysCountLabel } from '@renderer/utils/identityKeySetup'
 import IdentityKeysSection from './keys/IdentityKeysSection'
+import IdentityVotingName from './IdentityVotingName'
 
 export default function IdentityDetail({ walletId, identifier }: IdentityDetailProps): React.JSX.Element {
   const navigate = useNavigate()
@@ -44,6 +47,9 @@ export default function IdentityDetail({ walletId, identifier }: IdentityDetailP
   const { format: formatFiat, rateReady, currency } = useFiat()
   const { identities, loading, err } = useIdentities(walletId)
   const identity = identities.find(entry => entry.identifier === identifier)
+  const usernamesWalletId = identity == null ? undefined : walletId
+  const { usernames } = useDashPayUsernames(usernamesWalletId)
+  usePeriodicDashPayRefresh(usernamesWalletId)
   const back = (): void => {
     navigate(IDENTITIES_ROUTES.root)
   }
@@ -71,6 +77,7 @@ export default function IdentityDetail({ walletId, identifier }: IdentityDetailP
   }
 
   const name = identityName(identity)
+  const votingNames = identityVotingNames(identity, usernames)
   const extraNames = Math.max(0, identity.usernames.length - 1)
   const balance = identity.balance.amount
 
@@ -138,6 +145,13 @@ export default function IdentityDetail({ walletId, identifier }: IdentityDetailP
               subValue={`${activeKeysCount(identity.keys)} ${IDENTITY_DETAIL_COPY.active}`}
             />
           </div>
+          {votingNames.length > 0 && (
+            <ul aria-label={IDENTITY_DETAIL_COPY.votingUsernames} className={'flex min-w-0 flex-col gap-2'}>
+              {votingNames.map(votingName => (
+                <li key={votingName} className={'min-w-0'}><IdentityVotingName name={votingName} /></li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <IdentityKeysSection walletId={walletId} identity={identity} />
