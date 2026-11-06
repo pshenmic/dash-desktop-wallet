@@ -4,7 +4,6 @@ import { IDENTITY_KEY_TYPE_ECDSA } from '@renderer/constants/identityKeys'
 import { DashPayReadiness, DashPaySetupStep, SetupStepState } from '@renderer/enums/DashPay'
 import type { IdentityApiDto } from '@renderer/hooks/useIdentities'
 import type { DashPayReadinessInfo, SetupStepModel } from '@renderer/types/DashPay'
-import { identityLabel } from './identifierFormat'
 import { isIdentityKeyActive } from './identities'
 
 function keySatisfies(key: IdentityKeyDto, request: IdentityKeyRequestDto): boolean {
@@ -52,7 +51,7 @@ export function setupSteps(
     {
       step: DashPaySetupStep.Identity,
       state: identity.balance.amount === 0n ? SetupStepState.Warning : SetupStepState.Done,
-      caption: identityLabel(identity),
+      caption: identity.identifier,
     },
     {
       step: DashPaySetupStep.Username,

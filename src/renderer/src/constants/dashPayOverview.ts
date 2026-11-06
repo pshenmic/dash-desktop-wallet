@@ -58,6 +58,7 @@ export const OVERVIEW_COPY = {
   addContact: 'Add contact',
   registerUsername: 'Register username',
   yourSetup: 'Your setup',
+  copyIdentityId: 'Copy identity ID',
   of: 'of',
   stepReady: 'Ready',
   noCredits: 'No credits',
