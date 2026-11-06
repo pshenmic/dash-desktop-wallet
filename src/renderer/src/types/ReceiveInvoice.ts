@@ -29,6 +29,7 @@ export interface ReceiveAddressSelectProps {
   addresses: ReceiveAddressOption[]
   selected: ReceiveAddressOption
   onSelect: (address: string) => void
+  wideAddress?: boolean
 }
 
 export interface ReceiveAddressPanelProps extends ReceiveAddressSelectProps {
