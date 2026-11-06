@@ -14,6 +14,8 @@ export const RECEIVE_INVOICE_COPY = {
   testnet: 'Testnet',
   brand: 'Dash',
   paymentLink: 'Payment link',
+  copyPaymentLink: 'Copy payment link',
+  copyAddress: 'Copy address',
 } as const
 
 export const RECEIVE_INVOICE_ADDRESS_LABELS = {
