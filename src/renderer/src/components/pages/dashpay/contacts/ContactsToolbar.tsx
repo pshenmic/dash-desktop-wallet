@@ -4,7 +4,7 @@ import SearchField from '@renderer/components/ui/SearchField'
 import SegmentedControl from '@renderer/components/ui/SegmentedControl'
 import { CONTACT_SORT_OPTIONS } from '@renderer/constants/dashPay'
 import { CONTACTS_TAB_COPY } from '@renderer/constants/dashPayContacts'
-import { TOOLBAR_DROPDOWN_CLASS } from '@renderer/constants/listToolbar'
+import { TOOLBAR_DROPDOWN_CLASS, TOOLBAR_SEARCH_CLASS } from '@renderer/constants/listToolbar'
 import { ContactSort } from '@renderer/enums/DashPay'
 import { SegmentedControlAppearance } from '@renderer/enums/SegmentedControlAppearance'
 import type { AddContactButtonProps, ContactsToolbarProps } from '@renderer/types/DashPayContacts'
@@ -45,7 +45,7 @@ export default function ContactsToolbar({
           onChange={onQueryChange}
           placeholder={CONTACTS_TAB_COPY.searchPlaceholder}
           ariaLabel={CONTACTS_TAB_COPY.searchLabel}
-          className={'flex-1 min-w-0 max-w-[22rem]'}
+          className={`flex-1 ${TOOLBAR_SEARCH_CLASS}`}
         />
         <DropdownField
           options={CONTACT_SORT_OPTIONS}
