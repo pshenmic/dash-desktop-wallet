@@ -62,6 +62,30 @@ interface SelectableUtxoDTO {
   confirmations: number
 }
 
+// Mirrors Masternode in src/main/src/types/Masternode.
+interface MasternodeDTO {
+  proTxHash: string
+  type: string
+  status: string
+  posePenaltyScore: number
+  collateralTxid: string
+  collateralVout: number
+  collateralAddress: string
+  serviceAddress: string
+  payeeAddress: string
+  ownerAddress: string
+  votingAddress: string
+  operatorPublicKey: string
+  ownerKeyIndex: number | null
+  votingKeyIndex: number | null
+  operatorKeyIndex: number | null
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+  lastPaidBlock: number
+  lastPaidTime: number
+}
+
 // Hand-maintained alongside definitions.ts, and deliberately a second
 // declaration of src/main/src/types/Transaction: the three bundles do not share
 // types. Amounts stay bigint — structured clone carries them as themselves.
@@ -154,6 +178,7 @@ declare global {
       getTransactionByHash: (hash: string, network: Network) => Promise<TransactionDTO>
       getBalance: (address: string | string[], network: Network) => Promise<unknown>
       getIdentities: (walletId: string) => Promise<unknown>
+      getMasternodes: (walletId: string) => Promise<MasternodeDTO[]>
       getUsernames: (walletId: string) => Promise<unknown>
       refreshDashPay: (walletId: string) => Promise<void>
       registerUsername: (walletId: string, identifier: string, label: string, password: string) => Promise<unknown>

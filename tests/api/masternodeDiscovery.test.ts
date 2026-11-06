@@ -1,0 +1,117 @@
+import {beforeEach, describe, expect, it} from 'vitest'
+import {Script} from 'dash-core-sdk'
+import {MasternodeDAO} from '../../src/main/src/database/MasternodeDAO'
+import {WalletProviderFactory} from '../../src/main/src/providers/WalletProviderFactory'
+import {MasternodeService} from '../../src/main/src/services/core/MasternodeService'
+import {MasternodeKeyFilter, MasternodeKeys, NetworkMasternode} from '../../src/main/src/types/Masternode'
+import {UTXO} from '../../src/main/src/types/UTXO'
+import {masternodeKeyDeriver} from '../../src/main/src/utils/masternodeKeys'
+import {Harness, harness, PASSWORD, VALID_SEEDPHRASE} from './harness'
+
+function node(proTxHash: string, fields: Partial<NetworkMasternode> = {}): NetworkMasternode {
+  return {
+    proTxHash, type: 'Regular', status: 'ENABLED', posePenaltyScore: 0,
+    collateralTxid: proTxHash.repeat(64).slice(0, 64), collateralVout: 0, collateralAddress: 'Xnobody',
+    serviceAddress: '1.2.3.4:9999', payeeAddress: 'Xpayee', ownerAddress: 'Xnobody', votingAddress: 'Xnobody',
+    operatorPublicKey: 'ff'.repeat(48), platformNodeId: null, platformP2PPort: null, platformHttpPort: null,
+    lastPaidBlock: 0, lastPaidTime: 0, ...fields,
+  }
+}
+
+function listedBy(filter: MasternodeKeyFilter, listed: NetworkMasternode): string {
+  if (filter === 'owner') return listed.ownerAddress
+  if (filter === 'voting') return listed.votingAddress
+  return filter === 'operator' ? listed.operatorPublicKey : listed.collateralAddress
+}
+
+// A masternode list answering the same OR-of-values search the Dashscan filters run.
+function source(list: NetworkMasternode[] | null | Error, utxos: UTXO[] = []): WalletProviderFactory {
+  const provider = {
+    getWalletUtxos: async () => utxos,
+    getMasternodes: async (filter: MasternodeKeyFilter, values: string[]) => {
+      if (list instanceof Error) throw list
+      return list?.filter(entry => values.includes(listedBy(filter, entry))) ?? null
+    },
+  }
+  return {forWallet: () => provider} as unknown as WalletProviderFactory
+}
+
+describe('MasternodeService.discover', () => {
+  let wired: Harness
+  let walletId: string
+  let keys: MasternodeKeys
+  let current: WalletProviderFactory
+  let masternodes: MasternodeService
+
+  beforeEach(async () => {
+    wired = await harness()
+    walletId = await wired.createWalletHandler.handle(null as never, VALID_SEEDPHRASE, 'mainnet', PASSWORD)
+    keys = (await wired.masternodeKeyDAO.getKeys(walletId))!
+    const providers = {forWallet: (...args) => current.forWallet(...args)} as WalletProviderFactory
+    masternodes = new MasternodeService(wired.walletDAO, wired.masternodeKeyDAO, new MasternodeDAO(wired.knex), providers)
+  })
+
+  const key = (chain: 'owner' | 'voting' | 'operator', index: number): string =>
+    masternodeKeyDeriver(keys, 'mainnet', chain).derive(index).address
+
+  async function discover(providers: WalletProviderFactory): Promise<void> {
+    current = providers
+    await masternodes.discover(walletId)
+  }
+
+  async function listed(): Promise<string[]> {
+    return (await masternodes.getMasternodes(walletId)).map(({proTxHash}) => proTxHash).sort()
+  }
+
+  async function storedCollaterals(): Promise<string[]> {
+    const rows = await wired.knex('masternodes').where('wallet_id', walletId).orderBy('pro_tx_hash')
+    return rows.map(row => `${row.pro_tx_hash}:${row.collateral_txid.slice(0, 2)}:${row.collateral_vout}`)
+  }
+
+  it('walks each key chain past the first window and stops at the gap', async () => {
+    await discover(source([
+      node('a', {ownerAddress: key('owner', 3)}),
+      node('b', {ownerAddress: key('owner', 7)}),
+      node('c', {ownerAddress: key('owner', 20)}),
+      node('d', {votingAddress: key('voting', 1)}),
+    ]))
+
+    const owned = await masternodes.getMasternodes(walletId)
+    expect(owned.map(({proTxHash, ownerKeyIndex, votingKeyIndex}) => [proTxHash, ownerKeyIndex, votingKeyIndex]))
+      .toEqual([['a', 3, null], ['b', 7, null], ['d', null, 1]])
+  })
+
+  it('owns a node by a legacy-encoded operator key or by our collateral outpoint', async () => {
+    const legacy = `0${key('operator', 0).slice(1)}`
+    const collateral: UTXO = {
+      address: 'Xours', satoshis: 400_000_000_000n, script: new Script(), txId: 'e'.repeat(64), vOut: 0,
+      height: 1, timestamp: null, confirmations: 1,
+    }
+    await discover(source([
+      node('a', {operatorPublicKey: legacy}),
+      node('e', {type: 'Evo', collateralAddress: 'Xours'}),
+    ], [collateral]))
+
+    const owned = await masternodes.getMasternodes(walletId)
+    expect(owned.find(({proTxHash}) => proTxHash === 'a')?.operatorKeyIndex).toBe(0)
+    expect(await storedCollaterals()).toEqual(['a:aa:0', 'e:ee:0'])
+  })
+
+  it('replaces what a previous run found', async () => {
+    await discover(source([node('a', {ownerAddress: key('owner', 0)})]))
+    await discover(source([node('b', {ownerAddress: key('owner', 0)})]))
+
+    expect(await listed()).toEqual(['b'])
+    expect(await storedCollaterals()).toEqual(['b:bb:0'])
+  })
+
+  it('keeps what it knew when the source has no list or fails', async () => {
+    await discover(source([node('a', {ownerAddress: key('owner', 0)})]))
+
+    await discover(source(null))
+    await expect(discover(source(new Error('offline')))).rejects.toThrow('offline')
+
+    expect(await listed()).toEqual(['a'])
+    expect(await storedCollaterals()).toEqual(['a:aa:0'])
+  })
+})

@@ -201,6 +201,32 @@ export interface SelectableUtxo {
   confirmations: number
 }
 
+// getMasternodes — a masternode this wallet holds a key or the collateral of, as
+// last listed; empty until the first discovery run after startup. A null key
+// index is a key that is not ours; times are unix seconds, 0 = never.
+export interface MasternodeDto {
+  proTxHash: string
+  type: string
+  status: string
+  posePenaltyScore: number
+  collateralTxid: string
+  collateralVout: number
+  collateralAddress: string
+  serviceAddress: string
+  payeeAddress: string
+  ownerAddress: string
+  votingAddress: string
+  operatorPublicKey: string
+  ownerKeyIndex: number | null
+  votingKeyIndex: number | null
+  operatorKeyIndex: number | null
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+  lastPaidBlock: number
+  lastPaidTime: number
+}
+
 // the backend's business; this carries only what the user chose.
 export interface FeeParams {
   amountCredits: bigint
