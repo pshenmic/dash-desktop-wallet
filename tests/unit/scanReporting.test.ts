@@ -73,6 +73,8 @@ describe('scan completion reporting', () => {
       seedUtxos: [utxo('aa', '1000')],
       unconfirmedInputOutpoints: [],
       cfilterCursor: TIP,
+      watchedProviders: [],
+      foreignBlock: () => false,
     })
     await worker.start()
     info.mockClear()

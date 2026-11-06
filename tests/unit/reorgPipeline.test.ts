@@ -167,6 +167,7 @@ describe('SyncService reorg forwarding', () => {
       seedUtxos: [],
       unconfirmedInputOutpoints: [unconfirmedInput(3)],
       cfilterCursor: 90,
+      watchedProviders: [],
     })
     await reachCFilterPhase()
   })

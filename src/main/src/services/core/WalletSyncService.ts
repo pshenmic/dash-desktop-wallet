@@ -26,6 +26,7 @@ import {peerOverridesKey} from '../../../p2p/net/peerOverrides'
 import {ScanCursorGate} from '../../utils/scanCursorGate'
 import {Preferences} from '../../preferences'
 import {Network} from '../../types/Network'
+import {NetworkMasternode} from '../../types/Masternode'
 import {Transaction as SDKTransaction} from 'dash-core-sdk'
 import {Logger} from '../../utils/logger'
 
@@ -89,6 +90,11 @@ export class WalletSyncService {
   onGapExhausted: ((gap: GapExhausted) => void) | null = null
   onEvonodeDapiUrls: ((network: Network, dapiUrls: string[]) => void) | null = null
   onPlatformQuorums: ((network: Network, keys: Map<string, Uint8Array>) => void) | null = null
+  onMasternodeList: ((network: Network) => void) | null = null
+  // The masternodes a wallet already follows, read when its scan starts.
+  watchedProvidersOf: (walletId: string) => Promise<string[]> = async () => []
+  // The last proven list per network; absent until the p2p index first answers.
+  private masternodeLists = new Map<Network, NetworkMasternode[]>()
   // Wallets whose scan is held waiting for addresses. The worker resumes at the
   // held height, so the addresses answering it must not also rewind the cursor.
   private gapHeld = new Set<string>()
@@ -300,6 +306,9 @@ export class WalletSyncService {
       this.onEvonodeDapiUrls?.(data.network, data.dapiUrls)
     } else if (data.type === 'platformQuorums') {
       this.onPlatformQuorums?.(data.network, data.keys)
+    } else if (data.type === 'masternodeList') {
+      this.masternodeLists.set(data.network, data.masternodes)
+      this.onMasternodeList?.(data.network)
     } else if (data.type === 'error') {
       log.error('utility process error:', data.message)
     }
@@ -369,10 +378,11 @@ export class WalletSyncService {
     // re-covers it — the previous session's failures stop applying here.
     this.cursorGate.clear(walletId)
     if (!this.cursorGate.hasFailures()) this.persistenceError = null
-    const [seedUtxos, unconfirmedInputOutpoints, cfilterCursor] = await Promise.all([
+    const [seedUtxos, unconfirmedInputOutpoints, cfilterCursor, watchedProviders] = await Promise.all([
       this.transactionDAO.getUtxos(walletId),
       this.transactionDAO.getUnconfirmedInputOutpoints(walletId),
       this.transactionDAO.getCursor(walletId),
+      this.watchedProvidersOf(walletId),
     ])
 
     const chainDbPath = dataPath(ChainStorageFilename, network)
@@ -400,6 +410,7 @@ export class WalletSyncService {
       seedUtxos,
       unconfirmedInputOutpoints,
       cfilterCursor,
+      watchedProviders,
       peerOverrides,
       // birthdayHeight is intentionally undefined — defaults to genesis in the
       // utility process. Replace with a per-wallet birthday once the wallet
@@ -475,6 +486,22 @@ export class WalletSyncService {
     if (!this.child) return
     this.send({type: 'addWatchAddresses', walletId, addresses: addresses.map(toWatchAddress), rewindToHeight})
   }
+
+  // A rewind catches up on the history of nodes the scan has never followed.
+  // Through the persist queue for the same ordering reason as addWatchAddresses.
+  watchProviders = async (walletId: string, proTxHashes: string[], rewindToHeight?: number): Promise<void> => {
+    if (proTxHashes.length === 0) return
+    if (rewindToHeight != null) {
+      await this.enqueuePersist(async () => {
+        const cursor = await this.transactionDAO.getCursor(walletId)
+        if (cursor != null && cursor > rewindToHeight) await this.transactionDAO.resetCursor(walletId, rewindToHeight)
+      })
+    }
+    if (!this.child) return
+    this.send({type: 'watchProviders', walletId, proTxHashes, rewindToHeight})
+  }
+
+  getMasternodeList = (network: Network): NetworkMasternode[] | null => this.masternodeLists.get(network) ?? null
 
   getStatus = (): WalletSyncStatus => {
     if (this.persistenceError == null) return this.status

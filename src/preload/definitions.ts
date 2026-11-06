@@ -2,6 +2,10 @@
 // and the union on others let an unchecked value reach the IPC boundary.
 type Network = 'mainnet' | 'testnet'
 
+// Mirrors MasternodeKeyChain and ImportedMasternodeKey in src/main/src/types/Masternode.
+type MasternodeKeyRole = 'owner' | 'voting' | 'operator'
+type ImportedMasternodeKey = { role: MasternodeKeyRole; publicKey: string }
+
 // Mirrors src/main/src/types/CoinSelection, which the bundles do not share: an
 // address narrows the automatic selection, a picked outpoint list is spent whole.
 type CoreSpendSource =
@@ -56,6 +60,10 @@ export const apiDefinitions = (ipcRenderer) => ({
   getBalance: (address: string | string[], network: Network) => ipcRenderer.invoke('getBalance', address, network),
   getWalletBalance: (walletId: string) => ipcRenderer.invoke('getWalletBalance', walletId),
   getIdentities: (walletId: string) => ipcRenderer.invoke('getIdentities', walletId),
+  getMasternodes: (walletId: string) => ipcRenderer.invoke('getMasternodes', walletId),
+  getImportedMasternodeKeys: (walletId: string) => ipcRenderer.invoke('getImportedMasternodeKeys', walletId),
+  importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => ipcRenderer.invoke('importMasternodeKey', walletId, role, privateKey),
+  removeMasternodeKey: (walletId: string, key: ImportedMasternodeKey) => ipcRenderer.invoke('removeMasternodeKey', walletId, key),
   updateIdentityKeys: (walletId: string, identifier: string, update: IdentityKeysUpdate, password: string) => ipcRenderer.invoke('updateIdentityKeys', walletId, identifier, update, password),
   getIdentityPrivateKeys: (walletId: string, identifier: string, password: string) => ipcRenderer.invoke('getIdentityPrivateKeys', walletId, identifier, password),
   getUsernames: (walletId: string) => ipcRenderer.invoke('getUsernames', walletId),

@@ -380,3 +380,16 @@ export const MNLIST_REPLY_TIMEOUT_MS = 5_000
 
 // Lock peers asked for each quorum update; most never answer getmnlistd.
 export const PLATFORM_QUORUM_PEERS = 6
+
+// Core's nMasternodeMinimumConfirmations: a list entry's confirmedHash names the
+// block this far above the one its ProRegTx was mined in.
+export const MASTERNODE_MIN_CONFIRMATIONS: Record<Network, number> = {mainnet: 15, testnet: 1}
+
+// How soon a list is asked again while one of its nodes is not confirmed yet, so
+// a node just registered is not shown without its owner and collateral for an
+// hour. Mainnet confirms in 15 blocks, so this costs a few full lists per registration.
+export const MNLIST_PENDING_REFRESH_MS = 5 * 60_000
+
+// Registration blocks requested at once while the index is built, out of the
+// ~3,000 a mainnet list needs the first time.
+export const REGISTRATION_BLOCKS_INFLIGHT = 8

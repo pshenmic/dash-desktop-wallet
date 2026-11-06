@@ -514,7 +514,7 @@ export class FeeService {
     const grouped = await this.addressDAO.getAddressesByWalletId(wallet.walletId)
     const provider = this.providers.forWallet(wallet.walletId, wallet.network)
     await provider.ensureReady()
-    const utxos = await provider.getWalletUtxos()
+    const utxos = await this.providers.spendableUtxos(wallet.walletId, wallet.network, source)
 
     const selection = selectTransferInputs(
       grouped,
@@ -537,7 +537,7 @@ export class FeeService {
 
     const source = params.coreSource ?? undefined
     const grouped = await this.addressDAO.getAddressesByWalletId(wallet.walletId)
-    const utxos = await this.providers.forWallet(wallet.walletId, wallet.network).getWalletUtxos()
+    const utxos = await this.providers.spendableUtxos(wallet.walletId, wallet.network, source)
     const selectable = selectableTransferUtxos(grouped, utxos, source)
 
     const maxDuffs = maxSelectableAmount(selectable, feeForInputs, source)

@@ -61,6 +61,8 @@ const sync = new SyncService({
     process.parentPort.postMessage({type: 'evonodeDapiUrls', network, dapiUrls}),
   platformQuorums: (network, keys) =>
     process.parentPort.postMessage({type: 'platformQuorums', network, keys}),
+  masternodeList: (network, masternodes) =>
+    process.parentPort.postMessage({type: 'masternodeList', network, masternodes}),
 })
 
 process.parentPort.on('message', ({data}) => {
@@ -85,6 +87,9 @@ process.parentPort.on('message', ({data}) => {
       return
     case 'addWatchAddresses':
       sync.addWatchAddresses(data)
+      return
+    case 'watchProviders':
+      sync.watchProviders(data)
       return
     case 'broadcast':
       sync.broadcast(data)

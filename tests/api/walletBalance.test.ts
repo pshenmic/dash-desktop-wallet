@@ -22,6 +22,8 @@ const providerStub = (walletBalance: bigint): WalletProvider => ({
   getTransactionByHash: async () => { throw new Error('unused') },
   getTxLockStatus: async () => ({instantLocked: false, chainlocked: false, confirmed: false}),
   nextUnusedAddress: async () => '',
+  getMasternodes: async () => null,
+  watchMasternodes: async () => [],
 })
 
 describe('wallet balance', () => {

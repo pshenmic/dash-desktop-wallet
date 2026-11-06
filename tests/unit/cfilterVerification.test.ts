@@ -108,6 +108,8 @@ describe('cfilter verification against the filter-header chain', () => {
       seedUtxos: [],
       unconfirmedInputOutpoints: [],
       cfilterCursor: TIP,
+      watchedProviders: [],
+      foreignBlock: () => false,
     })
 
     await worker.start()
@@ -226,6 +228,8 @@ describe('cfilter verification at the bottom of the chain', () => {
       unconfirmedInputOutpoints: [],
       // Never synced: the scan starts at height 1.
       cfilterCursor: null,
+      watchedProviders: [],
+      foreignBlock: () => false,
     })
 
     await worker.start()

@@ -1,5 +1,6 @@
 import {describe, it, expect, beforeEach, vi} from 'vitest'
 import {Script} from 'dash-core-sdk'
+import type {Knex} from 'knex'
 import {WalletService} from '../../src/main/src/services/wallet/WalletService'
 import {CreateWalletHandler} from '../../src/main/src/api/wallet/createWallet'
 import {WalletProvider} from '../../src/main/src/providers/WalletProvider'
@@ -30,6 +31,8 @@ const providerStub = (utxos: UTXO[], ready = true): WalletProvider => ({
   getTransactionByHash: async () => { throw new Error('unused') },
   getTxLockStatus: async () => ({instantLocked: false, chainlocked: false, confirmed: false}),
   nextUnusedAddress: async () => '',
+  getMasternodes: async () => null,
+  watchMasternodes: async () => [],
 })
 
 describe('listing the coins a send can draw on', () => {
@@ -38,9 +41,11 @@ describe('listing the coins a send can draw on', () => {
   let createWalletHandler: CreateWalletHandler
   let walletId: string
   let owned: string
+  let knex: Knex
 
   beforeEach(async () => {
     const wired = await harness()
+    knex = wired.knex
     walletService = wired.walletService
     providers = wired.providers
     createWalletHandler = wired.createWalletHandler
@@ -52,7 +57,7 @@ describe('listing the coins a send can draw on', () => {
     vi.spyOn(providers, 'forWallet').mockReturnValue(providerStub([utxo(owned, 50_000n, 'aa', 2_300_000)]))
 
     expect(await walletService.getUtxos(walletId)).toEqual([
-      {txid: 'aa', vout: 0, satoshis: 50_000n, address: owned, height: 2_300_000, timestamp: MINED_AT, confirmations: 4},
+      {txid: 'aa', vout: 0, satoshis: 50_000n, address: owned, height: 2_300_000, timestamp: MINED_AT, confirmations: 4, collateral: false},
     ])
   })
 
@@ -66,6 +71,16 @@ describe('listing the coins a send can draw on', () => {
     const utxos = await walletService.getUtxos(walletId)
 
     expect(utxos.map(u => u.txid)).toEqual(['bb'])
+  })
+
+  it('flags a masternode collateral the wallet holds, and only that coin', async () => {
+    await knex('masternodes').insert({wallet_id: walletId, pro_tx_hash: 'pro', collateral_txid: 'aa', collateral_vout: 0})
+    vi.spyOn(providers, 'forWallet').mockReturnValue(providerStub([
+      utxo(owned, 100_000_000_000n, 'aa', 2_300_000),
+      utxo(owned, 50_000n, 'bb', 2_300_001),
+    ]))
+
+    expect((await walletService.getUtxos(walletId)).map(u => [u.txid, u.collateral])).toEqual([['aa', true], ['bb', false]])
   })
 
   it('keeps a mempool output at height zero rather than dropping it', async () => {
