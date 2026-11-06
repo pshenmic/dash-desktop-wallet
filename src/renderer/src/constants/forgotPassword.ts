@@ -24,6 +24,12 @@ export const FORGOT_PASSWORD_PROGRESS: StepProgress<Record<Exclude<ForgotPasswor
   },
 }
 
+export const FORGOT_PASSWORD_PREVIEW = {
+  passwordHint: 'Choose a new wallet password for the preview.',
+  successTitle: 'Preview complete',
+  successHint: 'You completed the simulated password reset.',
+} as const
+
 export const forgotPasswordTexts: ForgotPasswordTexts = {
   title: 'Reset Password',
   description: {
