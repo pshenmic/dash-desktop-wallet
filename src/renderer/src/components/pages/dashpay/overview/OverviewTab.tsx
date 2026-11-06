@@ -46,13 +46,19 @@ export default function OverviewTab({
   const { usernames: walletUsernames } = useDashPayUsernames(walletId)
   const [enabling, setEnabling] = useState(false)
   const walletIdentifiers = useWalletIdentifiers(identities)
+  const enableModal = enabling && identity != null && (
+    <EnableDashPayModal open onClose={() => setEnabling(false)} identity={identity} />
+  )
 
   if (loading) {
     return (
-      <div className={OVERVIEW_ROW_CLASS} role={'status'}>
-        <div className={OVERVIEW_SKELETON_CLASS} />
-        <div className={OVERVIEW_SKELETON_CLASS} />
-      </div>
+      <>
+        <div className={OVERVIEW_ROW_CLASS} role={'status'}>
+          <div className={OVERVIEW_SKELETON_CLASS} />
+          <div className={OVERVIEW_SKELETON_CLASS} />
+        </div>
+        {enableModal}
+      </>
     )
   }
 
@@ -116,7 +122,7 @@ export default function OverviewTab({
   const band = ready && identity != null ? overviewBand(contacts, identity.identifier, OVERVIEW_PREVIEW_LIMIT) : null
   const usernames = usernameSummary(identity == null ? [] : mergeIdentityUsernames(identity.usernames, walletUsernames, identity.identifier))
 
-  return (
+  const content = (
     <div className={'flex flex-col'}>
       <div className={OVERVIEW_ROW_CLASS}>
         {hero}
@@ -165,7 +171,13 @@ export default function OverviewTab({
           />
         )}
       </div>
-      {enabling && identity != null && <EnableDashPayModal open onClose={() => setEnabling(false)} identity={identity} />}
     </div>
+  )
+
+  return (
+    <>
+      {content}
+      {enableModal}
+    </>
   )
 }
