@@ -6,7 +6,6 @@ export interface ReceivePageType {
     platform: string
   },
   receiveAddressCard: {
-    addressText: string
     amount: string
     placeholder: string
   }
@@ -19,8 +18,7 @@ export const receivePage = {
     platform: 'Platform',
   },
   receiveAddressCard: {
-    addressText: 'Dash Address',
-    amount: 'Amount',
+    amount: 'Enter amount',
     placeholder: 'Optional',
   },
 }

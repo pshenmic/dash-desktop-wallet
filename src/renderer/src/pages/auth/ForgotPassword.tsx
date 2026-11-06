@@ -19,6 +19,9 @@ import { useRipple } from '@renderer/hooks/useRipple'
 import AuthBackground from '@renderer/components/pages/auth/AuthBackground'
 import WalletSelect from '@renderer/components/ui/WalletSelect'
 import ImportSeedPhrase from '@renderer/components/pages/auth/ImportSeedPhrase'
+import SeedPassphrase from '@renderer/components/pages/auth/SeedPassphrase'
+import { PASSPHRASE_PREVIEW, SEED_PASSPHRASE_COPY } from '@renderer/constants/auth'
+import { FORGOT_PASSWORD_PREVIEW } from '@renderer/constants/forgotPassword'
 import { API } from '@renderer/api'
 
 export default function ForgotPasswordPage(): React.JSX.Element {
@@ -43,12 +46,26 @@ export default function ForgotPasswordPage(): React.JSX.Element {
 
   const [step, setStep] = useState<ForgotPasswordStep>(ForgotPasswordStep.Seed)
   const [mnemonic, setMnemonic] = useState<string | null>(null)
+  const [passphrase, setPassphrase] = useState('')
+  const [previewingReset, setPreviewingReset] = useState(false)
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [busy, setBusy] = useState(false)
+  const isPreviewFlow = passphrase !== '' || previewingReset
+  const screenTitle = previewingReset && step === ForgotPasswordStep.Success ? FORGOT_PASSWORD_PREVIEW.successTitle : title
+  const screenDescription = previewingReset
+    ? step === ForgotPasswordStep.Success ? FORGOT_PASSWORD_PREVIEW.successHint : FORGOT_PASSWORD_PREVIEW.passwordHint
+    : description[step]
+  const recoveryWarning = passphrase ? { ...seedPhraseWarning, description: SEED_PASSPHRASE_COPY.warning } : seedPhraseWarning
 
   const handleSeedSubmit = async (words: string[]): Promise<void> => {
     if (!selectedWalletId || busy) return
+    if (passphrase !== '') {
+      setPreviewingReset(true)
+      setPassphrase('')
+      setStep(ForgotPasswordStep.Password)
+      return
+    }
     const phrase = words.join(' ')
     setBusy(true)
     try {
@@ -68,7 +85,7 @@ export default function ForgotPasswordPage(): React.JSX.Element {
 
   const handleReset = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
-    if (!selectedWalletId || mnemonic === null || busy) return
+    if (!selectedWalletId || busy || (!previewingReset && mnemonic === null)) return
     const pwdError = getPasswordValidationError(password)
     if (pwdError !== null) {
       toast.error(pwdError)
@@ -78,6 +95,13 @@ export default function ForgotPasswordPage(): React.JSX.Element {
       toast.error(passwordValidation.passwordsDoNotMatch)
       return
     }
+    if (previewingReset) {
+      setPassword('')
+      setConfirmPassword('')
+      setStep(ForgotPasswordStep.Success)
+      return
+    }
+    if (mnemonic === null) return
     setBusy(true)
     try {
       const ok = await API.resetWalletPassword(selectedWalletId, mnemonic, password)
@@ -112,12 +136,17 @@ export default function ForgotPasswordPage(): React.JSX.Element {
 
       <div className={"relative flex flex-col w-full h-full p-12 pt-[max(9rem,25vh)]"}>
         <div className={"flex flex-col w-full mb-8"}>
-          <DashLogo containerSize={50} />
+          <div className={'flex items-center gap-3'}>
+            <DashLogo containerSize={50} />
+            {isPreviewFlow && (
+              <Text size={12} weight={'medium'} color={'brand'} opacity={60}>{PASSPHRASE_PREVIEW.flowBadge}</Text>
+            )}
+          </div>
           <Text as={"h1"} className={"mt-6 leading-[78%] tracking-[-0.03em]"} color={"brand"} size={64} weight={"extrabold"}>
-            {title}
+            {screenTitle}
           </Text>
           <Text as={"p"} className={"mt-6"} color={"brand"} size={18} weight={"medium"} opacity={50}>
-            {description[step]}
+            {screenDescription}
           </Text>
         </div>
 
@@ -131,16 +160,21 @@ export default function ForgotPasswordPage(): React.JSX.Element {
                 options={walletOptions}
                 disabled={wallets.length <= 1}
                 value={selectedWalletId ?? ''}
-                onChange={setPickedWalletId}
+                onChange={walletId => {
+                  setPickedWalletId(walletId)
+                  setPassphrase('')
+                }}
               />
             </div>
             <ImportSeedPhrase
               submitImportSeedPhrase={handleSeedSubmit}
               data={{
                 buttonContinue: form.continueButton,
-                seedPhraseWarning: seedPhraseWarning
+                seedPhraseWarning: recoveryWarning
               }}
-            />
+            >
+              {import.meta.env.DEV && <SeedPassphrase path={'import'} value={passphrase} onChange={setPassphrase} />}
+            </ImportSeedPhrase>
           </div>
         )}
 
@@ -191,7 +225,7 @@ export default function ForgotPasswordPage(): React.JSX.Element {
               className={AUTH_CTA_CLASS}
               disabled={!password.trim() || !confirmPassword.trim() || busy}
             >
-              {form.resetButton}
+              {previewingReset ? PASSPHRASE_PREVIEW.finish : form.resetButton}
             </Button>
           </form>
         )}

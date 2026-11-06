@@ -7,6 +7,12 @@ export const IDENTITIES_ROUTES = {
 
 export const IDENTITY_ROUTE_PARAM = ':identifier'
 
+export const IDENTITIES_SEARCH_COPY = {
+  label: 'Search identities',
+  placeholder: 'Search name or identity ID',
+  noMatch: 'No matching identities',
+} as const
+
 export const IDENTITY_ROW_COPY = {
   open: 'Open',
   menuTitle: 'Identity actions',
@@ -19,6 +25,7 @@ export const IDENTITY_DETAIL_COPY = {
   title: 'Identity',
   balance: 'Balance',
   usernames: 'Usernames',
+  votingUsernames: 'Usernames in vote',
   keys: 'Keys',
   active: 'active',
   explorer: 'Open in explorer',

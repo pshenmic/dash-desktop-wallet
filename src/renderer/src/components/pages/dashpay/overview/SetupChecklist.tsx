@@ -1,4 +1,4 @@
-import { Text, Tooltip } from '@renderer/components/dash-ui-kit-extended'
+import { HighlightedIdentifier, Text, Tooltip } from '@renderer/components/dash-ui-kit-extended'
 import { CheckIcon } from '@renderer/components/dash-ui-kit-extended/icons'
 import CustomBadge from '@renderer/components/ui/CustomBadge'
 import StatusPill from '@renderer/components/ui/StatusPill'
@@ -9,11 +9,14 @@ import {
   SETUP_STEP_ICONS,
   SETUP_STEP_TITLES,
 } from '@renderer/constants/dashPayOverview'
+import UsernameStatusPill from '@renderer/components/pages/dashpay/usernames/UsernameStatusPill'
+import { HIGHLIGHTED_IDENTIFIER_CLASS } from '@renderer/constants/identifier'
 import { CHIP_ACTION, SURFACE_SECTION } from '@renderer/constants/surfaces'
-import { DashPaySetupStep, OverviewAction, SetupStepState } from '@renderer/enums/DashPay'
+import { DashPaySetupStep, OverviewAction, SetupStepState, UsernamePresentation } from '@renderer/enums/DashPay'
 import { StatusPillTone } from '@renderer/enums/StatusPillTone'
 import type { SetupStepModel } from '@renderer/types/DashPay'
 import type { SetupChecklistProps, SetupStepActionProps } from '@renderer/types/DashPayOverview'
+import { copyWithToast } from '@renderer/utils/clipboard'
 import { completedSetupSteps } from '@renderer/utils/dashPayOverview'
 import { setupSteps } from '@renderer/utils/dashPayReadiness'
 
@@ -30,12 +33,14 @@ function ChipButton({ label, disabled = false, tooltip, onClick }: SetupStepActi
 export default function SetupChecklist({
   identity,
   readiness,
+  votingUsername,
+  showRegisterUsername,
   canSwitch,
   onAction,
   onTopUp,
   onSwitchIdentity,
 }: SetupChecklistProps): React.JSX.Element {
-  const steps = setupSteps(identity, readiness)
+  const steps = setupSteps(identity, readiness, votingUsername)
   const ready = <StatusPill tone={StatusPillTone.Success}>{OVERVIEW_COPY.stepReady}</StatusPill>
 
   const trailing = (step: SetupStepModel): React.ReactNode => {
@@ -56,7 +61,9 @@ export default function SetupChecklist({
       return canSwitch ? <ChipButton label={OVERVIEW_COPY.switchIdentity} onClick={onSwitchIdentity} /> : ready
     }
     if (step.state === SetupStepState.Done) return ready
+    if (step.state === SetupStepState.Voting) return <UsernameStatusPill presentation={UsernamePresentation.Voting} />
     if (step.step === DashPaySetupStep.Username) {
+      if (!showRegisterUsername) return null
       return (
         <ChipButton
           label={OVERVIEW_COPY.register}
@@ -86,10 +93,24 @@ export default function SetupChecklist({
                   ? <CheckIcon size={14} color={'currentColor'} className={'[&_circle]:hidden'} />
                   : <Icon size={14} color={'currentColor'} className={step.state === SetupStepState.Todo ? 'opacity-50' : ''} />}
               </span>
-              <span className={'flex min-w-0 flex-1 flex-col gap-0.5'}>
+              <div className={'flex min-w-0 flex-1 flex-col gap-0.5'}>
                 <Text reset size={12} weight={'bold'} color={'brand'}>{SETUP_STEP_TITLES[step.step]}</Text>
-                <Text reset size={10} weight={'medium'} color={'brand'} opacity={50} className={'wrap-anywhere'}>{step.caption}</Text>
-              </span>
+                {step.step === DashPaySetupStep.Identity && identity != null && readiness != null ? (
+                  <button
+                    type={'button'}
+                    title={OVERVIEW_COPY.copyIdentityId}
+                    aria-label={`${OVERVIEW_COPY.copyIdentityId}: ${identity.identifier}`}
+                    onClick={() => copyWithToast(identity.identifier)}
+                    className={'min-w-0 self-start cursor-pointer text-left opacity-60 hover:opacity-100 focus-visible:opacity-100'}
+                  >
+                    <HighlightedIdentifier className={`min-w-0 text-[.625rem]! font-medium! ${HIGHLIGHTED_IDENTIFIER_CLASS} [&>div]:underline [&>div]:decoration-dotted [&>div]:underline-offset-2`}>
+                      {step.caption}
+                    </HighlightedIdentifier>
+                  </button>
+                ) : (
+                  <Text reset size={10} weight={'medium'} color={'brand'} opacity={50} className={'wrap-anywhere'}>{step.caption}</Text>
+                )}
+              </div>
               {trailing(step)}
             </li>
           )

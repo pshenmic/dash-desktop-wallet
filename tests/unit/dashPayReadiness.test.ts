@@ -136,11 +136,18 @@ describe('setupSteps', () => {
 
   it('marks every step done for a ready identity', () => {
     const ready = identity(DEFAULT_KEYS)
-    expect(setupSteps(ready, dashPayReadiness(ready))).toEqual([
-      { step: DashPaySetupStep.Identity, state: SetupStepState.Done, caption: 'alice.dash' },
+    expect(setupSteps(ready, dashPayReadiness(ready), 'pending.dash')).toEqual([
+      { step: DashPaySetupStep.Identity, state: SetupStepState.Done, caption: ready.identifier },
       { step: DashPaySetupStep.Username, state: SetupStepState.Done, caption: 'alice.dash' },
       { step: DashPaySetupStep.Keys, state: SetupStepState.Done, caption: DASHPAY_SETUP_COPY.keysDone },
     ])
+  })
+
+  it('shows the name in vote when no username is registered', () => {
+    const pending = identity(DEFAULT_KEYS, [])
+    expect(setupSteps(pending, dashPayReadiness(pending), 'pending.dash')[1]).toEqual({
+      step: DashPaySetupStep.Username, state: SetupStepState.Voting, caption: 'pending.dash',
+    })
   })
 
   it('warns about zero credits and leaves missing keys to do', () => {

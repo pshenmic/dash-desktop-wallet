@@ -20,15 +20,17 @@ import { formatApproxFiat } from '@renderer/utils/approxFiat'
 import { creditsToDuffs } from '@renderer/utils/balance'
 import { copyWithToast } from '@renderer/utils/clipboard'
 import { identityUrl, openExternal } from '@renderer/utils/explorer'
-import { identityLabel, identityName } from '@renderer/utils/identifierFormat'
+import { identityName } from '@renderer/utils/identifierFormat'
 import { identityKeysCountLabel } from '@renderer/utils/identityKeySetup'
+import IdentityVotingName from './IdentityVotingName'
 
-export default function IdentityRow({ identity, onOpen }: IdentityRowProps): React.JSX.Element {
+export default function IdentityRow({ identity, votingNames, onOpen }: IdentityRowProps): React.JSX.Element {
   const { status } = useAuth()
   const network = status?.network ?? null
   const { isBalanceVisible } = useBalanceVisibility()
   const { format: formatFiat, rateReady } = useFiat()
   const name = identityName(identity)
+  const votingName = votingNames[0]
   const extraNames = Math.max(0, identity.usernames.length - 1)
   const keysLabel = identityKeysCountLabel(identity.keys.length)
   const balance = identity.balance.amount
@@ -69,19 +71,22 @@ export default function IdentityRow({ identity, onOpen }: IdentityRowProps): Rea
         <button
           type={'button'}
           onClick={() => onOpen(identity.identifier)}
-          aria-label={`${IDENTITY_ROW_COPY.open} ${identityLabel(identity)}`}
+          aria-label={`${IDENTITY_ROW_COPY.open} ${name ?? votingName ?? identity.identifier}`}
           className={ROW_OPEN_OVERLAY_CLASS}
         />
         <span className={'pointer-events-none flex'}>
           <IdentityAvatar identifier={identity.identifier} size={IdentityAvatarSize.Sm} />
         </span>
         <div className={'pointer-events-none flex min-w-0 flex-col gap-1'}>
-          {name != null ? (
+          {name != null || votingName != null ? (
             <>
-              <div className={'flex min-w-0 items-center gap-1.5'}>
-                <Text reset size={14} weight={'medium'} color={'brand'} className={'min-w-0 truncate'}>{name}</Text>
-                {extraNames > 0 && <CustomBadge variant={'muted'} text={`+${extraNames}`} className={'shrink-0'} />}
-              </div>
+              {name != null && (
+                <div className={'flex min-w-0 items-center gap-1.5'}>
+                  <Text reset size={14} weight={'medium'} color={'brand'} className={'min-w-0 truncate'}>{name}</Text>
+                  {extraNames > 0 && <CustomBadge variant={'muted'} text={`+${extraNames}`} className={'shrink-0'} />}
+                </div>
+              )}
+              {votingName != null && <IdentityVotingName name={votingName} extraNames={votingNames.length - 1} onOpen={() => onOpen(identity.identifier)} />}
               <div className={'flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5'}>
                 {identifierLine}
                 {keysCaption}
