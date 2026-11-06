@@ -12,13 +12,14 @@ import {
   OVERVIEW_ROW_CLASS,
   OVERVIEW_SKELETON_CLASS,
 } from '@renderer/constants/dashPayOverview'
-import { DashPayReadiness, DashPayTab, ContactSegment, OverviewAction, OverviewBand } from '@renderer/enums/DashPay'
+import { DashPayReadiness, DashPayTab, ContactSegment, OverviewAction, OverviewBand, UsernamePresentation } from '@renderer/enums/DashPay'
 import { useDashPayUsernames } from '@renderer/hooks/useDashPayUsernames'
 import { useDashPayContacts } from '@renderer/hooks/useDashPayContacts'
 import { useWalletIdentifiers } from '@renderer/hooks/useWalletIdentifiers'
 import type { DashPayNavigationState } from '@renderer/types/DashPay'
 import type { OverviewTabProps } from '@renderer/types/DashPayScreens'
 import { contactsForIdentity, countContactSegments } from '@renderer/utils/dashPayContactList'
+import { dashPayHref } from '@renderer/utils/dashPayIdentity'
 import { orbitIdentifiers, overviewActions, overviewBand, usernameSummary } from '@renderer/utils/dashPayOverview'
 import { identityHref } from '@renderer/utils/identities'
 import { withParams } from '@renderer/utils/searchParams'
@@ -43,7 +44,7 @@ export default function OverviewTab({
   const location = useLocation()
   const [, setSearchParams] = useSearchParams()
   const { contacts, loading: contactsLoading } = useDashPayContacts(walletId)
-  const { usernames: walletUsernames } = useDashPayUsernames(walletId)
+  const { usernames: walletUsernames, usernamesKnown } = useDashPayUsernames(walletId)
   const [enabling, setEnabling] = useState(false)
   const walletIdentifiers = useWalletIdentifiers(identities)
   const enableModal = enabling && identity != null && (
@@ -64,7 +65,7 @@ export default function OverviewTab({
 
   const openWizard = (path: string): void => {
     const state: DashPayNavigationState = { returnTo: `${location.pathname}${location.search}` }
-    navigate(path, { state })
+    navigate(dashPayHref(path, identity?.identifier ?? null), { state })
   }
 
   const openContact = (contactId: string): void => {
@@ -75,6 +76,7 @@ export default function OverviewTab({
     if (action === OverviewAction.CreateIdentity) navigate(DASHPAY_REGISTER_IDENTITY_HREF)
     else if (action === OverviewAction.EnableDashPay) setEnabling(true)
     else if (action === OverviewAction.RegisterUsername) openWizard(DASHPAY_ROUTES.registerUsername)
+    else if (action === OverviewAction.ViewUsernames) onOpenSection(DashPayTab.Usernames)
     else openWizard(DASHPAY_ROUTES.addContact)
   }
 
@@ -82,6 +84,12 @@ export default function OverviewTab({
   const canRegister = readiness?.canRegister ?? false
   const ready = identity != null && readiness?.readiness === DashPayReadiness.Ready
   const orbit = identity == null ? [] : orbitIdentifiers(contacts, identity.identifier, OVERVIEW_ORBIT_COUNT)
+  const usernameRows = identity == null ? [] : mergeIdentityUsernames(identity.usernames, walletUsernames, identity.identifier)
+  const votingUsername = identity?.usernames.length === 0
+    ? usernameRows.find(row => row.presentation === UsernamePresentation.Voting)?.fullName
+    : undefined
+  const usernameAction = votingUsername != null ? OverviewAction.ViewUsernames
+    : usernamesKnown ? OverviewAction.RegisterUsername : null
 
   const actionDisabled = (action: OverviewAction): boolean =>
     (action === OverviewAction.FindPeople && !canSend) || (action === OverviewAction.RegisterUsername && !canRegister)
@@ -95,7 +103,7 @@ export default function OverviewTab({
         {OVERVIEW_COPY.registerUsername}
       </Button>
     </>
-  ) : overviewActions(identity, readiness).map((action, index) => (
+  ) : overviewActions(identity, readiness, usernameAction).map((action, index) => (
     <Button
       key={action}
       type={'button'}
@@ -113,14 +121,14 @@ export default function OverviewTab({
       identity={identity}
       ready={ready}
       orbit={orbit}
-      body={identity == null ? OVERVIEW_COPY.noIdentityBody : OVERVIEW_COPY.onboardingBody}
+      body={identity == null ? OVERVIEW_COPY.noIdentityBody
+        : votingUsername != null ? OVERVIEW_COPY.votingBody : OVERVIEW_COPY.onboardingBody}
       actions={heroActions}
     />
   )
 
   const own = identity == null ? [] : contactsForIdentity(contacts, identity.identifier)
   const band = ready && identity != null ? overviewBand(contacts, identity.identifier, OVERVIEW_PREVIEW_LIMIT) : null
-  const usernames = usernameSummary(identity == null ? [] : mergeIdentityUsernames(identity.usernames, walletUsernames, identity.identifier))
 
   const content = (
     <div className={'flex flex-col'}>
@@ -129,7 +137,7 @@ export default function OverviewTab({
         {ready ? (
           <ContactsSummary
             counts={countContactSegments(own, '')}
-            usernames={usernames}
+            usernames={usernameSummary(usernameRows)}
             keys={identity?.keys.length ?? 0}
             loading={contactsLoading}
             onOpenSection={onOpenSection}
@@ -139,6 +147,8 @@ export default function OverviewTab({
           <SetupChecklist
             identity={identity}
             readiness={readiness}
+            votingUsername={votingUsername}
+            showRegisterUsername={usernameAction === OverviewAction.RegisterUsername}
             canSwitch={identities.length > 1}
             onAction={runAction}
             onTopUp={() => navigate(DASHPAY_TOP_UP_HREF)}
