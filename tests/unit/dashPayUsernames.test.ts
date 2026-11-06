@@ -9,6 +9,7 @@ import {
   usernameTypeLabel,
 } from '../../src/renderer/src/utils/dashPayUsernames'
 import { mergeIdentityUsernames } from '../../src/renderer/src/utils/usernames'
+import { identityVotingNames } from '../../src/renderer/src/utils/identities'
 import { normalizeDpnsLabel } from '../../src/renderer/src/utils/dpnsLabel'
 import { UsernameStatus, DpnsLabelIssue, UsernameAvailability } from '../../src/renderer/src/enums/DashPay'
 import { REGISTER_SIGN_COPY, USERNAME_TYPE_COPY } from '../../src/renderer/src/constants/dashPayUsernames'
@@ -77,11 +78,25 @@ describe('usernameTitle', () => {
 })
 
 describe('usernameTypeLabel', () => {
-  it('names the network poll length for contested names', () => {
-    expect(usernameTypeLabel(true, 'testnet')).toBe(`${USERNAME_TYPE_COPY.contest} · 90 minutes`)
-    expect(usernameTypeLabel(true, 'mainnet')).toBe(`${USERNAME_TYPE_COPY.contest} · 14 days`)
-    expect(usernameTypeLabel(true, null)).toBe(USERNAME_TYPE_COPY.contest)
+  it('shows Premium with the network poll length', () => {
+    expect(usernameTypeLabel(true, 'testnet')).toBe('Premium · 90 minutes')
+    expect(usernameTypeLabel(true, 'mainnet')).toBe('Premium · 14 days')
+    expect(usernameTypeLabel(true, null)).toBe('Premium')
     expect(usernameTypeLabel(false, 'testnet')).toBe(USERNAME_TYPE_COPY.instant)
+  })
+})
+
+describe('identityVotingNames', () => {
+  it('keeps only unique, still-voting names for the identity', () => {
+    expect(identityVotingNames({ identifier: ME, usernames: ['a1ice.dash'] }, [
+      username('alice', UsernameStatus.Voting),
+      username('pay', UsernameStatus.Voting),
+      username('PAY', UsernameStatus.Voting),
+      username('later', UsernameStatus.Voting),
+      username('someone', UsernameStatus.Voting, { identifier: 'OtherIdentity' }),
+      username('missing', UsernameStatus.Missing),
+      username('owned', UsernameStatus.Registered),
+    ])).toEqual(['later.dash', 'pay.dash'])
   })
 })
 

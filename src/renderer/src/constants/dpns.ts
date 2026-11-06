@@ -9,6 +9,8 @@ export const DPNS_NAME_SUFFIX = `.${DPNS_PARENT_DOMAIN}`
 
 export const DPNS_HANDLE_PREFIX = '@'
 
+export const USERNAME_VOTE_TOOLTIP = 'Masternodes are voting on this name. Ownership is still pending.'
+
 export const DPNS_WHITESPACE_PATTERN = /\s+/g
 
 export const DPNS_LABEL_MIN = 3

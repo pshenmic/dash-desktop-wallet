@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { refreshIdentities, useIdentities } from "@renderer/hooks/useIdentities";
 import { useAuth } from "@renderer/contexts/AuthContext";
 import IdentityRow from "./IdentityRow";
@@ -16,17 +16,27 @@ import { SEARCH_CLEAR_LABEL, TOOLBAR_SEARCH_CLASS } from "@renderer/constants/li
 import { Button } from "@renderer/components/dash-ui-kit-extended";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import type { IdentitiesSearchState } from "@renderer/types/Identities";
-import { identityHref } from "@renderer/utils/identities";
-import { filterIdentities } from "@renderer/utils/dashPayIdentity";
+import { useDashPayUsernames } from "@renderer/hooks/useDashPayUsernames";
+import { usePeriodicDashPayRefresh } from "@renderer/hooks/useDashPayRefresh";
+import { identityHref, identityVotingNames } from "@renderer/utils/identities";
+import { matchesIdentityQuery } from "@renderer/utils/dpnsLabel";
 
 export default function Identities(): React.JSX.Element {
   const navigate = useNavigate()
   const { status } = useAuth()
   const walletId = status?.selectedWalletId ?? undefined
   const { identities, loading, err } = useIdentities(walletId)
+  const usernamesWalletId = identities.length > 0 ? walletId : undefined
+  const { usernames } = useDashPayUsernames(usernamesWalletId)
+  usePeriodicDashPayRefresh(usernamesWalletId)
   const { query, setQuery } = useOutletContext<IdentitiesSearchState>()
   const searchRef = useRef<HTMLInputElement>(null)
-  const visible = filterIdentities(identities, query)
+  const rows = useMemo(() => identities.map(identity => ({
+    identity,
+    votingNames: identityVotingNames(identity, usernames),
+  })), [identities, usernames])
+  const visible = rows.filter(({ identity, votingNames }) =>
+    matchesIdentityQuery(identity.identifier, [...identity.usernames, ...votingNames], query))
 
   const assetsList = [
     {
@@ -74,8 +84,8 @@ export default function Identities(): React.JSX.Element {
             )}
             {!loading && !err && visible.length > 0 && (
               <ul className={"contents"}>
-                {visible.map((identity) => (
-                  <IdentityRow key={identity.identifier} identity={identity} onOpen={identifier => navigate(identityHref(identifier))} />
+                {visible.map(({ identity, votingNames }) => (
+                  <IdentityRow key={identity.identifier} identity={identity} votingNames={votingNames} onOpen={identifier => navigate(identityHref(identifier))} />
                 ))}
               </ul>
             )}
