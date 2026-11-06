@@ -9,8 +9,9 @@ import {
   SETUP_STEP_ICONS,
   SETUP_STEP_TITLES,
 } from '@renderer/constants/dashPayOverview'
+import { USERNAME_PRESENTATION } from '@renderer/constants/dpns'
 import { CHIP_ACTION, SURFACE_SECTION } from '@renderer/constants/surfaces'
-import { DashPaySetupStep, OverviewAction, SetupStepState } from '@renderer/enums/DashPay'
+import { DashPaySetupStep, OverviewAction, SetupStepState, UsernamePresentation } from '@renderer/enums/DashPay'
 import { StatusPillTone } from '@renderer/enums/StatusPillTone'
 import type { SetupStepModel } from '@renderer/types/DashPay'
 import type { SetupChecklistProps, SetupStepActionProps } from '@renderer/types/DashPayOverview'
@@ -30,12 +31,14 @@ function ChipButton({ label, disabled = false, tooltip, onClick }: SetupStepActi
 export default function SetupChecklist({
   identity,
   readiness,
+  votingUsername,
+  showRegisterUsername,
   canSwitch,
   onAction,
   onTopUp,
   onSwitchIdentity,
 }: SetupChecklistProps): React.JSX.Element {
-  const steps = setupSteps(identity, readiness)
+  const steps = setupSteps(identity, readiness, votingUsername)
   const ready = <StatusPill tone={StatusPillTone.Success}>{OVERVIEW_COPY.stepReady}</StatusPill>
 
   const trailing = (step: SetupStepModel): React.ReactNode => {
@@ -56,7 +59,12 @@ export default function SetupChecklist({
       return canSwitch ? <ChipButton label={OVERVIEW_COPY.switchIdentity} onClick={onSwitchIdentity} /> : ready
     }
     if (step.state === SetupStepState.Done) return ready
+    if (step.state === SetupStepState.Voting) {
+      const { tone, label } = USERNAME_PRESENTATION[UsernamePresentation.Voting]
+      return <StatusPill tone={tone}>{label}</StatusPill>
+    }
     if (step.step === DashPaySetupStep.Username) {
+      if (!showRegisterUsername) return null
       return (
         <ChipButton
           label={OVERVIEW_COPY.register}

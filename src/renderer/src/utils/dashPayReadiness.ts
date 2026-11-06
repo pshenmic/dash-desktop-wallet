@@ -33,7 +33,11 @@ export function dashPayReadiness(identity: Pick<IdentityApiDto, 'usernames' | 'k
   }
 }
 
-export function setupSteps(identity: IdentityApiDto | null, readiness: DashPayReadinessInfo | null): SetupStepModel[] {
+export function setupSteps(
+  identity: IdentityApiDto | null,
+  readiness: DashPayReadinessInfo | null,
+  votingUsername?: string,
+): SetupStepModel[] {
   if (identity == null || readiness == null) {
     return [
       { step: DashPaySetupStep.Identity, state: SetupStepState.Todo, caption: DASHPAY_SETUP_COPY.noIdentity },
@@ -42,6 +46,8 @@ export function setupSteps(identity: IdentityApiDto | null, readiness: DashPayRe
     ]
   }
   const username = identity.usernames[0]
+  const usernameState = username != null ? SetupStepState.Done
+    : votingUsername != null ? SetupStepState.Voting : SetupStepState.Todo
   return [
     {
       step: DashPaySetupStep.Identity,
@@ -50,8 +56,8 @@ export function setupSteps(identity: IdentityApiDto | null, readiness: DashPayRe
     },
     {
       step: DashPaySetupStep.Username,
-      state: username == null ? SetupStepState.Todo : SetupStepState.Done,
-      caption: username ?? DASHPAY_SETUP_COPY.usernameTodo,
+      state: usernameState,
+      caption: username ?? votingUsername ?? DASHPAY_SETUP_COPY.usernameTodo,
     },
     {
       step: DashPaySetupStep.Keys,
