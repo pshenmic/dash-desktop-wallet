@@ -10,7 +10,7 @@ import NoResults from "@renderer/components/ui/NoResults"
 import CoreAddressSelect from "./CoreAddressSelect"
 import ReceiveQr from "./ReceiveQr"
 import { useAuth } from "@renderer/contexts/AuthContext"
-import { RECEIVE_INVOICE_ADDRESS_LABELS, RECEIVE_INVOICE_COPY } from "@renderer/constants/receiveInvoice"
+import { RECEIVE_INVOICE_ADDRESS_LABELS, RECEIVE_INVOICE_COPY, RECEIVE_QR_SIZE } from "@renderer/constants/receiveInvoice"
 import { SEND_AMOUNT_PATTERN } from "@renderer/constants/sendRecipients"
 import { defaultReceiveCoreAddress, receiveCoreAddresses } from "@renderer/utils/receiveDefaults"
 import { corePaymentUri, receiveAmountParam } from "@renderer/utils/receiveInvoice"
@@ -41,17 +41,20 @@ export default function ReceiveAddressCard({
   const paymentUri = corePaymentUri(address, amountParam)
 
   return (
-      <div className={`flex w-min max-w-190 items-center gap-8 ${SURFACE_SECTION}`}>
-        <ReceiveQr
-          value={paymentUri}
-          invoice={{
-            addressLabel: RECEIVE_INVOICE_ADDRESS_LABELS.core,
-            address,
-            amount: amountParam,
-            paymentLink: amountParam == null ? null : paymentUri,
-            network: status?.network ?? null,
-          }}
-        />
+      <div className={`flex w-min max-w-190 items-start gap-8 ${SURFACE_SECTION}`}>
+        <div className={"flex shrink-0 flex-col gap-3"} style={{width: RECEIVE_QR_SIZE}}>
+          <ReceiveQr
+            value={paymentUri}
+            invoice={{
+              addressLabel: RECEIVE_INVOICE_ADDRESS_LABELS.core,
+              address,
+              amount: amountParam,
+              paymentLink: amountParam == null ? null : paymentUri,
+              network: status?.network ?? null,
+            }}
+          />
+          <HashField hash={paymentUri} label={RECEIVE_INVOICE_COPY.paymentLink} />
+        </div>
 
         <div className={"flex flex-col w-full"}>
           <div className={"flex flex-col gap-[.5rem]"}>
@@ -64,7 +67,7 @@ export default function ReceiveAddressCard({
                 selected={selected}
                 onSelect={setSelectedAddress}
               />
-              <CopyButton text={address} />
+              <CopyButton text={address} className={"size-9! shrink-0 rounded-[.75rem]! dash-black-border [&>svg]:size-4 [&>svg]:opacity-60"} />
             </div>
           </div>
 
@@ -83,10 +86,6 @@ export default function ReceiveAddressCard({
               className={"w-full rounded-[.875rem] dash-block px-4 py-3.5 text-sm font-medium dash-text-default outline-none placeholder:text-current placeholder:opacity-40 focus-visible:ring-2 focus-visible:ring-dash-brand dark:focus-visible:ring-dash-mint"}
             />
           </label>
-
-          <div className={"mt-[.75rem]"}>
-            <HashField hash={paymentUri} label={RECEIVE_INVOICE_COPY.paymentLink} />
-          </div>
         </div>
       </div>
   )
