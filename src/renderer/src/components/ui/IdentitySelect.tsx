@@ -112,7 +112,7 @@ export function IdentitySelectPopover({
       event.preventDefault()
       event.stopPropagation()
       onDismiss(true)
-    } else if (event.key === 'Tab') {
+    } else if (event.key === 'Tab' && !framed) {
       onDismiss(false)
     }
   }
@@ -209,7 +209,13 @@ export function IdentitySelectPopover({
   }
 
   return (
-    <div onKeyDown={handlePopoverKey} className={`${styles.popover} flex flex-col gap-1 ${POPOVER}`}>
+    <div
+      onKeyDown={handlePopoverKey}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) onDismiss(false)
+      }}
+      className={`${styles.popover} flex flex-col gap-1 ${POPOVER}`}
+    >
       {header && (
         <Text reset size={10} weight={'medium'} color={'brand'} opacity={40} className={'block uppercase tracking-[.08em] px-[.625rem] py-1'}>
           {`${IDENTITY_SELECT_COPY.actAs} · ${identities.length}`}
