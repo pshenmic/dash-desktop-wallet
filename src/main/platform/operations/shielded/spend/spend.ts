@@ -12,7 +12,6 @@ import {consensusMessage} from '../../consensusMessage'
 import {buildTransition} from './buildTransition'
 import {checkSpent} from '../checkSpent'
 import {actualFee, minimumFee} from './fee'
-import {platformVersion} from '../../platformVersion'
 import {MAX_SPEND_NOTES, MAX_SPEND_RECIPIENTS} from '../../../../src/constants/credits'
 import {SHIELDED_ACCOUNT} from '../../../../src/constants/addresses'
 import {waitForResult} from './waitForResult'
@@ -56,7 +55,7 @@ export async function spend(payload: Payload, ctx: OperationContext): Promise<Re
   // Only a pool-to-pool transfer writes its payouts as Orchard outputs; the
   // rest leave the pool, so they add no action beyond the change note.
   const outputCount = kind === 'shieldedTransfer' ? recipients.length : 0
-  const version = await platformVersion(ctx)
+  const version = await ctx.sdk.node.getProtocolVersion()
   const fee = (numSpends: number): bigint => minimumFee(kind, bundleActions(numSpends, outputCount), version)
   const selectable = selectableNotes(
     checked.map(({recoveredNote, spent}) => ({index: poolIndex(recoveredNote), value: recoveredNote.note.value, spent})),
