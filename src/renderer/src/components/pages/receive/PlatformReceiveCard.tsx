@@ -47,6 +47,7 @@ export default function PlatformReceiveCard({ walletId }: { walletId: string | u
       addresses={receiveAddresses}
       selected={selected}
       onSelect={setSelectedAddress}
+      wideAddress
       addressLabel={RECEIVE_INVOICE_ADDRESS_LABELS.platform}
     >
       <Text size={12} weight={"medium"} color={"brand"} opacity={50}>

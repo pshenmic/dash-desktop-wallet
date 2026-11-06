@@ -1,7 +1,7 @@
 import { Text } from '@renderer/components/dash-ui-kit-extended'
 import { CopyIcon2 } from '@renderer/components/dash-ui-kit-extended/icons'
 import HashField from '@renderer/components/ui/HashField'
-import { RECEIVE_INVOICE_COPY, RECEIVE_QR_SIZE } from '@renderer/constants/receiveInvoice'
+import { RECEIVE_INVOICE_COPY, RECEIVE_QR_SIZE, RECEIVE_WIDE_PANEL_CLASS } from '@renderer/constants/receiveInvoice'
 import { CHIP_ACTION, SURFACE_SECTION } from '@renderer/constants/surfaces'
 import { useAuth } from '@renderer/contexts/AuthContext'
 import type { ReceiveAddressPanelProps } from '@renderer/types/ReceiveInvoice'
@@ -13,6 +13,7 @@ export default function ReceiveAddressPanel({
   addresses,
   selected,
   onSelect,
+  wideAddress = false,
   addressLabel,
   addressBadge,
   amount = null,
@@ -22,7 +23,7 @@ export default function ReceiveAddressPanel({
   const { status } = useAuth()
 
   return (
-    <div className={`flex w-full min-w-0 max-w-190 items-start gap-8 ${SURFACE_SECTION}`}>
+    <div className={`flex w-full min-w-0 items-start gap-8 ${wideAddress ? RECEIVE_WIDE_PANEL_CLASS : 'max-w-190'} ${SURFACE_SECTION}`}>
       <div className={'flex shrink-0 flex-col gap-3'} style={{width: RECEIVE_QR_SIZE}}>
         <ReceiveQr
           value={paymentLink ?? selected.address}
@@ -54,7 +55,7 @@ export default function ReceiveAddressPanel({
             <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{addressLabel}</Text>
             {addressBadge}
           </div>
-          <ReceiveAddressSelect addresses={addresses} selected={selected} onSelect={onSelect} />
+          <ReceiveAddressSelect addresses={addresses} selected={selected} onSelect={onSelect} wideAddress={wideAddress} />
         </div>
         {children}
       </div>

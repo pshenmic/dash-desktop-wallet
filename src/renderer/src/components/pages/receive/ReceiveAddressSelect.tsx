@@ -11,10 +11,11 @@ import type { ReceiveAddressSelectProps } from '@renderer/types/ReceiveInvoice'
 import { formatApproxFiat } from '@renderer/utils/approxFiat'
 import { davToDashCompact } from '@renderer/utils/balance'
 
-export default function ReceiveAddressSelect({ addresses, selected, onSelect }: ReceiveAddressSelectProps): React.JSX.Element {
+export default function ReceiveAddressSelect({ addresses, selected, onSelect, wideAddress = false }: ReceiveAddressSelectProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const { format, rateReady } = useFiat()
+  const identifierClass = wideAddress ? ADDRESS_SELECT_WRAPPING_IDENTIFIER_CLASS : `${ADDRESS_SELECT_IDENTIFIER_CLASS} min-w-0 [&>div]:truncate`
 
   useClickOutside(ref, () => setOpen(false))
 
@@ -28,7 +29,7 @@ export default function ReceiveAddressSelect({ addresses, selected, onSelect }: 
           onClick={() => setOpen(value => !value)}
           className={RECEIVE_ADDRESS_SELECT_TRIGGER}
         >
-          <HighlightedIdentifier className={`${ADDRESS_SELECT_IDENTIFIER_CLASS} min-w-0 [&>div]:truncate`}>{selected.address}</HighlightedIdentifier>
+          <HighlightedIdentifier className={identifierClass}>{selected.address}</HighlightedIdentifier>
           <DropdownChevron open={open} />
         </button>
         <CopyButton text={selected.address} label={RECEIVE_INVOICE_COPY.copyAddress} size={'field'} />

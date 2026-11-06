@@ -12,7 +12,7 @@ import { shieldedBalancesByAddress } from '@renderer/utils/shieldedBalances'
 import { API } from '@renderer/api'
 import { addressFormCopy, INVALID_WALLET_PASSWORD_MESSAGE, receiveCardCopy } from '@renderer/constants'
 import { SURFACE_SECTION } from '@renderer/constants/surfaces'
-import { RECEIVE_INVOICE_ADDRESS_LABELS } from '@renderer/constants/receiveInvoice'
+import { RECEIVE_INVOICE_ADDRESS_LABELS, RECEIVE_WIDE_PANEL_CLASS } from '@renderer/constants/receiveInvoice'
 import { useShieldedSyncState } from '@renderer/hooks/useShielded'
 import { ShieldedSyncPhase } from '@renderer/enums/ShieldedSyncPhase'
 
@@ -131,12 +131,13 @@ export default function ShieldedReceiveCard({ walletId }: { walletId: string | u
 
     return (
       <>
-        <div className={"flex flex-col gap-4 w-full max-w-190"}>
+        <div className={`flex w-full flex-col gap-4 ${RECEIVE_WIDE_PANEL_CLASS}`}>
           <ShieldedNotesAlert walletId={walletId} onSync={() => setSyncOpen(true)} syncing={syncRunning} />
           <ReceiveAddressPanel
             addresses={receiveAddresses}
             selected={selected}
             onSelect={setSelectedAddress}
+            wideAddress
             addressLabel={RECEIVE_INVOICE_ADDRESS_LABELS.shielded}
             addressBadge={
               <CustomBadge

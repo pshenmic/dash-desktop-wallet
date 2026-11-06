@@ -1,5 +1,7 @@
 export const RECEIVE_QR_SIZE = 225
 
+export const RECEIVE_WIDE_PANEL_CLASS = 'max-w-280'
+
 export const RECEIVE_QR_COPY = {
   copyImage: 'Copy image',
   saveImage: 'Save image',
