@@ -152,7 +152,7 @@ export const authTexts: AuthTexts = {
   connectionMode: {
     title: 'Choose a connection mode',
     description: 'You can change this later in Connection Settings.',
-    backgroundSyncTitle: 'Also sync P2P in the background',
+    backgroundSyncTitle: 'Begin syncing P2P in the background anyway',
     buttonCreate: 'Create Wallet',
     buttonImport: 'Import Wallet',
   },
