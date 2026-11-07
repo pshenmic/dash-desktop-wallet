@@ -170,7 +170,7 @@ jobs:
       with:
         node-version: 24.x
     - name: Install dependencies
-      run: yarn
+      run: yarn --frozen-lockfile
     # electron-builder signs when CSC_LINK is set and notarizes when the APPLE_*
     # variables are; without forceCodeSigning a missing secret would skip both
     # and publish an unsigned dmg.
