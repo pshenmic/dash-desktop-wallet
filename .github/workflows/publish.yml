@@ -36,7 +36,7 @@ jobs:
   publish_apt:
     needs: build_linux
     if: ${{ !github.event.release.prerelease }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     permissions:
       contents: read
       pages: write
@@ -142,7 +142,7 @@ jobs:
       # Each arch is its own Store revision; one failing should not cancel the other's upload.
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, ubuntu-24.04-arm]
+        os: [ubuntu-22.04, ubuntu-22.04-arm]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -170,7 +170,7 @@ jobs:
       with:
         node-version: 24.x
     - name: Install dependencies
-      run: yarn
+      run: yarn --frozen-lockfile
     # electron-builder signs when CSC_LINK is set and notarizes when the APPLE_*
     # variables are; without forceCodeSigning a missing secret would skip both
     # and publish an unsigned dmg.
