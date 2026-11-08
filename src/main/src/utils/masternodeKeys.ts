@@ -56,6 +56,27 @@ export function legacyG1(publicKey: Uint8Array): Uint8Array {
   return legacy
 }
 
+export function requireBasicOperatorKey(publicKey: string): string {
+  try {
+    G1.fromBytes(hexToBytes(publicKey))
+  } catch {
+    throw new Error(`Not a BLS public key: ${publicKey}`)
+  }
+  return publicKey.toLowerCase()
+}
+
+// A list prints a legacy-state node's key in the legacy encoding. Legacy never
+// sets 0x20, x being under 381 bits, and basic always sets 0x80, so a key with
+// 0x80 set and 0x20 clear reads either way and is refused rather than guessed.
+export function basicOperatorKey(listed: string): string {
+  const bytes = hexToBytes(listed)
+  if ((bytes[0] & 0x80) !== 0 && (bytes[0] & 0x20) === 0) {
+    throw new Error('The listed operator key may be in either BLS encoding; pass it explicitly')
+  }
+  bytes[0] |= 0x80
+  return requireBasicOperatorKey(bytesToHex(bytes))
+}
+
 export function operatorPublicKey(accountPublicKey: Uint8Array, chainCode: Uint8Array, index: number): Uint8Array {
   const tweak = blsStep(chainCode, concatBytes(legacyG1(accountPublicKey), numberToBytesBE(index, 4))).privateKey
   return G1.fromBytes(accountPublicKey).add(G1.BASE.multiply(Fr.fromBytes(tweak))).toBytes(true)

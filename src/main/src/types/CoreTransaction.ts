@@ -1,5 +1,6 @@
 import {Script} from 'dash-core-sdk'
 import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
+import {ProUpRegTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRegTx.js'
 import {Network} from './Network'
 
 export type RecipientType = 'p2pkh' | 'p2sh'
@@ -62,11 +63,14 @@ export interface BuildSignedAssetLockParams extends BuildAssetLockParams {
   network: Network
 }
 
-// payload is completed here: its inputs hash and the collateral's signature
-// both depend on the inputs chosen.
-export interface BuildSignedProRegTxParams {
-  payload: ProRegTX
-  collateral: TransferInput
+export type ProviderPayload = ProRegTX | ProUpRegTx
+
+// payload is completed here: its inputs hash and signature both depend on the
+// inputs chosen. signer holds the key that signs it — the collateral's for a
+// ProRegTx, the owner's for a ProUpRegTx.
+export interface BuildSignedProviderTxParams {
+  payload: ProviderPayload
+  signer: Pick<TransferInput, 'derivationPath' | 'address'>
   inputs: TransferInput[]
   changeAddress: string
   inputTotal: bigint

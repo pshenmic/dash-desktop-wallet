@@ -3,6 +3,9 @@ import {secp256k1} from '@noble/curves/secp256k1.js'
 import {concatBytes, hexToBytes} from '@noble/hashes/utils.js'
 import {Script, Transaction, utils as sdkUtils} from 'dash-core-sdk'
 import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
+import {ProUpRegTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRegTx.js'
+import {bls12_381} from '@noble/curves/bls12-381.js'
+import {bytesToHex} from '@noble/hashes/utils.js'
 import {KeyPairController} from 'dash-platform-sdk/src/keyPair/index.js'
 import {MasternodeDAO} from '../../src/main/src/database/MasternodeDAO'
 import {Preferences} from '../../src/main/src/preferences'
@@ -10,11 +13,18 @@ import {WalletProviderFactory} from '../../src/main/src/providers/WalletProvider
 import {CoreTransactionService} from '../../src/main/src/services/core/CoreTransactionService'
 import {MasternodeService} from '../../src/main/src/services/core/MasternodeService'
 import {WalletSyncService} from '../../src/main/src/services/core/WalletSyncService'
-import {MasternodeKeyChain, MasternodeKeyFilter, MasternodeKeys, MasternodeRegistration, NetworkMasternode} from '../../src/main/src/types/Masternode'
+import {
+  MasternodeKeyChain,
+  MasternodeKeyFilter,
+  MasternodeKeys,
+  MasternodeRegistrarUpdate,
+  MasternodeRegistration,
+  NetworkMasternode,
+} from '../../src/main/src/types/Masternode'
 import {UTXO} from '../../src/main/src/types/UTXO'
 import {masternodeKeyDeriver} from '../../src/main/src/utils/masternodeKeys'
 import {nodeKey} from '../../src/main/src/utils/masternodes'
-import {proRegInputsHash, proRegSignString, signedMessageHash} from '../../src/main/src/utils/proRegTx'
+import {payloadDigest, proRegSignString, providerInputsHash, signedMessageHash} from '../../src/main/src/utils/providerTx'
 import {harness, Harness, PASSWORD, VALID_SEEDPHRASE} from './harness'
 
 const DASH = 100_000_000n
@@ -47,14 +57,16 @@ const keyPair = new KeyPairController()
 const EVO_FIELDS: Partial<MasternodeRegistration> & {platformNodeId: string} =
   {type: 'Evo', platformNodeId: '5b6ddd9532c5863b8bb113ef92d77f77b66f859b', platformP2PPort: 36656, platformHttpPort: 1443}
 
-function payloadSigner(payload: ProRegTX): string {
+function payloadSigner(payload: ProRegTX | ProUpRegTx): string {
   const signature = hexToBytes(payload.payloadSig)
   const recovered = concatBytes(Uint8Array.of((signature[0] - 27) & 3), signature.slice(1))
-  const message = signedMessageHash(proRegSignString(payload, 'testnet'))
-  return keyPair.p2pkhAddress(secp256k1.recoverPublicKey(recovered, message, {prehash: false}), 'testnet')
+  const hash = payload instanceof ProRegTX ? signedMessageHash(proRegSignString(payload, 'testnet')) : payloadDigest(payload)
+  return keyPair.p2pkhAddress(secp256k1.recoverPublicKey(recovered, hash, {prehash: false}), 'testnet')
 }
 
-describe('MasternodeService.register', () => {
+const keyIdOf = (address: string): string => bytesToHex(sdkUtils.addressToPublicKeyHash(address))
+
+describe('MasternodeService provider transactions', () => {
   let wired: Harness
   let walletId: string
   let keys: MasternodeKeys
@@ -121,7 +133,7 @@ describe('MasternodeService.register', () => {
     expect(payload.type).toBe(0)
     expect(payload.collateralOutpoint).toMatchObject({txId: 'cc'.repeat(32), vOut: 0})
     expect(tx.inputs.map(input => input.txId)).toEqual(['aa'.repeat(32)])
-    expect(payload.inputsHash).toBe(proRegInputsHash(tx.inputs))
+    expect(payload.inputsHash).toBe(providerInputsHash(tx.inputs))
     expect(payloadSigner(payload)).toBe(owned[0])
     expect(payload.getPayoutAddress('testnet')).toBe(owned[2])
     expect(payload.ipAddress).toBe('203.0.113.7')
@@ -169,5 +181,66 @@ describe('MasternodeService.register', () => {
   it('refuses before any list has arrived to tell which keys are free', async () => {
     list = null
     await expect(masternodes.register(walletId, registration(), PASSWORD)).rejects.toThrow('has not arrived')
+  })
+  describe('updateRegistrar', () => {
+    const PRO_TX_HASH = '11'.repeat(32)
+    const KEEP: MasternodeRegistrarUpdate = {operator: {kind: 'keep'}, voting: {kind: 'keep'}, payoutAddress: null}
+
+    beforeEach(() => {
+      list = [node(PRO_TX_HASH, {
+        collateralTxid: 'cc'.repeat(32), collateralAddress: owned[0], payeeAddress: owned[2],
+        ownerAddress: key('owner', 0), votingAddress: key('voting', 0), operatorPublicKey: key('operator', 0),
+      })]
+    })
+
+    async function update(fields: Partial<MasternodeRegistrarUpdate>): Promise<{tx: Transaction; payload: ProUpRegTx}> {
+      const result = await masternodes.updateRegistrar(walletId, PRO_TX_HASH, {...KEEP, ...fields}, PASSWORD)
+      const tx = Transaction.fromHex(broadcast.at(-1)!)
+      expect(result.txid).toBe(tx.hash())
+      return {tx, payload: tx.extraPayload as ProUpRegTx}
+    }
+
+    it('restates the kept keys, signs with the owner key and leaves the collateral unspent', async () => {
+      const {tx, payload} = await update({payoutAddress: owned[1]})
+
+      expect(tx.type).toBe(3)
+      expect(payload.version).toBe(2)
+      expect(payload.proTxHash).toBe(PRO_TX_HASH)
+      expect(payload.pubKeyOperator).toBe(key('operator', 0))
+      expect(payload.keyIdVoting).toBe(keyIdOf(key('voting', 0)))
+      expect(payload.scriptPayout.getAddress('testnet')).toBe(owned[1])
+      expect(payloadSigner(payload)).toBe(key('owner', 0))
+      expect(tx.inputs.map(input => input.txId)).toEqual(['aa'.repeat(32)])
+      expect(payload.inputsHash).toBe(providerInputsHash(tx.inputs))
+    })
+
+    it('keeps the current payout when none is passed', async () => {
+      const {payload} = await update({})
+      expect(payload.scriptPayout.getAddress('testnet')).toBe(owned[2])
+    })
+
+    it('rotates to the lowest wallet keys no listed node carries', async () => {
+      const {payload} = await update({operator: {kind: 'wallet'}, voting: {kind: 'wallet'}})
+      expect(payload.pubKeyOperator).toBe(key('operator', 1))
+      expect(payload.keyIdVoting).toBe(keyIdOf(key('voting', 1)))
+    })
+
+    it('refuses an external operator key another node carries', async () => {
+      const taken = bytesToHex(bls12_381.G1.Point.BASE.multiply(7n).toBytes(true))
+      list!.push(node('22'.repeat(32), {operatorPublicKey: taken}))
+      await expect(masternodes.updateRegistrar(walletId, PRO_TX_HASH, {...KEEP, operator: {kind: 'external', publicKey: taken}}, PASSWORD))
+        .rejects.toThrow('already uses this operator key')
+      expect(broadcast).toEqual([])
+    })
+
+    it('refuses a node whose owner key the wallet does not derive', async () => {
+      list = [node(PRO_TX_HASH, {votingAddress: key('voting', 0)})]
+      await expect(masternodes.updateRegistrar(walletId, PRO_TX_HASH, KEEP, PASSWORD)).rejects.toThrow("owner key")
+    })
+
+    it('refuses a payout to the voting key', async () => {
+      await expect(masternodes.updateRegistrar(walletId, PRO_TX_HASH, {...KEEP, payoutAddress: key('voting', 0)}, PASSWORD))
+        .rejects.toThrow('may not pay the owner or voting key')
+    })
   })
 })

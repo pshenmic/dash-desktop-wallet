@@ -9,8 +9,9 @@ export const DUST_THRESHOLD_DUFFS = 546n
 export const MASTERNODE_COLLATERAL_DUFFS: Record<MasternodeType, bigint> = {Regular: 1_000n * DUFFS_PER_DASH, Evo: 4_000n * DUFFS_PER_DASH}
 // nType of a ProTx.
 export const MASTERNODE_TYPE_CODE: Record<MasternodeType, number> = {Regular: 0, Evo: 1}
-// Basic-scheme BLS. Valid before and after v24; v3 (ExtNetInfo) only after it.
-export const PROREG_TX_VERSION = 2
+// Basic-scheme BLS, for ProRegTx and ProUpRegTx alike. Valid before and after
+// v24; v3 (ExtNetInfo) only after it.
+export const PROTX_VERSION = 2
 // 100%, in the hundredths of a percent ProRegTx carries.
 export const MAX_OPERATOR_REWARD = 10_000
 

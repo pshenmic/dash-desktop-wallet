@@ -32,6 +32,7 @@ import { GetImportedMasternodeKeysHandler } from './api/masternodes/getImportedM
 import { ImportMasternodeKeyHandler } from './api/masternodes/importMasternodeKey'
 import { RemoveMasternodeKeyHandler } from './api/masternodes/removeMasternodeKey'
 import { RegisterMasternodeHandler } from './api/masternodes/registerMasternode'
+import { UpdateMasternodeRegistrarHandler } from './api/masternodes/updateMasternodeRegistrar'
 import { GetUsernamesHandler } from './api/wallet/getUsernames'
 import { RefreshDashPayHandler } from './api/wallet/refreshDashPay'
 import { RegisterUsernameHandler } from './api/wallet/registerUsername'
@@ -205,6 +206,7 @@ export class WalletBackend {
     registerHandler('importMasternodeKey', new ImportMasternodeKeyHandler(this.masternodeService).handle)
     registerHandler('removeMasternodeKey', new RemoveMasternodeKeyHandler(this.masternodeService).handle)
     registerHandler('registerMasternode', new RegisterMasternodeHandler(this.masternodeService).handle)
+    registerHandler('updateMasternodeRegistrar', new UpdateMasternodeRegistrarHandler(this.masternodeService).handle)
     registerHandler('getUsernames', new GetUsernamesHandler(this.identityService).handle)
     registerHandler('refreshDashPay', new RefreshDashPayHandler(this.walletService).handle)
     registerHandler('registerUsername', new RegisterUsernameHandler(this.identityService).handle)

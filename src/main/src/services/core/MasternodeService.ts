@@ -11,13 +11,18 @@ import {
   ImportedMasternodeKey,
   Masternode,
   MasternodeKeyChain,
+  MasternodeRegistrarUpdate,
   MasternodeRegistration,
   MasternodeRegistrationResult,
+  MasternodeUpdateResult,
   NetworkMasternode,
+  OperatorKeyChoice,
+  ProviderTxContext,
+  ProviderTxPlan,
 } from '../../types/Masternode'
 import {memoryWindowStore, runAddressWindow} from '../../utils/addressWindow'
 import {coreFeeDuffsFor} from '../../utils/coreFeeRate'
-import {masternodeKeyDeriver, masternodePublicKey} from '../../utils/masternodeKeys'
+import {basicOperatorKey, masternodeKeyDeriver, masternodePublicKey, requireBasicOperatorKey} from '../../utils/masternodeKeys'
 import {
   carriesKey,
   collateralsToStore,
@@ -28,7 +33,7 @@ import {
   unusedKeyIndex,
   withoutCollaterals,
 } from '../../utils/masternodes'
-import {proRegPayloadBytes, requireRegistrationFields} from '../../utils/proRegTx'
+import {providerPayloadBytes, requireRegistrationFields} from '../../utils/providerTx'
 import {addressPaths, selectTransferInputs} from '../../utils/transferInputs'
 import {withUnlockedWallet} from '../../utils/walletSeed'
 import {CoreTransactionService} from './CoreTransactionService'
@@ -104,22 +109,7 @@ export class MasternodeService {
   // takes the same keys and is refused by consensus as a duplicate.
   async register(walletId: string, registration: MasternodeRegistration, password: string): Promise<MasternodeRegistrationResult> {
     requireRegistrationFields(registration)
-    if (!this.listed.has(walletId)) await this.discover(walletId)
-    const owned = this.listed.get(walletId)
-    if (owned == null) throw new Error('The masternode list has not arrived yet')
-    const keys = await this.masternodeKeyDAO.getKeys(walletId)
-    if (keys == null) throw new Error('Masternode keys are derived at the next password check')
-
-    const {tx, inputTotal} = await withUnlockedWallet(this.walletDAO, walletId, password, async ({wallet, seed}) => {
-      const {network} = wallet
-      const provider = this.providers.forWallet(walletId, network)
-      await provider.ensureReady()
-      const [grouped, utxos, collaterals] = await Promise.all([
-        this.addressDAO.getAddressesByWalletId(walletId),
-        provider.getWalletUtxos(),
-        this.masternodeDAO.getCollaterals(walletId),
-      ])
-
+    const {txid, fee, peersAcked} = await this.sendProviderTx(walletId, password, async ({network, keys, owned, grouped, utxos, collaterals}) => {
       const {txid, vout} = registration.collateral
       const coin = utxos.find(({txId, vOut}) => txId === txid && vOut === vout)
       if (coin == null) throw new Error('The collateral is not an unspent coin of this wallet')
@@ -132,36 +122,103 @@ export class MasternodeService {
 
       const derived = (chain: MasternodeKeyChain): string => masternodeKeyDeriver(keys, network, chain).derive(unusedKeyIndex(owned, chain)).address
       const keyId = (chain: MasternodeKeyChain): string => bytesToHex(sdkUtils.addressToPublicKeyHash(derived(chain)))
-      const payload = this.coreTransactionService.proRegPayload(registration, {
-        ownerKeyId: keyId('owner'),
-        votingKeyId: keyId('voting'),
-        operatorPublicKey: derived('operator'),
-      }, network)
+      return {
+        payload: this.coreTransactionService.proRegPayload(registration, {
+          ownerKeyId: keyId('owner'),
+          votingKeyId: keyId('voting'),
+          operatorPublicKey: derived('operator'),
+        }, network),
+        signer: {derivationPath: collateralPath, address: coin.address},
+        spendable: utxos.filter(utxo => utxo !== coin),
+      }
+    })
+    return {proTxHash: txid, fee, peersAcked}
+  }
 
-      // The change is the only output, so it is what has to clear dust.
+  // A ProUpRegTx restates all three fields, so a kept one is the node's current value.
+  async updateRegistrar(walletId: string, proTxHash: string, update: MasternodeRegistrarUpdate, password: string): Promise<MasternodeUpdateResult> {
+    return this.sendProviderTx(walletId, password, async context => {
+      const {network, keys, owned, utxos} = context
+      const node = owned.find(entry => entry.proTxHash === proTxHash)
+      if (node == null) throw new Error('Not a masternode of this wallet')
+      if (node.ownerKeyIndex == null) throw new Error("This wallet does not derive the masternode's owner key")
+      const owner = masternodeKeyDeriver(keys, network, 'owner').derive(node.ownerKeyIndex)
+
+      const votingAddress = update.voting.kind === 'keep' ? node.votingAddress
+        : update.voting.kind === 'wallet' ? masternodeKeyDeriver(keys, network, 'voting').derive(unusedKeyIndex(owned, 'voting')).address
+        : update.voting.address
+      if (this.coreTransactionService.classifyAddress(votingAddress, network) !== 'p2pkh') throw new Error('A voting key is a P2PKH address')
+      if (votingAddress === node.collateralAddress) throw new Error('The voting key may not be the collateral address')
+
+      const payoutAddress = update.payoutAddress ?? node.payeeAddress
+      if (payoutAddress == null) throw new Error('The current payout is not known yet; pass a payout address')
+      if (payoutAddress === owner.address || payoutAddress === votingAddress) throw new Error('The payout may not pay the owner or voting key')
+
+      return {
+        payload: this.coreTransactionService.proUpRegPayload(proTxHash, await this.operatorKey(node, update.operator, context), votingAddress, payoutAddress, network),
+        signer: owner,
+        spendable: utxos,
+      }
+    })
+  }
+
+  // Operator keys are unique across the list, so an external one is checked
+  // against it; a wallet one is unused by construction.
+  private async operatorKey(node: Masternode, choice: OperatorKeyChoice, {network, keys, owned, imported, provider}: ProviderTxContext): Promise<string> {
+    const deriver = masternodeKeyDeriver(keys, network, 'operator')
+    if (choice.kind === 'wallet') return deriver.derive(unusedKeyIndex(owned, 'operator')).address
+    if (choice.kind === 'keep') {
+      if (node.operatorKeyIndex != null) return deriver.derive(node.operatorKeyIndex).address
+      return imported.find(key => key.role === 'operator' && carriesKey(node, key))?.publicKey ?? basicOperatorKey(node.operatorPublicKey)
+    }
+    const publicKey = requireBasicOperatorKey(choice.publicKey)
+    const listed = await provider.getMasternodes('operator', masternodeFilterValues('operator', publicKey))
+    if (listed == null) throw new Error('The masternode list has not arrived yet')
+    if (listed.some(entry => entry.proTxHash !== node.proTxHash)) throw new Error('Another masternode already uses this operator key')
+    return publicKey
+  }
+
+  // Both kinds pay their fee from the wallet's ordinary coins, with the change as
+  // their only output, so the change is what has to clear dust.
+  private async sendProviderTx(
+    walletId: string,
+    password: string,
+    plan: (context: ProviderTxContext) => Promise<ProviderTxPlan>,
+  ): Promise<MasternodeUpdateResult> {
+    if (!this.listed.has(walletId)) await this.discover(walletId)
+    const owned = this.listed.get(walletId)
+    if (owned == null) throw new Error('The masternode list has not arrived yet')
+    const keys = await this.masternodeKeyDAO.getKeys(walletId)
+    if (keys == null) throw new Error('Masternode keys are derived at the next password check')
+
+    const {tx, inputTotal} = await withUnlockedWallet(this.walletDAO, walletId, password, async ({wallet, seed}) => {
+      const {network} = wallet
+      const provider = this.providers.forWallet(walletId, network)
+      await provider.ensureReady()
+      const [grouped, utxos, imported, collaterals] = await Promise.all([
+        this.addressDAO.getAddressesByWalletId(walletId),
+        provider.getWalletUtxos(),
+        this.masternodeKeyDAO.getImportedKeys(walletId),
+        this.masternodeDAO.getCollaterals(walletId),
+      ])
+      const {payload, signer, spendable} = await plan({network, keys, owned, imported, provider, grouped, utxos, collaterals})
+
       const {coreFeeMultiplier} = this.preferences.general
       const {transferInputs, inputTotal, changeAddress, feeDuffs} = selectTransferInputs(
         grouped,
-        withoutCollaterals(utxos.filter(utxo => utxo !== coin), collaterals),
+        withoutCollaterals(spendable, collaterals),
         DUST_THRESHOLD_DUFFS,
-        inputsCount => coreFeeDuffsFor(coreFeeMultiplier, inputsCount, 1, false, proRegPayloadBytes(payload)),
+        inputsCount => coreFeeDuffsFor(coreFeeMultiplier, inputsCount, 1, false, providerPayloadBytes(payload)),
       )
-      const tx = await this.coreTransactionService.buildSignedProRegTx({
-        payload,
-        collateral: {txId: coin.txId, vOut: coin.vOut, script: coin.script, derivationPath: collateralPath, address: coin.address},
-        inputs: transferInputs,
-        changeAddress,
-        inputTotal,
-        feeDuffs,
-        seed,
-        network,
+      const tx = await this.coreTransactionService.buildSignedProviderTx({
+        payload, signer, inputs: transferInputs, changeAddress, inputTotal, feeDuffs, seed, network,
       })
       return {tx, inputTotal}
     })
 
     const broadcast = await this.walletSyncService.broadcastTransaction(tx.hex())
     return {
-      proTxHash: broadcast.txid,
+      txid: broadcast.txid,
       fee: inputTotal - tx.outputs.reduce((sum, output) => sum + output.satoshis, 0n),
       peersAcked: broadcast.peersDelivered.length,
     }

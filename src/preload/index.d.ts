@@ -117,6 +117,23 @@ interface MasternodeRegistrationResultDTO {
   peersAcked: number
 }
 
+// Mirrors MasternodeRegistrarUpdate and MasternodeUpdateResult in
+// src/main/src/types/Masternode. keep is the node's current key, wallet the
+// lowest unused wallet key, external a key the wallet does not hold. A new
+// operator key PoSe-bans the node until that operator's ProUpServTx. A null
+// payoutAddress keeps the current payout.
+interface MasternodeRegistrarUpdateDTO {
+  operator: { kind: 'keep' } | { kind: 'wallet' } | { kind: 'external'; publicKey: string }
+  voting: { kind: 'keep' } | { kind: 'wallet' } | { kind: 'external'; address: string }
+  payoutAddress: string | null
+}
+
+interface MasternodeUpdateResultDTO {
+  txid: string
+  fee: bigint
+  peersAcked: number
+}
+
 // Hand-maintained alongside definitions.ts, and deliberately a second
 // declaration of src/main/src/types/Transaction: the three bundles do not share
 // types. Amounts stay bigint — structured clone carries them as themselves.
@@ -214,6 +231,7 @@ declare global {
       importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => Promise<MasternodeDTO[] | null>
       removeMasternodeKey: (walletId: string, key: ImportedMasternodeKeyDTO) => Promise<void>
       registerMasternode: (walletId: string, registration: MasternodeRegistrationDTO, password: string) => Promise<MasternodeRegistrationResultDTO>
+      updateMasternodeRegistrar: (walletId: string, proTxHash: string, update: MasternodeRegistrarUpdateDTO, password: string) => Promise<MasternodeUpdateResultDTO>
       getUsernames: (walletId: string) => Promise<unknown>
       refreshDashPay: (walletId: string) => Promise<void>
       registerUsername: (walletId: string, identifier: string, label: string, password: string) => Promise<unknown>

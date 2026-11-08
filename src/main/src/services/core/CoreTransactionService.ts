@@ -9,16 +9,17 @@ import {
 } from 'dash-core-sdk'
 import {Base58Check} from 'dash-core-sdk/src/base58check.js'
 import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
+import {ProUpRegTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRegTx.js'
 import {OutPoint} from 'dash-core-sdk/src/types/OutPoint.js'
 import {bytesToHex} from '@noble/hashes/utils.js'
 import {KeyPairController} from 'dash-platform-sdk/src/keyPair/index.js'
 import {Network} from '../../types/Network'
 import {ADDRESS_DECODED_LENGTH, ADDRESS_PREFIX} from '../../constants/addresses'
-import {DUST_THRESHOLD_DUFFS, MASTERNODE_TYPE_CODE, PROREG_TX_VERSION, SEQUENCE_FINAL} from '../../constants/chain'
+import {DUST_THRESHOLD_DUFFS, MASTERNODE_TYPE_CODE, PROTX_VERSION, SEQUENCE_FINAL} from '../../constants/chain'
 import {
   BuildAssetLockParams,
   BuildSignedAssetLockParams,
-  BuildSignedProRegTxParams,
+  BuildSignedProviderTxParams,
   BuildSignedTransferParams,
   BuildTransferParams,
   RecipientType,
@@ -27,7 +28,7 @@ import {
 import {MasternodeRegistration, ProviderKeyIds} from '../../types/Masternode'
 import {buildAssetLockOutputs} from '../../utils/assetLockTx'
 import {derivePath256} from '../../utils/dashPayKeys'
-import {proRegInputsHash, proRegSignString, serviceAddressParts, signMessage} from '../../utils/proRegTx'
+import {payloadDigest, proRegSignString, providerInputsHash, serviceAddressParts, signHash, signMessage} from '../../utils/providerTx'
 
 
 export class CoreTransactionService {
@@ -69,7 +70,7 @@ export class CoreTransactionService {
     }
   }
 
-  private async privateKeys(inputs: TransferInput[], seed: Uint8Array, network: Network): Promise<PrivateKey[]> {
+  private async privateKeys(inputs: Array<Pick<TransferInput, 'derivationPath' | 'address'>>, seed: Uint8Array, network: Network): Promise<PrivateKey[]> {
     const hdKey = this.keyPair.seedToHdKey(seed, network)
 
     const privateKeys: PrivateKey[] = []
@@ -107,7 +108,7 @@ export class CoreTransactionService {
   proRegPayload(registration: MasternodeRegistration, keys: ProviderKeyIds, network: Network): ProRegTX {
     const service = registration.serviceAddress == null ? null : serviceAddressParts(registration.serviceAddress)
     return new ProRegTX(
-      PROREG_TX_VERSION,
+      PROTX_VERSION,
       MASTERNODE_TYPE_CODE[registration.type],
       0,
       new OutPoint(registration.collateral.txid, registration.collateral.vout),
@@ -126,17 +127,36 @@ export class CoreTransactionService {
     )
   }
 
-  // The collateral signs the payload, which commits to the inputs, so the
-  // payload is finished before the inputs are signed over it.
-  async buildSignedProRegTx(params: BuildSignedProRegTxParams): Promise<SDKTransaction> {
-    const {payload, collateral, inputs, changeAddress, inputTotal, feeDuffs, seed, network} = params
-    const transaction = new SDKTransaction(undefined, undefined, undefined, 3, TransactionType.TRANSACTION_PROVIDER_REGISTER, payload)
+  proUpRegPayload(proTxHash: string, operatorPublicKey: string, votingAddress: string, payoutAddress: string, network: Network): ProUpRegTx {
+    return new ProUpRegTx(
+      PROTX_VERSION,
+      proTxHash,
+      0,
+      operatorPublicKey,
+      bytesToHex(sdkUtils.addressToPublicKeyHash(votingAddress)),
+      this.payoutScript(payoutAddress, network),
+      '00'.repeat(32),
+      '',
+    )
+  }
+
+  // The payload commits to the inputs and the inputs' signatures to the payload,
+  // so it is finished in between. A ProRegTx's collateral signs Core's sign
+  // string as a message; a ProUpRegTx's owner signs the payload hash itself.
+  async buildSignedProviderTx(params: BuildSignedProviderTxParams): Promise<SDKTransaction> {
+    const {payload, signer, inputs, changeAddress, inputTotal, feeDuffs, seed, network} = params
+    const isRegistration = payload instanceof ProRegTX
+    const type = isRegistration ? TransactionType.TRANSACTION_PROVIDER_REGISTER : TransactionType.TRANSACTION_PROVIDER_UPDATE_REGISTRAR
+    const transaction = new SDKTransaction(undefined, undefined, undefined, 3, type, payload)
     this.addInputs(transaction, inputs)
     this.addChange(transaction, inputTotal - feeDuffs, changeAddress)
 
-    payload.inputsHash = proRegInputsHash(inputs)
-    const [collateralKey, ...inputKeys] = await this.privateKeys([collateral, ...inputs], seed, network)
-    payload.payloadSig = bytesToHex(signMessage(proRegSignString(payload, network), collateralKey.bytes()))
+    payload.inputsHash = providerInputsHash(inputs)
+    const [signerKey, ...inputKeys] = await this.privateKeys([signer, ...inputs], seed, network)
+    const signature = isRegistration
+      ? signMessage(proRegSignString(payload, network), signerKey.bytes())
+      : signHash(payloadDigest(payload), signerKey.bytes())
+    payload.payloadSig = bytesToHex(signature)
     transaction.sign(inputKeys)
 
     return transaction

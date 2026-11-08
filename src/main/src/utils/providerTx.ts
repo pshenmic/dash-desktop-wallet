@@ -5,6 +5,7 @@ import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
 import {COMPACT_SIGNATURE_SIZE} from 'dash-core-sdk/src/constants.js'
 import {doubleSHA256, encodeCompactSize, getCompactVariableSize} from 'dash-core-sdk/src/utils.js'
 import {MAX_OPERATOR_REWARD, MESSAGE_MAGIC} from '../constants/chain'
+import {ProviderPayload} from '../types/CoreTransaction'
 import {MasternodeRegistration} from '../types/Masternode'
 import {Network} from '../types/Network'
 
@@ -13,15 +14,15 @@ function uint256Hex(hash: Uint8Array): string {
   return bytesToHex(hash.toReversed())
 }
 
-export function proRegInputsHash(inputs: Array<{txId: string; vOut: number}>): string {
+export function providerInputsHash(inputs: Array<{txId: string; vOut: number}>): string {
   return uint256Hex(doubleSHA256(concatBytes(...inputs.map(({txId, vOut}) => new OutPoint(txId, vOut).bytes()))))
 }
 
 // Core hashes the payload with SER_GETHASH, which drops vchSig and its length.
-function proRegPayloadHash(payload: ProRegTX): string {
+export function payloadDigest(payload: ProviderPayload): Uint8Array {
   const bytes = payload.bytes()
   const sigLength = payload.payloadSig.length / 2
-  return uint256Hex(doubleSHA256(bytes.slice(0, bytes.length - getCompactVariableSize(sigLength) - sigLength)))
+  return doubleSHA256(bytes.slice(0, bytes.length - getCompactVariableSize(sigLength) - sigLength))
 }
 
 // CProRegTx::MakeSignString, which the collateral key signs as a message.
@@ -31,7 +32,7 @@ export function proRegSignString(payload: ProRegTX, network: Network): string {
     payload.operatorReward,
     payload.getOwnerAddress(network),
     payload.getVotingAddress(network),
-    proRegPayloadHash(payload),
+    uint256Hex(payloadDigest(payload)),
   ].join('|')
 }
 
@@ -43,9 +44,9 @@ export function signedMessageHash(message: string): Uint8Array {
   return doubleSHA256(concatBytes(varString(MESSAGE_MAGIC), varString(message)))
 }
 
-// What an unsigned payload adds to the transaction once the collateral's
-// signature and the payload's own length prefix are in.
-export function proRegPayloadBytes(payload: ProRegTX): number {
+// What an unsigned payload adds to the transaction once its compact signature
+// and the payload's own length prefix are in.
+export function providerPayloadBytes(payload: ProviderPayload): number {
   const signed = payload.bytes().length + COMPACT_SIGNATURE_SIZE
   return signed + getCompactVariableSize(signed)
 }
@@ -81,7 +82,11 @@ export function requireRegistrationFields(registration: MasternodeRegistration):
 
 // Core's compact signature leads with 27 + recovery id, plus 4 for a compressed
 // key; noble's recovered format leads with the bare recovery id.
-export function signMessage(message: string, privateKey: Uint8Array): Uint8Array {
-  const signature = secp256k1.sign(signedMessageHash(message), privateKey, {prehash: false, lowS: true, format: 'recovered'})
+export function signHash(hash: Uint8Array, privateKey: Uint8Array): Uint8Array {
+  const signature = secp256k1.sign(hash, privateKey, {prehash: false, lowS: true, format: 'recovered'})
   return concatBytes(Uint8Array.of(31 + signature[0]), signature.slice(1))
+}
+
+export function signMessage(message: string, privateKey: Uint8Array): Uint8Array {
+  return signHash(signedMessageHash(message), privateKey)
 }

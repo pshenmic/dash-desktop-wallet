@@ -1,3 +1,9 @@
+import type {WalletProvider} from '../providers/WalletProvider'
+import type {ProviderPayload, TransferInput} from './CoreTransaction'
+import type {GroupedAddresses} from './GroupedAddresses'
+import type {Network} from './Network'
+import type {UTXO} from './UTXO'
+
 export type MasternodeKeyRole = 'voting' | 'owner' | 'operator' | 'platformNode'
 // The roles a masternode list can be searched by, each walked as a key chain.
 export type MasternodeKeyChain = 'owner' | 'voting' | 'operator'
@@ -26,6 +32,44 @@ export interface ProviderKeyIds {
   ownerKeyId: string
   votingKeyId: string
   operatorPublicKey: string
+}
+
+// keep is the key the node carries now; wallet is the chain's lowest index no
+// listed node carries; external is a key the wallet does not hold. A new
+// operator key resets the node's service and PoSe-bans it until that operator's
+// ProUpServTx. A null payoutAddress keeps the current payout.
+export type OperatorKeyChoice = {kind: 'keep'} | {kind: 'wallet'} | {kind: 'external'; publicKey: string}
+export type VotingKeyChoice = {kind: 'keep'} | {kind: 'wallet'} | {kind: 'external'; address: string}
+
+export interface MasternodeRegistrarUpdate {
+  operator: OperatorKeyChoice
+  voting: VotingKeyChoice
+  payoutAddress: string | null
+}
+
+// What a provider transaction is planned from, once the wallet is unlocked.
+export interface ProviderTxContext {
+  network: Network
+  keys: MasternodeKeys
+  owned: Masternode[]
+  imported: ImportedMasternodeKey[]
+  provider: WalletProvider
+  grouped: GroupedAddresses
+  utxos: UTXO[]
+  collaterals: MasternodeCollateral[]
+}
+
+// spendable is what the fee may come from, before the stored collaterals are taken out.
+export interface ProviderTxPlan {
+  payload: ProviderPayload
+  signer: Pick<TransferInput, 'derivationPath' | 'address'>
+  spendable: UTXO[]
+}
+
+export interface MasternodeUpdateResult {
+  txid: string
+  fee: bigint
+  peersAcked: number
 }
 
 export interface MasternodeRegistrationResult {
