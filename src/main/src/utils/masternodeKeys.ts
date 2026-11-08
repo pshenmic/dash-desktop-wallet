@@ -77,9 +77,24 @@ export function basicOperatorKey(listed: string): string {
   return requireBasicOperatorKey(bytesToHex(bytes))
 }
 
+function operatorTweak(accountPublicKey: Uint8Array, chainCode: Uint8Array, index: number): bigint {
+  return Fr.fromBytes(blsStep(chainCode, concatBytes(legacyG1(accountPublicKey), numberToBytesBE(index, 4))).privateKey)
+}
+
 export function operatorPublicKey(accountPublicKey: Uint8Array, chainCode: Uint8Array, index: number): Uint8Array {
-  const tweak = blsStep(chainCode, concatBytes(legacyG1(accountPublicKey), numberToBytesBE(index, 4))).privateKey
-  return G1.fromBytes(accountPublicKey).add(G1.BASE.multiply(Fr.fromBytes(tweak))).toBytes(true)
+  return G1.fromBytes(accountPublicKey).add(G1.BASE.multiply(operatorTweak(accountPublicKey, chainCode, index))).toBytes(true)
+}
+
+function operatorAccount(seed: Uint8Array, network: Network): ExtendedSecretKey {
+  return accountLevels(network, 'operator').reduce(blsHardenedChild, blsStep(utf8ToBytes(BLS_HD_SEED_KEY), seed))
+}
+
+// The secret behind operatorPublicKey: a non-hardened step adds the same tweak
+// to the account secret that it adds to the account point.
+export function operatorSecretKey(seed: Uint8Array, network: Network, index: number): Uint8Array {
+  const account = operatorAccount(seed, network)
+  const accountPublicKey = G1.BASE.multiply(Fr.fromBytes(account.privateKey)).toBytes(true)
+  return Fr.toBytes(Fr.add(Fr.fromBytes(account.privateKey), operatorTweak(accountPublicKey, account.chainCode, index)))
 }
 
 function slip10Child({privateKey, chainCode}: ExtendedSecretKey, level: number): ExtendedSecretKey {
@@ -94,7 +109,7 @@ export function platformNodeId(publicKey: Uint8Array): Uint8Array {
 
 export function masternodeKeys(seed: Uint8Array, network: Network): MasternodeKeys {
   const root = HDKey.fromMasterSeed(seed, HD_VERSIONS[network])
-  const operator = accountLevels(network, 'operator').reduce(blsHardenedChild, blsStep(utf8ToBytes(BLS_HD_SEED_KEY), seed))
+  const operator = operatorAccount(seed, network)
   const ed25519Master = hmac(sha512, utf8ToBytes(ED25519_SEED_KEY), seed)
   const platformAccount = accountLevels(network, 'platformNode')
     .reduce(slip10Child, {privateKey: ed25519Master.slice(0, 32), chainCode: ed25519Master.slice(32)})

@@ -75,6 +75,15 @@ export function unusedKeyIndex(owned: Masternode[], chain: MasternodeKeyChain): 
   return index
 }
 
+// A node whose operator key the wallet derives, which is what lets it sign as operator.
+export function operatedNode(owned: Masternode[], proTxHash: string): Masternode & {operatorKeyIndex: number} {
+  const node = owned.find(entry => entry.proTxHash === proTxHash)
+  if (node == null) throw new Error('Not a masternode of this wallet')
+  const {operatorKeyIndex} = node
+  if (operatorKeyIndex == null) throw new Error("This wallet does not derive the masternode's operator key")
+  return {...node, operatorKeyIndex}
+}
+
 export function carriesKey(node: NetworkMasternode, {role, publicKey}: ImportedMasternodeKey): boolean {
   const key = nodeKey(role, node)
   return key != null && masternodeFilterValues(role, publicKey).includes(key)

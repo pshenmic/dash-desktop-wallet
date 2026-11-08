@@ -1,4 +1,5 @@
-import {MasternodeType} from '../types/Masternode'
+import {MasternodeType, RevocationReason} from '../types/Masternode'
+import {Network} from '../types/Network'
 
 export const SEQUENCE_FINAL = 0xffffffff
 
@@ -14,6 +15,11 @@ export const MASTERNODE_TYPE_CODE: Record<MasternodeType, number> = {Regular: 0,
 export const PROTX_VERSION = 2
 // 100%, in the hundredths of a percent ProRegTx carries.
 export const MAX_OPERATOR_REWARD = 10_000
+// v24 refuses an Evo service update below v3 (ExtNetInfo) and refuses v3
+// before it activates: active on testnet, signaling on mainnet from 2026-11-09.
+export const EVO_SERVICE_TX_VERSION: Record<Network, number> = {mainnet: 2, testnet: 3}
+export const REVOCATION_REASON_CODE: Record<RevocationReason, number> = {notSpecified: 0, termination: 1, compromisedKeys: 2, changeOfKeys: 3}
+export const BLS_SIGNATURE_SIZE = 96
 
 // Dash Core's strMessageMagic, kept from its DarkCoin days.
 export const MESSAGE_MAGIC = 'DarkCoin Signed Message:\n'

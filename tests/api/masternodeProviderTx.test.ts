@@ -4,6 +4,8 @@ import {concatBytes, hexToBytes} from '@noble/hashes/utils.js'
 import {Script, Transaction, utils as sdkUtils} from 'dash-core-sdk'
 import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
 import {ProUpRegTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRegTx.js'
+import {ProUpRevTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRevTx.js'
+import {ProUpServTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpServTx.js'
 import {bls12_381} from '@noble/curves/bls12-381.js'
 import {bytesToHex} from '@noble/hashes/utils.js'
 import {KeyPairController} from 'dash-platform-sdk/src/keyPair/index.js'
@@ -19,6 +21,7 @@ import {
   MasternodeKeys,
   MasternodeRegistrarUpdate,
   MasternodeRegistration,
+  MasternodeServiceUpdate,
   NetworkMasternode,
 } from '../../src/main/src/types/Masternode'
 import {UTXO} from '../../src/main/src/types/UTXO'
@@ -241,6 +244,75 @@ describe('MasternodeService provider transactions', () => {
     it('refuses a payout to the voting key', async () => {
       await expect(masternodes.updateRegistrar(walletId, PRO_TX_HASH, {...KEEP, payoutAddress: key('voting', 0)}, PASSWORD))
         .rejects.toThrow('may not pay the owner or voting key')
+    })
+  })
+  describe('operator transactions', () => {
+    const PRO_TX_HASH = '33'.repeat(32)
+    const SERVICE: MasternodeServiceUpdate = {
+      serviceAddress: '203.0.113.9:19999', operatorPayoutAddress: null, platformNodeId: null, platformP2PPort: null, platformHttpPort: null,
+    }
+
+    const operated = (fields: Partial<NetworkMasternode> = {}): NetworkMasternode => node(PRO_TX_HASH, {
+      collateralTxid: 'cc'.repeat(32), collateralAddress: owned[0], operatorPublicKey: key('operator', 0), ...fields,
+    })
+
+    const signedByOperator = (payload: ProUpServTx | ProUpRevTx): boolean => {
+      const {longSignatures} = bls12_381
+      return longSignatures.verify(hexToBytes(payload.payloadSig), longSignatures.hash(payloadDigest(payload)), hexToBytes(key('operator', 0)))
+    }
+
+    const lastBroadcast = (): Transaction => Transaction.fromHex(broadcast.at(-1)!)
+
+    it('restates a Regular service at v2, signed by the operator key', async () => {
+      list = [operated()]
+      await masternodes.updateService(walletId, PRO_TX_HASH, SERVICE, PASSWORD)
+      const tx = lastBroadcast()
+      const payload = tx.extraPayload as ProUpServTx
+
+      expect(tx.type).toBe(2)
+      expect([payload.version, payload.type, payload.proTxHash]).toEqual([2, 0, PRO_TX_HASH])
+      expect([payload.ipAddress, payload.port]).toEqual(['203.0.113.9', 19999])
+      expect(payload.scriptOperatorPayout.bytes()).toHaveLength(0)
+      expect(signedByOperator(payload)).toBe(true)
+      expect(tx.inputs.map(input => input.txId)).toEqual(['aa'.repeat(32)])
+    })
+
+    it('puts an Evo service and its platform endpoints in v3 netInfo on testnet', async () => {
+      utxos[0] = utxo(owned[0], 4_000n * DASH, 'cc'.repeat(32))
+      list = [operated({type: 'Evo'})]
+      await masternodes.updateService(walletId, PRO_TX_HASH, {
+        ...SERVICE, platformNodeId: EVO_FIELDS.platformNodeId, platformP2PPort: 36656, platformHttpPort: 1443,
+      }, PASSWORD)
+      const payload = lastBroadcast().extraPayload as ProUpServTx
+
+      expect([payload.version, payload.type, payload.platformNodeID]).toEqual([3, 1, EVO_FIELDS.platformNodeId])
+      expect(payload.netInfo!.getPrimary(1)).toBe('203.0.113.9:36656')
+      expect(payload.netInfo!.getPrimary(2)).toBe('203.0.113.9:1443')
+      expect(signedByOperator(payload)).toBe(true)
+    })
+
+    it('refuses a node whose operator key the wallet does not derive', async () => {
+      list = [operated({operatorPublicKey: 'ff'.repeat(48), ownerAddress: key('owner', 0)})]
+      await expect(masternodes.updateService(walletId, PRO_TX_HASH, SERVICE, PASSWORD)).rejects.toThrow('operator key')
+      await expect(masternodes.revoke(walletId, PRO_TX_HASH, 'termination', PASSWORD)).rejects.toThrow('operator key')
+      expect(broadcast).toEqual([])
+    })
+
+    it('revokes with the reason code, signed by the operator key', async () => {
+      list = [operated()]
+      await masternodes.revoke(walletId, PRO_TX_HASH, 'changeOfKeys', PASSWORD)
+      const tx = lastBroadcast()
+      const payload = tx.extraPayload as ProUpRevTx
+
+      expect(tx.type).toBe(4)
+      expect([payload.version, payload.proTxHash, payload.reason]).toEqual([2, PRO_TX_HASH, 3])
+      expect(payload.inputsHash).toBe(providerInputsHash(tx.inputs))
+      expect(signedByOperator(payload)).toBe(true)
+    })
+
+    it('refuses an unknown revocation reason', async () => {
+      list = [operated()]
+      await expect(masternodes.revoke(walletId, PRO_TX_HASH, 'bored' as never, PASSWORD)).rejects.toThrow('Unknown revocation reason')
     })
   })
 })

@@ -1,5 +1,5 @@
 import type {WalletProvider} from '../providers/WalletProvider'
-import type {ProviderPayload, TransferInput} from './CoreTransaction'
+import type {ProviderPayload, ProviderTxSigner} from './CoreTransaction'
 import type {GroupedAddresses} from './GroupedAddresses'
 import type {Network} from './Network'
 import type {UTXO} from './UTXO'
@@ -10,21 +10,34 @@ export type MasternodeKeyChain = 'owner' | 'voting' | 'operator'
 export type MasternodeKeyFilter = MasternodeKeyChain | 'collateral'
 export type MasternodeType = 'Regular' | 'Evo'
 
+// An Evo's alone, null on a Regular node. platformNodeId is the Tenderdash node
+// id, whose key the node generated.
+export interface MasternodePlatformFields {
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+}
+
 // What the caller decides about a registration; the owner, voting and operator
 // keys are the wallet's own. operatorReward is in hundredths of a percent, as
 // ProRegTx carries it. A null serviceAddress registers without one, to be set
-// later by the operator's ProUpServTx. The platform fields are an Evo's alone;
-// platformNodeId is the Tenderdash node id, whose key the node generated.
-export interface MasternodeRegistration {
+// later by the operator's ProUpServTx.
+export interface MasternodeRegistration extends MasternodePlatformFields {
   type: MasternodeType
   collateral: {txid: string; vout: number}
   serviceAddress: string | null
   payoutAddress: string
   operatorReward: number
-  platformNodeId: string | null
-  platformP2PPort: number | null
-  platformHttpPort: number | null
 }
+
+// A ProUpServTx restates the whole service, so every field is the new value.
+// operatorPayoutAddress must stay null on a node registered with no operator reward.
+export interface MasternodeServiceUpdate extends MasternodePlatformFields {
+  serviceAddress: string
+  operatorPayoutAddress: string | null
+}
+
+export type RevocationReason = 'notSpecified' | 'termination' | 'compromisedKeys' | 'changeOfKeys'
 
 // The wallet's provider keys at the indexes a registration takes, in the form
 // ProRegTx carries them.
@@ -62,7 +75,7 @@ export interface ProviderTxContext {
 // spendable is what the fee may come from, before the stored collaterals are taken out.
 export interface ProviderTxPlan {
   payload: ProviderPayload
-  signer: Pick<TransferInput, 'derivationPath' | 'address'>
+  signer: ProviderTxSigner
   spendable: UTXO[]
 }
 

@@ -128,6 +128,21 @@ interface MasternodeRegistrarUpdateDTO {
   payoutAddress: string | null
 }
 
+// Mirrors MasternodeServiceUpdate and RevocationReason in
+// src/main/src/types/Masternode. Signed by the operator key, so only for a node
+// whose operator key the wallet derives. A ProUpServTx restates the whole
+// service; the platform fields are an Evo's alone. Revoking PoSe-bans the node
+// until the owner sets a new operator key.
+interface MasternodeServiceUpdateDTO {
+  serviceAddress: string
+  operatorPayoutAddress: string | null
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+}
+
+type RevocationReasonDTO = 'notSpecified' | 'termination' | 'compromisedKeys' | 'changeOfKeys'
+
 interface MasternodeUpdateResultDTO {
   txid: string
   fee: bigint
@@ -232,6 +247,8 @@ declare global {
       removeMasternodeKey: (walletId: string, key: ImportedMasternodeKeyDTO) => Promise<void>
       registerMasternode: (walletId: string, registration: MasternodeRegistrationDTO, password: string) => Promise<MasternodeRegistrationResultDTO>
       updateMasternodeRegistrar: (walletId: string, proTxHash: string, update: MasternodeRegistrarUpdateDTO, password: string) => Promise<MasternodeUpdateResultDTO>
+      updateMasternodeService: (walletId: string, proTxHash: string, update: MasternodeServiceUpdateDTO, password: string) => Promise<MasternodeUpdateResultDTO>
+      revokeMasternode: (walletId: string, proTxHash: string, reason: RevocationReasonDTO, password: string) => Promise<MasternodeUpdateResultDTO>
       getUsernames: (walletId: string) => Promise<unknown>
       refreshDashPay: (walletId: string) => Promise<void>
       registerUsername: (walletId: string, identifier: string, label: string, password: string) => Promise<unknown>

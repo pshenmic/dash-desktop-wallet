@@ -5,7 +5,7 @@ import {MasternodeDAO} from '../../database/MasternodeDAO'
 import {MasternodeKeyDAO} from '../../database/MasternodeKeyDAO'
 import {WalletProviderFactory} from '../../providers/WalletProviderFactory'
 import {MASTERNODE_KEY_CHAINS, MASTERNODE_KEY_WINDOW} from '../../constants/addresses'
-import {DUFFS_PER_DASH, DUST_THRESHOLD_DUFFS, MASTERNODE_COLLATERAL_DUFFS} from '../../constants/chain'
+import {DUFFS_PER_DASH, DUST_THRESHOLD_DUFFS, MASTERNODE_COLLATERAL_DUFFS, REVOCATION_REASON_CODE} from '../../constants/chain'
 import {Preferences} from '../../preferences'
 import {
   ImportedMasternodeKey,
@@ -14,11 +14,13 @@ import {
   MasternodeRegistrarUpdate,
   MasternodeRegistration,
   MasternodeRegistrationResult,
+  MasternodeServiceUpdate,
   MasternodeUpdateResult,
   NetworkMasternode,
   OperatorKeyChoice,
   ProviderTxContext,
   ProviderTxPlan,
+  RevocationReason,
 } from '../../types/Masternode'
 import {memoryWindowStore, runAddressWindow} from '../../utils/addressWindow'
 import {coreFeeDuffsFor} from '../../utils/coreFeeRate'
@@ -29,11 +31,12 @@ import {
   collateralUtxos,
   masternodeFilterValues,
   matchMasternodeKeys,
+  operatedNode,
   ownedMasternodes,
   unusedKeyIndex,
   withoutCollaterals,
 } from '../../utils/masternodes'
-import {providerPayloadBytes, requireRegistrationFields} from '../../utils/providerTx'
+import {providerPayloadBytes, requirePlatformFields, requireRegistrationFields} from '../../utils/providerTx'
 import {addressPaths, selectTransferInputs} from '../../utils/transferInputs'
 import {withUnlockedWallet} from '../../utils/walletSeed'
 import {CoreTransactionService} from './CoreTransactionService'
@@ -128,7 +131,7 @@ export class MasternodeService {
           votingKeyId: keyId('voting'),
           operatorPublicKey: derived('operator'),
         }, network),
-        signer: {derivationPath: collateralPath, address: coin.address},
+        signer: {kind: 'address', derivationPath: collateralPath, address: coin.address},
         spendable: utxos.filter(utxo => utxo !== coin),
       }
     })
@@ -156,10 +159,36 @@ export class MasternodeService {
 
       return {
         payload: this.coreTransactionService.proUpRegPayload(proTxHash, await this.operatorKey(node, update.operator, context), votingAddress, payoutAddress, network),
-        signer: owner,
+        signer: {kind: 'address', derivationPath: owner.derivationPath, address: owner.address},
         spendable: utxos,
       }
     })
+  }
+
+  // The operator signs, so only a node whose operator key the wallet derives;
+  // one run by a hosting provider is updated by that provider.
+  async updateService(walletId: string, proTxHash: string, update: MasternodeServiceUpdate, password: string): Promise<MasternodeUpdateResult> {
+    return this.sendProviderTx(walletId, password, async ({network, owned, utxos}) => {
+      const node = operatedNode(owned, proTxHash)
+      const type = node.type === 'Evo' ? 'Evo' : 'Regular'
+      requirePlatformFields(type, update)
+      return {
+        payload: this.coreTransactionService.proUpServPayload(type, proTxHash, update, network),
+        signer: {kind: 'operator', index: node.operatorKeyIndex},
+        spendable: utxos,
+      }
+    })
+  }
+
+  // Revoking resets the node's service and PoSe-bans it; only the owner's
+  // ProUpRegTx with a new operator key brings it back.
+  async revoke(walletId: string, proTxHash: string, reason: RevocationReason, password: string): Promise<MasternodeUpdateResult> {
+    if (!(reason in REVOCATION_REASON_CODE)) throw new Error(`Unknown revocation reason: ${reason}`)
+    return this.sendProviderTx(walletId, password, async ({owned, utxos}) => ({
+      payload: this.coreTransactionService.proUpRevPayload(proTxHash, reason),
+      signer: {kind: 'operator', index: operatedNode(owned, proTxHash).operatorKeyIndex},
+      spendable: utxos,
+    }))
   }
 
   // Operator keys are unique across the list, so an external one is checked

@@ -5,12 +5,17 @@ import {bytesToHex, concatBytes, hexToBytes} from '@noble/hashes/utils.js'
 import {PrivateKey, Transaction, utils as sdkUtils} from 'dash-core-sdk'
 import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
 import {ProUpRegTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRegTx.js'
+import {ProUpServTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpServTx.js'
+import {CoreTransactionService} from '../../src/main/src/services/core/CoreTransactionService'
 import {KeyPairController} from 'dash-platform-sdk/src/keyPair/index.js'
+import {getCompactVariableSize} from 'dash-core-sdk/src/utils.js'
 import {basicOperatorKey, legacyG1} from '../../src/main/src/utils/masternodeKeys'
 import {
   payloadDigest,
   proRegSignString,
   providerInputsHash,
+  providerPayloadBytes,
+  signBls,
   signedMessageHash,
   signMessage,
 } from '../../src/main/src/utils/providerTx'
@@ -43,6 +48,13 @@ describe.each([['v1 Regular', REGULAR], ['v2 Evo', EVO]])('%s ProRegTx', (_, vec
   const tx = Transaction.fromHex(vector.hex)
   const payload = tx.extraPayload as ProRegTX
 
+  it('hashes and prices the unsigned payload as it went out signed', () => {
+    const unsigned = Object.assign(Object.create(Object.getPrototypeOf(payload)), payload, {payloadSig: ''})
+    const signed = payload.bytes().length
+    expect(payloadDigest(unsigned)).toEqual(payloadDigest(payload))
+    expect(providerPayloadBytes(unsigned)).toBe(signed + getCompactVariableSize(signed))
+  })
+
   it('hashes its inputs into inputsHash', () => {
     expect(providerInputsHash(tx.inputs.map(input => ({txId: input.txId, vOut: input.vOut})))).toBe(payload.inputsHash)
   })
@@ -65,6 +77,13 @@ describe('signMessage', () => {
 describe.each(UPDATES)('ProUpRegTx %#', ({hex, keyIdOwner}) => {
   const tx = Transaction.fromHex(hex)
   const payload = tx.extraPayload as ProUpRegTx
+
+  it('hashes and prices the unsigned payload as it went out signed', () => {
+    const unsigned = Object.assign(Object.create(Object.getPrototypeOf(payload)), payload, {payloadSig: ''})
+    const signed = payload.bytes().length
+    expect(payloadDigest(unsigned)).toEqual(payloadDigest(payload))
+    expect(providerPayloadBytes(unsigned)).toBe(signed + getCompactVariableSize(signed))
+  })
 
   it('hashes its inputs into inputsHash', () => {
     expect(providerInputsHash(tx.inputs)).toBe(payload.inputsHash)
@@ -96,5 +115,73 @@ describe('basicOperatorKey', () => {
 
   it('refuses a key either encoding could have produced', () => {
     expect(() => basicOperatorKey(bytesToHex(keyWithSign(false)))).toThrow('either BLS encoding')
+  })
+})
+
+// Testnet ProUpServTxs (Regular and Evo, all v3 since v24 is active there) and
+// ProUpRevTxs, with the operator key each was signed by.
+const OPERATOR_SIGNED = [
+  {txid: '744dd6ad', operatorPublicKey: 'adad41e17d64581f58fcbc8dff2845a9a10c2e57db782dc5fd41a175729e59048dc3fb82d9f0620eeaac3eacadced01a',
+    hex: '0300020001d455c2442d52a70e1020f4c8d9d4703b8ac0f1de8c07209ddcc94d9d91c8407b000000006a47304402203e281a24acc3a6cbebfc34f2438f465ba74f924ad15b590c2b6816d317e45fbc02201b56d995828436eff75a00526445ed3d88ffd4c5dd19db93730b7c6c5e8c2724012103373b1a2246e5c28ce99c49a927fa3f8823bb5e26d9b037ff1069dcae3ba4cf4afeffffff019480c35f000000001976a91418d05f474a776383ac3aebbfb978ae29da144ed088ac00000000b20300000082607466905f4091ec6db6df160559605139b246282485a548f4ea38255da1e6010100010101044e1146af4dbb005284d2886455107aa20f1a53166d32f30834a659c5df036630ec46499edc3935a6fda8e649ccd68bfeacc58cf348637ae92f31372dd5637c378cd0bba0012c664d1ad592047b53914b7d9cb34e6181ed0e4a76ac95c6f83969421f9c05086c06c0e838a96d004d21c2367e15c3c99d9bb1e8915012cc7ed65b7df2ad39674fea'},
+  {txid: '7b40c891', operatorPublicKey: 'ad99da4a07542b221fa6f2335ab2a1071cad6f2dbae230fe82a619b07d039b6270632272ea7269dc5c8241eef139f57c',
+    hex: '030002000182607466905f4091ec6db6df160559605139b246282485a548f4ea38255da1e6000000006a47304402203a2c5d6e018ea40f8802821e532d0a98671a2ffc3cb89cc756b688fda92b24c00220594c926e883e3d252e4f8a0b665ec55951253f1992ee361913b5554947fe713a012103373b1a2246e5c28ce99c49a927fa3f8823bb5e26d9b037ff1069dcae3ba4cf4afeffffff011082c35f000000001976a91418d05f474a776383ac3aebbfb978ae29da144ed088ac00000000dc03000100800b5c82dde5ef1694b17d0a93dfd03ca8a49c1c31512457e78396f79fa23c7601030001010104a223f3554e1d0101010104a223f3558f300201010104a223f35505a30051fbafb6fee2545980ea4759dda3032a15562ac2730c4080490852c5e983447fc92e0ebc2cf6df05de73b3a9821e9c590420d033a7c591322f3285b9073d5733741306cf9174757ecfb4bc49355545b359ffb0086fea231bf214cb7842ad6c1f8bd991d103be60f926d71a29cf632bab1ee3ecc99a79556842b67cc966a70ef3fca6e4deb7023f6f126592ae1ee24c2b8dff75a3'},
+  {txid: '92a94878', operatorPublicKey: 'b6693296894820bdc3c0ae76f357e544847f10a68f0046f53745370dbe861d57e194ddaf7ff7d5e73cc3f240515c448e',
+    hex: '0300020001559c0f3b03af9d416a2e72eb749547d77169cb04fcfaeb0a14057eabc88d24ed000000006a47304402205060653ff31da446735a21845c40feb2d0627f6791e43d35fc605ea9a134fa23022020107839f5a9e08e05db66c87aa56b690ace0a50ea55adaf05814e0e5284425f0121024cc4973b7f20a9282deb930af896892be43b2b462a30c98b9ff9f8a2622d88fefeffffff010c8ef405000000001976a91454331ff5356c8a834bc40ec241aacfae8bf5c54e88ac00000000dc030001004abd3d9b76a34d428159456a2e9722036c2de8da9ef138e7e191d73dd81a74390103000101010444437a164e1f010101010444437a168f30020101010444437a1605a300791faa35b83b603c754a39d2a7c9f12d7e33945ca2137f3c924e9ee7e8f30d76b4563e764e296ef17cbb808ca3ed72bcb9f37bec98b7937c11607288938362cfdd5036d01c2f25c7c9a286360590f0b76b902e82484d72a7a93f37becb7d670ed4b1e95a0fe7eeae72e9361ab2abc2816b1d862fc9def98dab3ccc54eb82bca8c42ba37593fb0cf76008ae15635da4c612020c26'},
+  {txid: 'e65c3539', operatorPublicKey: 'b1f9052f62561db112ddca7df3d914d546866b130124eccb2ae1e8419563e51f239b2efec3d1b3fd388072610939d694',
+    hex: '0300020001df9f071cb742b9c0fd882f87679eb566625b355eaf3848a9b07449f6ba9dc8b6000000006a473044022068c796010321a59a5b48743ec6355fbc1c0ebe8d82a51afd117c765fb40b255b02204babad07605e54e7aa8080176da3230aa768c6b6ce571434dde0c737820356c3012102b11bf0c233c8ffca382542a37a981fead1d114bc8dfd2779727b08b864c910a3feffffff01deddf505000000001976a91447eb59e9a49b3794acf272f1bfff17f228291daf88ac00000000b203000000aad381e4314f1630559db598be088232973e6c9ab61e7da181272675fa70ee720101000101010444437a434e1f00b853365843057353b98b30412d08d1e5c58cbbbc46b44c5ab86c08f54e84da409734538b10302c781370765f1ebff8be6ea4f3d68b311e56c20a843558d6fa37374908c1d041c7ca748b2fcf0a4d68e3147fc4333931a79a1f9738afefaa76d35c7ae4809c4ac0d0aaace8f79e1b6c8b904553430bc24628470235aaa813d25d'},
+  {txid: '5b22bfff', operatorPublicKey: '99c825dac0553e4ab11a441f9ceae265254303d9c8ad50c4cfc36211449613d7269307c7d94a6903e0818a25e6a5607f',
+    hex: '03000400015498415f488cd005f5c4a0d44afa056054f0563fa2ef282dc8eaa33772fff4ba000000006a47304402206d187174c4e0ac2d496c1dedd098af84b998979e9538d762cd5d812899b7961d022054bda6dbc2fb8fc3c70766bcf0aabb1fcfe777d4a5fc0feacb85159787c98d8101210389c2bc8088d56da1f940db47a0c25ba3fb53ffb540a7e347bd6b6275d4ab4bcffeffffff01f31e023b000000001976a9144e0c37c67b0bf8d9cd52da576437a92379dfb40488ac00000000a40300e31fadad3c2dd7247ce1aa7efba75dcfc1c4bcc2a14a9a71182f51afe9f3bece00005f203c3b95b819eb5c6a0550bd3074db8d16adbcc9a4a1a349a9eb35bf585eec8a951f933698a7d6544addd7394dcb83244d02e2f1982c490cc2bb7b7fc377e1c3486daf6b6455c648d9c76f4a9bb91502ee34760c7678724bf98aeaa7941606453657a718183ffad86ab3b48105762c1b478f933cd7a300051a09be8b661f06'},
+  {txid: 'a0477146', operatorPublicKey: '8699a2bd842a175191e534503bd9732d28f8d3580a1d3f802c6e45ec33976942f5a5753d9cff216e4ca8e490b69abe0c',
+    hex: '030004000176e01d2dbf0b6ba5e7a61bcd45d6df112e9472cb7c7ac220b4551504abd99ac8000000006a47304402200d06f373a2b9133ca2816a7c047bf4316300d8d13ad002829345f6c145afae9c02203aab1c8ac4bcfe10ac42fcd040eee4c789b9190eb3743b5306ce9ccb8a86999901210389c2bc8088d56da1f940db47a0c25ba3fb53ffb540a7e347bd6b6275d4ab4bcffeffffff018317023b000000001976a9144e0c37c67b0bf8d9cd52da576437a92379dfb40488ac00000000a40300499f136ec3e87499770c98e991b6084822d3ee78472e39f1d8ebca17ad3ceb5a0000c126fb5552fa4be0d7dd02dc685ef80aeb42c9bd4f6f1ab59ede1d64e69b5d3b95ba4190ac6e7cd13b6c54f52912ccfaae7d46fd40ac32de59b4d9906b3e4628273dfaf4145ee619c58a5a5697a08c7b15458291e476d96b8ccaefb68a68a27eb78d57578895948a29ea1d6a4d0e6e520db52d3c4f82f2cfc84cc561e98f77af'},
+]
+
+const verifyBls = (signature: string, hash: Uint8Array, publicKey: string): boolean => {
+  const {longSignatures} = bls12_381
+  return longSignatures.verify(hexToBytes(signature), longSignatures.hash(hash), hexToBytes(publicKey))
+}
+
+describe.each(OPERATOR_SIGNED)('operator-signed $txid', ({hex, operatorPublicKey}) => {
+  const tx = Transaction.fromHex(hex)
+  const payload = tx.extraPayload as ProUpServTx
+
+  it('hashes its inputs into inputsHash', () => {
+    expect(providerInputsHash(tx.inputs)).toBe(payload.inputsHash)
+  })
+
+  it('was BLS-signed over the payload hash by the operator key', () => {
+    expect(verifyBls(payload.payloadSig, payloadDigest(payload), operatorPublicKey)).toBe(true)
+  })
+
+  const unsigned = Object.assign(Object.create(Object.getPrototypeOf(payload)), payload, {payloadSig: ''})
+
+  it('hashes and prices the unsigned payload as it went out signed', () => {
+    const signed = payload.bytes().length
+    expect(payloadDigest(unsigned)).toEqual(payloadDigest(payload))
+    expect(providerPayloadBytes(unsigned)).toBe(signed + getCompactVariableSize(signed))
+  })
+})
+
+describe('proUpServPayload', () => {
+  it('rebuilds a testnet Evo service update byte for byte', () => {
+    const mined = Transaction.fromHex(OPERATOR_SIGNED[1].hex).extraPayload as ProUpServTx
+    const built = new CoreTransactionService().proUpServPayload('Evo', mined.proTxHash, {
+      serviceAddress: '162.35.243.85:19997',
+      operatorPayoutAddress: null,
+      platformNodeId: mined.platformNodeID!,
+      platformP2PPort: 36656,
+      platformHttpPort: 1443,
+    }, 'testnet')
+    built.inputsHash = mined.inputsHash
+    built.payloadSig = mined.payloadSig
+    expect(bytesToHex(built.bytes())).toBe(bytesToHex(mined.bytes()))
+  })
+})
+
+describe('signBls', () => {
+  it('signs in the scheme the mined operator signatures verify under', () => {
+    const secret = new Uint8Array(32).fill(9)
+    const publicKey = bytesToHex(bls12_381.longSignatures.getPublicKey(secret).toBytes(true))
+    const hash = new Uint8Array(32).fill(1)
+    expect(verifyBls(bytesToHex(signBls(hash, secret)), hash, publicKey)).toBe(true)
   })
 })
