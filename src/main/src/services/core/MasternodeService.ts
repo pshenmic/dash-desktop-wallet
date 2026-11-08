@@ -1,10 +1,22 @@
+import {utils as sdkUtils} from 'dash-core-sdk'
+import {AddressDAO} from '../../database/AddressDAO'
 import {WalletDAO} from '../../database/WalletDAO'
 import {MasternodeDAO} from '../../database/MasternodeDAO'
 import {MasternodeKeyDAO} from '../../database/MasternodeKeyDAO'
 import {WalletProviderFactory} from '../../providers/WalletProviderFactory'
 import {MASTERNODE_KEY_CHAINS, MASTERNODE_KEY_WINDOW} from '../../constants/addresses'
-import {ImportedMasternodeKey, Masternode, MasternodeKeyChain, NetworkMasternode} from '../../types/Masternode'
+import {DUFFS_PER_DASH, DUST_THRESHOLD_DUFFS, MASTERNODE_COLLATERAL_DUFFS} from '../../constants/chain'
+import {Preferences} from '../../preferences'
+import {
+  ImportedMasternodeKey,
+  Masternode,
+  MasternodeKeyChain,
+  MasternodeRegistration,
+  MasternodeRegistrationResult,
+  NetworkMasternode,
+} from '../../types/Masternode'
 import {memoryWindowStore, runAddressWindow} from '../../utils/addressWindow'
+import {coreFeeDuffsFor} from '../../utils/coreFeeRate'
 import {masternodeKeyDeriver, masternodePublicKey} from '../../utils/masternodeKeys'
 import {
   carriesKey,
@@ -13,7 +25,14 @@ import {
   masternodeFilterValues,
   matchMasternodeKeys,
   ownedMasternodes,
+  unusedKeyIndex,
+  withoutCollaterals,
 } from '../../utils/masternodes'
+import {proRegPayloadBytes, requireRegistrationFields} from '../../utils/proRegTx'
+import {addressPaths, selectTransferInputs} from '../../utils/transferInputs'
+import {withUnlockedWallet} from '../../utils/walletSeed'
+import {CoreTransactionService} from './CoreTransactionService'
+import {WalletSyncService} from './WalletSyncService'
 import {requireWallet} from '../../utils/requireWallet'
 import {bytesToHex} from '@noble/hashes/utils.js'
 import createCoreClient from 'dash-core-sdk/src/createCoreClient.js'
@@ -28,14 +47,31 @@ export class MasternodeService {
   private masternodeKeyDAO: MasternodeKeyDAO
   private masternodeDAO: MasternodeDAO
   private providers: WalletProviderFactory
+  private addressDAO: AddressDAO
+  private coreTransactionService: CoreTransactionService
+  private walletSyncService: WalletSyncService
+  private preferences: Preferences
   // Live network state, so only the last run's answer is kept, in memory.
   private listed = new Map<string, Masternode[]>()
 
-  constructor(walletDAO: WalletDAO, masternodeKeyDAO: MasternodeKeyDAO, masternodeDAO: MasternodeDAO, providers: WalletProviderFactory) {
+  constructor(
+    walletDAO: WalletDAO,
+    masternodeKeyDAO: MasternodeKeyDAO,
+    masternodeDAO: MasternodeDAO,
+    providers: WalletProviderFactory,
+    addressDAO: AddressDAO,
+    coreTransactionService: CoreTransactionService,
+    walletSyncService: WalletSyncService,
+    preferences: Preferences,
+  ) {
     this.walletDAO = walletDAO
     this.masternodeKeyDAO = masternodeKeyDAO
     this.masternodeDAO = masternodeDAO
     this.providers = providers
+    this.addressDAO = addressDAO
+    this.coreTransactionService = coreTransactionService
+    this.walletSyncService = walletSyncService
+    this.preferences = preferences
   }
 
   // null until the first discovery run since startup has answered.
@@ -62,6 +98,73 @@ export class MasternodeService {
   async removeKey(walletId: string, key: ImportedMasternodeKey): Promise<void> {
     await this.masternodeKeyDAO.removeImportedKey(walletId, key)
     await this.discover(walletId)
+  }
+
+  // A registration still unmined is in no list, so one made before it is mined
+  // takes the same keys and is refused by consensus as a duplicate.
+  async register(walletId: string, registration: MasternodeRegistration, password: string): Promise<MasternodeRegistrationResult> {
+    requireRegistrationFields(registration)
+    if (!this.listed.has(walletId)) await this.discover(walletId)
+    const owned = this.listed.get(walletId)
+    if (owned == null) throw new Error('The masternode list has not arrived yet')
+    const keys = await this.masternodeKeyDAO.getKeys(walletId)
+    if (keys == null) throw new Error('Masternode keys are derived at the next password check')
+
+    const {tx, inputTotal} = await withUnlockedWallet(this.walletDAO, walletId, password, async ({wallet, seed}) => {
+      const {network} = wallet
+      const provider = this.providers.forWallet(walletId, network)
+      await provider.ensureReady()
+      const [grouped, utxos, collaterals] = await Promise.all([
+        this.addressDAO.getAddressesByWalletId(walletId),
+        provider.getWalletUtxos(),
+        this.masternodeDAO.getCollaterals(walletId),
+      ])
+
+      const {txid, vout} = registration.collateral
+      const coin = utxos.find(({txId, vOut}) => txId === txid && vOut === vout)
+      if (coin == null) throw new Error('The collateral is not an unspent coin of this wallet')
+      if (coin.satoshis !== MASTERNODE_COLLATERAL_DUFFS[registration.type]) {
+        throw new Error(`A ${registration.type} masternode's collateral is exactly ${MASTERNODE_COLLATERAL_DUFFS[registration.type] / DUFFS_PER_DASH} DASH`)
+      }
+      if (collaterals.some(row => row.txid === txid && row.vout === vout)) throw new Error('This coin is already a masternode collateral')
+      const collateralPath = addressPaths(grouped).get(coin.address)
+      if (collateralPath == null) throw new Error(`No derivation path for address ${coin.address}`)
+
+      const derived = (chain: MasternodeKeyChain): string => masternodeKeyDeriver(keys, network, chain).derive(unusedKeyIndex(owned, chain)).address
+      const keyId = (chain: MasternodeKeyChain): string => bytesToHex(sdkUtils.addressToPublicKeyHash(derived(chain)))
+      const payload = this.coreTransactionService.proRegPayload(registration, {
+        ownerKeyId: keyId('owner'),
+        votingKeyId: keyId('voting'),
+        operatorPublicKey: derived('operator'),
+      }, network)
+
+      // The change is the only output, so it is what has to clear dust.
+      const {coreFeeMultiplier} = this.preferences.general
+      const {transferInputs, inputTotal, changeAddress, feeDuffs} = selectTransferInputs(
+        grouped,
+        withoutCollaterals(utxos.filter(utxo => utxo !== coin), collaterals),
+        DUST_THRESHOLD_DUFFS,
+        inputsCount => coreFeeDuffsFor(coreFeeMultiplier, inputsCount, 1, false, proRegPayloadBytes(payload)),
+      )
+      const tx = await this.coreTransactionService.buildSignedProRegTx({
+        payload,
+        collateral: {txId: coin.txId, vOut: coin.vOut, script: coin.script, derivationPath: collateralPath, address: coin.address},
+        inputs: transferInputs,
+        changeAddress,
+        inputTotal,
+        feeDuffs,
+        seed,
+        network,
+      })
+      return {tx, inputTotal}
+    })
+
+    const broadcast = await this.walletSyncService.broadcastTransaction(tx.hex())
+    return {
+      proTxHash: broadcast.txid,
+      fee: inputTotal - tx.outputs.reduce((sum, output) => sum + output.satoshis, 0n),
+      peersAcked: broadcast.peersDelivered.length,
+    }
   }
 
   // Leaves the stored collaterals as they are when the source has no masternode

@@ -1,11 +1,21 @@
+import {MasternodeType} from '../types/Masternode'
+
 export const SEQUENCE_FINAL = 0xffffffff
 
 export const DUFFS_PER_DASH = 100_000_000n
 
 export const DUST_THRESHOLD_DUFFS = 546n
 
-// Regular and Evo masternode collateral.
-export const MASTERNODE_COLLATERAL_DUFFS = [1_000n * DUFFS_PER_DASH, 4_000n * DUFFS_PER_DASH]
+export const MASTERNODE_COLLATERAL_DUFFS: Record<MasternodeType, bigint> = {Regular: 1_000n * DUFFS_PER_DASH, Evo: 4_000n * DUFFS_PER_DASH}
+// nType of a ProTx.
+export const MASTERNODE_TYPE_CODE: Record<MasternodeType, number> = {Regular: 0, Evo: 1}
+// Basic-scheme BLS. Valid before and after v24; v3 (ExtNetInfo) only after it.
+export const PROREG_TX_VERSION = 2
+// 100%, in the hundredths of a percent ProRegTx carries.
+export const MAX_OPERATOR_REWARD = 10_000
+
+// Dash Core's strMessageMagic, kept from its DarkCoin days.
+export const MESSAGE_MAGIC = 'DarkCoin Signed Message:\n'
 
 // Not consensus: a standard transaction may not exceed 100 kB, and at 34 bytes
 // per output this keeps a send well inside what peers relay.

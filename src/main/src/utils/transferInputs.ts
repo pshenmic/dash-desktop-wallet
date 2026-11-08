@@ -78,6 +78,10 @@ export function selectableTransferUtxos(
     }))
 }
 
+export function addressPaths(grouped: GroupedAddresses): Map<string, string> {
+  return new Map([...grouped.receiving, ...grouped.change, ...grouped.dashPay ?? []].map(a => [a.address, a.derivationPath]))
+}
+
 export function selectTransferInputs(
   grouped: GroupedAddresses,
   utxos: UTXO[],
@@ -86,7 +90,7 @@ export function selectTransferInputs(
   source?: CoreSpendSource,
   changeTo?: string,
 ): TransferInputSelection {
-  const pathByAddress = new Map([...grouped.receiving, ...grouped.change, ...grouped.dashPay ?? []].map(a => [a.address, a.derivationPath]))
+  const pathByAddress = addressPaths(grouped)
 
   const selectable = selectableTransferUtxos(grouped, utxos, source)
 

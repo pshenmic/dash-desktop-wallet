@@ -31,6 +31,7 @@ import { GetMasternodesHandler } from './api/masternodes/getMasternodes'
 import { GetImportedMasternodeKeysHandler } from './api/masternodes/getImportedMasternodeKeys'
 import { ImportMasternodeKeyHandler } from './api/masternodes/importMasternodeKey'
 import { RemoveMasternodeKeyHandler } from './api/masternodes/removeMasternodeKey'
+import { RegisterMasternodeHandler } from './api/masternodes/registerMasternode'
 import { GetUsernamesHandler } from './api/wallet/getUsernames'
 import { RefreshDashPayHandler } from './api/wallet/refreshDashPay'
 import { RegisterUsernameHandler } from './api/wallet/registerUsername'
@@ -203,6 +204,7 @@ export class WalletBackend {
     registerHandler('getImportedMasternodeKeys', new GetImportedMasternodeKeysHandler(this.masternodeService).handle)
     registerHandler('importMasternodeKey', new ImportMasternodeKeyHandler(this.masternodeService).handle)
     registerHandler('removeMasternodeKey', new RemoveMasternodeKeyHandler(this.masternodeService).handle)
+    registerHandler('registerMasternode', new RegisterMasternodeHandler(this.masternodeService).handle)
     registerHandler('getUsernames', new GetUsernamesHandler(this.identityService).handle)
     registerHandler('refreshDashPay', new RefreshDashPayHandler(this.walletService).handle)
     registerHandler('registerUsername', new RegisterUsernameHandler(this.identityService).handle)
@@ -339,7 +341,7 @@ export class WalletBackend {
     this.coreDiscoveryService = new CoreDiscoveryService(walletDAO, addressDAO, identityDAO, dashPayCache, transactionDAO, this.walletSyncService, providers)
     this.coreLockService = new CoreLockService(walletDAO, addressDAO, this.walletSyncService, coreTransactionService, providers, preferences)
     const masternodeKeyDAO = new MasternodeKeyDAO(knex)
-    this.masternodeService = new MasternodeService(walletDAO, masternodeKeyDAO, masternodeDAO, providers)
+    this.masternodeService = new MasternodeService(walletDAO, masternodeKeyDAO, masternodeDAO, providers, addressDAO, coreTransactionService, this.walletSyncService, preferences)
     this.walletSyncService.watchedProvidersOf = masternodeDAO.getFollowedProTxHashes
     this.walletCredentialsService = new WalletCredentialsService(walletDAO, addressDAO, masternodeKeyDAO, calibratedIterations)
     this.identityService = new IdentityService(walletDAO, identityDAO, dashPayCache, this.platformWorkerService)

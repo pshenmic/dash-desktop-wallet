@@ -66,13 +66,22 @@ export function matchMasternodeKeys(chain: MasternodeKeyChain, derived: DerivedA
   return matches
 }
 
+// The iOS wallet's rule: the lowest index of the chain no listed node carries.
+// Every node carrying a derived key is one of ours, so ours are the ones to read.
+export function unusedKeyIndex(owned: Masternode[], chain: MasternodeKeyChain): number {
+  const used = new Set(owned.map(node => node[`${chain}KeyIndex` as const]))
+  let index = 0
+  while (used.has(index)) index++
+  return index
+}
+
 export function carriesKey(node: NetworkMasternode, {role, publicKey}: ImportedMasternodeKey): boolean {
   const key = nodeKey(role, node)
   return key != null && masternodeFilterValues(role, publicKey).includes(key)
 }
 
 export function collateralUtxos(utxos: UTXO[]): UTXO[] {
-  return utxos.filter(utxo => MASTERNODE_COLLATERAL_DUFFS.includes(utxo.satoshis))
+  return utxos.filter(utxo => Object.values(MASTERNODE_COLLATERAL_DUFFS).includes(utxo.satoshis))
 }
 
 // What a discovery run stores for each owned node. A p2p list knows a node's

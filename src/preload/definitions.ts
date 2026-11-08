@@ -5,6 +5,17 @@ type Network = 'mainnet' | 'testnet'
 // Mirrors MasternodeKeyChain and ImportedMasternodeKey in src/main/src/types/Masternode.
 type MasternodeKeyRole = 'owner' | 'voting' | 'operator'
 type ImportedMasternodeKey = { role: MasternodeKeyRole; publicKey: string }
+// Mirrors MasternodeRegistration in src/main/src/types/Masternode.
+type MasternodeRegistration = {
+  type: 'Regular' | 'Evo'
+  collateral: { txid: string; vout: number }
+  serviceAddress: string | null
+  payoutAddress: string
+  operatorReward: number
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+}
 
 // Mirrors src/main/src/types/CoinSelection, which the bundles do not share: an
 // address narrows the automatic selection, a picked outpoint list is spent whole.
@@ -64,6 +75,7 @@ export const apiDefinitions = (ipcRenderer) => ({
   getImportedMasternodeKeys: (walletId: string) => ipcRenderer.invoke('getImportedMasternodeKeys', walletId),
   importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => ipcRenderer.invoke('importMasternodeKey', walletId, role, privateKey),
   removeMasternodeKey: (walletId: string, key: ImportedMasternodeKey) => ipcRenderer.invoke('removeMasternodeKey', walletId, key),
+  registerMasternode: (walletId: string, registration: MasternodeRegistration, password: string) => ipcRenderer.invoke('registerMasternode', walletId, registration, password),
   updateIdentityKeys: (walletId: string, identifier: string, update: IdentityKeysUpdate, password: string) => ipcRenderer.invoke('updateIdentityKeys', walletId, identifier, update, password),
   getIdentityPrivateKeys: (walletId: string, identifier: string, password: string) => ipcRenderer.invoke('getIdentityPrivateKeys', walletId, identifier, password),
   getUsernames: (walletId: string) => ipcRenderer.invoke('getUsernames', walletId),

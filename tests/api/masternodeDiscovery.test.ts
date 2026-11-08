@@ -1,8 +1,11 @@
 import {beforeEach, describe, expect, it} from 'vitest'
 import {PrivateKey, Script} from 'dash-core-sdk'
 import {MasternodeDAO} from '../../src/main/src/database/MasternodeDAO'
+import {Preferences} from '../../src/main/src/preferences'
 import {WalletProviderFactory} from '../../src/main/src/providers/WalletProviderFactory'
+import {CoreTransactionService} from '../../src/main/src/services/core/CoreTransactionService'
 import {MasternodeService} from '../../src/main/src/services/core/MasternodeService'
+import {WalletSyncService} from '../../src/main/src/services/core/WalletSyncService'
 import {Masternode, MasternodeKeyFilter, MasternodeKeys, NetworkMasternode} from '../../src/main/src/types/Masternode'
 import {UTXO} from '../../src/main/src/types/UTXO'
 import {masternodeKeyDeriver} from '../../src/main/src/utils/masternodeKeys'
@@ -52,7 +55,10 @@ describe('MasternodeService.discover', () => {
     walletId = await wired.createWalletHandler.handle(null as never, VALID_SEEDPHRASE, 'mainnet', PASSWORD)
     keys = (await wired.masternodeKeyDAO.getKeys(walletId))!
     const providers = {forWallet: (...args) => current.forWallet(...args)} as WalletProviderFactory
-    masternodes = new MasternodeService(wired.walletDAO, wired.masternodeKeyDAO, new MasternodeDAO(wired.knex), providers)
+    masternodes = new MasternodeService(
+      wired.walletDAO, wired.masternodeKeyDAO, new MasternodeDAO(wired.knex), providers,
+      wired.addressDAO, new CoreTransactionService(), {} as WalletSyncService, Preferences.default(),
+    )
     watched = []
   })
 

@@ -2,6 +2,37 @@ export type MasternodeKeyRole = 'voting' | 'owner' | 'operator' | 'platformNode'
 // The roles a masternode list can be searched by, each walked as a key chain.
 export type MasternodeKeyChain = 'owner' | 'voting' | 'operator'
 export type MasternodeKeyFilter = MasternodeKeyChain | 'collateral'
+export type MasternodeType = 'Regular' | 'Evo'
+
+// What the caller decides about a registration; the owner, voting and operator
+// keys are the wallet's own. operatorReward is in hundredths of a percent, as
+// ProRegTx carries it. A null serviceAddress registers without one, to be set
+// later by the operator's ProUpServTx. The platform fields are an Evo's alone;
+// platformNodeId is the Tenderdash node id, whose key the node generated.
+export interface MasternodeRegistration {
+  type: MasternodeType
+  collateral: {txid: string; vout: number}
+  serviceAddress: string | null
+  payoutAddress: string
+  operatorReward: number
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+}
+
+// The wallet's provider keys at the indexes a registration takes, in the form
+// ProRegTx carries them.
+export interface ProviderKeyIds {
+  ownerKeyId: string
+  votingKeyId: string
+  operatorPublicKey: string
+}
+
+export interface MasternodeRegistrationResult {
+  proTxHash: string
+  fee: bigint
+  peersAcked: number
+}
 
 // One entry of the network's masternode list. Times are unix seconds, 0 = never.
 // Null is a field the source cannot give: the p2p list carries no PoSe score or

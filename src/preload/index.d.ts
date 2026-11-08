@@ -98,6 +98,25 @@ interface MasternodeDTO {
   registeredHeight: number | null
 }
 
+// Mirrors MasternodeRegistration and MasternodeRegistrationResult in
+// src/main/src/types/Masternode.
+interface MasternodeRegistrationDTO {
+  type: 'Regular' | 'Evo'
+  collateral: { txid: string; vout: number }
+  serviceAddress: string | null
+  payoutAddress: string
+  operatorReward: number
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+}
+
+interface MasternodeRegistrationResultDTO {
+  proTxHash: string
+  fee: bigint
+  peersAcked: number
+}
+
 // Hand-maintained alongside definitions.ts, and deliberately a second
 // declaration of src/main/src/types/Transaction: the three bundles do not share
 // types. Amounts stay bigint — structured clone carries them as themselves.
@@ -194,6 +213,7 @@ declare global {
       getImportedMasternodeKeys: (walletId: string) => Promise<ImportedMasternodeKeyDTO[]>
       importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => Promise<MasternodeDTO[] | null>
       removeMasternodeKey: (walletId: string, key: ImportedMasternodeKeyDTO) => Promise<void>
+      registerMasternode: (walletId: string, registration: MasternodeRegistrationDTO, password: string) => Promise<MasternodeRegistrationResultDTO>
       getUsernames: (walletId: string) => Promise<unknown>
       refreshDashPay: (walletId: string) => Promise<void>
       registerUsername: (walletId: string, identifier: string, label: string, password: string) => Promise<unknown>

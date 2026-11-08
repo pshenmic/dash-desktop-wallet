@@ -1,4 +1,5 @@
 import {Script} from 'dash-core-sdk'
+import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
 import {Network} from './Network'
 
 export type RecipientType = 'p2pkh' | 'p2sh'
@@ -57,6 +58,19 @@ export interface BuildAssetLockParams {
 }
 
 export interface BuildSignedAssetLockParams extends BuildAssetLockParams {
+  seed: Uint8Array
+  network: Network
+}
+
+// payload is completed here: its inputs hash and the collateral's signature
+// both depend on the inputs chosen.
+export interface BuildSignedProRegTxParams {
+  payload: ProRegTX
+  collateral: TransferInput
+  inputs: TransferInput[]
+  changeAddress: string
+  inputTotal: bigint
+  feeDuffs: bigint
   seed: Uint8Array
   network: Network
 }
