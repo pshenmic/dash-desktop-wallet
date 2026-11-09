@@ -149,14 +149,17 @@ jobs:
       - name: Build Snap
         id: build
         uses: snapcore/action-build@v1
-      - name: Publish to Snap Store
-        if: ${{ !github.event.release.prerelease }}
-        uses: snapcore/action-publish@v1
-        env:
-          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
-        with:
-          snap: ${{ steps.build.outputs.snap }}
-          release: stable
+      # Disabled: the `dash-desktop-wallet` name is still in Snap Store review,
+      # and publishing before it is approved fails the job. Restore this step
+      # once the snap is live.
+      # - name: Publish to Snap Store
+      #   if: ${{ !github.event.release.prerelease }}
+      #   uses: snapcore/action-publish@v1
+      #   env:
+      #     SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+      #   with:
+      #     snap: ${{ steps.build.outputs.snap }}
+      #     release: stable
       - name: Upload Snap artifact
         uses: softprops/action-gh-release@v2
         with:
@@ -216,6 +219,6 @@ jobs:
       if: ${{ !github.event.release.prerelease }}
       uses: actions/upload-artifact@v4
       with:
-        name: dash-desktop-appx
+        name: dash-desktop-wallet-appx
         path: dist/*.appx
         if-no-files-found: error
