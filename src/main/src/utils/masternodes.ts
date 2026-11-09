@@ -6,6 +6,7 @@ import {DashscanMasternode} from '../types/Dashscan'
 import {CoreSpendSource, ListedUtxo, SelectableUtxo} from '../types/CoinSelection'
 import {
   ImportedMasternodeKey,
+  ListedMasternodes,
   Masternode,
   MasternodeCollateral,
   MasternodeKeyChain,
@@ -73,6 +74,20 @@ export function unusedKeyIndex(owned: Masternode[], chain: MasternodeKeyChain): 
   let index = 0
   while (used.has(index)) index++
   return index
+}
+
+// Dashscan keeps a row for every node it ever listed, so a source's node is
+// checked against the network's own list. Only a list asked for after the node was
+// first seen can say it is gone; an older one, or none yet, leaves it unsettled.
+export function existingMasternodes(
+  owned: Masternode[],
+  listed: ListedMasternodes | null,
+  firstSeen: Map<string, number>,
+): {existing: Masternode[]; unsettled: boolean} {
+  const isListed = (node: Masternode): boolean => listed?.proTxHashes.has(node.proTxHash) ?? false
+  const decided = (node: Masternode): boolean => listed != null && listed.askedAt > (firstSeen.get(node.proTxHash) ?? Infinity)
+  const existing = owned.filter(node => isListed(node) || !decided(node))
+  return {existing, unsettled: existing.some(node => !isListed(node))}
 }
 
 // A node whose operator key the wallet derives, which is what lets it sign as operator.

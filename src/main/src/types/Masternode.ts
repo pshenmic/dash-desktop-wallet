@@ -79,6 +79,13 @@ export interface ProviderTxPlan {
   spendable: UTXO[]
 }
 
+// The network's own list, which carries a node exactly while its collateral is
+// unspent; askedAt is when the lock pool asked for it.
+export interface ListedMasternodes {
+  proTxHashes: Set<string>
+  askedAt: number
+}
+
 export interface MasternodeUpdateResult {
   txid: string
   fee: bigint

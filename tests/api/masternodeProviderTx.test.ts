@@ -77,6 +77,8 @@ describe('MasternodeService provider transactions', () => {
   let utxos: UTXO[]
   let list: NetworkMasternode[] | null
   let broadcast: string[]
+  // Nodes the source still returns but the network's list no longer carries.
+  let gone: Set<string>
   let masternodes: MasternodeService
 
   const key = (chain: MasternodeKeyChain, index: number): string =>
@@ -85,7 +87,7 @@ describe('MasternodeService provider transactions', () => {
   const registration = (fields: Partial<MasternodeRegistration> = {}): MasternodeRegistration => ({
     type: 'Regular',
     collateral: {txid: 'cc'.repeat(32), vout: 0},
-    serviceAddress: '203.0.113.7:19999',
+    serviceAddress: '45.33.12.7:19999',
     payoutAddress: owned[2],
     operatorReward: 0,
     platformNodeId: null,
@@ -109,6 +111,7 @@ describe('MasternodeService provider transactions', () => {
     utxos = [utxo(owned[0], 1_000n * DASH, 'cc'.repeat(32)), utxo(owned[1], DASH, 'aa'.repeat(32))]
     list = []
     broadcast = []
+    gone = new Set()
 
     const provider = {
       ensureReady: async () => undefined,
@@ -118,6 +121,8 @@ describe('MasternodeService provider transactions', () => {
       watchMasternodes: async () => [],
     }
     const walletSync = {
+      getListedMasternodes: () => ({proTxHashes: new Set((list ?? []).map(({proTxHash}) => proTxHash).filter(hash => !gone.has(hash))), askedAt: 0}),
+      refreshListedMasternodes: () => undefined,
       broadcastTransaction: async (hex: string) => {
         broadcast.push(hex)
         return {txid: Transaction.fromHex(hex).hash(), peersDelivered: ['peer']}
@@ -139,7 +144,7 @@ describe('MasternodeService provider transactions', () => {
     expect(payload.inputsHash).toBe(providerInputsHash(tx.inputs))
     expect(payloadSigner(payload)).toBe(owned[0])
     expect(payload.getPayoutAddress('testnet')).toBe(owned[2])
-    expect(payload.ipAddress).toBe('203.0.113.7')
+    expect(payload.ipAddress).toBe('45.33.12.7')
     expect(payload.port).toBe(19999)
     expect(tx.outputs).toHaveLength(1)
     expect(fee).toBe(DASH - tx.outputs[0].satoshis)
@@ -162,6 +167,13 @@ describe('MasternodeService provider transactions', () => {
     expect(payload.type).toBe(1)
     expect(payload.platformNodeID).toBe(EVO_FIELDS.platformNodeId)
     expect([payload.platformP2PPort, payload.platformHTTPPort]).toEqual([36656, 1443])
+  })
+
+  // Core reads a collateral from the UTXO set only, so peers drop the tx silently.
+  it('refuses a collateral still in the mempool', async () => {
+    utxos[0] = {...utxo(owned[0], 1_000n * DASH, 'cc'.repeat(32)), height: 0, confirmations: 0}
+    await expect(masternodes.register(walletId, registration(), PASSWORD)).rejects.toThrow('needs a confirmation')
+    expect(broadcast).toEqual([])
   })
 
   it('refuses a collateral of the wrong amount for the type', async () => {
@@ -249,7 +261,7 @@ describe('MasternodeService provider transactions', () => {
   describe('operator transactions', () => {
     const PRO_TX_HASH = '33'.repeat(32)
     const SERVICE: MasternodeServiceUpdate = {
-      serviceAddress: '203.0.113.9:19999', operatorPayoutAddress: null, platformNodeId: null, platformP2PPort: null, platformHttpPort: null,
+      serviceAddress: '45.33.12.9:19999', operatorPayoutAddress: null, platformNodeId: null, platformP2PPort: null, platformHttpPort: null,
     }
 
     const operated = (fields: Partial<NetworkMasternode> = {}): NetworkMasternode => node(PRO_TX_HASH, {
@@ -271,7 +283,7 @@ describe('MasternodeService provider transactions', () => {
 
       expect(tx.type).toBe(2)
       expect([payload.version, payload.type, payload.proTxHash]).toEqual([2, 0, PRO_TX_HASH])
-      expect([payload.ipAddress, payload.port]).toEqual(['203.0.113.9', 19999])
+      expect([payload.ipAddress, payload.port]).toEqual(['45.33.12.9', 19999])
       expect(payload.scriptOperatorPayout.bytes()).toHaveLength(0)
       expect(signedByOperator(payload)).toBe(true)
       expect(tx.inputs.map(input => input.txId)).toEqual(['aa'.repeat(32)])
@@ -286,8 +298,8 @@ describe('MasternodeService provider transactions', () => {
       const payload = lastBroadcast().extraPayload as ProUpServTx
 
       expect([payload.version, payload.type, payload.platformNodeID]).toEqual([3, 1, EVO_FIELDS.platformNodeId])
-      expect(payload.netInfo!.getPrimary(1)).toBe('203.0.113.9:36656')
-      expect(payload.netInfo!.getPrimary(2)).toBe('203.0.113.9:1443')
+      expect(payload.netInfo!.getPrimary(1)).toBe('45.33.12.9:36656')
+      expect(payload.netInfo!.getPrimary(2)).toBe('45.33.12.9:1443')
       expect(signedByOperator(payload)).toBe(true)
     })
 
@@ -308,6 +320,22 @@ describe('MasternodeService provider transactions', () => {
       expect([payload.version, payload.proTxHash, payload.reason]).toEqual([2, PRO_TX_HASH, 3])
       expect(payload.inputsHash).toBe(providerInputsHash(tx.inputs))
       expect(signedByOperator(payload)).toBe(true)
+    })
+
+    // Core's BadPort: peers would fetch it and drop it without a word.
+    it('refuses mainnet\'s port on testnet before unlocking anything', async () => {
+      list = [operated()]
+      await expect(masternodes.updateService(walletId, PRO_TX_HASH, {...SERVICE, serviceAddress: '1.2.3.4:9999'}, 'wrong password'))
+        .rejects.toThrow("Port 9999 is mainnet's")
+      expect(broadcast).toEqual([])
+    })
+
+    it('refuses to revoke a node the network list no longer carries', async () => {
+      list = [operated()]
+      gone.add(PRO_TX_HASH)
+      await expect(masternodes.revoke(walletId, PRO_TX_HASH, 'termination', PASSWORD)).rejects.toThrow("network's masternode list does not carry")
+      await expect(masternodes.updateService(walletId, PRO_TX_HASH, SERVICE, PASSWORD)).rejects.toThrow("network's masternode list does not carry")
+      expect(broadcast).toEqual([])
     })
 
     it('refuses an unknown revocation reason', async () => {

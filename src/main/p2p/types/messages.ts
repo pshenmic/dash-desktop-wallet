@@ -130,6 +130,12 @@ export interface P2PSetLogLevelMessage {
   level: LogLevel
 }
 
+// A fresh full list now rather than at the hourly refresh: main asks when a
+// node it lists is missing from a list asked for before it first saw the node.
+export interface P2PRefreshMasternodesMessage {
+  type: 'refreshMasternodes'
+}
+
 export type P2PCommand =
   | P2PStartMessage
   | P2PListenMessage
@@ -143,6 +149,7 @@ export type P2PCommand =
   | P2PGetConnectedPeersMessage
   | P2PBanPeersMessage
   | P2PProbePeerMessage
+  | P2PRefreshMasternodesMessage
 
 // ── Events (utility -> main) ────────────────────────────────────────────────
 
@@ -247,6 +254,16 @@ export interface P2PMasternodeListMessage {
   masternodes: NetworkMasternode[]
 }
 
+// Every node of a full list fetched on the lock pool, in both modes, whose entries
+// its coinbase's merkleRootMNList covers: which nodes exist, not whose they are.
+// askedAt is when the list was asked for, at the latest block announced then.
+export interface P2PListedMasternodesMessage {
+  type: 'listedMasternodes'
+  network: Network
+  proTxHashes: string[]
+  askedAt: number
+}
+
 // A mempool tx paying one of our addresses, seen on the lock pool before any
 // block carries it. Recorded unconfirmed; its isdlock is what makes it final.
 export interface P2PIncomingTxMessage {
@@ -280,3 +297,4 @@ export type P2PEvent =
   | P2PChainRewoundMessage
   | P2PIncomingTxMessage
   | P2PMasternodeListMessage
+  | P2PListedMasternodesMessage

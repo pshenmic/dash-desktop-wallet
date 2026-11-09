@@ -17,6 +17,8 @@ export class MasternodeList {
   private retry: ReturnType<typeof setTimeout> | null = null
   private quorums: QuorumSet | null = null
   private registryAskedAt = 0
+  // The newest block a peer announced, where an asked-for list is taken.
+  private latest: {peer: Peer; blockHash: string} | null = null
   readonly registry: ProviderRegistry
 
   constructor(private readonly opts: MasternodeListOptions) {
@@ -27,6 +29,7 @@ export class MasternodeList {
   resetPool(): void {
     this.verifiedAt = 0
     this.askedAt = 0
+    this.latest = null
     if (this.retry) clearTimeout(this.retry)
     this.retry = null
     this.registryAskedAt = 0
@@ -36,9 +39,18 @@ export class MasternodeList {
   // A peer is asked for a block it announced itself, so it always holds it; a reply
   // is checked against its own coinbase, so the first verified one wins.
   onBlockAnnounced(peer: Peer, blockHash: string): void {
+    this.latest = {peer, blockHash}
     const now = Date.now()
     if (now - this.verifiedAt < MNLIST_REFRESH_MS || now - this.askedAt < MNLIST_REPLY_TIMEOUT_MS) return
     this.ask(peer, blockHash)
+  }
+
+  // An ask still unanswered answers this too.
+  refresh(): void {
+    const inFlight = this.askedAt > this.verifiedAt && Date.now() - this.askedAt < MNLIST_REPLY_TIMEOUT_MS
+    if (this.latest == null || inFlight) return
+    this.verifiedAt = 0
+    this.ask(this.latest.peer, this.latest.blockHash)
   }
 
   // Many peers never answer getmnlistd, and waiting for the next announcement
@@ -85,6 +97,7 @@ export class MasternodeList {
     this.verifiedAt = Date.now()
     log.info(`masternode list at ${diff.blockHash} from ${peer.host}:${peer.port}: ${dapiUrls.length} evonode DAPI url(s)`)
     this.opts.events.evonodeDapiUrls(pool.network, dapiUrls)
+    this.opts.events.listedMasternodes(pool.network, diff.mnList.map(({proRegTxHash}) => proRegTxHash), this.askedAt)
   }
 
   // A diff from the last verified quorum set, so following the tip costs a few KB a block.

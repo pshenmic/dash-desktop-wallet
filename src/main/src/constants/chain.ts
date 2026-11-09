@@ -15,6 +15,18 @@ export const MASTERNODE_TYPE_CODE: Record<MasternodeType, number> = {Regular: 0,
 export const PROTX_VERSION = 2
 // 100%, in the hundredths of a percent ProRegTx carries.
 export const MAX_OPERATOR_REWARD = 10_000
+// Core's mainnet ports. A mainnet masternode serves on exactly these; on any
+// other network none of its ports may be the mainnet Core port.
+export const MAINNET_CORE_PORT = 9999
+export const MAINNET_PLATFORM_P2P_PORT = 26656
+export const MAINNET_PLATFORM_HTTP_PORT = 443
+// What CNetAddr::IsRoutable refuses (RFC 1918, 2544, 3927, 5737, 6598, local),
+// as [network, prefix bits], plus the broadcast address IsValid refuses.
+export const NON_ROUTABLE_IPV4: Array<[string, number]> = [
+  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16],
+  ['172.16.0.0', 12], ['192.0.2.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15],
+  ['198.51.100.0', 24], ['203.0.113.0', 24], ['255.255.255.255', 32],
+]
 // v24 refuses an Evo service update below v3 (ExtNetInfo) and refuses v3
 // before it activates: active on testnet, signaling on mainnet from 2026-11-09.
 export const EVO_SERVICE_TX_VERSION: Record<Network, number> = {mainnet: 2, testnet: 3}

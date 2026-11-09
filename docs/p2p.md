@@ -66,6 +66,15 @@ Things the code cannot tell you, and that a plausible-looking change breaks:
   header chain**, never from the DAPI-url refresh's check alone: the header at
   the coinbase height must hash to the diff's block, carry the coinbase's merkle
   root, and that coinbase's `merkleRootMNList` must cover every entry.
+- **Which nodes still exist comes from the lock pool, in both modes.** Every
+  full list the hourly DAPI-url refresh verifies also goes to main as its set of
+  proTxHashes (`listedMasternodes`), with when it was asked for. Dashscan keeps
+  the row of a node whose collateral was spent, frozen in its last state, so
+  discovery drops an owned node once a list asked for after the node was first
+  seen does not carry it; one missing from an older list makes main send
+  `refreshMasternodes`, which asks at the newest announced block. A ProUpRegTx,
+  ProUpServTx or ProUpRevTx is refused for a node that list does not carry —
+  Core drops it as `bad-protx-hash`, and peers send no reason.
 - **A list entry has no owner key, collateral or payout.** Those live only in the
   ProRegTx, read once from the block at `height(confirmedHash) − N` (Core's
   `nMasternodeMinimumConfirmations`: 15 mainnet, 1 testnet) and kept in chain.db

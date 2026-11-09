@@ -129,6 +129,10 @@ export class SyncService {
     ...this.bulkPool?.peerInfo() ?? [],
   ]
 
+  refreshMasternodes = (): void => {
+    this.masternodeList.refresh()
+  }
+
   // A ready peer answered its handshake already; anything else is claimed for
   // the dial, since Core drops both connections on a second one from this host.
   probePeer = async (peer: string, network: Network): Promise<PeerProbeResult> => {
@@ -631,7 +635,7 @@ export class SyncService {
     }
     const displayTxid = reverseHex(msg.txid)
     const matched = this.watchedTxids.has(displayTxid)
-    locks.info(`isdlock received wire=${msg.txid} display=${displayTxid} matched=${matched} watching=[${[...this.watchedTxids].join(',')}]`)
+    locks.debug(`isdlock received wire=${msg.txid} display=${displayTxid} matched=${matched} watching=[${[...this.watchedTxids].join(',')}]`)
     if (!matched) return
     this.watchedTxids.delete(displayTxid)
     // Serialized for InstantAssetLockProof construction in main. We broadcast L1

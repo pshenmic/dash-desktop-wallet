@@ -23,4 +23,5 @@ export interface SyncServiceEvents {
   evonodeDapiUrls: (network: Network, dapiUrls: string[]) => void
   platformQuorums: (network: Network, keys: Map<string, Uint8Array>) => void
   masternodeList: (network: Network, masternodes: NetworkMasternode[]) => void
+  listedMasternodes: (network: Network, proTxHashes: string[], askedAt: number) => void
 }

@@ -80,7 +80,7 @@ describe('provider registry', () => {
     registry = new ProviderRegistry({
       pool: () => pool as unknown as PoolService,
       chain: () => store as unknown as ChainStore,
-      events: {masternodeList: (_network, masternodes) => lists.push(masternodes), evonodeDapiUrls: () => undefined, platformQuorums: () => undefined},
+      events: {masternodeList: (_network, masternodes) => lists.push(masternodes), evonodeDapiUrls: () => undefined, platformQuorums: () => undefined, listedMasternodes: () => undefined},
     })
   })
   afterEach(() => {
@@ -109,7 +109,7 @@ describe('provider registry', () => {
     const restarted = new ProviderRegistry({
       pool: () => pool as unknown as PoolService,
       chain: () => store as unknown as ChainStore,
-      events: {masternodeList: (_network, masternodes) => lists.push(masternodes), evonodeDapiUrls: () => undefined, platformQuorums: () => undefined},
+      events: {masternodeList: (_network, masternodes) => lists.push(masternodes), evonodeDapiUrls: () => undefined, platformQuorums: () => undefined, listedMasternodes: () => undefined},
     })
     peer.sent = []
     await restarted.offer(fullList([entry(EVO, CONFIRMED_HASH)]))

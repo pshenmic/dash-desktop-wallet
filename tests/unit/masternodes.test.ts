@@ -2,11 +2,12 @@ import {describe, expect, it} from 'vitest'
 import {hexToBytes} from '@noble/hashes/utils.js'
 import {Script} from 'dash-core-sdk'
 import {DashscanMasternode} from '../../src/main/src/types/Dashscan'
-import {NetworkMasternode} from '../../src/main/src/types/Masternode'
+import {Masternode, NetworkMasternode} from '../../src/main/src/types/Masternode'
 import {UTXO} from '../../src/main/src/types/UTXO'
 import {masternodeKeyDeriver, masternodeKeys} from '../../src/main/src/utils/masternodeKeys'
 import {
   collateralUtxos,
+  existingMasternodes,
   masternodeFilterValues,
   matchMasternodeKeys,
   networkMasternode,
@@ -148,5 +149,34 @@ describe('ownedMasternodes', () => {
       {role: 'operator', publicKey: OPERATOR_0},
     ], [])
     expect(owned.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['a', ['voting']], ['b', ['operator']]])
+  })
+})
+
+describe('existingMasternodes', () => {
+  const owned = (proTxHash: string): Masternode =>
+    ({...node(proTxHash), ownerKeyIndex: 0, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: []})
+  const firstSeen = new Map([['aa', 100], ['bb', 100]])
+  const listed = (askedAt: number, ...proTxHashes: string[]) => ({proTxHashes: new Set(proTxHashes), askedAt})
+
+  it('drops a node a list asked for after it was first seen does not carry', () => {
+    const {existing, unsettled} = existingMasternodes([owned('aa'), owned('bb')], listed(200, 'aa'), firstSeen)
+    expect(existing.map(({proTxHash}) => proTxHash)).toEqual(['aa'])
+    expect(unsettled).toBe(false)
+  })
+
+  it('keeps a node missing from an older list, and asks for a newer one', () => {
+    const {existing, unsettled} = existingMasternodes([owned('aa'), owned('bb')], listed(50, 'aa'), firstSeen)
+    expect(existing.map(({proTxHash}) => proTxHash)).toEqual(['aa', 'bb'])
+    expect(unsettled).toBe(true)
+  })
+
+  it('keeps every node until any list has arrived', () => {
+    const {existing, unsettled} = existingMasternodes([owned('aa')], null, firstSeen)
+    expect(existing).toHaveLength(1)
+    expect(unsettled).toBe(true)
+  })
+
+  it('is settled when every node is listed', () => {
+    expect(existingMasternodes([owned('aa')], listed(50, 'aa'), firstSeen).unsettled).toBe(false)
   })
 })

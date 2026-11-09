@@ -15,6 +15,10 @@ import {
   proRegSignString,
   providerInputsHash,
   providerPayloadBytes,
+  requireProTxHash,
+  requireRegistrationFields,
+  requireServiceUpdate,
+  serviceAddressParts,
   signBls,
   signedMessageHash,
   signMessage,
@@ -183,5 +187,70 @@ describe('signBls', () => {
     const publicKey = bytesToHex(bls12_381.longSignatures.getPublicKey(secret).toBytes(true))
     const hash = new Uint8Array(32).fill(1)
     expect(verifyBls(bytesToHex(signBls(hash, secret)), hash, publicKey)).toBe(true)
+  })
+})
+
+describe('serviceAddressParts', () => {
+  it('takes a public IPv4 address on the port its network allows', () => {
+    expect(serviceAddressParts('1.2.3.4:19999', 'testnet')).toEqual({ip: '1.2.3.4', port: 19999})
+    expect(serviceAddressParts(' 1.2.3.4:9999 ', 'mainnet')).toEqual({ip: '1.2.3.4', port: 9999})
+  })
+
+  it('refuses mainnet\'s Core port off mainnet, and any other port on it', () => {
+    expect(() => serviceAddressParts('1.2.3.4:9999', 'testnet')).toThrow("Port 9999 is mainnet's")
+    expect(() => serviceAddressParts('1.2.3.4:19999', 'mainnet')).toThrow('serves on port 9999')
+  })
+
+  it.each(['10.0.0.1', '172.16.5.5', '192.168.1.1', '127.0.0.1', '0.1.2.3', '100.64.0.1', '169.254.1.1',
+    '198.18.0.1', '192.0.2.1', '198.51.100.1', '203.0.113.1', '255.255.255.255'])('refuses %s, which Core cannot route', ip => {
+    expect(() => serviceAddressParts(`${ip}:19999`, 'testnet')).toThrow('not a public address')
+  })
+
+  it.each(['1.2.3.4', '1.2.3.4:', '1.2.3:19999', '1.2.3.256:19999', '1.2.3.4:0', '1.2.3.4:70000', '[::1]:19999', 'host:19999'])(
+    'refuses %s, which is not IPv4 and a port', value => {
+      expect(() => serviceAddressParts(value, 'testnet')).toThrow('Not an IPv4 address and port')
+    })
+})
+
+describe('provider tx field checks', () => {
+  const NODE_ID = '5b6ddd9532c5863b8bb113ef92d77f77b66f859b'
+  const evo = {serviceAddress: '1.2.3.4:19999', operatorPayoutAddress: null, platformNodeId: NODE_ID, platformP2PPort: 36656, platformHttpPort: 1443}
+
+  it('takes a well-formed Evo service', () => {
+    expect(() => requireServiceUpdate('Evo', evo, 'testnet')).not.toThrow()
+    expect(() => requireServiceUpdate('Evo', {...evo, serviceAddress: '1.2.3.4:9999', platformP2PPort: 26656, platformHttpPort: 443}, 'mainnet')).not.toThrow()
+  })
+
+  it('holds a mainnet Evo to the default platform ports', () => {
+    expect(() => requireServiceUpdate('Evo', {...evo, serviceAddress: '1.2.3.4:9999'}, 'mainnet')).toThrow('26656 (P2P) and 443 (HTTP)')
+  })
+
+  it('refuses the Core port as a platform port, and ports that collide', () => {
+    expect(() => requireServiceUpdate('Evo', {...evo, platformHttpPort: 9999}, 'testnet')).toThrow('cannot be a platform port')
+    expect(() => requireServiceUpdate('Evo', {...evo, platformHttpPort: 36656}, 'testnet')).toThrow('must all differ')
+    expect(() => requireServiceUpdate('Evo', {...evo, platformP2PPort: 19999}, 'testnet')).toThrow('must all differ')
+  })
+
+  it('refuses a zero or malformed platform node id, and platform fields on a Regular node', () => {
+    expect(() => requireServiceUpdate('Evo', {...evo, platformNodeId: '0'.repeat(40)}, 'testnet')).toThrow('platform node id')
+    expect(() => requireServiceUpdate('Evo', {...evo, platformNodeId: 'xyz'}, 'testnet')).toThrow('platform node id')
+    expect(() => requireServiceUpdate('Regular', evo, 'testnet')).toThrow('Evo masternodes only')
+  })
+
+  it('refuses a registration with a malformed collateral or reward', () => {
+    const registration = {
+      type: 'Regular' as const, collateral: {txid: 'cc'.repeat(32), vout: 0}, serviceAddress: null, payoutAddress: 'y',
+      operatorReward: 0, platformNodeId: null, platformP2PPort: null, platformHttpPort: null,
+    }
+    expect(() => requireRegistrationFields(registration, 'testnet')).not.toThrow()
+    expect(() => requireRegistrationFields({...registration, collateral: {txid: 'cc', vout: 0}}, 'testnet')).toThrow('txid and an output index')
+    expect(() => requireRegistrationFields({...registration, collateral: {txid: 'cc'.repeat(32), vout: -1}}, 'testnet')).toThrow('txid and an output index')
+    expect(() => requireRegistrationFields({...registration, operatorReward: 10_001}, 'testnet')).toThrow('Operator reward')
+    expect(() => requireRegistrationFields({...registration, serviceAddress: '10.0.0.1:19999'}, 'testnet')).toThrow('not a public address')
+  })
+
+  it('refuses a proTxHash that is not 32 bytes of hex', () => {
+    expect(() => requireProTxHash('ab'.repeat(32))).not.toThrow()
+    expect(() => requireProTxHash('ab')).toThrow('Not a proTxHash')
   })
 })

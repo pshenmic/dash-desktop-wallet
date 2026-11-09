@@ -26,7 +26,7 @@ import {peerOverridesKey} from '../../../p2p/net/peerOverrides'
 import {ScanCursorGate} from '../../utils/scanCursorGate'
 import {Preferences} from '../../preferences'
 import {Network} from '../../types/Network'
-import {NetworkMasternode} from '../../types/Masternode'
+import {ListedMasternodes, NetworkMasternode} from '../../types/Masternode'
 import {Transaction as SDKTransaction} from 'dash-core-sdk'
 import {Logger} from '../../utils/logger'
 
@@ -91,10 +91,13 @@ export class WalletSyncService {
   onEvonodeDapiUrls: ((network: Network, dapiUrls: string[]) => void) | null = null
   onPlatformQuorums: ((network: Network, keys: Map<string, Uint8Array>) => void) | null = null
   onMasternodeList: ((network: Network) => void) | null = null
+  onListedMasternodes: ((network: Network) => void) | null = null
   // The masternodes a wallet already follows, read when its scan starts.
   watchedProvidersOf: (walletId: string) => Promise<string[]> = async () => []
   // The last proven list per network; absent until the p2p index first answers.
   private masternodeLists = new Map<Network, NetworkMasternode[]>()
+  // The lock pool's last full list per network, in both modes.
+  private listedMasternodes = new Map<Network, ListedMasternodes>()
   // Wallets whose scan is held waiting for addresses. The worker resumes at the
   // held height, so the addresses answering it must not also rewind the cursor.
   private gapHeld = new Set<string>()
@@ -293,9 +296,6 @@ export class WalletSyncService {
         probe.resolve(data.result)
       }
     } else if (data.type === 'txInstantLocked') {
-      this.transactionDAO.markInstantLocked(data.txid).catch(err =>
-        log.error('markInstantLocked failed:', err)
-      )
       this.recordInstantLock(data.txid, data.islockHex)
     } else if (data.type === 'chainLocked') {
       this.transactionDAO.markChainlockedUpTo(data.network, data.height).catch(err =>
@@ -309,6 +309,9 @@ export class WalletSyncService {
     } else if (data.type === 'masternodeList') {
       this.masternodeLists.set(data.network, data.masternodes)
       this.onMasternodeList?.(data.network)
+    } else if (data.type === 'listedMasternodes') {
+      this.listedMasternodes.set(data.network, {proTxHashes: new Set(data.proTxHashes), askedAt: data.askedAt})
+      this.onListedMasternodes?.(data.network)
     } else if (data.type === 'error') {
       log.error('utility process error:', data.message)
     }
@@ -503,6 +506,12 @@ export class WalletSyncService {
 
   getMasternodeList = (network: Network): NetworkMasternode[] | null => this.masternodeLists.get(network) ?? null
 
+  getListedMasternodes = (network: Network): ListedMasternodes | null => this.listedMasternodes.get(network) ?? null
+
+  refreshListedMasternodes(): void {
+    if (this.child) this.send({type: 'refreshMasternodes'})
+  }
+
   getStatus = (): WalletSyncStatus => {
     if (this.persistenceError == null) return this.status
     return {...this.status, lastError: this.persistenceError}
@@ -559,8 +568,12 @@ export class WalletSyncService {
     })
   }
 
+  // Both ways a lock arrives, a broadcast session and the watcher, end here. A
+  // row written before it is marked now; one written after reads the cache.
   private recordInstantLock(txid: string, islockHex: string): void {
     this.instantLocks.set(txid, islockHex)
+    this.transactionDAO.markInstantLocked(txid).catch(err =>
+      log.error('markInstantLocked failed:', err))
     this.disarmLockWatch(txid)
     const waiters = this.instantLockWaiters.get(txid)
     if (waiters) {
@@ -959,14 +972,21 @@ export class WalletSyncService {
         }
       }),
     }
-    await this.transactionDAO.recordPendingTx(walletId, applied, true)
+    await this.recordPendingTx(walletId, applied, true)
     this.markWalletDataChanged(walletId)
+  }
+
+  // A broadcast session hands over its lock before the spend is recorded, and a
+  // peer announces an islock once, so a lock already cached is written with the row.
+  private async recordPendingTx(walletId: string, tx: AppliedTx, isLocal: boolean): Promise<void> {
+    await this.transactionDAO.recordPendingTx(walletId, tx, isLocal)
+    if (this.instantLocks.has(tx.txid)) await this.transactionDAO.markInstantLocked(tx.txid)
   }
 
   // A payment the lock pool saw in the mempool. Recorded unconfirmed so the
   // balance moves immediately, then armed so its isdlock marks it final.
   private async recordIncomingTx(walletId: string, tx: AppliedTx): Promise<void> {
-    await this.transactionDAO.recordPendingTx(walletId, tx, false)
+    await this.recordPendingTx(walletId, tx, false)
     this.markWalletDataChanged(walletId)
     const received = tx.outputs.filter(o => o.isMine).reduce((sum, o) => sum + BigInt(o.satoshis), 0n)
     log.info(`incoming tx ${tx.txid} recorded unconfirmed (+${received} duffs)`)

@@ -63,6 +63,8 @@ const sync = new SyncService({
     process.parentPort.postMessage({type: 'platformQuorums', network, keys}),
   masternodeList: (network, masternodes) =>
     process.parentPort.postMessage({type: 'masternodeList', network, masternodes}),
+  listedMasternodes: (network, proTxHashes, askedAt) =>
+    process.parentPort.postMessage({type: 'listedMasternodes', network, proTxHashes, askedAt}),
 })
 
 process.parentPort.on('message', ({data}) => {
@@ -108,6 +110,9 @@ process.parentPort.on('message', ({data}) => {
       return
     case 'getConnectedPeers':
       process.parentPort.postMessage({type: 'peers', requestId: data.requestId, peers: sync.getConnectedPeers()})
+      return
+    case 'refreshMasternodes':
+      sync.refreshMasternodes()
       return
     case 'probePeer':
       sync.probePeer(data.peer, data.network).then(result =>

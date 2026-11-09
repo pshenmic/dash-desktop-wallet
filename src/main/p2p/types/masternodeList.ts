@@ -7,7 +7,7 @@ export interface MasternodeListOptions {
   // Read on every call: the lock pool and chain.db each outlive the other.
   pool: () => PoolService | null
   chain: () => ChainStore | null
-  events: Pick<SyncServiceEvents, 'evonodeDapiUrls' | 'platformQuorums' | 'masternodeList'>
+  events: Pick<SyncServiceEvents, 'evonodeDapiUrls' | 'platformQuorums' | 'masternodeList' | 'listedMasternodes'>
 }
 
 // What a list entry lacks and only the ProRegTx carries. Fixed at registration

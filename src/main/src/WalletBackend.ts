@@ -153,6 +153,7 @@ import {GetLogFileHandler} from './api/logs/getLogFile'
 import {ShowLogFileInFolderHandler} from './api/logs/showLogFileInFolder'
 import {registerHandler} from './utils/ipcHandler'
 import {Logger} from './utils/logger'
+import {Network} from './types/Network'
 
 const prevout = new Logger('prevout')
 const locks = new Logger('locks')
@@ -410,11 +411,13 @@ export class WalletBackend {
       resolvePrevOuts(walletId)
     }
     // A p2p list arrives on its own schedule, hours apart, so it is matched at once.
-    this.walletSyncService.onMasternodeList = (network) => {
+    const rediscoverMasternodes = (network: Network): void => {
       walletDAO.getSelectedWallet()
         .then(selected => selected?.network === network ? masternodeService.discover(selected.walletId) : undefined)
         .catch(err => discoveryLog.error('masternode discovery failed:', err))
     }
+    this.walletSyncService.onMasternodeList = rediscoverMasternodes
+    this.walletSyncService.onListedMasternodes = rediscoverMasternodes
     // The scan is stopped until this answers, so it must not join a discovery
     // run that started before the block that exhausted the gap was persisted.
     this.walletSyncService.onGapExhausted = (gap) => {

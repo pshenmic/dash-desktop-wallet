@@ -120,7 +120,7 @@ export class CoreTransactionService {
 
   // Unsigned and with no inputs hash yet: the shape the fee is quoted from.
   proRegPayload(registration: MasternodeRegistration, keys: ProviderKeyIds, network: Network): ProRegTX {
-    const service = registration.serviceAddress == null ? null : serviceAddressParts(registration.serviceAddress)
+    const service = registration.serviceAddress == null ? null : serviceAddressParts(registration.serviceAddress, network)
     return new ProRegTX(
       PROTX_VERSION,
       MASTERNODE_TYPE_CODE[registration.type],
@@ -157,7 +157,7 @@ export class CoreTransactionService {
   // From v3 the service, and an Evo's platform endpoints, travel in netInfo; the
   // platform node id stays a field of its own.
   proUpServPayload(type: MasternodeType, proTxHash: string, update: MasternodeServiceUpdate, network: Network): ProUpServTx {
-    const {ip, port} = serviceAddressParts(update.serviceAddress)
+    const {ip, port} = serviceAddressParts(update.serviceAddress, network)
     const version = type === 'Evo' ? EVO_SERVICE_TX_VERSION[network] : PROTX_VERSION
     const extended = version >= PROTX_VERSION_EXT_ADDR
     const endpoints: Array<[NetInfoPurpose, number | null]> = [
