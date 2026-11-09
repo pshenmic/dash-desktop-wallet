@@ -64,9 +64,16 @@ interface SelectableUtxoDTO {
   collateral: boolean
 }
 
-// Mirrors MasternodeKeyChain, ImportedMasternodeKey and Masternode in
-// src/main/src/types/Masternode.
+// Mirrors MasternodeKeyChain, ImportedMasternodeKey, Masternode and
+// OwnedCollateral in src/main/src/types/Masternode.
 type MasternodeKeyRole = 'owner' | 'voting' | 'operator'
+
+interface MasternodeCollateralDTO {
+  proTxHash: string
+  txid: string
+  vout: number
+  address: string | null
+}
 
 interface ImportedMasternodeKeyDTO {
   role: MasternodeKeyRole
@@ -242,6 +249,7 @@ declare global {
       getBalance: (address: string | string[], network: Network) => Promise<unknown>
       getIdentities: (walletId: string) => Promise<unknown>
       getMasternodes: (walletId: string) => Promise<MasternodeDTO[] | null>
+      getMasternodeCollaterals: (walletId: string) => Promise<MasternodeCollateralDTO[]>
       getImportedMasternodeKeys: (walletId: string) => Promise<ImportedMasternodeKeyDTO[]>
       importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => Promise<MasternodeDTO[] | null>
       removeMasternodeKey: (walletId: string, key: ImportedMasternodeKeyDTO) => Promise<void>

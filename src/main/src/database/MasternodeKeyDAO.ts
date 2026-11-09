@@ -11,7 +11,7 @@ export class MasternodeKeyDAO {
   getKeys = async (walletId: string): Promise<MasternodeKeys | null> => {
     const [row, platformRows] = await this.knex.transaction(async trx => Promise.all([
       trx('masternode_keys')
-        .select('voting_xpub', 'owner_xpub', 'operator_public_key', 'operator_chain_code')
+        .select('collateral_xpub', 'voting_xpub', 'owner_xpub','operator_public_key', 'operator_chain_code')
         .where('wallet_id', walletId)
         .first(),
       trx('masternode_platform_keys')
@@ -22,6 +22,7 @@ export class MasternodeKeyDAO {
     if (row == null) return null
 
     return {
+      collateralXpub: row.collateral_xpub,
       votingXpub: row.voting_xpub,
       ownerXpub: row.owner_xpub,
       operatorPublicKey: row.operator_public_key,
@@ -41,6 +42,7 @@ export class MasternodeKeyDAO {
       await trx('masternode_keys')
         .insert({
           wallet_id: walletId,
+          collateral_xpub: keys.collateralXpub,
           voting_xpub: keys.votingXpub,
           owner_xpub: keys.ownerXpub,
           operator_public_key: Buffer.from(keys.operatorPublicKey),

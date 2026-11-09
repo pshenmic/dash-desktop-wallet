@@ -9,9 +9,9 @@ import {
   ListedMasternodes,
   Masternode,
   MasternodeCollateral,
-  MasternodeKeyChain,
   MasternodeKeyFilter,
   NetworkMasternode,
+  OwnedCollateral,
 } from '../types/Masternode'
 import {UTXO} from '../types/UTXO'
 import {legacyG1} from './masternodeKeys'
@@ -42,7 +42,7 @@ export function networkMasternode(row: DashscanMasternode): NetworkMasternode {
 
 // What a derived key is listed as. An operator key may be registered in either
 // BLS encoding, so both are searched.
-export function masternodeFilterValues(chain: MasternodeKeyChain, address: string): string[] {
+export function masternodeFilterValues(chain: MasternodeKeyFilter, address: string): string[] {
   return chain === 'operator' ? [address, bytesToHex(legacyG1(hexToBytes(address)))] : [address]
 }
 
@@ -55,7 +55,7 @@ export function nodeKey(filter: MasternodeKeyFilter, node: NetworkMasternode): s
 }
 
 // proTxHash → the index of our key that the node carries for this chain.
-export function matchMasternodeKeys(chain: MasternodeKeyChain, derived: DerivedAddress[], nodes: NetworkMasternode[]): Map<string, number> {
+export function matchMasternodeKeys(chain: MasternodeKeyFilter, derived: DerivedAddress[], nodes: NetworkMasternode[]): Map<string, number> {
   const indexByValue = new Map(derived.flatMap(({index, address}) =>
     masternodeFilterValues(chain, address).map(value => [value, index] as const)))
   const matches = new Map<string, number>()
@@ -123,6 +123,12 @@ export function collateralsToStore(owned: Masternode[], stored: MasternodeCollat
   })
 }
 
+// By outpoint, so a node whose collateral moved since the list was read keeps no stale address.
+export function ownedCollaterals(stored: MasternodeCollateral[], listed: Masternode[]): OwnedCollateral[] {
+  const addresses = new Map(listed.map(node => [`${node.collateralTxid}:${node.collateralVout}`, node.collateralAddress]))
+  return stored.map(({proTxHash, txid, vout}) => ({proTxHash, txid, vout, address: addresses.get(`${txid}:${vout}`) ?? null}))
+}
+
 // By outpoint: another output of the same transaction is an ordinary coin.
 function collateralOutpoints(collaterals: MasternodeCollateral[]): Set<string> {
   return new Set(collaterals.map(({txid, vout}) => `${txid}:${vout}`))
@@ -142,10 +148,11 @@ export function withCollateralFlag(utxos: SelectableUtxo[], collaterals: Mastern
 }
 
 // A node is ours when it carries one of our derived or imported keys, or spends
-// from one of our collateral outpoints; one listed by several searches appears once.
+// from one of our collateral outpoints or collateral-chain addresses; one listed
+// by several searches appears once.
 export function ownedMasternodes(
   nodes: NetworkMasternode[],
-  matches: Record<MasternodeKeyChain, Map<string, number>>,
+  matches: Record<MasternodeKeyFilter, Map<string, number>>,
   imported: ImportedMasternodeKey[],
   collateral: UTXO[],
 ): Masternode[] {
@@ -161,5 +168,5 @@ export function ownedMasternodes(
     }))
     .filter(node => outpoints.has(`${node.collateralTxid}:${node.collateralVout}`)
       || node.importedRoles.length > 0
-      || MASTERNODE_KEY_CHAINS.some(chain => matches[chain].has(node.proTxHash)))
+      || Object.values(matches).some(chainMatches => chainMatches.has(node.proTxHash)))
 }

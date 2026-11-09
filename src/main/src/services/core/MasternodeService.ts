@@ -4,7 +4,7 @@ import {WalletDAO} from '../../database/WalletDAO'
 import {MasternodeDAO} from '../../database/MasternodeDAO'
 import {MasternodeKeyDAO} from '../../database/MasternodeKeyDAO'
 import {WalletProviderFactory} from '../../providers/WalletProviderFactory'
-import {MASTERNODE_KEY_CHAINS, MASTERNODE_KEY_WINDOW} from '../../constants/addresses'
+import {MASTERNODE_KEY_CHAINS, MASTERNODE_KEY_WINDOW, MASTERNODE_WALKED_CHAINS} from '../../constants/addresses'
 import {DUFFS_PER_DASH, DUST_THRESHOLD_DUFFS, MASTERNODE_COLLATERAL_DUFFS, REVOCATION_REASON_CODE} from '../../constants/chain'
 import {Preferences} from '../../preferences'
 import {
@@ -19,6 +19,7 @@ import {
   NetworkMasternode,
   OperatorKeyChoice,
   ProviderTxContext,
+  OwnedCollateral,
   ProviderTxPlan,
   RevocationReason,
 } from '../../types/Masternode'
@@ -32,10 +33,9 @@ import {
   existingMasternodes,
   masternodeFilterValues,
   matchMasternodeKeys,
+  ownedCollaterals,
   operatedNode,
   ownedMasternodes,
-  unusedKeyIndex,
-  withoutCollaterals,
 } from '../../utils/masternodes'
 import {
   providerPayloadBytes,
@@ -94,6 +94,11 @@ export class MasternodeService {
   // null until the first discovery run since startup has answered.
   async getMasternodes(walletId: string): Promise<Masternode[] | null> {
     return this.listed.get(walletId) ?? null
+  }
+
+  // From the stored rows, so a list outage still answers what sends must not spend.
+  async getCollaterals(walletId: string): Promise<OwnedCollateral[]> {
+    return ownedCollaterals(await this.masternodeDAO.getCollaterals(walletId), this.listed.get(walletId) ?? [])
   }
 
   async getImportedKeys(walletId: string): Promise<ImportedMasternodeKey[]> {
@@ -318,8 +323,8 @@ export class MasternodeService {
     if (found == null) return
 
     const nodes: NetworkMasternode[] = [...found]
-    const matches = {} as Record<MasternodeKeyChain, Map<string, number>>
-    for (const chain of MASTERNODE_KEY_CHAINS) {
+    const matches = {} as Record<MasternodeKeyFilter, Map<string, number>>
+    for (const chain of MASTERNODE_WALKED_CHAINS) {
       const chainMatches = matches[chain] = new Map<string, number>()
       const importedValues = imported.filter(({role}) => role === chain)
         .flatMap(({publicKey}) => masternodeFilterValues(chain, publicKey))

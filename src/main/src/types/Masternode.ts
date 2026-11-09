@@ -4,7 +4,7 @@ import type {GroupedAddresses} from './GroupedAddresses'
 import type {Network} from './Network'
 import type {UTXO} from './UTXO'
 
-export type MasternodeKeyRole = 'voting' | 'owner' | 'operator' | 'platformNode'
+export type MasternodeKeyRole = 'collateral' | 'voting' | 'owner' | 'operator' | 'platformNode'
 // The roles a masternode list can be searched by, each walked as a key chain.
 export type MasternodeKeyChain = 'owner' | 'voting' | 'operator'
 export type MasternodeKeyFilter = MasternodeKeyChain | 'collateral'
@@ -148,10 +148,18 @@ export interface MasternodeCollateral {
   followed: boolean
 }
 
+export interface OwnedCollateral {
+  proTxHash: string
+  txid: string
+  vout: number
+  address: string | null
+}
+
 // What a wallet persists to derive its provider keys without the seed. The
 // operator node is BLS, which has no xpub encoding; its public key is the
 // standard compressed G1 point. Platform node keys are ed25519, indexed 0'…
 export interface MasternodeKeys {
+  collateralXpub: string
   votingXpub: string
   ownerXpub: string
   operatorPublicKey: Uint8Array

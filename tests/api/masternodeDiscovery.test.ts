@@ -68,7 +68,7 @@ describe('MasternodeService.discover', () => {
     watched = []
   })
 
-  const key = (chain: 'owner' | 'voting' | 'operator', index: number): string =>
+  const key = (chain: MasternodeKeyFilter, index: number): string =>
     masternodeKeyDeriver(keys, 'mainnet', chain).derive(index).address
 
   async function discover(providers: WalletProviderFactory): Promise<void> {
@@ -114,6 +114,26 @@ describe('MasternodeService.discover', () => {
 
     expect((await owned()).find(({proTxHash}) => proTxHash === 'a')?.operatorKeyIndex).toBe(0)
     expect(await storedCollaterals()).toEqual(['a:aa:0', 'e:ee:0'])
+  })
+
+  // DashSync pays a collateral its ProRegTx creates to the reserved 3'/0' chain.
+  it('owns a node whose collateral address is on the collateral chain', async () => {
+    await discover(source([
+      node('h', {collateralAddress: key('collateral', 3)}),
+      node('i', {collateralAddress: 'Xnobody'}),
+    ]))
+
+    expect(await listed()).toEqual(['h'])
+    expect(await storedCollaterals()).toEqual(['h:hh:0'])
+  })
+
+  it('answers the stored collaterals, with an address only while the list carries it', async () => {
+    const address = key('collateral', 0)
+    await discover(source([node('h', {collateralAddress: address})]))
+    expect(await masternodes.getCollaterals(walletId)).toEqual([{proTxHash: 'h', txid: 'h'.repeat(64), vout: 0, address}])
+
+    await discover(source([node('h', {collateralAddress: null, collateralTxid: null, collateralVout: null, ownerAddress: key('owner', 0)})]))
+    expect(await masternodes.getCollaterals(walletId)).toEqual([{proTxHash: 'h', txid: 'h'.repeat(64), vout: 0, address: null}])
   })
 
   it('replaces what a previous run found', async () => {

@@ -66,6 +66,15 @@ describe('masternodeKeys', () => {
     expect(masternodeAccountPath('mainnet', 'voting')).toBe("m/9'/5'/3'/1'")
     expect(masternodeAccountPath('testnet', 'owner')).toBe("m/9'/1'/3'/2'")
   })
+
+  // DashSync's DSMasternodeHoldingsDerivationPath, with a non-hardened index.
+  it('derives collateral addresses at m/9\'/coin\'/3\'/0\'/i', () => {
+    const root = HDKey.fromMasterSeed(SEED, HD_VERSIONS.mainnet)
+    const fromSeed = PrivateKey.fromBytes(root.derive("m/9'/5'/3'/0'/4").privateKey!, 'mainnet').getAddress()
+    expect(masternodeKeyDeriver(mainnet, 'mainnet', 'collateral').derive(4)).toEqual({
+      index: 4, address: fromSeed, derivationPath: "m/9'/5'/3'/0'/4",
+    })
+  })
 })
 
 describe('masternodePublicKey', () => {

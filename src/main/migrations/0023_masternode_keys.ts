@@ -6,6 +6,7 @@ import type {Knex} from 'knex'
 export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('masternode_keys', table => {
     table.text('wallet_id').notNullable().references('wallet_id').inTable('wallet')
+    table.text('collateral_xpub').notNullable()
     table.text('voting_xpub').notNullable()
     table.text('owner_xpub').notNullable()
     table.binary('operator_public_key').notNullable()
