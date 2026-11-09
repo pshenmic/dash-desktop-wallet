@@ -90,7 +90,7 @@ Create or import BIP39 wallets · keep several and switch at any time · export 
 |---|---|---|
 | **macOS** | Universal `.dmg` (Apple silicon + Intel), signed and notarized | [Download](https://github.com/pshenmic/dash-desktop-wallet/releases/latest) |
 | **Windows** | `.exe` installer, x64 | [Download](https://github.com/pshenmic/dash-desktop-wallet/releases/latest) |
-| **Linux** | APT repository, Snap, `.deb`, AppImage — x64 and arm64 | [See below](#linux) |
+| **Linux** | APT repository, `.deb`, AppImage — x64 and arm64 | [See below](#linux) |
 
 > [!NOTE]
 > The Windows installer is not code-signed yet, so SmartScreen may warn on first launch. Choose **More info → Run anyway**.
@@ -118,14 +118,6 @@ sudo rm /etc/apt/sources.list.d/dash-desktop-wallet.list /usr/share/keyrings/das
 ```
 
 </details>
-
-**Snap**
-
-[![Get it from the Snap Store](https://snapcraft.io/static/images/badges/en/snap-store-black.svg)](https://snapcraft.io/dash-desktop-wallet)
-
-```sh
-sudo snap install dash-desktop-wallet
-```
 
 **AppImage / `.deb`** — download from [Releases](https://github.com/pshenmic/dash-desktop-wallet/releases/latest).
 
