@@ -9,6 +9,7 @@ import {
   ListedMasternodes,
   Masternode,
   MasternodeCollateral,
+  MasternodeKeyChain,
   MasternodeKeyFilter,
   NetworkMasternode,
   OwnedCollateral,

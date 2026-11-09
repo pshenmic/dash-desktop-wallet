@@ -92,13 +92,13 @@ describe('MasternodeService.discover', () => {
   it('walks each key chain past the first window and stops at the gap', async () => {
     await discover(source([
       node('a', {ownerAddress: key('owner', 3)}),
-      node('b', {ownerAddress: key('owner', 7)}),
-      node('c', {ownerAddress: key('owner', 20)}),
+      node('b', {ownerAddress: key('owner', 25)}),
+      node('c', {ownerAddress: key('owner', 80)}),
       node('d', {votingAddress: key('voting', 1)}),
     ]))
 
     expect((await owned()).map(({proTxHash, ownerKeyIndex, votingKeyIndex}) => [proTxHash, ownerKeyIndex, votingKeyIndex]))
-      .toEqual([['a', 3, null], ['b', 7, null], ['d', null, 1]])
+      .toEqual([['a', 3, null], ['b', 25, null], ['d', null, 1]])
   })
 
   it('owns a node by a legacy-encoded operator key or by our collateral outpoint', async () => {

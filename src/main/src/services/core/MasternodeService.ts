@@ -11,6 +11,7 @@ import {
   ImportedMasternodeKey,
   Masternode,
   MasternodeKeyChain,
+  MasternodeKeyFilter,
   MasternodeRegistrarUpdate,
   MasternodeRegistration,
   MasternodeRegistrationResult,
@@ -18,8 +19,8 @@ import {
   MasternodeUpdateResult,
   NetworkMasternode,
   OperatorKeyChoice,
-  ProviderTxContext,
   OwnedCollateral,
+  ProviderTxContext,
   ProviderTxPlan,
   RevocationReason,
 } from '../../types/Masternode'
@@ -33,9 +34,11 @@ import {
   existingMasternodes,
   masternodeFilterValues,
   matchMasternodeKeys,
-  ownedCollaterals,
   operatedNode,
+  ownedCollaterals,
   ownedMasternodes,
+  unusedKeyIndex,
+  withoutCollaterals,
 } from '../../utils/masternodes'
 import {
   providerPayloadBytes,
