@@ -10,6 +10,7 @@ import {
   MasternodeCollateral,
   MasternodeKeyFilter,
   NetworkMasternode,
+  OwnedCollateral,
 } from '../types/Masternode'
 import {UTXO} from '../types/UTXO'
 import {legacyG1} from './masternodeKeys'
@@ -87,6 +88,12 @@ export function collateralsToStore(owned: Masternode[], stored: MasternodeCollat
     if (txid == null || vout == null) return []
     return [{proTxHash, txid, vout, followed: (row?.followed ?? false) || followed.has(proTxHash)}]
   })
+}
+
+// By outpoint, so a node whose collateral moved since the list was read keeps no stale address.
+export function ownedCollaterals(stored: MasternodeCollateral[], listed: Masternode[]): OwnedCollateral[] {
+  const addresses = new Map(listed.map(node => [`${node.collateralTxid}:${node.collateralVout}`, node.collateralAddress]))
+  return stored.map(({proTxHash, txid, vout}) => ({proTxHash, txid, vout, address: addresses.get(`${txid}:${vout}`) ?? null}))
 }
 
 // By outpoint: another output of the same transaction is an ordinary coin.

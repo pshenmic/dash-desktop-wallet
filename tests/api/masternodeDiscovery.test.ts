@@ -115,6 +115,15 @@ describe('MasternodeService.discover', () => {
     expect(await storedCollaterals()).toEqual(['h:hh:0'])
   })
 
+  it('answers the stored collaterals, with an address only while the list carries it', async () => {
+    const address = key('collateral', 0)
+    await discover(source([node('h', {collateralAddress: address})]))
+    expect(await masternodes.getCollaterals(walletId)).toEqual([{proTxHash: 'h', txid: 'h'.repeat(64), vout: 0, address}])
+
+    await discover(source([node('h', {collateralAddress: null, collateralTxid: null, collateralVout: null, ownerAddress: key('owner', 0)})]))
+    expect(await masternodes.getCollaterals(walletId)).toEqual([{proTxHash: 'h', txid: 'h'.repeat(64), vout: 0, address: null}])
+  })
+
   it('replaces what a previous run found', async () => {
     await discover(source([node('a', {ownerAddress: key('owner', 0)})]))
     await discover(source([node('b', {ownerAddress: key('owner', 0)})]))

@@ -28,6 +28,7 @@ import { GetAllWalletsHandler } from './api/wallet/getAllWallets'
 import { GetTransactionsHandler } from './api/wallet/getTransactions'
 import { GetIdentitiesHandler } from './api/wallet/getIdentities'
 import { GetMasternodesHandler } from './api/masternodes/getMasternodes'
+import { GetMasternodeCollateralsHandler } from './api/masternodes/getMasternodeCollaterals'
 import { GetImportedMasternodeKeysHandler } from './api/masternodes/getImportedMasternodeKeys'
 import { ImportMasternodeKeyHandler } from './api/masternodes/importMasternodeKey'
 import { RemoveMasternodeKeyHandler } from './api/masternodes/removeMasternodeKey'
@@ -200,6 +201,7 @@ export class WalletBackend {
     registerHandler("getTransactionByHash", new GetTransactionByHashHandler(this.walletService).handle)
     registerHandler('getIdentities', new GetIdentitiesHandler(this.identityService).handle)
     registerHandler('getMasternodes', new GetMasternodesHandler(this.masternodeService).handle)
+    registerHandler('getMasternodeCollaterals', new GetMasternodeCollateralsHandler(this.masternodeService).handle)
     registerHandler('getImportedMasternodeKeys', new GetImportedMasternodeKeysHandler(this.masternodeService).handle)
     registerHandler('importMasternodeKey', new ImportMasternodeKeyHandler(this.masternodeService).handle)
     registerHandler('removeMasternodeKey', new RemoveMasternodeKeyHandler(this.masternodeService).handle)

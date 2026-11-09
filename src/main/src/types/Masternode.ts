@@ -53,6 +53,13 @@ export interface MasternodeCollateral {
   followed: boolean
 }
 
+export interface OwnedCollateral {
+  proTxHash: string
+  txid: string
+  vout: number
+  address: string | null
+}
+
 // What a wallet persists to derive its provider keys without the seed. The
 // operator node is BLS, which has no xpub encoding; its public key is the
 // standard compressed G1 point. Platform node keys are ed25519, indexed 0'…

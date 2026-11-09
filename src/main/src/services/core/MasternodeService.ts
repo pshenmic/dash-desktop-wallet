@@ -3,7 +3,14 @@ import {MasternodeDAO} from '../../database/MasternodeDAO'
 import {MasternodeKeyDAO} from '../../database/MasternodeKeyDAO'
 import {WalletProviderFactory} from '../../providers/WalletProviderFactory'
 import {MASTERNODE_KEY_CHAINS, MASTERNODE_KEY_WINDOW, MASTERNODE_WALKED_CHAINS} from '../../constants/addresses'
-import {ImportedMasternodeKey, Masternode, MasternodeKeyChain, MasternodeKeyFilter, NetworkMasternode} from '../../types/Masternode'
+import {
+  ImportedMasternodeKey,
+  Masternode,
+  MasternodeKeyChain,
+  MasternodeKeyFilter,
+  NetworkMasternode,
+  OwnedCollateral,
+} from '../../types/Masternode'
 import {memoryWindowStore, runAddressWindow} from '../../utils/addressWindow'
 import {masternodeKeyDeriver, masternodePublicKey} from '../../utils/masternodeKeys'
 import {
@@ -12,6 +19,7 @@ import {
   collateralUtxos,
   masternodeFilterValues,
   matchMasternodeKeys,
+  ownedCollaterals,
   ownedMasternodes,
 } from '../../utils/masternodes'
 import {requireWallet} from '../../utils/requireWallet'
@@ -41,6 +49,11 @@ export class MasternodeService {
   // null until the first discovery run since startup has answered.
   async getMasternodes(walletId: string): Promise<Masternode[] | null> {
     return this.listed.get(walletId) ?? null
+  }
+
+  // From the stored rows, so a list outage still answers what sends must not spend.
+  async getCollaterals(walletId: string): Promise<OwnedCollateral[]> {
+    return ownedCollaterals(await this.masternodeDAO.getCollaterals(walletId), this.listed.get(walletId) ?? [])
   }
 
   async getImportedKeys(walletId: string): Promise<ImportedMasternodeKey[]> {

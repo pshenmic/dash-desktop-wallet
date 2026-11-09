@@ -10,6 +10,7 @@ import {
   masternodeFilterValues,
   matchMasternodeKeys,
   networkMasternode,
+  ownedCollaterals,
   ownedMasternodes,
   collateralsToStore,
   withCollateralFlag,
@@ -153,5 +154,17 @@ describe('ownedMasternodes', () => {
       {role: 'operator', publicKey: OPERATOR_0},
     ], [])
     expect(owned.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['a', ['voting']], ['b', ['operator']]])
+  })
+
+  it('names a stored collateral by the address the list gives that outpoint', () => {
+    const [listed] = ownedMasternodes([node('a', {collateralAddress: 'Xheld'})], {...none, owner: new Map([['a', 0]])}, [], [])
+    const stored = [
+      {proTxHash: 'a', txid: 'c'.repeat(64), vout: 0, followed: true},
+      {proTxHash: 'b', txid: 'c'.repeat(64), vout: 1, followed: false},
+    ]
+    expect(ownedCollaterals(stored, [listed])).toEqual([
+      {proTxHash: 'a', txid: 'c'.repeat(64), vout: 0, address: 'Xheld'},
+      {proTxHash: 'b', txid: 'c'.repeat(64), vout: 1, address: null},
+    ])
   })
 })
