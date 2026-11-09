@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Button, Text } from "@renderer/components/dash-ui-kit-extended";
 import type { UseCreateWalletState, WordCount } from '@renderer/types/auth'
 import { Switch } from "dash-ui-kit/react";
@@ -14,9 +15,10 @@ type SeedPhraseData = Pick<
 
 type SeedPhraseProps = Pick<UseCreateWalletState, 'seedPhrase' | 'wordCount' | 'setWordCount' | 'verifySeedPhrase'> & {
   data: SeedPhraseData
+  children?: ReactNode
 }
 
-export default function SeedPhrase({ seedPhrase, wordCount, setWordCount, verifySeedPhrase, data } : SeedPhraseProps): React.JSX.Element {
+export default function SeedPhrase({ seedPhrase, wordCount, setWordCount, verifySeedPhrase, data, children } : SeedPhraseProps): React.JSX.Element {
   const options = [
     { label: "12 words", value: 12 as const },
     { label: "24 words", value: 24 as const },
@@ -55,6 +57,7 @@ export default function SeedPhrase({ seedPhrase, wordCount, setWordCount, verify
         ))}
       </div>
 
+      {children}
       <SeedPhraseWarning {...data.seedPhraseWarning} />
 
       <div className={"flex gap-[.75rem] items-center"}>

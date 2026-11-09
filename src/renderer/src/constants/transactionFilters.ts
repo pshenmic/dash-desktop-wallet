@@ -28,8 +28,7 @@ export const TX_BALANCE_CHANGE_OPTIONS: FilterOption<TxFilter['balanceChange']>[
   { value: TxBalanceChangeFilter.Unchanged, label: 'No change' },
 ]
 
-export const TX_FILTER_LABELS: Record<keyof TxFilter, string> = {
-  search: 'Search',
+export const TX_FILTER_LABELS: Record<Exclude<keyof TxFilter, 'search'>, string> = {
   source: 'Chain',
   balanceChange: 'Balance change',
   type: 'Type',

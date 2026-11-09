@@ -6,12 +6,13 @@ import IdentitySelect from '@renderer/components/ui/IdentitySelect'
 import { DASHPAY_READINESS_BADGES, READINESS_TONE_CLASS } from '@renderer/constants/dashPay'
 import { DASHPAY_REGISTER_IDENTITY_HREF, REQUEST_COUNT_FORMS, SWITCHER_COPY } from '@renderer/constants/dashPayOverview'
 import { POPOVER_OPTION } from '@renderer/constants/surfaces'
+import { useAuth } from '@renderer/contexts/AuthContext'
 import { IdentitySelectAppearance } from '@renderer/enums/IdentitySelectAppearance'
+import { useDashPayUsernames } from '@renderer/hooks/useDashPayUsernames'
 import type { IdentityApiDto } from '@renderer/hooks/useIdentities'
 import type { IdentitySwitcherProps } from '@renderer/types/DashPayOverview'
 import { countLabel } from '@renderer/utils/countLabel'
 import { incomingCountByIdentity } from '@renderer/utils/dashPayIdentity'
-import { dashPayReadiness } from '@renderer/utils/dashPayReadiness'
 import IdentityReadinessBadge from './IdentityReadinessBadge'
 
 export default function IdentitySwitcher({
@@ -25,18 +26,14 @@ export default function IdentitySwitcher({
   ref,
 }: IdentitySwitcherProps): React.JSX.Element {
   const navigate = useNavigate()
-  const readinessById = useMemo(
-    () => new Map(identities.map(entry => [entry.identifier, dashPayReadiness(entry).readiness])),
-    [identities]
-  )
+  const { status } = useAuth()
+  const { identityStatus } = useDashPayUsernames(status?.selectedWalletId ?? undefined)
   const requests = useMemo(() => incomingCountByIdentity(contacts), [contacts])
   const attention = Object.entries(requests).some(([id, count]) => id !== identity?.identifier && count > 0)
 
-  const readinessOf = (entry: IdentityApiDto) => readinessById.get(entry.identifier) ?? dashPayReadiness(entry).readiness
-
   const renderTriggerMeta = (entry: IdentityApiDto): React.ReactNode => {
-    const readiness = readinessOf(entry)
-    return <span className={READINESS_TONE_CLASS[readiness]}>{DASHPAY_READINESS_BADGES[readiness].text}</span>
+    const badgeStatus = identityStatus(entry)
+    return badgeStatus == null ? null : <span className={READINESS_TONE_CLASS[badgeStatus]}>{DASHPAY_READINESS_BADGES[badgeStatus].text}</span>
   }
 
   const renderMeta = (entry: IdentityApiDto): React.ReactNode => {
@@ -69,7 +66,7 @@ export default function IdentitySwitcher({
       onRetry={onRetry}
       renderTriggerMeta={renderTriggerMeta}
       renderMeta={renderMeta}
-      renderBadge={entry => <IdentityReadinessBadge readiness={readinessOf(entry)} />}
+      renderBadge={entry => <IdentityReadinessBadge status={identityStatus(entry)} />}
       footer={footer}
       attention={attention}
     />

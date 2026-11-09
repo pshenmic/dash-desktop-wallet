@@ -5,6 +5,7 @@ import {WalletDAO} from '../../database/WalletDAO'
 import {AddressDAO} from '../../database/AddressDAO'
 import {IdentityDAO} from '../../database/IdentityDAO'
 import {PlatformTransactionDAO} from '../../database/PlatformTransactionDAO'
+import {MasternodeKeyDAO} from '../../database/MasternodeKeyDAO'
 import {WalletProviderFactory} from '../../providers/WalletProviderFactory'
 import {WalletProvider} from '../../providers/WalletProvider'
 import {Network} from '../../types/Network'
@@ -25,6 +26,7 @@ import {withUnlockedWallet} from "../../utils/walletSeed";
 import {requireSelectedWallet, requireWallet} from '../../utils/requireWallet'
 import {mergePlatformTransactions} from '../../utils/platformExplorerTransactions'
 import {dashPayAccountPath} from '../../utils/dashPayKeys'
+import {masternodeKeys} from '../../utils/masternodeKeys'
 import {dashPayPayments} from '../../utils/dashPayContacts'
 import {DashPayDirection, DashPayPayment} from '../../types/DashPay'
 import {
@@ -54,6 +56,7 @@ export class WalletService {
   private addressDAO: AddressDAO
   private identityDAO: IdentityDAO
   private platformTransactionDAO: PlatformTransactionDAO
+  private masternodeKeyDAO: MasternodeKeyDAO
   private identities: IdentityService
   private platformHistory: PlatformHistoryService
   private walletSyncService: WalletSyncService
@@ -72,6 +75,7 @@ export class WalletService {
     addressDAO: AddressDAO,
     identityDAO: IdentityDAO,
     platformTransactionDAO: PlatformTransactionDAO,
+    masternodeKeyDAO: MasternodeKeyDAO,
     identities: IdentityService,
     platformHistory: PlatformHistoryService,
     walletSyncService: WalletSyncService,
@@ -86,6 +90,7 @@ export class WalletService {
     this.addressDAO = addressDAO
     this.identityDAO = identityDAO
     this.platformTransactionDAO = platformTransactionDAO
+    this.masternodeKeyDAO = masternodeKeyDAO
     this.identities = identities
     this.platformHistory = platformHistory
     this.walletSyncService = walletSyncService
@@ -110,9 +115,11 @@ export class WalletService {
     const walletId = randomBytes(4).toString('hex')
     const encryptedMnemonic = encryptMnemonic(seedphrase, password, this.pbkdf2Iterations)
 
+    const seed = this.keyPair.mnemonicToSeed(seedphrase)
+    const providerKeys = masternodeKeys(seed, network)
+
     await this.walletDAO.saveWallet(encryptedMnemonic, walletId, network, null)
 
-    const seed = this.keyPair.mnemonicToSeed(seedphrase)
     const hdKey = this.keyPair.seedToHdKey(seed, network)
     const coinType = COIN_TYPE[network]
     const accountId = 0
@@ -123,6 +130,7 @@ export class WalletService {
     const coreAccountNode = await this.keyPair.derivePath(hdKey, coreAccountPath(coinType, accountId))
     await this.walletDAO.setCoreXpub(walletId, coreAccountNode.publicExtendedKey)
     await this.walletDAO.setDashPayXpub(walletId, (await this.keyPair.derivePath(hdKey, dashPayAccountPath(network))).publicExtendedKey)
+    await this.masternodeKeyDAO.saveKeys(walletId, providerKeys)
 
     const coreXpub = coreAccountNode.publicExtendedKey
     const addresses: Address[] = []

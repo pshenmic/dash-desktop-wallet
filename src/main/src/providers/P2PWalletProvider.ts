@@ -12,6 +12,7 @@ import {confirmationsAt} from '../utils/confirmations'
 import {dedupeTransactions} from '../utils/dedupeTransactions'
 import {AddressUsage} from '../types/AddressDiscovery'
 import {ConnectionStatus} from '../types/ConnectionStatus'
+import {NetworkMasternode} from '../types/Masternode'
 import {Logger} from '../utils/logger'
 
 const log = new Logger('prevout')
@@ -118,6 +119,11 @@ export class P2PWalletProvider implements WalletProvider {
   // The local store only knows the addresses already derived into it, so it
   // cannot answer for indexes beyond the current window.
   async scanAddressUsage(): Promise<AddressUsage[] | null> {
+    return null
+  }
+
+  // The SPV sync does not fetch the masternode list (mnlistdiff) yet.
+  async getMasternodes(): Promise<NetworkMasternode[] | null> {
     return null
   }
 

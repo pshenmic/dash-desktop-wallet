@@ -11,6 +11,7 @@ import {AddressDAO} from '../../src/main/src/database/AddressDAO'
 import {IdentityDAO} from '../../src/main/src/database/IdentityDAO'
 import {DashPayCache} from '../../src/main/src/database/DashPayCache'
 import {PlatformTransactionDAO} from '../../src/main/src/database/PlatformTransactionDAO'
+import {MasternodeKeyDAO} from '../../src/main/src/database/MasternodeKeyDAO'
 import {TransactionDAO} from '../../src/main/src/database/TransactionDAO'
 import {CoreDiscoveryService} from '../../src/main/src/services/core/CoreDiscoveryService'
 import {CorePrevOutService} from '../../src/main/src/services/core/CorePrevOutService'
@@ -32,6 +33,7 @@ const TEST_PBKDF2_ITERATIONS = 1_000
 export interface Harness {
   knex: Knex
   walletDAO: WalletDAO
+  masternodeKeyDAO: MasternodeKeyDAO
   addressDAO: AddressDAO
   identityDAO: IdentityDAO
   transactionDAO: TransactionDAO
@@ -78,7 +80,8 @@ export async function harness(): Promise<Harness> {
   const coreDiscoveryService = new CoreDiscoveryService(walletDAO, addressDAO, identityDAO, dashPayCache, transactionDAO, walletSyncService, providers)
   const coreLockService = new CoreLockService(walletDAO, addressDAO, walletSyncService, coreTransactionService, providers, preferences)
 
-  const walletCredentialsService = new WalletCredentialsService(walletDAO, addressDAO, TEST_PBKDF2_ITERATIONS)
+  const masternodeKeyDAO = new MasternodeKeyDAO(knex)
+  const walletCredentialsService = new WalletCredentialsService(walletDAO, addressDAO, masternodeKeyDAO, TEST_PBKDF2_ITERATIONS)
   const identityService = new IdentityService(walletDAO, identityDAO, dashPayCache, platform)
 
   // Stubbed rather than built: the real one reads the platform explorer, and
@@ -89,13 +92,14 @@ export async function harness(): Promise<Harness> {
   } as unknown as PlatformHistoryService
 
   const walletService = new WalletService(
-    walletDAO, addressDAO, identityDAO, new PlatformTransactionDAO(knex), identityService, platformHistoryService, walletSyncService, platform,
+    walletDAO, addressDAO, identityDAO, new PlatformTransactionDAO(knex), masternodeKeyDAO, identityService, platformHistoryService, walletSyncService, platform,
     providers, coreDiscoveryService, coreTransactionService, preferences, TEST_PBKDF2_ITERATIONS,
   )
 
   return {
     knex,
     walletDAO,
+    masternodeKeyDAO,
     addressDAO,
     identityDAO,
     transactionDAO,
