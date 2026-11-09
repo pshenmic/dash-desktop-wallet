@@ -31,6 +31,8 @@ type MasternodeServiceUpdate = {
   platformHttpPort: number | null
 }
 type RevocationReason = 'notSpecified' | 'termination' | 'compromisedKeys' | 'changeOfKeys'
+// Mirrors VoteOutcome in src/main/src/types/Governance.
+type VoteOutcome = 'yes' | 'no' | 'abstain'
 
 // Mirrors src/main/src/types/CoinSelection, which the bundles do not share: an
 // address narrows the automatic selection, a picked outpoint list is spent whole.
@@ -96,6 +98,10 @@ export const apiDefinitions = (ipcRenderer) => ({
   updateMasternodeRegistrar: (walletId: string, proTxHash: string, update: MasternodeRegistrarUpdate, password: string) => ipcRenderer.invoke('updateMasternodeRegistrar', walletId, proTxHash, update, password),
   updateMasternodeService: (walletId: string, proTxHash: string, update: MasternodeServiceUpdate, password: string) => ipcRenderer.invoke('updateMasternodeService', walletId, proTxHash, update, password),
   revokeMasternode: (walletId: string, proTxHash: string, reason: RevocationReason, password: string) => ipcRenderer.invoke('revokeMasternode', walletId, proTxHash, reason, password),
+
+  getGovernanceProposals: (walletId: string) => ipcRenderer.invoke('getGovernanceProposals', walletId),
+  getProposalTally: (walletId: string, proposalHash: string) => ipcRenderer.invoke('getProposalTally', walletId, proposalHash),
+  voteProposal: (walletId: string, proposalHash: string, outcome: VoteOutcome, proTxHashes: string[], password: string) => ipcRenderer.invoke('voteProposal', walletId, proposalHash, outcome, proTxHashes, password),
 
   getIdentities: (walletId: string) => ipcRenderer.invoke('getIdentities', walletId),
   updateIdentityKeys: (walletId: string, identifier: string, update: IdentityKeysUpdate, password: string) => ipcRenderer.invoke('updateIdentityKeys', walletId, identifier, update, password),

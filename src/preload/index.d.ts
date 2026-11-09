@@ -156,6 +156,33 @@ interface MasternodeUpdateResultDTO {
   peersAcked: number
 }
 
+// Mirrors Proposal, ProposalTally, VoteOutcome and VoteResult in
+// src/main/src/types/Governance.
+interface ProposalDTO {
+  hash: string
+  name: string
+  url: string
+  paymentAddress: string
+  paymentDuffs: bigint
+  startEpoch: number
+  endEpoch: number
+  createdAt: number
+  collateralHash: string
+}
+
+interface ProposalTallyDTO {
+  yes: number
+  no: number
+  abstain: number
+}
+
+type VoteOutcomeDTO = 'yes' | 'no' | 'abstain'
+
+interface VoteResultDTO {
+  proTxHash: string
+  peers: number
+}
+
 // Hand-maintained alongside definitions.ts, and deliberately a second
 // declaration of src/main/src/types/Transaction: the three bundles do not share
 // types. Amounts stay bigint — structured clone carries them as themselves.
@@ -257,6 +284,9 @@ declare global {
       updateMasternodeRegistrar: (walletId: string, proTxHash: string, update: MasternodeRegistrarUpdateDTO, password: string) => Promise<MasternodeUpdateResultDTO>
       updateMasternodeService: (walletId: string, proTxHash: string, update: MasternodeServiceUpdateDTO, password: string) => Promise<MasternodeUpdateResultDTO>
       revokeMasternode: (walletId: string, proTxHash: string, reason: RevocationReasonDTO, password: string) => Promise<MasternodeUpdateResultDTO>
+      getGovernanceProposals: (walletId: string) => Promise<ProposalDTO[] | null>
+      getProposalTally: (walletId: string, proposalHash: string) => Promise<ProposalTallyDTO | null>
+      voteProposal: (walletId: string, proposalHash: string, outcome: VoteOutcomeDTO, proTxHashes: string[], password: string) => Promise<VoteResultDTO[]>
       getUsernames: (walletId: string) => Promise<unknown>
       refreshDashPay: (walletId: string) => Promise<void>
       registerUsername: (walletId: string, identifier: string, label: string, password: string) => Promise<unknown>

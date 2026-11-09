@@ -76,7 +76,7 @@ export function providerPayloadBytes(payload: ProviderPayload): number {
 }
 
 const isPort = (port: number | null): port is number => port != null && Number.isInteger(port) && port >= 1 && port <= 65535
-const isHash = (value: string): boolean => /^[0-9a-fA-F]{64}$/.test(value)
+export const isHash = (value: string): boolean => /^[0-9a-fA-F]{64}$/.test(value)
 const ipv4Number = (ip: string): number => ip.split('.').reduce((value, octet) => value * 256 + Number(octet), 0)
 
 function isRoutable(ip: string): boolean {

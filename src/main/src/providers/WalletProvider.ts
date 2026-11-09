@@ -4,6 +4,7 @@ import {Transaction} from '../types/Transaction'
 import {TxLockStatus} from '../types/TxLockStatus'
 import {AddressUsage} from '../types/AddressDiscovery'
 import {ConnectionStatus} from '../types/ConnectionStatus'
+import {Proposal, ProposalTally} from '../types/Governance'
 import {Masternode, MasternodeKeyFilter, NetworkMasternode} from '../types/Masternode'
 
 // Read side only: where a wallet's history, balances and UTXOs come from.
@@ -38,4 +39,9 @@ export interface WalletProvider {
   // does not carry; `fresh` are ones it has never followed. Answers the
   // proTxHashes it now follows from their registration on.
   watchMasternodes(owned: Masternode[], fresh: Masternode[]): Promise<string[]>
+  // Proposals some superblock can still pay. Null while the source has none to
+  // give yet: p2p before chain.db opens and the index answers.
+  getProposals(): Promise<Proposal[] | null>
+  // Null while the votes or the masternode list they are checked against arrive.
+  getProposalTally(proposalHash: string): Promise<ProposalTally | null>
 }

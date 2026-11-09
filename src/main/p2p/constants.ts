@@ -22,7 +22,7 @@ export const NODE_BLOOM = 1 << 2
 
 export const INV_TYPE_NAMES: Record<number, string> = {
   0: 'ERROR', 1: 'TX', 2: 'BLOCK', 3: 'FILTERED_BLOCK',
-  16: 'DSTX', 29: 'CLSIG', 30: 'ISLOCK', 31: 'ISDLOCK',
+  16: 'DSTX', 17: 'GOVOBJ', 18: 'GOVOBJVOTE', 29: 'CLSIG', 30: 'ISLOCK', 31: 'ISDLOCK',
 }
 
 export const FORWARDED_EVENTS: Array<keyof PoolServiceEventMap> = [
@@ -33,9 +33,28 @@ export const FORWARDED_EVENTS: Array<keyof PoolServiceEventMap> = [
   'peerping', 'peerpong',
   'peercfcheckpt', 'peercfheaders', 'peercfilter',
   'peerislock', 'peerisdlock', 'peerclsig',
-  'peergetheaders', 'peermnlistdiff',
+  'peergetheaders', 'peermnlistdiff', 'peergetdata',
   'seederror',
 ]
+
+// Commands dash-core-p2p's pool does not forward from its peers.
+export const GOVERNANCE_COMMANDS = ['govobj', 'govobjvote'] as const
+export const INV_GOVERNANCE_OBJECT = 17
+export const INV_GOVERNANCE_VOTE = 18
+// Core scores a peer asking twice within its fulfilled-request expiry, an hour,
+// for the object list or for one object's votes.
+export const GOVERNANCE_RESYNC_MS = 60 * 60_000
+export const GOVERNANCE_SYNC_PEERS = 2
+// A peer asked for governance data answers with invs; only these are requested.
+export const GOVERNANCE_REPLY_WINDOW_MS = 60_000
+export const GOVERNANCE_EMIT_DELAY_MS = 1_000
+// How long an announced vote waits for peers to ask for it.
+export const VOTE_RELAY_WINDOW_MS = 10_000
+// govsync's bloom filter (vData, nHashFuncs, nTweak, nFlags). Core reads an empty
+// one beside a proposal hash as a fetch of the object alone, so the vote sync
+// sends one byte that matches no vote.
+export const GOVSYNC_OBJECTS_FILTER = Uint8Array.of(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+export const GOVSYNC_VOTES_FILTER = Uint8Array.of(1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0)
 
 // Forwarded events that say nothing about whether the far end is reachable: a
 // dial that never completes emits peerdisconnect just as a live peer leaving does.

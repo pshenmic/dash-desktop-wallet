@@ -1,5 +1,6 @@
 import {LogLevel} from '../../src/types/Log'
 import {Network} from '../../src/types/Network'
+import {GovernanceVote, Proposal} from '../../src/types/Governance'
 import {NetworkMasternode} from '../../src/types/Masternode'
 import {BroadcastPolicyOverrides, BroadcastResult} from './broadcast'
 import {PeerInfo, PeerOverrides, PeerProbeResult} from './pool'
@@ -136,6 +137,24 @@ export interface P2PRefreshMasternodesMessage {
   type: 'refreshMasternodes'
 }
 
+// Answered at once from chain.db with `proposals`; peers are asked at most hourly.
+export interface P2PSyncProposalsMessage {
+  type: 'syncProposals'
+}
+
+// The same for one proposal's votes, answered with `proposalVotes`.
+export interface P2PSyncProposalVotesMessage {
+  type: 'syncProposalVotes'
+  proposalHash: string
+}
+
+// A signed govobjvote, announced on the lock pool; answered with `voteRelayed`.
+export interface P2PRelayVoteMessage {
+  type: 'relayVote'
+  requestId: string
+  vote: Uint8Array
+}
+
 export type P2PCommand =
   | P2PStartMessage
   | P2PListenMessage
@@ -150,6 +169,9 @@ export type P2PCommand =
   | P2PBanPeersMessage
   | P2PProbePeerMessage
   | P2PRefreshMasternodesMessage
+  | P2PSyncProposalsMessage
+  | P2PSyncProposalVotesMessage
+  | P2PRelayVoteMessage
 
 // ── Events (utility -> main) ────────────────────────────────────────────────
 
@@ -264,6 +286,29 @@ export interface P2PListedMasternodesMessage {
   askedAt: number
 }
 
+// Every stored proposal still in its payment window, as govsync delivered it.
+export interface P2PProposalsMessage {
+  type: 'proposals'
+  network: Network
+  proposals: Proposal[]
+}
+
+// Every vote held for one proposal, each with the address its signature recovers to.
+export interface P2PProposalVotesMessage {
+  type: 'proposalVotes'
+  network: Network
+  proposalHash: string
+  votes: GovernanceVote[]
+}
+
+// peers is how many asked for the vote after it was announced.
+export interface P2PVoteRelayedMessage {
+  type: 'voteRelayed'
+  requestId: string
+  peers: number
+  errorMessage: string | null
+}
+
 // A mempool tx paying one of our addresses, seen on the lock pool before any
 // block carries it. Recorded unconfirmed; its isdlock is what makes it final.
 export interface P2PIncomingTxMessage {
@@ -298,3 +343,6 @@ export type P2PEvent =
   | P2PIncomingTxMessage
   | P2PMasternodeListMessage
   | P2PListedMasternodesMessage
+  | P2PProposalsMessage
+  | P2PProposalVotesMessage
+  | P2PVoteRelayedMessage

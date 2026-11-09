@@ -88,6 +88,26 @@ Things the code cannot tell you, and that a plausible-looking change breaks:
   ProUpRegTx's proTxHash in the block filter. A node the wallet starts following
   rewinds the scan to its registration once.
 
+## Governance (`sync/governance.ts`)
+
+- **Proposals and votes come from peers with `govsync`, in p2p mode only**, and
+  live in chain.db (`g:` objects, `v:<proposal>:` votes). rpc mode reads Dashscan
+  and never asks a peer. dash-core-p2p drops `govobj` and `govobjvote`
+  unparsed, so `net/governanceMessages.ts` registers them and `PoolService` takes
+  them off each peer itself.
+- **Core scores a peer that asks twice within an hour**, for the list or for one
+  proposal's votes, so both asks are held to one an hour, persisted, and spread
+  over peers not asked in that hour. An empty bloom filter beside a proposal hash
+  is a fetch of the object alone; the vote sync sends a one-byte filter.
+- **A vote counts only where its signature recovers to the node's current voting
+  key**, the node found by collateral outpoint in the proven list. Mainnet signs
+  a message (`txid-vout|parent|signal|outcome|time`), testnet the hash.
+- **A vote goes out as an `inv`, and only a peer's `getdata` gets the vote**:
+  Core drops one it neither requested nor saw announced. It also drops a node's
+  new vote within an hour of its last on the same proposal, and says nothing.
+- **A proposal is dropped once its end is a superblock cycle behind**, on open
+  and in what the providers answer: no superblock left can pay it.
+
 ## Difficulty (`utils/difficulty.ts`)
 
 - **Every header's `nBits` is checked against the retarget rule for its era**:

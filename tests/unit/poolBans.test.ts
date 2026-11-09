@@ -3,7 +3,9 @@ import {describe, it, expect, beforeEach, afterEach, vi} from 'vitest'
 vi.mock('dash-core-p2p', async () => {
   const {EventEmitter} = await import('events')
   return {
+    Message: class {},
     Messages: class {
+      add = (): void => undefined
       GetAddr = (): {command: string} => ({command: 'getaddr'})
       Ping = (): {command: string; nonce: Uint8Array} => ({command: 'ping', nonce: new Uint8Array(8)})
     },
@@ -39,6 +41,7 @@ interface FakePeer {
   sent: unknown[]
   sendMessage: (message: unknown) => void
   disconnect: () => void
+  on: () => void
 }
 
 const fakePeer = (host: string, port = 19999): FakePeer => {
@@ -46,6 +49,7 @@ const fakePeer = (host: string, port = 19999): FakePeer => {
     host, port, subversion: '/Dash Core:22.1.0/', disconnects: 0, sent: [],
     sendMessage: message => { peer.sent.push(message) },
     disconnect: () => { peer.disconnects++ },
+    on: () => undefined,
   }
   return peer
 }

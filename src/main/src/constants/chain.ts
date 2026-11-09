@@ -1,3 +1,4 @@
+import {VoteOutcome} from '../types/Governance'
 import {MasternodeType, RevocationReason} from '../types/Masternode'
 import {Network} from '../types/Network'
 
@@ -32,6 +33,15 @@ export const NON_ROUTABLE_IPV4: Array<[string, number]> = [
 export const EVO_SERVICE_TX_VERSION: Record<Network, number> = {mainnet: 2, testnet: 3}
 export const REVOCATION_REASON_CODE: Record<RevocationReason, number> = {notSpecified: 0, termination: 1, compromisedKeys: 2, changeOfKeys: 3}
 export const BLS_SIGNATURE_SIZE = 96
+
+// Core's governance codes: an object's type, a vote's signal and its outcome.
+export const GOVERNANCE_PROPOSAL_TYPE = 1
+export const VOTE_SIGNAL_FUNDING = 1
+export const VOTE_OUTCOME_CODE: Record<VoteOutcome, number> = {yes: 1, no: 2, abstain: 3}
+export const MASTERNODE_VOTE_WEIGHT: Record<MasternodeType, number> = {Regular: 1, Evo: 4}
+// One superblock cycle (nSuperblockCycle × the 2.5-minute target). A proposal
+// that ended before the current cycle began can be paid by no superblock left.
+export const SUPERBLOCK_CYCLE_SECONDS: Record<Network, number> = {mainnet: 16_616 * 150, testnet: 24 * 150}
 
 // Dash Core's strMessageMagic, kept from its DarkCoin days.
 export const MESSAGE_MAGIC = 'DarkCoin Signed Message:\n'

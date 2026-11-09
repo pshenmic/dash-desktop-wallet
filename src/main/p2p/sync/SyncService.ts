@@ -25,9 +25,10 @@ import {dialProbe} from '../net/peerProbe'
 import {HeaderSyncWorker} from './workers/HeaderSyncWorker'
 import {CFilterSyncWorker} from './workers/CFilterSyncWorker'
 import {MasternodeList} from './masternodeList'
+import {Governance} from './governance'
 import type {ChainLock, HeaderSyncWorkerStatus} from '../types/headerSync'
 import type {CFilterSyncWorkerStatus} from '../types/cfilterSync'
-import {P2PAddWatchAddressesMessage, P2PBroadcastMessage, P2PListenMessage, P2PReseedUtxosMessage, P2PStartMessage, P2PWatchProvidersMessage, P2PWatchTxsMessage} from '../types/messages'
+import {P2PAddWatchAddressesMessage, P2PBroadcastMessage, P2PListenMessage, P2PRelayVoteMessage, P2PReseedUtxosMessage, P2PStartMessage, P2PWatchProvidersMessage, P2PWatchTxsMessage} from '../types/messages'
 import type {PayoutUpdate} from '../types/masternodeList'
 import {Network} from '../../src/types/Network'
 import {BroadcastResult} from '../types/broadcast'
@@ -94,6 +95,7 @@ export class SyncService {
   private mempoolStats = {announced: 0, fetched: 0, matched: 0}
   private mempoolReportTimer: ReturnType<typeof setInterval> | null = null
   private readonly masternodeList: MasternodeList
+  private readonly governance: Governance
 
   private status: WalletSyncStatus = {
     phase: 'idle',
@@ -118,6 +120,7 @@ export class SyncService {
 
   constructor(private readonly events: SyncServiceEvents) {
     this.masternodeList = new MasternodeList({pool: () => this.lockPool, chain: () => this.chainStore, events})
+    this.governance = new Governance({pool: () => this.lockPool, chain: () => this.chainStore, events})
   }
 
   getStatus = (): WalletSyncStatus => this.status
@@ -131,6 +134,19 @@ export class SyncService {
 
   refreshMasternodes = (): void => {
     this.masternodeList.refresh()
+  }
+
+  // Proposals come from chain.db, so only p2p mode answers; votes go out in both.
+  syncProposals = (): void => {
+    this.governance.syncProposals()
+  }
+
+  syncProposalVotes = (proposalHash: string): void => {
+    this.governance.syncVotes(proposalHash).catch(err => log.warn(`votes on ${proposalHash} failed:`, err))
+  }
+
+  relayVote = (cmd: P2PRelayVoteMessage): void => {
+    this.governance.relay(cmd.requestId, cmd.vote)
   }
 
   // A ready peer answered its handshake already; anything else is claimed for
@@ -234,6 +250,7 @@ export class SyncService {
     this.watchedTxids = new Set()
     this.chainLock = null
     this.masternodeList.resetPool()
+    this.governance.resetPool()
 
     const pinned = overrides?.mode === 'static' ? overrides.staticPeers : []
     this.pinnedOnly = pinned.length > 0
@@ -271,6 +288,11 @@ export class SyncService {
     this.lockPool.on('peermnlistdiff', this.masternodeList.onDiff)
     this.lockPool.on('peerblock', this.masternodeList.registry.onBlock)
     this.lockPool.on('peeraddr', this.feedBulkPool)
+    this.lockPool.on('peerinv', this.governance.onInv)
+    this.lockPool.on('peergovobj', this.governance.onObject)
+    this.lockPool.on('peergovobjvote', this.governance.onVote)
+    this.lockPool.on('peergetdata', this.governance.onGetData)
+    this.lockPool.on('peerready', this.governance.onPeerReady)
     // Nothing else emits status while the bulk layer is down, so lock-pool
     // churn is a lazy-mode wallet's only signal.
     this.lockPool.on('peerready', this.onLockPeerChange)
@@ -362,6 +384,8 @@ export class SyncService {
       this.events.error(labelled)
       return
     }
+
+    this.governance.open().catch(err => log.warn('governance load failed:', err))
 
     // Resume from persisted tip, or genesis on a fresh chain.db.
     let resumeHeight = persisted.tipHeight
@@ -728,6 +752,7 @@ export class SyncService {
     }
     this.syncPool = null
     this.masternodeList.closeChain()
+    this.governance.closeChain()
     if (this.chainStore) {
       await this.chainStore.close().catch(() => { /* ignore */ })
       this.chainStore = null

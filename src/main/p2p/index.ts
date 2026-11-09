@@ -65,6 +65,12 @@ const sync = new SyncService({
     process.parentPort.postMessage({type: 'masternodeList', network, masternodes}),
   listedMasternodes: (network, proTxHashes, askedAt) =>
     process.parentPort.postMessage({type: 'listedMasternodes', network, proTxHashes, askedAt}),
+  proposals: (network, proposals) =>
+    process.parentPort.postMessage({type: 'proposals', network, proposals}),
+  proposalVotes: (network, proposalHash, votes) =>
+    process.parentPort.postMessage({type: 'proposalVotes', network, proposalHash, votes}),
+  voteRelayed: (requestId, peers, errorMessage) =>
+    process.parentPort.postMessage({type: 'voteRelayed', requestId, peers, errorMessage}),
 })
 
 process.parentPort.on('message', ({data}) => {
@@ -113,6 +119,15 @@ process.parentPort.on('message', ({data}) => {
       return
     case 'refreshMasternodes':
       sync.refreshMasternodes()
+      return
+    case 'syncProposals':
+      sync.syncProposals()
+      return
+    case 'syncProposalVotes':
+      sync.syncProposalVotes(data.proposalHash)
+      return
+    case 'relayVote':
+      sync.relayVote(data)
       return
     case 'probePeer':
       sync.probePeer(data.peer, data.network).then(result =>

@@ -33,6 +33,8 @@ const providerStub = (utxos: UTXO[], ready = true): WalletProvider => ({
   nextUnusedAddress: async () => '',
   getMasternodes: async () => null,
   watchMasternodes: async () => [],
+  getProposals: async () => null,
+  getProposalTally: async () => null,
 })
 
 describe('listing the coins a send can draw on', () => {

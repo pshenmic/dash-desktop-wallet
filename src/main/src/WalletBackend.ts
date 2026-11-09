@@ -36,6 +36,9 @@ import { RegisterMasternodeHandler } from './api/masternodes/registerMasternode'
 import { UpdateMasternodeRegistrarHandler } from './api/masternodes/updateMasternodeRegistrar'
 import { UpdateMasternodeServiceHandler } from './api/masternodes/updateMasternodeService'
 import { RevokeMasternodeHandler } from './api/masternodes/revokeMasternode'
+import { GetGovernanceProposalsHandler } from './api/governance/getGovernanceProposals'
+import { GetProposalTallyHandler } from './api/governance/getProposalTally'
+import { VoteProposalHandler } from './api/governance/voteProposal'
 import { GetUsernamesHandler } from './api/wallet/getUsernames'
 import { RefreshDashPayHandler } from './api/wallet/refreshDashPay'
 import { RegisterUsernameHandler } from './api/wallet/registerUsername'
@@ -139,6 +142,7 @@ import {GetUtxosHandler} from './api/wallet/getUtxos'
 import {DISCOVERY_INTERVAL_MS} from './constants/addresses'
 import {CoreDiscoveryService} from './services/core/CoreDiscoveryService'
 import {MasternodeService} from './services/core/MasternodeService'
+import {GovernanceService} from './services/core/GovernanceService'
 import {MasternodeDAO} from './database/MasternodeDAO'
 import {CorePrevOutService} from './services/core/CorePrevOutService'
 import {WalletCredentialsService} from './services/wallet/WalletCredentialsService'
@@ -179,6 +183,7 @@ export class WalletBackend {
   private coreDiscoveryService?: CoreDiscoveryService
   private coreLockService?: CoreLockService
   private masternodeService?: MasternodeService
+  private governanceService?: GovernanceService
   private walletCredentialsService?: WalletCredentialsService
   private identityService?: IdentityService
   private logService?: LogService
@@ -188,7 +193,7 @@ export class WalletBackend {
   private identityDAO?: IdentityDAO
 
   private initHandlers(): void {
-    if (!this.walletService || !this.platformAddressService || !this.platformHistoryService || !this.platformTransferService || !this.feeService || !this.applicationService || !this.walletSyncService || !this.ratesService || !this.contactService || !this.shieldedService || !this.assetLockService || !this.addressDAO || !this.walletDAO || !this.identityDAO || !this.identityRegistrationService || !this.coreDiscoveryService || !this.coreLockService || !this.walletCredentialsService || !this.identityService || !this.logService || !this.platformWorkerService || !this.masternodeService) {
+    if (!this.walletService || !this.platformAddressService || !this.platformHistoryService || !this.platformTransferService || !this.feeService || !this.applicationService || !this.walletSyncService || !this.ratesService || !this.contactService || !this.shieldedService || !this.assetLockService || !this.addressDAO || !this.walletDAO || !this.identityDAO || !this.identityRegistrationService || !this.coreDiscoveryService || !this.coreLockService || !this.walletCredentialsService || !this.identityService || !this.logService || !this.platformWorkerService || !this.masternodeService || !this.governanceService) {
       throw new Error('Services not initialized. Call start() first.')
     }
 
@@ -214,6 +219,9 @@ export class WalletBackend {
     registerHandler('updateMasternodeRegistrar', new UpdateMasternodeRegistrarHandler(this.masternodeService).handle)
     registerHandler('updateMasternodeService', new UpdateMasternodeServiceHandler(this.masternodeService).handle)
     registerHandler('revokeMasternode', new RevokeMasternodeHandler(this.masternodeService).handle)
+    registerHandler('getGovernanceProposals', new GetGovernanceProposalsHandler(this.governanceService).handle)
+    registerHandler('getProposalTally', new GetProposalTallyHandler(this.governanceService).handle)
+    registerHandler('voteProposal', new VoteProposalHandler(this.governanceService).handle)
     registerHandler('getUsernames', new GetUsernamesHandler(this.identityService).handle)
     registerHandler('refreshDashPay', new RefreshDashPayHandler(this.walletService).handle)
     registerHandler('registerUsername', new RegisterUsernameHandler(this.identityService).handle)
@@ -351,6 +359,7 @@ export class WalletBackend {
     this.coreLockService = new CoreLockService(walletDAO, addressDAO, this.walletSyncService, coreTransactionService, providers, preferences)
     const masternodeKeyDAO = new MasternodeKeyDAO(knex)
     this.masternodeService = new MasternodeService(walletDAO, masternodeKeyDAO, masternodeDAO, providers, addressDAO, coreTransactionService, this.walletSyncService, preferences)
+    this.governanceService = new GovernanceService(walletDAO, providers, this.masternodeService, this.walletSyncService)
     this.walletSyncService.watchedProvidersOf = masternodeDAO.getFollowedProTxHashes
     this.walletCredentialsService = new WalletCredentialsService(walletDAO, addressDAO, masternodeKeyDAO, calibratedIterations)
     this.identityService = new IdentityService(walletDAO, identityDAO, dashPayCache, this.platformWorkerService)
