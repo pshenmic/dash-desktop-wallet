@@ -1,5 +1,5 @@
 import {AddressWindowPolicy} from '../types/AddressWindow'
-import {MasternodeKeyChain, MasternodeKeyRole} from '../types/Masternode'
+import {MasternodeKeyChain, MasternodeKeyFilter, MasternodeKeyRole} from '../types/Masternode'
 
 // BIP-44 coin type and the account level of every derivation path in the app.
 // Defining these more than once forks the key tree on whichever copy is missed.
@@ -7,10 +7,12 @@ export const COIN_TYPE: Record<'mainnet' | 'testnet', number> = {mainnet: 5, tes
 export const PLATFORM_ACCOUNT = 0
 export const SHIELDED_ACCOUNT = 0
 
-// DIP-3 provider keys live at m/9'/coinType'/3'/<role>'.
+// DIP-3 provider keys live at m/9'/coinType'/3'/<role>'. DIP-9 reserves 0';
+// DashSync pays a collateral its ProRegTx creates there.
 export const MASTERNODE_FEATURE = 3
-export const MASTERNODE_KEY_ROLE: Record<MasternodeKeyRole, number> = {voting: 1, owner: 2, operator: 3, platformNode: 4}
+export const MASTERNODE_KEY_ROLE: Record<MasternodeKeyRole, number> = {collateral: 0, voting: 1, owner: 2, operator: 3, platformNode: 4}
 export const MASTERNODE_KEY_CHAINS: MasternodeKeyChain[] = ['owner', 'voting', 'operator']
+export const MASTERNODE_WALKED_CHAINS: MasternodeKeyFilter[] = [...MASTERNODE_KEY_CHAINS, 'collateral']
 // HMAC keys of the dashbls BLS HD and SLIP-10 ed25519 masters.
 export const BLS_HD_SEED_KEY = 'BLS HD seed'
 export const ED25519_SEED_KEY = 'ed25519 seed'
@@ -66,8 +68,8 @@ export const SHIELDED_ADDRESS_WINDOW: AddressWindowPolicy = {
 // DashPay (DIP-15), two chains per contact: DIP-15's own gap, which key-wallet
 // uses for both. Only one payer ever uses a chain, so a short gap covers it.
 export const DASHPAY_ADDRESS_WINDOW: AddressWindowPolicy = {
-  gapLimit: 10,
-  batch: 10,
+  gapLimit: 50,
+  batch: 20,
   maxRounds: 50,
 }
 
@@ -81,8 +83,8 @@ export const DASHPAY_START_RETRY_MS = 2_000
 // Masternode keys (DIP-3), one walk per owner, voting and operator chain. A
 // wallet runs few nodes, and every round is one Dashscan filter request.
 export const MASTERNODE_KEY_WINDOW: AddressWindowPolicy = {
-  gapLimit: 5,
-  batch: 5,
+  gapLimit: 50,
+  batch: 20,
   maxRounds: 50,
 }
 

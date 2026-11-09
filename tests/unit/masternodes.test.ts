@@ -82,7 +82,7 @@ describe('masternode key matching', () => {
 })
 
 describe('ownedMasternodes', () => {
-  const none = {owner: new Map(), voting: new Map(), operator: new Map()}
+  const none = {owner: new Map(), voting: new Map(), operator: new Map(), collateral: new Map()}
 
   it('flags a collateral by its outpoint, not by its amount or address', () => {
     const coin = (txid: string, vout: number) =>
@@ -131,10 +131,15 @@ describe('ownedMasternodes', () => {
   })
 
   it('records each matched key index once per node and drops unmatched nodes', () => {
-    const matches = {owner: new Map([['a', 2]]), voting: new Map([['a', 4]]), operator: new Map()}
+    const matches = {owner: new Map([['a', 2]]), voting: new Map([['a', 4]]), operator: new Map(), collateral: new Map()}
     const owned = ownedMasternodes([node('a'), node('a'), node('b')], matches, [], [])
     expect(owned).toHaveLength(1)
     expect(owned[0]).toMatchObject({proTxHash: 'a', ownerKeyIndex: 2, votingKeyIndex: 4, operatorKeyIndex: null})
+  })
+
+  it('owns a node by a collateral-chain address the wallet holds no coin of', () => {
+    const owned = ownedMasternodes([node('a'), node('b')], {...none, collateral: new Map([['a', 0]])}, [], [])
+    expect(owned.map(({proTxHash}) => proTxHash)).toEqual(['a'])
   })
 
   it('owns a node by an imported key, in either operator encoding, only in that role', () => {

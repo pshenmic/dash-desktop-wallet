@@ -2,8 +2,8 @@ import {WalletDAO} from '../../database/WalletDAO'
 import {MasternodeDAO} from '../../database/MasternodeDAO'
 import {MasternodeKeyDAO} from '../../database/MasternodeKeyDAO'
 import {WalletProviderFactory} from '../../providers/WalletProviderFactory'
-import {MASTERNODE_KEY_CHAINS, MASTERNODE_KEY_WINDOW} from '../../constants/addresses'
-import {ImportedMasternodeKey, Masternode, MasternodeKeyChain, NetworkMasternode} from '../../types/Masternode'
+import {MASTERNODE_KEY_CHAINS, MASTERNODE_KEY_WINDOW, MASTERNODE_WALKED_CHAINS} from '../../constants/addresses'
+import {ImportedMasternodeKey, Masternode, MasternodeKeyChain, MasternodeKeyFilter, NetworkMasternode} from '../../types/Masternode'
 import {memoryWindowStore, runAddressWindow} from '../../utils/addressWindow'
 import {masternodeKeyDeriver, masternodePublicKey} from '../../utils/masternodeKeys'
 import {
@@ -79,8 +79,8 @@ export class MasternodeService {
     if (found == null) return
 
     const nodes: NetworkMasternode[] = [...found]
-    const matches = {} as Record<MasternodeKeyChain, Map<string, number>>
-    for (const chain of MASTERNODE_KEY_CHAINS) {
+    const matches = {} as Record<MasternodeKeyFilter, Map<string, number>>
+    for (const chain of MASTERNODE_WALKED_CHAINS) {
       const chainMatches = matches[chain] = new Map<string, number>()
       const importedValues = imported.filter(({role}) => role === chain)
         .flatMap(({publicKey}) => masternodeFilterValues(chain, publicKey))

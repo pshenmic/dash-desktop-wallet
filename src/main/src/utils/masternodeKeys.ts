@@ -17,7 +17,7 @@ import {
   MASTERNODE_PLATFORM_KEY_BATCH,
 } from '../constants/addresses'
 import {AddressDeriver} from '../types/AddressWindow'
-import {ExtendedSecretKey, MasternodeKeyChain, MasternodeKeyRole, MasternodeKeys} from '../types/Masternode'
+import {ExtendedSecretKey, MasternodeKeyChain, MasternodeKeyFilter, MasternodeKeyRole, MasternodeKeys} from '../types/Masternode'
 import {Network} from '../types/Network'
 
 const G1 = bls12_381.G1.Point
@@ -79,6 +79,7 @@ export function masternodeKeys(seed: Uint8Array, network: Network): MasternodeKe
     .reduce(slip10Child, {privateKey: ed25519Master.slice(0, 32), chainCode: ed25519Master.slice(32)})
 
   return {
+    collateralXpub: root.derive(masternodeAccountPath(network, 'collateral')).publicExtendedKey,
     votingXpub: root.derive(masternodeAccountPath(network, 'voting')).publicExtendedKey,
     ownerXpub: root.derive(masternodeAccountPath(network, 'owner')).publicExtendedKey,
     operatorPublicKey: G1.BASE.multiply(Fr.fromBytes(operator.privateKey)).toBytes(true),
@@ -88,11 +89,12 @@ export function masternodeKeys(seed: Uint8Array, network: Network): MasternodeKe
   }
 }
 
-// One provider key chain of the stored account keys. Owner and voting keys are
-// listed by their P2PKH address, operator keys by their hex public key.
-export function masternodeKeyDeriver(keys: MasternodeKeys, network: Network, chain: MasternodeKeyChain): AddressDeriver {
+// One provider key chain of the stored account keys. Collateral, owner and
+// voting keys are listed by their P2PKH address, operator keys by their hex public key.
+export function masternodeKeyDeriver(keys: MasternodeKeys, network: Network, chain: MasternodeKeyFilter): AddressDeriver {
   const accountPath = masternodeAccountPath(network, chain)
-  const account = chain === 'operator' ? null : HDKey.fromExtendedKey(chain === 'owner' ? keys.ownerXpub : keys.votingXpub, HD_VERSIONS[network])
+  const xpubs = {collateral: keys.collateralXpub, owner: keys.ownerXpub, voting: keys.votingXpub}
+  const account = chain === 'operator' ? null : HDKey.fromExtendedKey(xpubs[chain], HD_VERSIONS[network])
   return {
     derive: index => ({
       index,

@@ -8,7 +8,6 @@ import {
   ImportedMasternodeKey,
   Masternode,
   MasternodeCollateral,
-  MasternodeKeyChain,
   MasternodeKeyFilter,
   NetworkMasternode,
 } from '../types/Masternode'
@@ -41,7 +40,7 @@ export function networkMasternode(row: DashscanMasternode): NetworkMasternode {
 
 // What a derived key is listed as. An operator key may be registered in either
 // BLS encoding, so both are searched.
-export function masternodeFilterValues(chain: MasternodeKeyChain, address: string): string[] {
+export function masternodeFilterValues(chain: MasternodeKeyFilter, address: string): string[] {
   return chain === 'operator' ? [address, bytesToHex(legacyG1(hexToBytes(address)))] : [address]
 }
 
@@ -54,7 +53,7 @@ export function nodeKey(filter: MasternodeKeyFilter, node: NetworkMasternode): s
 }
 
 // proTxHash → the index of our key that the node carries for this chain.
-export function matchMasternodeKeys(chain: MasternodeKeyChain, derived: DerivedAddress[], nodes: NetworkMasternode[]): Map<string, number> {
+export function matchMasternodeKeys(chain: MasternodeKeyFilter, derived: DerivedAddress[], nodes: NetworkMasternode[]): Map<string, number> {
   const indexByValue = new Map(derived.flatMap(({index, address}) =>
     masternodeFilterValues(chain, address).map(value => [value, index] as const)))
   const matches = new Map<string, number>()
@@ -109,10 +108,11 @@ export function withCollateralFlag(utxos: SelectableUtxo[], collaterals: Mastern
 }
 
 // A node is ours when it carries one of our derived or imported keys, or spends
-// from one of our collateral outpoints; one listed by several searches appears once.
+// from one of our collateral outpoints or collateral-chain addresses; one listed
+// by several searches appears once.
 export function ownedMasternodes(
   nodes: NetworkMasternode[],
-  matches: Record<MasternodeKeyChain, Map<string, number>>,
+  matches: Record<MasternodeKeyFilter, Map<string, number>>,
   imported: ImportedMasternodeKey[],
   collateral: UTXO[],
 ): Masternode[] {
@@ -128,5 +128,5 @@ export function ownedMasternodes(
     }))
     .filter(node => outpoints.has(`${node.collateralTxid}:${node.collateralVout}`)
       || node.importedRoles.length > 0
-      || MASTERNODE_KEY_CHAINS.some(chain => matches[chain].has(node.proTxHash)))
+      || Object.values(matches).some(chainMatches => chainMatches.has(node.proTxHash)))
 }
