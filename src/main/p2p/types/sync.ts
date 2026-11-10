@@ -27,5 +27,5 @@ export interface SyncServiceEvents {
   listedMasternodes: (network: Network, proTxHashes: string[], askedAt: number) => void
   proposals: (network: Network, proposals: Proposal[]) => void
   proposalVotes: (network: Network, proposalHash: string, votes: GovernanceVote[]) => void
-  voteRelayed: (requestId: string, peers: number, errorMessage: string | null) => void
+  voteRelayed: (requestId: string, peers: number, accepted: number, errorMessage: string | null) => void
 }

@@ -7,6 +7,7 @@ import {
   governanceObject,
   governanceVote,
   isStaleProposal,
+  lastVoteTime,
   proposalOf,
   proposalTally,
   voteBytes,
@@ -96,6 +97,20 @@ describe('governance votes', () => {
     const unsigned: UnsignedVote = {collateralTxid: 'ab'.repeat(32), collateralVout: 3, parentHash: PROPOSAL, outcome: 2, signal: 1, time: 1_800_000_000}
     const parsed = governanceVote(voteBytes(unsigned, signHash(voteDigest(unsigned, network), key.bytes())), network)
     expect(parsed).toMatchObject({...unsigned, voter: key.getAddress()})
+  })
+})
+
+describe('lastVoteTime', () => {
+  it("is the node's latest funding vote its current voting key signed", () => {
+    const listed = node('aa'.repeat(32), 0, 'Xvoter')
+    expect(lastVoteTime([
+      vote({time: 100}),
+      vote({time: 300, voter: 'Xold'}),
+      vote({time: 250, signal: 2}),
+      vote({time: 200}),
+      vote({time: 400, collateralVout: 1}),
+    ], listed)).toBe(200)
+    expect(lastVoteTime([], listed)).toBeNull()
   })
 })
 

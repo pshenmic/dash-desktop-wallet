@@ -43,6 +43,7 @@ const providerStub = (utxos: UTXO[]): WalletProvider => ({
   watchMasternodes: async () => [],
   getProposals: async () => null,
   getProposalTally: async () => null,
+  getProposalVotes: async () => null,
 })
 
 const txid = (byte: string): string => byte.repeat(32)

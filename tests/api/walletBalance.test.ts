@@ -26,6 +26,7 @@ const providerStub = (walletBalance: bigint): WalletProvider => ({
   watchMasternodes: async () => [],
   getProposals: async () => null,
   getProposalTally: async () => null,
+  getProposalVotes: async () => null,
 })
 
 describe('wallet balance', () => {

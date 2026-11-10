@@ -156,7 +156,7 @@ interface MasternodeUpdateResultDTO {
   peersAcked: number
 }
 
-// Mirrors Proposal, ProposalTally, VoteOutcome and VoteResult in
+// Mirrors Proposal, ProposalTally, VoteOutcome and VoteResult (with VoteRelay) in
 // src/main/src/types/Governance.
 interface ProposalDTO {
   hash: string
@@ -181,6 +181,8 @@ type VoteOutcomeDTO = 'yes' | 'no' | 'abstain'
 interface VoteResultDTO {
   proTxHash: string
   peers: number
+  // How many of those peers served the vote back; 0 is a vote Core dropped.
+  accepted: number
 }
 
 // Hand-maintained alongside definitions.ts, and deliberately a second

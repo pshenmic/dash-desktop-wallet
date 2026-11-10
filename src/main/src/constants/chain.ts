@@ -39,6 +39,10 @@ export const GOVERNANCE_PROPOSAL_TYPE = 1
 export const VOTE_SIGNAL_FUNDING = 1
 export const VOTE_OUTCOME_CODE: Record<VoteOutcome, number> = {yes: 1, no: 2, abstain: 3}
 export const MASTERNODE_VOTE_WEIGHT: Record<MasternodeType, number> = {Regular: 1, Evo: 4}
+// Core's GOVERNANCE_UPDATE_MIN: a node's next vote on an object within it is dropped.
+export const GOVERNANCE_UPDATE_MIN_SECONDS = 60 * 60
+// Both lists' status for a PoSe-banned node, which Core's wallet refuses to vote with.
+export const POSE_BANNED_STATUS = 'POSE_BANNED'
 // One superblock cycle (nSuperblockCycle × the 2.5-minute target). A proposal
 // that ended before the current cycle began can be paid by no superblock left.
 export const SUPERBLOCK_CYCLE_SECONDS: Record<Network, number> = {mainnet: 16_616 * 150, testnet: 24 * 150}

@@ -15,7 +15,7 @@ import {ConnectionStatus} from '../types/ConnectionStatus'
 import {Masternode, MasternodeKeyFilter, NetworkMasternode} from '../types/Masternode'
 import {Network} from '../types/Network'
 import {nodeKey} from '../utils/masternodes'
-import {Proposal, ProposalTally} from '../types/Governance'
+import {GovernanceVote, Proposal, ProposalTally} from '../types/Governance'
 import {isStaleProposal, proposalTally} from '../utils/governance'
 import {Logger} from '../utils/logger'
 
@@ -161,9 +161,13 @@ export class P2PWalletProvider implements WalletProvider {
 
   // Each vote is checked against the proven list's current voting key.
   async getProposalTally(proposalHash: string): Promise<ProposalTally | null> {
-    const votes = this.walletSyncService.getProposalVotes(this.network, proposalHash)
+    const votes = await this.getProposalVotes(proposalHash)
     const masternodes = this.walletSyncService.getMasternodeList(this.network)
     return votes == null || masternodes == null ? null : proposalTally(votes, masternodes)
+  }
+
+  async getProposalVotes(proposalHash: string): Promise<GovernanceVote[] | null> {
+    return this.walletSyncService.getProposalVotes(this.network, proposalHash)
   }
 
   private p2pkhScript(address: string): Script {

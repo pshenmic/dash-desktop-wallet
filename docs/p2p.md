@@ -104,7 +104,11 @@ Things the code cannot tell you, and that a plausible-looking change breaks:
   a message (`txid-vout|parent|signal|outcome|time`), testnet the hash.
 - **A vote goes out as an `inv`, and only a peer's `getdata` gets the vote**:
   Core drops one it neither requested nor saw announced. It also drops a node's
-  new vote within an hour of its last on the same proposal, and says nothing.
+  new vote within an hour of its last on the same proposal, and says nothing —
+  so main refuses that case first, as Core's own wallet does, and the relay then
+  sends each peer that took the vote a `getdata` for it. Core serves a vote only
+  from the ones it kept, so a peer serving it back is the proof, and only then
+  is our vote counted locally.
 - **A proposal is dropped once its end is a superblock cycle behind**, on open
   and in what the providers answer: no superblock left can pay it.
 

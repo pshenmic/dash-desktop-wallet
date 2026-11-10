@@ -301,11 +301,13 @@ export interface P2PProposalVotesMessage {
   votes: GovernanceVote[]
 }
 
-// peers is how many asked for the vote after it was announced.
+// peers is how many asked for the vote after it was announced, accepted how
+// many of them served it back.
 export interface P2PVoteRelayedMessage {
   type: 'voteRelayed'
   requestId: string
   peers: number
+  accepted: number
   errorMessage: string | null
 }
 

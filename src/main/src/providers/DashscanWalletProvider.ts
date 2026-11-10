@@ -347,6 +347,10 @@ export class DashscanWalletProvider implements WalletProvider {
     return {yes: row.yesCount, no: row.noCount, abstain: row.abstainCount}
   }
 
+  async getProposalVotes(): Promise<null> {
+    return null
+  }
+
   private async proposalRows(): Promise<DashscanProposal[]> {
     const rows = await requestJson<DashscanProposal[]>(this.request, '/governance/proposals')
     return rows.filter(({objectType}) => objectType === 'Proposal')

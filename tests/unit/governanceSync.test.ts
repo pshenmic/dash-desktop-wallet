@@ -49,7 +49,7 @@ describe('governance sync', () => {
   let peers: ReturnType<typeof fakePeer>[]
   let proposals: Proposal[][]
   let votes: GovernanceVote[][]
-  let relayed: Array<[string, number, string | null]>
+  let relayed: Array<[string, number, number, string | null]>
   let governance: Governance
 
   const inv = (type: number, hash: string) => ({inventory: [{type, hash: displayHexToWire(hash)}]}) as never
@@ -69,7 +69,7 @@ describe('governance sync', () => {
       messages: {
         GovSync: (arg: {payload: Uint8Array}) => ({command: 'govsync', ...arg}),
         GovObjVote: (arg: {payload: Uint8Array}) => ({command: 'govobjvote', ...arg}),
-        Inv: (items: unknown) => ({command: 'inv', items}),
+        Inventory: (items: unknown) => ({command: 'inv', items}),
         GetData: (items: unknown) => ({command: 'getdata', items}),
       },
     } as unknown as PoolService
@@ -79,7 +79,7 @@ describe('governance sync', () => {
       events: {
         proposals: (_network, list) => proposals.push(list),
         proposalVotes: (_network, _hash, list) => votes.push(list),
-        voteRelayed: (requestId, count, error) => relayed.push([requestId, count, error]),
+        voteRelayed: (requestId, count, accepted, error) => relayed.push([requestId, count, accepted, error]),
       },
     })
   })
@@ -144,15 +144,42 @@ describe('governance sync', () => {
     expect([...store.votes.get(PROPOSAL)!.keys()]).toEqual([VOTE_HASH])
   })
 
-  it('announces a vote and hands it to each peer that asks, once', async () => {
+  it('announces a vote, hands it to each peer that asks once, and asks them back', async () => {
     governance.relay('r1', hexToBytes(MAINNET_VOTES[0]))
     expect(sentBy('inv')).toHaveLength(3)
 
     governance.onGetData(peers[1] as never, inv(18, VOTE_HASH))
     governance.onGetData(peers[1] as never, inv(18, VOTE_HASH))
-    expect(sentBy('govobjvote')).toHaveLength(1)
+    governance.onGetData(peers[2] as never, inv(18, VOTE_HASH))
+    expect(sentBy('govobjvote')).toHaveLength(2)
 
     await vi.advanceTimersByTimeAsync(10_000)
-    expect(relayed).toEqual([['r1', 1, null]])
+    expect(peers.map(peer => peer.sent.filter(({command}) => command === 'getdata').length)).toEqual([0, 1, 1])
+    governance.onVote(peers[1] as never, payload(MAINNET_VOTES[0]))
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(relayed).toEqual([['r1', 2, 1, null]])
+  })
+
+  // Core serves a vote back only from the votes it kept.
+  it('counts our vote only once a peer serves it back', async () => {
+    store.objects.set(PROPOSAL, hexToBytes(MAINNET_PROPOSAL_OBJECT))
+    store.state = {syncedAt: Date.now(), votesSyncedAt: {[PROPOSAL]: Date.now()}}
+    await governance.open()
+    await governance.syncVotes(PROPOSAL)
+
+    governance.relay('r1', hexToBytes(MAINNET_VOTES[0]))
+    governance.onGetData(peers[0] as never, inv(18, VOTE_HASH))
+    await vi.advanceTimersByTimeAsync(16_000)
+    expect(relayed).toEqual([['r1', 1, 0, null]])
+    expect(store.votes.get(PROPOSAL)).toBeUndefined()
+
+    governance.relay('r2', hexToBytes(MAINNET_VOTES[0]))
+    governance.onGetData(peers[0] as never, inv(18, VOTE_HASH))
+    await vi.advanceTimersByTimeAsync(10_000)
+    governance.onVote(peers[0] as never, payload(MAINNET_VOTES[0]))
+    await vi.advanceTimersByTimeAsync(6_000)
+    expect(relayed.at(-1)).toEqual(['r2', 1, 1, null])
+    expect([...store.votes.get(PROPOSAL)!.keys()]).toEqual([VOTE_HASH])
+    expect(votes.at(-1)?.map(({hash}) => hash)).toEqual([VOTE_HASH])
   })
 })

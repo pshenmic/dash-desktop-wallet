@@ -26,7 +26,7 @@ import {peerOverridesKey} from '../../../p2p/net/peerOverrides'
 import {ScanCursorGate} from '../../utils/scanCursorGate'
 import {Preferences} from '../../preferences'
 import {Network} from '../../types/Network'
-import {GovernanceVote, Proposal} from '../../types/Governance'
+import {GovernanceVote, Proposal, VoteRelay} from '../../types/Governance'
 import {ListedMasternodes, NetworkMasternode} from '../../types/Masternode'
 import {Transaction as SDKTransaction} from 'dash-core-sdk'
 import {Logger} from '../../utils/logger'
@@ -86,7 +86,7 @@ export class WalletSyncService {
   // Answered per request like the peer list, but a failure has to reach the
   // caller: an unanswered probe is not evidence that a peer is unreachable.
   private pendingProbes = new Map<string, {resolve: (result: PeerProbeResult) => void; reject: (err: Error) => void}>()
-  private pendingVoteRelays = new Map<string, {resolve: (peers: number) => void; reject: (err: Error) => void}>()
+  private pendingVoteRelays = new Map<string, {resolve: (relay: VoteRelay) => void; reject: (err: Error) => void}>()
   onWalletActivity: ((walletId: string) => void) | null = null
   private activityDebounce: ReturnType<typeof setTimeout> | null = null
   onGapExhausted: ((gap: GapExhausted) => void) | null = null
@@ -329,7 +329,7 @@ export class WalletSyncService {
     } else if (data.type === 'voteRelayed') {
       const relay = this.pendingVoteRelays.get(data.requestId)
       this.pendingVoteRelays.delete(data.requestId)
-      if (data.errorMessage == null) relay?.resolve(data.peers)
+      if (data.errorMessage == null) relay?.resolve({peers: data.peers, accepted: data.accepted})
       else relay?.reject(new Error(data.errorMessage))
     } else if (data.type === 'error') {
       log.error('utility process error:', data.message)
@@ -543,12 +543,12 @@ export class WalletSyncService {
     return this.proposalVotes.get(`${network}:${proposalHash}`) ?? null
   }
 
-  // Over the lock pool, in both modes. Answers how many peers asked for the vote.
-  relayVote = async (vote: Uint8Array): Promise<number> => {
+  // Over the lock pool, in both modes.
+  relayVote = async (vote: Uint8Array): Promise<VoteRelay> => {
     if (this.lockListenNetwork) await this.startLockListen(this.lockListenNetwork, this.lockListenWalletId)
     if (!this.child) throw new Error('relayVote: p2p transport not started — no wallet selected')
     const requestId = randomUUID()
-    return new Promise<number>((resolve, reject) => {
+    return new Promise<VoteRelay>((resolve, reject) => {
       this.pendingVoteRelays.set(requestId, {resolve, reject})
       this.send({type: 'relayVote', requestId, vote})
     })

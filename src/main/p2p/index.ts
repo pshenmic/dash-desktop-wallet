@@ -69,8 +69,8 @@ const sync = new SyncService({
     process.parentPort.postMessage({type: 'proposals', network, proposals}),
   proposalVotes: (network, proposalHash, votes) =>
     process.parentPort.postMessage({type: 'proposalVotes', network, proposalHash, votes}),
-  voteRelayed: (requestId, peers, errorMessage) =>
-    process.parentPort.postMessage({type: 'voteRelayed', requestId, peers, errorMessage}),
+  voteRelayed: (requestId, peers, accepted, errorMessage) =>
+    process.parentPort.postMessage({type: 'voteRelayed', requestId, peers, accepted, errorMessage}),
 })
 
 process.parentPort.on('message', ({data}) => {

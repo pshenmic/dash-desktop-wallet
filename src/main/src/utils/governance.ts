@@ -174,6 +174,14 @@ export function governanceVote(bytes: Uint8Array, network: Network): GovernanceV
   return {...vote, hash: voteHash(vote), voter: recoveredAddress(voteDigest(vote, network), signature, network)}
 }
 
+// The node's latest funding vote that its current voting key signed, which is
+// the one Core holds a new vote against.
+export function lastVoteTime(votes: GovernanceVote[], {collateralTxid, collateralVout, votingAddress}: NetworkMasternode): number | null {
+  const own = votes.filter(vote => vote.signal === VOTE_SIGNAL_FUNDING && vote.voter === votingAddress
+    && vote.collateralTxid === collateralTxid && vote.collateralVout === collateralVout)
+  return own.length === 0 ? null : Math.max(...own.map(({time}) => time))
+}
+
 // Core keeps each node's latest vote per signal and drops one whose key is not
 // the node's current voting key.
 export function proposalTally(votes: GovernanceVote[], masternodes: NetworkMasternode[]): ProposalTally {

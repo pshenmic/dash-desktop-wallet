@@ -10,6 +10,7 @@ import {
   GOVSYNC_VOTES_FILTER,
   INV_GOVERNANCE_OBJECT,
   INV_GOVERNANCE_VOTE,
+  VOTE_CONFIRM_WINDOW_MS,
   VOTE_RELAY_WINDOW_MS,
 } from '../constants'
 import type {ChainStore} from '../store/ChainStore'
@@ -49,7 +50,9 @@ export class Governance {
   private unsavedObjects = new Map<string, Uint8Array>()
   private unsavedVotes = new Map<string, Map<string, Uint8Array>>()
   private flushTimer: ReturnType<typeof setTimeout> | null = null
-  private relays = new Map<string, {payload: Uint8Array; peers: Set<Peer>}>()
+  // peers asked for the vote; asked back are those sent a getdata for it once
+  // the window closed, and accepted those that served it.
+  private relays = new Map<string, {payload: Uint8Array; peers: Set<Peer>; askedBack: Set<Peer>; accepted: Set<Peer>}>()
 
   constructor(private readonly opts: GovernanceOptions) {}
 
@@ -149,19 +152,28 @@ export class Governance {
   relay(requestId: string, payload: Uint8Array): void {
     const pool = this.opts.pool()
     if (pool == null || pool.readyPeers.size === 0) {
-      this.opts.events.voteRelayed(requestId, 0, 'No peer is connected')
+      this.opts.events.voteRelayed(requestId, 0, 0, 'No peer is connected')
       return
     }
     const vote = governanceVote(payload, pool.network)
-    const relay = {payload, peers: new Set<Peer>()}
+    const relay = {payload, peers: new Set<Peer>(), askedBack: new Set<Peer>(), accepted: new Set<Peer>()}
     this.relays.set(vote.hash, relay)
-    this.keepVote(vote, payload)
-    const inv = messagesOf(pool).Inv([Inventory.forItem(INV_GOVERNANCE_VOTE, vote.hash)])
+    const inv = messagesOf(pool).Inventory([Inventory.forItem(INV_GOVERNANCE_VOTE, vote.hash)])
     for (const peer of pool.readyPeers) peer.sendMessage(inv)
+    // Core serves a vote on getdata only from the votes it kept, so asking the
+    // peers that took it is what tells a kept vote from a silently dropped one.
     setTimeout(() => {
-      if (this.relays.get(vote.hash) === relay) this.relays.delete(vote.hash)
-      log.info(`vote ${vote.hash} on ${vote.parentHash}: ${relay.peers.size} peer(s) asked for it`)
-      this.opts.events.voteRelayed(requestId, relay.peers.size, null)
+      const getData = messagesOf(pool).GetData([{type: INV_GOVERNANCE_VOTE, hash: displayHexToWire(vote.hash)}])
+      for (const peer of relay.peers) {
+        if (!pool.readyPeers.has(peer)) continue
+        relay.askedBack.add(peer)
+        peer.sendMessage(getData)
+      }
+      setTimeout(() => {
+        if (this.relays.get(vote.hash) === relay) this.relays.delete(vote.hash)
+        log.info(`vote ${vote.hash} on ${vote.parentHash}: ${relay.peers.size} peer(s) asked for it, ${relay.accepted.size} kept it`)
+        this.opts.events.voteRelayed(requestId, relay.peers.size, relay.accepted.size, null)
+      }, VOTE_CONFIRM_WINDOW_MS).unref?.()
     }, VOTE_RELAY_WINDOW_MS).unref?.()
   }
 
@@ -205,17 +217,25 @@ export class Governance {
     this.scheduleFlush()
   }
 
+  // Our own vote served back is the proof a peer kept it, and only then is it
+  // ours to count; that runs in rpc mode too, where nothing is stored.
   onVote = (peer: Peer, msg: PayloadMessage): void => {
-    const store = this.store
-    if (store == null) return
+    const pool = this.opts.pool()
+    if (pool == null) return
     let vote: GovernanceVote
     try {
-      vote = governanceVote(msg.payload, store.network)
+      vote = governanceVote(msg.payload, pool.network)
     } catch (err) {
       log.debug(`unreadable governance vote from ${peerTarget(peer)}:`, err)
       return
     }
-    if (this.requested.delete(vote.hash)) this.keepVote(vote, msg.payload)
+    const relay = this.relays.get(vote.hash)
+    if (relay?.askedBack.has(peer)) {
+      if (relay.accepted.size === 0 && this.store != null) this.keepVote(vote, relay.payload)
+      relay.accepted.add(peer)
+    } else if (this.store != null && this.requested.delete(vote.hash)) {
+      this.keepVote(vote, msg.payload)
+    }
   }
 
   onGetData = (peer: Peer, msg: InventoryMessage): void => {

@@ -14,6 +14,6 @@ export interface GovernanceOptions {
 export interface GovernanceMessages {
   GovSync: (arg: {payload: Uint8Array}) => Message
   GovObjVote: (arg: {payload: Uint8Array}) => Message
-  Inv: (items: Inventory[]) => Message
+  Inventory: (items: Inventory[]) => Message
   GetData: (items: Array<{type: number; hash: Uint8Array}>) => Message
 }

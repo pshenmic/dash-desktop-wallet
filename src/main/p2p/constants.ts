@@ -50,6 +50,8 @@ export const GOVERNANCE_REPLY_WINDOW_MS = 60_000
 export const GOVERNANCE_EMIT_DELAY_MS = 1_000
 // How long an announced vote waits for peers to ask for it.
 export const VOTE_RELAY_WINDOW_MS = 10_000
+// Then how long the peers that took it have to serve it back.
+export const VOTE_CONFIRM_WINDOW_MS = 5_000
 // govsync's bloom filter (vData, nHashFuncs, nTweak, nFlags). Core reads an empty
 // one beside a proposal hash as a fetch of the object alone, so the vote sync
 // sends one byte that matches no vote.

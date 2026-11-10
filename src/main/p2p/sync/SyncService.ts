@@ -145,8 +145,13 @@ export class SyncService {
     this.governance.syncVotes(proposalHash).catch(err => log.warn(`votes on ${proposalHash} failed:`, err))
   }
 
+  // Main waits on the answer, so a throw has to become one.
   relayVote = (cmd: P2PRelayVoteMessage): void => {
-    this.governance.relay(cmd.requestId, cmd.vote)
+    try {
+      this.governance.relay(cmd.requestId, cmd.vote)
+    } catch (err) {
+      this.events.voteRelayed(cmd.requestId, 0, 0, err instanceof Error ? err.message : String(err))
+    }
   }
 
   // A ready peer answered its handshake already; anything else is claimed for

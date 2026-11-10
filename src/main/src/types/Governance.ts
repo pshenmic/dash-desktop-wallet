@@ -47,8 +47,13 @@ export interface ProposalTally {
   abstain: number
 }
 
-// peers is how many asked for the vote after its announcement.
-export interface VoteResult {
-  proTxHash: string
+// peers asked for the vote after its announcement; accepted is how many of them
+// then served it back, which Core does only for a vote it kept.
+export interface VoteRelay {
   peers: number
+  accepted: number
+}
+
+export interface VoteResult extends VoteRelay {
+  proTxHash: string
 }

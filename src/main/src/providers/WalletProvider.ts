@@ -4,7 +4,7 @@ import {Transaction} from '../types/Transaction'
 import {TxLockStatus} from '../types/TxLockStatus'
 import {AddressUsage} from '../types/AddressDiscovery'
 import {ConnectionStatus} from '../types/ConnectionStatus'
-import {Proposal, ProposalTally} from '../types/Governance'
+import {GovernanceVote, Proposal, ProposalTally} from '../types/Governance'
 import {Masternode, MasternodeKeyFilter, NetworkMasternode} from '../types/Masternode'
 
 // Read side only: where a wallet's history, balances and UTXOs come from.
@@ -44,4 +44,7 @@ export interface WalletProvider {
   getProposals(): Promise<Proposal[] | null>
   // Null while the votes or the masternode list they are checked against arrive.
   getProposalTally(proposalHash: string): Promise<ProposalTally | null>
+  // Each vote with the address it recovers to. Null where the source has no votes
+  // to give: rpc, whose list carries only counts, or p2p while they arrive.
+  getProposalVotes(proposalHash: string): Promise<GovernanceVote[] | null>
 }
