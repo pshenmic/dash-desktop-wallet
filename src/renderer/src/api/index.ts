@@ -250,10 +250,6 @@ export class API {
     return this.api.exportKeyByAddress(walletId, address, password) as Promise<AddressKeyInfoDto>
   }
 
-  static async exportKeyByPath(walletId: string, path: string, password: string): Promise<AddressKeyInfoDto> {
-    return this.api.exportKeyByPath(walletId, path, password) as Promise<AddressKeyInfoDto>
-  }
-
   static async verifyWalletMnemonic(walletId: string, mnemonic: string): Promise<boolean> {
     return this.api.verifyWalletMnemonic(walletId, mnemonic)
   }

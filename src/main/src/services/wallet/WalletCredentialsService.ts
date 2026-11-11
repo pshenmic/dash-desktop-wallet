@@ -5,7 +5,7 @@ import {PlatformAddressDAO} from '../../database/PlatformAddressDAO'
 import {WalletDAO} from '../../database/WalletDAO'
 import {AddressKeyInfo} from '../../types/Address'
 import {Network} from '../../types/Network'
-import {COIN_TYPE, DERIVATION_PATH, PLATFORM_ACCOUNT} from '../../constants/addresses'
+import {COIN_TYPE, PLATFORM_ACCOUNT} from '../../constants/addresses'
 import {decryptMnemonic, encryptMnemonic} from '../../utils'
 import {coreAccountPath} from '../../utils/addressDiscovery'
 import {derivePath256} from '../../utils/dashPayKeys'
@@ -34,43 +34,27 @@ export class WalletCredentialsService {
     this.pbkdf2Iterations = pbkdf2Iterations
   }
 
+  // Core, DashPay receiving and platform rows; shielded has no per-index path.
   async exportKeyByAddress(walletId: string, address: string, password: string): Promise<AddressKeyInfo> {
-    const owned = await this.ownedAddress(walletId, row => row.address === address)
+    const {receiving, change, dashPay = []} = await this.addressDAO.getAddressesByWalletId(walletId)
+    const platform = await this.platformAddressDAO.getAddresses(walletId)
+    const owned = [...receiving, ...change, ...dashPay, ...platform].find(row => row.address === address)
     if (owned == null) {
       throw new Error(`${address} is not an address of this wallet`)
     }
-    return this.exportKey(walletId, owned.derivationPath, password, owned.address)
-  }
+    const path = owned.derivationPath
 
-  async exportKeyByPath(walletId: string, path: string, password: string): Promise<AddressKeyInfo> {
-    if (!DERIVATION_PATH.test(path)) {
-      throw new Error(`Invalid derivation path: ${path}`)
-    }
-    const owned = await this.ownedAddress(walletId, row => row.derivationPath === path)
-    return this.exportKey(walletId, path, password, owned?.address)
-  }
-
-  // Core, DashPay receiving and platform rows; shielded has no per-index path.
-  private async ownedAddress(walletId: string, match: (row: {address: string, derivationPath: string}) => boolean) {
-    const {receiving, change, dashPay = []} = await this.addressDAO.getAddressesByWalletId(walletId)
-    const platform = await this.platformAddressDAO.getAddresses(walletId)
-    return [...receiving, ...change, ...dashPay, ...platform].find(match)
-  }
-
-  // A path no row holds reports the key's L1 P2PKH address.
-  private async exportKey(walletId: string, path: string, password: string, address?: string): Promise<AddressKeyInfo> {
     return withUnlockedWallet(this.walletDAO, walletId, password, async ({wallet, seed}) => {
       const derived = derivePath256(this.keyPair.seedToHdKey(seed, wallet.network), path)
       if (derived.privateKey == null || derived.publicKey == null) {
         throw new Error(`Failed to derive a key at ${path}`)
       }
-      const key = PrivateKey.fromBytes(derived.privateKey, wallet.network, true)
       return {
-        address: address ?? key.getAddress(),
+        address,
         path,
         publicKey: derived.publicKey,
         privateKey: derived.privateKey,
-        wif: key.toWIF(),
+        wif: PrivateKey.fromBytes(derived.privateKey, wallet.network, true).toWIF(),
       }
     })
   }
