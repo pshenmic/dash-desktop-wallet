@@ -281,6 +281,7 @@ declare global {
       updateMasternodeService: (walletId: string, proTxHash: string, update: MasternodeServiceUpdateDTO, password: string) => Promise<MasternodeUpdateResultDTO>
       revokeMasternode: (walletId: string, proTxHash: string, reason: RevocationReasonDTO, password: string) => Promise<MasternodeUpdateResultDTO>
       getGovernanceProposals: (walletId: string) => Promise<ProposalDTO[] | null>
+      refreshGovernance: (walletId: string, proposalHash?: string) => Promise<void>
       getProposalTally: (walletId: string, proposalHash: string) => Promise<ProposalTallyDTO | null>
       voteProposal: (walletId: string, proposalHash: string, outcome: VoteOutcomeDTO, proTxHashes: string[], password: string) => Promise<VoteResultDTO[]>
       getUsernames: (walletId: string) => Promise<unknown>

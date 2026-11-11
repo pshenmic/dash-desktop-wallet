@@ -6,7 +6,7 @@ import {VOTE_OUTCOME_CODE, VOTE_SIGNAL_FUNDING} from '../../constants/chain'
 import {Proposal, ProposalTally, VoteOutcome, VoteResult} from '../../types/Governance'
 import {governanceVote, requireVoteRequest, requireVotingNode, voteBytes, voteDigest} from '../../utils/governance'
 import {masternodeAccountPath} from '../../utils/masternodeKeys'
-import {signHash} from '../../utils/providerTx'
+import {isHash, signHash} from '../../utils/providerTx'
 import {requireWallet} from '../../utils/requireWallet'
 import {withUnlockedWallet} from '../../utils/walletSeed'
 import {Logger} from '../../utils/logger'
@@ -26,6 +26,12 @@ export class GovernanceService {
   async getProposals(walletId: string): Promise<Proposal[] | null> {
     const {network} = await requireWallet(this.walletDAO, walletId)
     return this.providers.forWallet(walletId, network).getProposals()
+  }
+
+  async refresh(walletId: string, proposalHash?: string): Promise<void> {
+    if (proposalHash != null && !isHash(proposalHash)) throw new Error('Not a proposal hash: 64 hex characters')
+    const {network} = await requireWallet(this.walletDAO, walletId)
+    await this.providers.forWallet(walletId, network).refreshGovernance(proposalHash)
   }
 
   // Null while the list, the votes or the masternodes they are checked against arrive.

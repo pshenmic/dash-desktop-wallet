@@ -531,16 +531,19 @@ export class WalletSyncService {
     if (this.child) this.send({type: 'refreshMasternodes'})
   }
 
-  // What the child last sent, and a request that it sync (peers are asked at most
-  // hourly). Null until the p2p index has opened chain.db and answered.
-  requestProposals = (network: Network): Proposal[] | null => {
-    if (this.child) this.send({type: 'syncProposals'})
-    return this.proposals.get(network) ?? null
-  }
+  // Null until the p2p index has opened chain.db and sent its proposals.
+  getProposals = (network: Network): Proposal[] | null => this.proposals.get(network) ?? null
 
-  requestProposalVotes = (network: Network, proposalHash: string): GovernanceVote[] | null => {
-    if (this.child) this.send({type: 'syncProposalVotes', proposalHash})
-    return this.proposalVotes.get(`${network}:${proposalHash}`) ?? null
+  // Null until the proposal's votes were asked for and the index answered.
+  getProposalVotes = (network: Network, proposalHash: string): GovernanceVote[] | null =>
+    this.proposalVotes.get(`${network}:${proposalHash}`) ?? null
+
+  // The proposal list, and one proposal's votes when named. The child asks peers
+  // at most hourly for each, so calling this often costs nothing.
+  refreshGovernance(proposalHash?: string): void {
+    if (!this.child) return
+    this.send({type: 'syncProposals'})
+    if (proposalHash != null) this.send({type: 'syncProposalVotes', proposalHash})
   }
 
   // Over the lock pool, in both modes.

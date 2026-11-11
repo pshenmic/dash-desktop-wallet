@@ -156,7 +156,7 @@ export class P2PWalletProvider implements WalletProvider {
   // chain.db drops stale proposals as it opens; one that went stale since is dropped here.
   async getProposals(): Promise<Proposal[] | null> {
     const now = Math.floor(Date.now() / 1000)
-    return this.walletSyncService.requestProposals(this.network)?.filter(proposal => !isStaleProposal(proposal, now, this.network)) ?? null
+    return this.walletSyncService.getProposals(this.network)?.filter(proposal => !isStaleProposal(proposal, now, this.network)) ?? null
   }
 
   // Each vote is checked against the proven list's current voting key.
@@ -167,7 +167,11 @@ export class P2PWalletProvider implements WalletProvider {
   }
 
   async getProposalVotes(proposalHash: string): Promise<GovernanceVote[] | null> {
-    return this.walletSyncService.requestProposalVotes(this.network, proposalHash)
+    return this.walletSyncService.getProposalVotes(this.network, proposalHash)
+  }
+
+  async refreshGovernance(proposalHash?: string): Promise<void> {
+    this.walletSyncService.refreshGovernance(proposalHash)
   }
 
   private p2pkhScript(address: string): Script {

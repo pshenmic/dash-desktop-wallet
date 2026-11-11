@@ -47,4 +47,7 @@ export interface WalletProvider {
   // Each vote with the address it recovers to. Null where the source has no votes
   // to give: rpc, whose list carries only counts, or p2p while they arrive.
   getProposalVotes(proposalHash: string): Promise<GovernanceVote[] | null>
+  // Fetches what the three reads above answer from: the proposal list, and the
+  // votes of `proposalHash` when given. The reads themselves never fetch.
+  refreshGovernance(proposalHash?: string): Promise<void>
 }

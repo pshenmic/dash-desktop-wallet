@@ -39,6 +39,7 @@ import { RevokeMasternodeHandler } from './api/masternodes/revokeMasternode'
 import { GetGovernanceProposalsHandler } from './api/governance/getGovernanceProposals'
 import { GetProposalTallyHandler } from './api/governance/getProposalTally'
 import { VoteProposalHandler } from './api/governance/voteProposal'
+import { RefreshGovernanceHandler } from './api/governance/refreshGovernance'
 import { GetUsernamesHandler } from './api/wallet/getUsernames'
 import { RefreshDashPayHandler } from './api/wallet/refreshDashPay'
 import { RegisterUsernameHandler } from './api/wallet/registerUsername'
@@ -222,6 +223,7 @@ export class WalletBackend {
     registerHandler('getGovernanceProposals', new GetGovernanceProposalsHandler(this.governanceService).handle)
     registerHandler('getProposalTally', new GetProposalTallyHandler(this.governanceService).handle)
     registerHandler('voteProposal', new VoteProposalHandler(this.governanceService).handle)
+    registerHandler('refreshGovernance', new RefreshGovernanceHandler(this.governanceService).handle)
     registerHandler('getUsernames', new GetUsernamesHandler(this.identityService).handle)
     registerHandler('refreshDashPay', new RefreshDashPayHandler(this.walletService).handle)
     registerHandler('registerUsername', new RegisterUsernameHandler(this.identityService).handle)
@@ -383,6 +385,7 @@ export class WalletBackend {
 
     const discovery = this.coreDiscoveryService
     const masternodeService = this.masternodeService
+    const governanceService = this.governanceService
     const walletService = this.walletService
     const walletSyncService = this.walletSyncService
     const applicationService = this.applicationService
@@ -415,6 +418,8 @@ export class WalletBackend {
       resolvePrevOuts(selected.walletId)
       masternodeService.discover(selected.walletId).catch(err =>
         discoveryLog.error('masternode discovery failed:', err))
+      governanceService.refresh(selected.walletId).catch(err =>
+        discoveryLog.error('governance refresh failed:', err))
     }
     this.walletSyncService.onWalletActivity = (walletId) => {
       discovery.discoverCoreAddresses(walletId).catch(err =>

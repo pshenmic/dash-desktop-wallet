@@ -351,6 +351,9 @@ export class DashscanWalletProvider implements WalletProvider {
     return null
   }
 
+  // Every read asks Dashscan afresh.
+  async refreshGovernance(): Promise<void> {}
+
   private async proposalRows(): Promise<DashscanProposal[]> {
     const rows = await requestJson<DashscanProposal[]>(this.request, '/governance/proposals')
     return rows.filter(({objectType}) => objectType === 'Proposal')

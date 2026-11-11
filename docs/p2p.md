@@ -109,7 +109,10 @@ Things the code cannot tell you, and that a plausible-looking change breaks:
 ## Governance (`sync/governance.ts`, `sync/voteRelay.ts`)
 
 - **Proposals and votes come from peers with `govsync`, in p2p mode only**, and
-  live in chain.db (`g:` objects, `v:<proposal>:` votes). rpc mode reads Dashscan
+  live in chain.db (`g:` objects, `v:<proposal>:` votes). Main's reads answer
+  what the child last sent and never fetch; `refreshGovernance`, from the
+  discovery tick and the renderer, is what asks (a proposal's votes only when
+  it names one). rpc mode reads Dashscan
   and never asks a peer. dash-core-p2p drops `govobj` and `govobjvote`
   unparsed, so `net/governanceMessages.ts` registers them and `PoolService` takes
   them off each peer itself.

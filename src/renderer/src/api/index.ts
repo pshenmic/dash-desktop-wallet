@@ -194,6 +194,12 @@ export class API {
     return this.api.revokeMasternode(walletId, proTxHash, reason, password)
   }
 
+  // Fetches the proposal list, and the votes of one proposal when named; the
+  // governance reads below only answer what a refresh brought.
+  static async refreshGovernance(walletId: string, proposalHash?: string): Promise<void> {
+    return this.api.refreshGovernance(walletId, proposalHash)
+  }
+
   // Null until the source has a list to give; p2p answers once chain.db opens.
   static async getGovernanceProposals(walletId: string): Promise<ProposalDto[] | null> {
     return this.api.getGovernanceProposals(walletId)

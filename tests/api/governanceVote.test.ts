@@ -33,10 +33,15 @@ describe('GovernanceService.vote', () => {
   let proposals: Proposal[] | null
   let owned: Masternode[] | null
   let votes: GovernanceVote[] | null
+  let refreshed: Array<string | undefined>
 
   const service = (): GovernanceService => new GovernanceService(
     wired.walletDAO,
-    {forWallet: () => ({getProposals: async () => proposals, getProposalVotes: async () => votes})} as unknown as WalletProviderFactory,
+    {forWallet: () => ({
+      getProposals: async () => proposals,
+      getProposalVotes: async () => votes,
+      refreshGovernance: async (hash?: string) => { refreshed.push(hash) },
+    })} as unknown as WalletProviderFactory,
     {getMasternodes: async () => owned} as unknown as MasternodeService,
     {relayVote: async (vote: Uint8Array) => (relayed.push(vote), {peers: 3, accepted: 2})} as unknown as WalletSyncService,
   )
@@ -44,6 +49,7 @@ describe('GovernanceService.vote', () => {
   beforeEach(async () => {
     wired = await harness()
     relayed = []
+    refreshed = []
     proposals = [proposal]
     votes = null
     owned = null
@@ -67,6 +73,19 @@ describe('GovernanceService.vote', () => {
     expect(governanceVote(relayed[0], network)).toMatchObject({
       collateralTxid: 'aa'.repeat(32), collateralVout: 1, parentHash: PROPOSAL, outcome: 2, signal: 1, voter: owned![0].votingAddress,
     })
+  })
+
+  // Reads answer what a refresh brought and fetch nothing themselves.
+  it('fetches on refresh alone: the list, and a proposal\'s votes when named', async () => {
+    const walletId = await wallet('mainnet')
+    await service().getProposals(walletId)
+    await service().getProposalTally(walletId, PROPOSAL).catch(() => undefined)
+    expect(refreshed).toEqual([])
+
+    await service().refresh(walletId)
+    await service().refresh(walletId, PROPOSAL)
+    expect(refreshed).toEqual([undefined, PROPOSAL])
+    await expect(service().refresh(walletId, 'nope')).rejects.toThrow('Not a proposal hash')
   })
 
   describe('refuses before unlocking', () => {
