@@ -330,7 +330,8 @@ export class ChainStore {
       if ((err as {code?: string}).code === 'LEVEL_NOT_FOUND') return undefined
       throw err
     })
-    return stored == null ? {syncedAt: 0, votesSyncedAt: {}} : JSON.parse(Buffer.from(stored).toString('utf8')) as GovernanceSyncState
+    const state: Partial<GovernanceSyncState> = stored == null ? {} : JSON.parse(Buffer.from(stored).toString('utf8'))
+    return {syncedAt: 0, votesSyncedAt: {}, asked: {}, ...state}
   }
 
   writeGovernanceState = async (state: GovernanceSyncState): Promise<void> => {

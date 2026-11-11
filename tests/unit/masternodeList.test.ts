@@ -5,6 +5,7 @@ import {ProUpRegTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRegTx.js'
 import {
   committedList,
   evonodeDapiUrls,
+  isV24Active,
   listedMasternode,
   payoutUpdate,
   providerRegistration,
@@ -114,6 +115,17 @@ describe('provider registrations', () => {
     expect(payoutUpdate(update, new Set([INTERNAL]), 900000, 'testnet')).toBeNull()
   })
 
+})
+
+// Core requires coinbase payload version 4 exactly while v24 is active.
+describe('isV24Active', () => {
+  const diff = (version?: number): MnListDiff => ({cbTx: {extraPayload: version == null ? undefined : {version}}}) as never
+
+  it('reads v24 off the coinbase payload version', () => {
+    expect(isV24Active(diff(3))).toBe(false)
+    expect(isV24Active(diff(4))).toBe(true)
+    expect(isV24Active(diff())).toBe(false)
+  })
 })
 
 describe('committedList', () => {

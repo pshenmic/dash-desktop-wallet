@@ -8,6 +8,7 @@ import {masternodeKeyDeriver, masternodeKeys} from '../../src/main/src/utils/mas
 import {
   collateralUtxos,
   existingMasternodes,
+  unusedKeyIndex,
   masternodeFilterValues,
   matchMasternodeKeys,
   networkMasternode,
@@ -170,11 +171,25 @@ describe('ownedMasternodes', () => {
   })
 })
 
+describe('unusedKeyIndex', () => {
+  const owned = (ownerKeyIndex: number | null, votingKeyIndex: number | null): Masternode =>
+    ({...node('aa'), ownerKeyIndex, votingKeyIndex, operatorKeyIndex: null, importedRoles: []})
+
+  it('is the lowest index of the chain no node carries', () => {
+    expect(unusedKeyIndex([owned(0, null), owned(2, 0)], 'owner')).toBe(1)
+    expect(unusedKeyIndex([], 'voting')).toBe(0)
+  })
+
+  it('skips an index any of several chains carries', () => {
+    expect(unusedKeyIndex([owned(null, 0), owned(1, null)], 'owner', 'voting', 'operator')).toBe(2)
+  })
+})
+
 describe('existingMasternodes', () => {
   const owned = (proTxHash: string): Masternode =>
     ({...node(proTxHash), ownerKeyIndex: 0, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: []})
   const firstSeen = new Map([['aa', 100], ['bb', 100]])
-  const listed = (askedAt: number, ...proTxHashes: string[]) => ({proTxHashes: new Set(proTxHashes), askedAt})
+  const listed = (askedAt: number, ...proTxHashes: string[]) => ({proTxHashes: new Set(proTxHashes), askedAt, v24Active: false})
 
   it('drops a node a list asked for after it was first seen does not carry', () => {
     const {existing, unsettled} = existingMasternodes([owned('aa'), owned('bb')], listed(200, 'aa'), firstSeen)

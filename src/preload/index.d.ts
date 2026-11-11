@@ -125,10 +125,7 @@ interface MasternodeRegistrationResultDTO {
 }
 
 // Mirrors MasternodeRegistrarUpdate and MasternodeUpdateResult in
-// src/main/src/types/Masternode. keep is the node's current key, wallet the
-// lowest unused wallet key, external a key the wallet does not hold. A new
-// operator key PoSe-bans the node until that operator's ProUpServTx. A null
-// payoutAddress keeps the current payout.
+// src/main/src/types/Masternode, which says what each choice does.
 interface MasternodeRegistrarUpdateDTO {
   operator: { kind: 'keep' } | { kind: 'wallet' } | { kind: 'external'; publicKey: string }
   voting: { kind: 'keep' } | { kind: 'wallet' } | { kind: 'external'; address: string }
@@ -136,10 +133,7 @@ interface MasternodeRegistrarUpdateDTO {
 }
 
 // Mirrors MasternodeServiceUpdate and RevocationReason in
-// src/main/src/types/Masternode. Signed by the operator key, so only for a node
-// whose operator key the wallet derives. A ProUpServTx restates the whole
-// service; the platform fields are an Evo's alone. Revoking PoSe-bans the node
-// until the owner sets a new operator key.
+// src/main/src/types/Masternode. Both are signed by the operator key.
 interface MasternodeServiceUpdateDTO {
   serviceAddress: string
   operatorPayoutAddress: string | null

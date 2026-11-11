@@ -65,9 +65,8 @@ export function requireBasicOperatorKey(publicKey: string): string {
   return publicKey.toLowerCase()
 }
 
-// A list prints a legacy-state node's key in the legacy encoding. Legacy never
-// sets 0x20, x being under 381 bits, and basic always sets 0x80, so a key with
-// 0x80 set and 0x20 clear reads either way and is refused rather than guessed.
+// A list prints a legacy-state node's key in the legacy encoding, which never sets
+// 0x20; basic always sets 0x80. One with 0x80 set and 0x20 clear reads either way.
 export function basicOperatorKey(listed: string): string {
   const bytes = hexToBytes(listed)
   if ((bytes[0] & 0x80) !== 0 && (bytes[0] & 0x20) === 0) {

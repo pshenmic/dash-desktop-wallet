@@ -67,16 +67,21 @@ Things the code cannot tell you, and that a plausible-looking change breaks:
   coinbase height must hash to the diff's block, carry the coinbase's merkle
   root, and that coinbase's `merkleRootMNList` must cover every entry.
 - **The list follows the tip block by block, as a diff.** The full list
-  (~500 KB mainnet) is asked once, then each new tip asks for the diff from the
-  block the list is proven at (a few KB), applies it, and proves the result the
-  same way; the quorums ride the same diff. Only a rewind below that block asks
-  for the full list again. A diff based on a list already replaced is dropped,
-  since several peers answer each ask.
+  (~500 KB mainnet) is asked once, of one peer at a time with another after
+  `MNLIST_REPLY_TIMEOUT_MS`; then each new tip asks several peers for the diff
+  from the block the list is proven at (a few KB), applies it, and proves the
+  result the same way; the quorums ride the same diff. Only a rewind below that
+  block asks for the full list again. A diff based on a list already replaced
+  is dropped, since several peers answer each ask.
 - **Which nodes still exist comes from the lock pool, in both modes.** Every
   list proven at the tip, and every full list the hourly DAPI-url refresh
   verifies (rpc mode has no chain to follow), goes to main as its set of
-  proTxHashes (`listedMasternodes`), with when it was asked for. A block that
-  changed no node sends nothing, since main rediscovers on every list. Dashscan keeps
+  proTxHashes (`listedMasternodes`), once, with when that list was asked for
+  (kept per block hash; 0 for one nobody asked for, which can drop no node). A
+  block that changed no node sends nothing, since main rediscovers on every list.
+  The same message says whether v24 is active — Core requires coinbase payload
+  version 4 exactly then — which decides an Evo service update's version: v24
+  refuses one below v3 and nothing before it accepts v3. Dashscan keeps
   the row of a node whose collateral was spent, frozen in its last state, so
   discovery drops an owned node once a list asked for after the node was first
   seen does not carry it; one missing from an older list makes main send
@@ -104,9 +109,15 @@ Things the code cannot tell you, and that a plausible-looking change breaks:
   unparsed, so `net/governanceMessages.ts` registers them and `PoolService` takes
   them off each peer itself.
 - **Core scores a peer that asks twice within an hour**, for the list or for one
-  proposal's votes, so both asks are held to one an hour, persisted, and spread
-  over peers not asked in that hour. An empty bloom filter beside a proposal hash
-  is a fetch of the object alone; the vote sync sends a one-byte filter.
+  proposal's votes, so who was asked when is persisted and no peer is asked
+  twice in that hour. A sync counts as done only once it is answered: until
+  then other peers are asked, a reply window apart. An empty bloom filter
+  beside a proposal hash is a fetch of the object alone; the vote sync sends a
+  one-byte filter.
+- **Nothing checks a proposal's collateral**, so one peer could invent one: an
+  object is fetched once `PROPOSAL_ANNOUNCERS` peers announced it (fewer only
+  when the pool holds fewer). A vote whose signature recovers to no key is not
+  kept, and a proposal holds at most `PROPOSAL_VOTES_MAX`.
 - **A vote counts only where its signature recovers to the node's current voting
   key**, the node found by collateral outpoint in the proven list. Mainnet signs
   a message (`txid-vout|parent|signal|outcome|time`), testnet the hash.

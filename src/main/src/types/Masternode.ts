@@ -18,10 +18,8 @@ export interface MasternodePlatformFields {
   platformHttpPort: number | null
 }
 
-// What the caller decides about a registration; the owner, voting and operator
-// keys are the wallet's own. operatorReward is in hundredths of a percent, as
-// ProRegTx carries it. A null serviceAddress registers without one, to be set
-// later by the operator's ProUpServTx.
+// operatorReward is in hundredths of a percent, as ProRegTx carries it. A null
+// serviceAddress registers without one, left to the operator's ProUpServTx.
 export interface MasternodeRegistration extends MasternodePlatformFields {
   type: MasternodeType
   collateral: {txid: string; vout: number}
@@ -47,10 +45,8 @@ export interface ProviderKeyIds {
   operatorPublicKey: string
 }
 
-// keep is the key the node carries now; wallet is the chain's lowest index no
-// listed node carries; external is a key the wallet does not hold. A new
-// operator key resets the node's service and PoSe-bans it until that operator's
-// ProUpServTx. A null payoutAddress keeps the current payout.
+// wallet is the chain's lowest index no listed node carries. A new operator key
+// PoSe-bans the node until that operator's ProUpServTx; a null payoutAddress keeps the payout.
 export type OperatorKeyChoice = {kind: 'keep'} | {kind: 'wallet'} | {kind: 'external'; publicKey: string}
 export type VotingKeyChoice = {kind: 'keep'} | {kind: 'wallet'} | {kind: 'external'; address: string}
 
@@ -80,10 +76,11 @@ export interface ProviderTxPlan {
 }
 
 // The network's own list, which carries a node exactly while its collateral is
-// unspent; askedAt is when the lock pool asked for it.
+// unspent; askedAt is when the lock pool asked for it, 0 for one it did not ask for.
 export interface ListedMasternodes {
   proTxHashes: Set<string>
   askedAt: number
+  v24Active: boolean
 }
 
 export interface MasternodeUpdateResult {

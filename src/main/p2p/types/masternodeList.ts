@@ -41,4 +41,5 @@ export interface ProvenList {
   height: number
   entries: SimplifiedMNListEntry[]
   commitments: FinalCommitment[]
+  v24Active: boolean
 }

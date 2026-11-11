@@ -87,23 +87,19 @@ export const apiDefinitions = (ipcRenderer) => ({
   getTransactionByHash: (hash: string, network: Network) => ipcRenderer.invoke('getTransactionByHash', hash, network),
   getBalance: (address: string | string[], network: Network) => ipcRenderer.invoke('getBalance', address, network),
   getWalletBalance: (walletId: string) => ipcRenderer.invoke('getWalletBalance', walletId),
-
+  getIdentities: (walletId: string) => ipcRenderer.invoke('getIdentities', walletId),
   getMasternodes: (walletId: string) => ipcRenderer.invoke('getMasternodes', walletId),
   getMasternodeCollaterals: (walletId: string) => ipcRenderer.invoke('getMasternodeCollaterals', walletId),
   getImportedMasternodeKeys: (walletId: string) => ipcRenderer.invoke('getImportedMasternodeKeys', walletId),
   importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => ipcRenderer.invoke('importMasternodeKey', walletId, role, privateKey),
   removeMasternodeKey: (walletId: string, key: ImportedMasternodeKey) => ipcRenderer.invoke('removeMasternodeKey', walletId, key),
-
   registerMasternode: (walletId: string, registration: MasternodeRegistration, password: string) => ipcRenderer.invoke('registerMasternode', walletId, registration, password),
   updateMasternodeRegistrar: (walletId: string, proTxHash: string, update: MasternodeRegistrarUpdate, password: string) => ipcRenderer.invoke('updateMasternodeRegistrar', walletId, proTxHash, update, password),
   updateMasternodeService: (walletId: string, proTxHash: string, update: MasternodeServiceUpdate, password: string) => ipcRenderer.invoke('updateMasternodeService', walletId, proTxHash, update, password),
   revokeMasternode: (walletId: string, proTxHash: string, reason: RevocationReason, password: string) => ipcRenderer.invoke('revokeMasternode', walletId, proTxHash, reason, password),
-
   getGovernanceProposals: (walletId: string) => ipcRenderer.invoke('getGovernanceProposals', walletId),
   getProposalTally: (walletId: string, proposalHash: string) => ipcRenderer.invoke('getProposalTally', walletId, proposalHash),
   voteProposal: (walletId: string, proposalHash: string, outcome: VoteOutcome, proTxHashes: string[], password: string) => ipcRenderer.invoke('voteProposal', walletId, proposalHash, outcome, proTxHashes, password),
-
-  getIdentities: (walletId: string) => ipcRenderer.invoke('getIdentities', walletId),
   updateIdentityKeys: (walletId: string, identifier: string, update: IdentityKeysUpdate, password: string) => ipcRenderer.invoke('updateIdentityKeys', walletId, identifier, update, password),
   getIdentityPrivateKeys: (walletId: string, identifier: string, password: string) => ipcRenderer.invoke('getIdentityPrivateKeys', walletId, identifier, password),
   getUsernames: (walletId: string) => ipcRenderer.invoke('getUsernames', walletId),

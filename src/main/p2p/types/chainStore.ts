@@ -16,8 +16,10 @@ export interface StoredState extends ChainTipState {
   updatedAt: number
 }
 
-// When the object list, and each proposal's votes, were last asked for.
+// When the object list, and each proposal's votes, were last answered, and when
+// each `peer/proposal` (`peer/` for the list) was asked, which Core holds against a repeat.
 export interface GovernanceSyncState {
   syncedAt: number
   votesSyncedAt: Record<string, number>
+  asked: Record<string, number>
 }

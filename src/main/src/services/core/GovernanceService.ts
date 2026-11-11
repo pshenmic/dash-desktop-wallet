@@ -38,9 +38,8 @@ export class GovernanceService {
     return provider.getProposalTally(proposalHash)
   }
 
-  // A funding vote per node, signed with its voting key, refused on the checks
-  // Core's own wallet runs before relaying. One it drops anyway comes back with
-  // accepted 0.
+  // Refused on the checks Core's own wallet runs before relaying; a vote Core
+  // drops anyway comes back with accepted 0.
   async vote(walletId: string, proposalHash: string, outcome: VoteOutcome, proTxHashes: string[], password: string): Promise<VoteResult[]> {
     requireVoteRequest(proposalHash, outcome, proTxHashes)
     const {network} = await requireWallet(this.walletDAO, walletId)

@@ -63,8 +63,8 @@ const sync = new SyncService({
     process.parentPort.postMessage({type: 'platformQuorums', network, keys}),
   masternodeList: (network, masternodes) =>
     process.parentPort.postMessage({type: 'masternodeList', network, masternodes}),
-  listedMasternodes: (network, proTxHashes, askedAt) =>
-    process.parentPort.postMessage({type: 'listedMasternodes', network, proTxHashes, askedAt}),
+  listedMasternodes: (network, proTxHashes, askedAt, v24Active) =>
+    process.parentPort.postMessage({type: 'listedMasternodes', network, proTxHashes, askedAt, v24Active}),
   proposals: (network, proposals) =>
     process.parentPort.postMessage({type: 'proposals', network, proposals}),
   proposalVotes: (network, proposalHash, votes) =>

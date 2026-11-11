@@ -17,7 +17,7 @@ class FakeStore {
   readonly network = 'mainnet' as const
   objects = new Map<string, Uint8Array>()
   votes = new Map<string, Map<string, Uint8Array>>()
-  state: GovernanceSyncState = {syncedAt: 0, votesSyncedAt: {}}
+  state: GovernanceSyncState = {syncedAt: 0, votesSyncedAt: {}, asked: {}}
   getProposalObjects = async (): Promise<Uint8Array[]> => [...this.objects.values()]
   getVotes = async (hash: string): Promise<Uint8Array[]> => [...this.votes.get(hash)?.values() ?? []]
   writeProposals = async (put: Map<string, Uint8Array>, del: string[] = []): Promise<void> => {
@@ -91,19 +91,44 @@ describe('governance sync', () => {
 
   const sentBy = (command: string) => peers.flatMap(peer => peer.sent.filter(message => message.command === command))
 
-  it('asks two peers for the object list once an hour, and keeps what they send', async () => {
+  it('asks two peers for the object list once an hour, and keeps what both announce', async () => {
     await governance.open()
     expect(sentBy('govsync')).toHaveLength(2)
-    const asked = peers.find(peer => peer.sent.length > 0)!
+    const [first, second] = peers.filter(peer => peer.sent.length > 0)
 
-    governance.onInv(asked as never, inv(17, PROPOSAL))
-    governance.onObject(asked as never, payload(MAINNET_PROPOSAL_OBJECT))
-    await vi.advanceTimersByTimeAsync(1_000)
+    governance.onInv(first as never, inv(17, PROPOSAL))
+    expect(sentBy('getdata')).toHaveLength(0)
+    governance.onInv(second as never, inv(17, PROPOSAL))
+    expect(second.sent.filter(({command}) => command === 'getdata')).toHaveLength(1)
+    governance.onObject(second as never, payload(MAINNET_PROPOSAL_OBJECT))
+    await vi.advanceTimersByTimeAsync(60_000)
 
     expect(proposals.at(-1)?.map(({hash}) => hash)).toEqual([PROPOSAL])
     expect([...store.objects.keys()]).toEqual([PROPOSAL])
     governance.onPeerReady()
     expect(sentBy('govsync')).toHaveLength(2)
+  })
+
+  it('fetches no proposal a single peer announced', async () => {
+    await governance.open()
+    const asked = peers.find(peer => peer.sent.length > 0)!
+    governance.onInv(asked as never, inv(17, PROPOSAL))
+    governance.onInv(asked as never, inv(17, PROPOSAL))
+    expect(sentBy('getdata')).toHaveLength(0)
+  })
+
+  it('asks the peers left once the first ones let the reply window pass unanswered', async () => {
+    await governance.open()
+    governance.onPeerReady()
+    expect(sentBy('govsync')).toHaveLength(2)
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    governance.onPeerReady()
+    expect(peers.map(peer => peer.sent.filter(({command}) => command === 'govsync').length)).toEqual([1, 1, 1])
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    governance.onPeerReady()
+    expect(sentBy('govsync')).toHaveLength(3)
   })
 
   it('takes no object it did not ask for', async () => {
@@ -144,6 +169,23 @@ describe('governance sync', () => {
     expect([...store.votes.get(PROPOSAL)!.keys()]).toEqual([VOTE_HASH])
   })
 
+  it('keeps no vote whose signature recovers to no key, and sends main the held votes once', async () => {
+    store.objects.set(PROPOSAL, hexToBytes(MAINNET_PROPOSAL_OBJECT))
+    store.state.syncedAt = Date.now()
+    await governance.open()
+    await governance.syncVotes(PROPOSAL)
+    await governance.syncVotes(PROPOSAL)
+    expect(votes).toEqual([[]])
+
+    const unsigned = hexToBytes(MAINNET_VOTES[0])
+    unsigned[85] = 0
+    const asked = peers.find(peer => peer.sent.some(({command}) => command === 'govsync'))!
+    governance.onInv(asked as never, inv(18, VOTE_HASH))
+    governance.onVote(asked as never, {payload: unsigned} as never)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(store.votes.size).toBe(0)
+  })
+
   it('announces a vote, hands it to each peer that asks once, and asks them back', async () => {
     governance.relay('r1', hexToBytes(MAINNET_VOTES[0]))
     expect(sentBy('inv')).toHaveLength(3)
@@ -163,7 +205,7 @@ describe('governance sync', () => {
   // Core serves a vote back only from the votes it kept.
   it('counts our vote only once a peer serves it back', async () => {
     store.objects.set(PROPOSAL, hexToBytes(MAINNET_PROPOSAL_OBJECT))
-    store.state = {syncedAt: Date.now(), votesSyncedAt: {[PROPOSAL]: Date.now()}}
+    store.state = {syncedAt: Date.now(), votesSyncedAt: {[PROPOSAL]: Date.now()}, asked: {}}
     await governance.open()
     await governance.syncVotes(PROPOSAL)
 

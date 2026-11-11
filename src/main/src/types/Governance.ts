@@ -23,9 +23,8 @@ export interface GovernanceObject {
   data: string
 }
 
-// A vote as a peer relayed it. voter is the address its signature recovers to,
-// null when it recovers to none; it counts only where it is the voting key of
-// the node holding the collateral. Codes are Core's.
+// A vote as a peer relayed it, with Core's codes. voter is the address its signature
+// recovers to (null for none); it counts only as the collateral's node's voting key.
 export interface GovernanceVote {
   hash: string
   collateralTxid: string

@@ -68,18 +68,17 @@ export function matchMasternodeKeys(chain: MasternodeKeyFilter, derived: Derived
   return matches
 }
 
-// The iOS wallet's rule: the lowest index of the chain no listed node carries.
+// The iOS wallet's rule: the lowest index no listed node carries on any of `chains`.
 // Every node carrying a derived key is one of ours, so ours are the ones to read.
-export function unusedKeyIndex(owned: Masternode[], chain: MasternodeKeyChain): number {
-  const used = new Set(owned.map(node => node[`${chain}KeyIndex` as const]))
+export function unusedKeyIndex(owned: Masternode[], ...chains: MasternodeKeyChain[]): number {
+  const used = new Set(owned.flatMap(node => chains.map(chain => node[`${chain}KeyIndex` as const])))
   let index = 0
   while (used.has(index)) index++
   return index
 }
 
-// Dashscan keeps a row for every node it ever listed, so a source's node is
-// checked against the network's own list. Only a list asked for after the node was
-// first seen can say it is gone; an older one, or none yet, leaves it unsettled.
+// Dashscan keeps a row for every node it ever listed, so the network's own list
+// decides. Only one asked for after the node was first seen can say it is gone.
 export function existingMasternodes(
   owned: Masternode[],
   listed: ListedMasternodes | null,

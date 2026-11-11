@@ -146,11 +146,13 @@ export class MasternodeService {
       const collateralPath = addressPaths(grouped).get(coin.address)
       if (collateralPath == null) throw new Error(`No derivation path for address ${coin.address}`)
 
-      const derived = (chain: MasternodeKeyChain): string => masternodeKeyDeriver(keys, network, chain).derive(unusedKeyIndex(owned, chain)).address
+      // One index for all three: a node not confirmed yet lists no owner key, so
+      // the owner chain alone would hand out the index that node already took.
+      const index = unusedKeyIndex(owned, ...MASTERNODE_KEY_CHAINS)
+      const derived = (chain: MasternodeKeyChain): string => masternodeKeyDeriver(keys, network, chain).derive(index).address
       const keyId = (chain: MasternodeKeyChain): string => bytesToHex(sdkUtils.addressToPublicKeyHash(derived(chain)))
       if ([derived('owner'), derived('voting')].includes(registration.payoutAddress)) throw new Error('The payout may not pay the owner or voting key')
-      log.info(`register ${registration.type} on ${txid}:${vout}: wallet keys owner #${unusedKeyIndex(owned, 'owner')}, ` +
-        `voting #${unusedKeyIndex(owned, 'voting')}, operator #${unusedKeyIndex(owned, 'operator')}, service ${registration.serviceAddress ?? 'none'}`)
+      log.info(`register ${registration.type} on ${txid}:${vout}: wallet keys #${index}, service ${registration.serviceAddress ?? 'none'}`)
       return {
         payload: this.coreTransactionService.proRegPayload(registration, {
           ownerKeyId: keyId('owner'),
@@ -211,9 +213,10 @@ export class MasternodeService {
       const node = operatedNode(owned, proTxHash)
       const type = node.type === 'Evo' ? 'Evo' : 'Regular'
       requireServiceUpdate(type, update, network)
+      const v24Active = this.walletSyncService.getListedMasternodes(network)?.v24Active ?? false
       log.info(`update service ${proTxHash}: ${type}, service ${update.serviceAddress}, operator key #${node.operatorKeyIndex}`)
       return {
-        payload: this.coreTransactionService.proUpServPayload(type, proTxHash, update, network),
+        payload: this.coreTransactionService.proUpServPayload(type, proTxHash, update, v24Active, network),
         signer: {kind: 'operator', index: node.operatorKeyIndex},
         spendable: utxos,
       }
@@ -252,9 +255,8 @@ export class MasternodeService {
     return publicKey
   }
 
-  // Both kinds pay their fee from the wallet's ordinary coins, with the change as
-  // their only output, so the change is what has to clear dust.
-  // An update names a node that must still exist, or every peer drops it silently.
+  // The change is the only output, so it is what has to clear dust. `target` is
+  // the node an update names: one no longer listed is dropped by every peer silently.
   private async sendProviderTx(
     walletId: string,
     password: string,

@@ -13,13 +13,12 @@ import {DashscanProposal} from '../types/Dashscan'
 import {GovernanceObject, GovernanceVote, Proposal, ProposalTally, UnsignedVote, VoteOutcome} from '../types/Governance'
 import {MasternodeType, NetworkMasternode} from '../types/Masternode'
 import {Network} from '../types/Network'
-import {isHash, requireProTxHash, signedMessageHash} from './providerTx'
+import {isHash, requireProTxHash, signedMessageHash, uint256Hex} from './providerTx'
 
 const {decodeCompactSize, doubleSHA256, encodeCompactSize, getCompactVariableSize, publicKeyHashToAddress, SHA256RIPEMD160} = sdkUtils
 
 // Hashes travel in wire order and are shown reversed.
 const wire = (hex: string): Uint8Array => hexToBytes(hex).reverse()
-const display = (bytes: Uint8Array): string => bytesToHex(Uint8Array.from(bytes).reverse())
 
 function view(bytes: Uint8Array): DataView {
   return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
@@ -48,10 +47,10 @@ export function governanceObject(bytes: Uint8Array): GovernanceObject {
     bytes.subarray(0, 44), withLength(utf8ToBytes(dataHex)), outpoint, Uint8Array.of(0, 0xff, 0xff, 0xff, 0xff), withLength(signature.value),
   ))
   return {
-    hash: display(hash),
+    hash: uint256Hex(hash),
     type: view(bytes).getInt32(data.end, true),
     time: Number(view(bytes).getBigInt64(36, true)),
-    collateralHash: display(bytes.subarray(44, 76)),
+    collateralHash: uint256Hex(bytes.subarray(44, 76)),
     data: dataHex,
   }
 }
@@ -143,7 +142,7 @@ export function voteDigest(vote: UnsignedVote, network: Network): Uint8Array {
 // signal before the outcome.
 export function voteHash(vote: UnsignedVote): string {
   const fields = voteFields(vote)
-  return display(doubleSHA256(concatBytes(
+  return uint256Hex(doubleSHA256(concatBytes(
     fields.subarray(0, 36), Uint8Array.of(0, 0xff, 0xff, 0xff, 0xff), fields.subarray(36, 68),
     fields.subarray(72, 76), fields.subarray(68, 72), fields.subarray(76, 84),
   )))
@@ -163,9 +162,9 @@ function recoveredAddress(digest: Uint8Array, signature: Uint8Array, network: Ne
 export function governanceVote(bytes: Uint8Array, network: Network): GovernanceVote {
   const reader = view(bytes)
   const vote: UnsignedVote = {
-    collateralTxid: display(bytes.subarray(0, 32)),
+    collateralTxid: uint256Hex(bytes.subarray(0, 32)),
     collateralVout: reader.getUint32(32, true),
-    parentHash: display(bytes.subarray(36, 68)),
+    parentHash: uint256Hex(bytes.subarray(36, 68)),
     outcome: reader.getInt32(68, true),
     signal: reader.getInt32(72, true),
     time: Number(reader.getBigInt64(76, true)),

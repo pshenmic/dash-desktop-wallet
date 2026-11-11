@@ -320,7 +320,7 @@ export class WalletSyncService {
       this.masternodeLists.set(data.network, data.masternodes)
       this.onMasternodeList?.(data.network)
     } else if (data.type === 'listedMasternodes') {
-      this.listedMasternodes.set(data.network, {proTxHashes: new Set(data.proTxHashes), askedAt: data.askedAt})
+      this.listedMasternodes.set(data.network, {proTxHashes: new Set(data.proTxHashes), askedAt: data.askedAt, v24Active: data.v24Active})
       this.onListedMasternodes?.(data.network)
     } else if (data.type === 'proposals') {
       this.proposals.set(data.network, data.proposals)

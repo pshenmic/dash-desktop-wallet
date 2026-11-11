@@ -2,7 +2,7 @@ import type {Message, MnListDiff, Peer} from 'dash-core-p2p'
 import {ProviderRegistry} from './providerRegistry'
 import {MNLIST_REFRESH_MS, MNLIST_REPLY_TIMEOUT_MS, PLATFORM_QUORUM_PEERS} from '../constants'
 import {wireToDisplayHex} from '../utils/byteOrder'
-import {committedList, committedQuorums, evonodeDapiUrls, quorumKey} from '../utils/masternodeList'
+import {committedList, committedQuorums, evonodeDapiUrls, isV24Active, quorumKey} from '../utils/masternodeList'
 import type {MasternodeListOptions, ProvenList} from '../types/masternodeList'
 import {Logger} from '../../src/utils/logger'
 
@@ -15,7 +15,9 @@ export class MasternodeList {
   private askedAt = 0
   private retry: ReturnType<typeof setTimeout> | null = null
   private proven: ProvenList | null = null
-  private followedAt = 0
+  // Block hash → when a list at it was first asked for.
+  private asked = new Map<string, number>()
+  private fullRetry: ReturnType<typeof setTimeout> | null = null
   // The newest block a peer announced, where an asked-for list is taken.
   private latest: {peer: Peer; blockHash: string} | null = null
   readonly registry: ProviderRegistry
@@ -29,8 +31,11 @@ export class MasternodeList {
     this.verifiedAt = 0
     this.askedAt = 0
     this.latest = null
+    this.asked.clear()
     if (this.retry) clearTimeout(this.retry)
     this.retry = null
+    if (this.fullRetry) clearTimeout(this.fullRetry)
+    this.fullRetry = null
     this.registry.resetPool()
   }
 
@@ -57,6 +62,7 @@ export class MasternodeList {
     const pool = this.opts.pool()
     if (!pool) return
     this.askedAt = Date.now()
+    if (!this.asked.has(blockHash)) this.asked.set(blockHash, this.askedAt)
     log.info(`asking ${peer.host}:${peer.port} for the masternode list at ${blockHash}`)
     peer.sendMessage(pool.messages.GetMnListDiff({blockHash}))
 
@@ -81,34 +87,49 @@ export class MasternodeList {
     const pool = this.opts.pool()
     const diff = msg.mnlistdiff
     if (!pool || diff == null) return
-    this.apply(peer, diff).catch(err => log.warn(`masternode list from ${peer.host}:${peer.port} failed:`, err))
-    // Only a full list carries every evonode, and a peer answering after the
-    // list verified would only repeat it.
-    if (/[^0]/.test(diff.baseBlockHash) || Date.now() - this.verifiedAt < MNLIST_REFRESH_MS) return
-    const dapiUrls = evonodeDapiUrls(diff)
-    if (dapiUrls == null) {
-      log.warn(`${peer.host}:${peer.port} sent a masternode list its coinbase does not commit to`)
-      this.askedAt = 0
-      return
-    }
-    this.verifiedAt = Date.now()
-    log.info(`masternode list at ${diff.blockHash} from ${peer.host}:${peer.port}: ${dapiUrls.length} evonode DAPI url(s)`)
-    this.opts.events.evonodeDapiUrls(pool.network, dapiUrls)
-    this.opts.events.listedMasternodes(pool.network, diff.mnList.map(({proRegTxHash}) => proRegTxHash), this.askedAt)
+    const askedAt = this.asked.get(diff.blockHash) ?? 0
+    this.apply(peer, diff, askedAt)
+      .catch(err => {
+        log.warn(`masternode list from ${peer.host}:${peer.port} failed:`, err)
+        return false
+      })
+      .then(announced => {
+        // Only a full list carries every evonode, and a peer answering after the
+        // list verified would only repeat it.
+        if (/[^0]/.test(diff.baseBlockHash) || Date.now() - this.verifiedAt < MNLIST_REFRESH_MS) return
+        const dapiUrls = evonodeDapiUrls(diff)
+        if (dapiUrls == null) {
+          log.warn(`${peer.host}:${peer.port} sent a masternode list its coinbase does not commit to`)
+          this.askedAt = 0
+          return
+        }
+        this.verifiedAt = Date.now()
+        log.info(`masternode list at ${diff.blockHash} from ${peer.host}:${peer.port}: ${dapiUrls.length} evonode DAPI url(s)`)
+        this.opts.events.evonodeDapiUrls(pool.network, dapiUrls)
+        if (announced) return
+        this.opts.events.listedMasternodes(pool.network, diff.mnList.map(({proRegTxHash}) => proRegTxHash), askedAt, isV24Active(diff))
+      })
   }
 
-  // A diff from the last proven list, so following the tip costs a few KB a block;
-  // the full list is asked only while there is none. Asked at a block our chain
-  // already holds, so the answer can be proven against it.
+  // Asked at a block our chain already holds, so the answer can be proven against
+  // it. A diff is a few KB and many peers never answer, so several are asked at once.
   followTip(blockHash: string): void {
     const pool = this.opts.pool()
     if (!pool) return
-    this.followedAt = Date.now()
+    if (!this.asked.has(blockHash)) this.asked.set(blockHash, Date.now())
     const request = pool.messages.GetMnListDiff({baseBlockHash: this.proven?.blockHash, blockHash})
     const peers = [...pool.readyPeers]
-    for (let i = 0; i < PLATFORM_QUORUM_PEERS && peers.length > 0; i++) {
+    for (let i = 0; i < (this.proven == null ? 1 : PLATFORM_QUORUM_PEERS) && peers.length > 0; i++) {
       peers.splice(Math.floor(Math.random() * peers.length), 1)[0]!.sendMessage(request)
     }
+    if (this.fullRetry) clearTimeout(this.fullRetry)
+    this.fullRetry = null
+    if (this.proven != null) return
+    // The full list is ~500 KB on mainnet, so one peer at a time is asked for it.
+    this.fullRetry = setTimeout(() => {
+      this.fullRetry = null
+      if (this.proven == null && this.opts.chain() != null) this.followTip(blockHash)
+    }, MNLIST_REPLY_TIMEOUT_MS)
   }
 
   // Core refuses, and scores, a diff based on a block off its active chain.
@@ -121,32 +142,36 @@ export class MasternodeList {
     const store = this.opts.chain()
     if (store && this.proven) this.opts.events.platformQuorums(store.network, new Map())
     this.proven = null
+    if (this.fullRetry) clearTimeout(this.fullRetry)
+    this.fullRetry = null
     this.registry.closeChain()
   }
 
-  // Trusted only at a block on our own header chain: its work vouches for the
-  // coinbase, and the coinbase for the list and the commitments. Several peers
-  // answer each ask, so one based on a list already replaced is dropped.
-  private async apply(peer: Peer, diff: MnListDiff): Promise<void> {
+  // Trusted only at a block on our own header chain, whose work vouches for the
+  // coinbase. True once main was told the list; a diff on a replaced list is dropped.
+  private async apply(peer: Peer, diff: MnListDiff, askedAt: number): Promise<boolean> {
     const store = this.opts.chain()
     const height = diff.coinbaseHeight
     const full = !/[^0]/.test(diff.baseBlockHash)
     const base = full ? null : this.proven
-    if (store == null || height == null || (!full && base?.blockHash !== diff.baseBlockHash)) return
+    if (store == null || height == null || (!full && base?.blockHash !== diff.baseBlockHash)) return false
     const header = await store.getHeaderByHeight(height)
-    if (header == null || store !== this.opts.chain() || height <= (this.proven?.height ?? 0) || (!full && this.proven !== base)) return
+    if (header == null || store !== this.opts.chain() || height <= (this.proven?.height ?? 0) || (!full && this.proven !== base)) return false
     const commitments = committedQuorums(diff, header, base?.commitments ?? [])
     const entries = committedList(diff, header, base?.entries ?? [])
     if (commitments == null || entries == null) {
       log.warn(`${peer.host}:${peer.port} sent a masternode list block ${height} does not commit to`)
-      return
+      return false
     }
-    this.proven = {blockHash: diff.blockHash, height, entries, commitments}
+    const v24Active = isV24Active(diff)
+    this.proven = {blockHash: diff.blockHash, height, entries, commitments, v24Active}
+    for (const [blockHash, at] of this.asked) if (at <= askedAt) this.asked.delete(blockHash)
     this.opts.events.platformQuorums(store.network, new Map(commitments.map(quorum =>
       [quorumKey(quorum), Uint8Array.from(Buffer.from(quorum.quorumPublicKey, 'hex'))])))
     // Main rediscovers on every list, and most blocks change no node.
-    if (!full && diff.mnList.length === 0 && diff.deletedMNs.length === 0) return
-    this.opts.events.listedMasternodes(store.network, entries.map(({proRegTxHash}) => proRegTxHash), this.followedAt)
+    if (base?.v24Active === v24Active && diff.mnList.length === 0 && diff.deletedMNs.length === 0) return false
+    this.opts.events.listedMasternodes(store.network, entries.map(({proRegTxHash}) => proRegTxHash), askedAt, v24Active)
     await this.registry.offer(store, height, entries)
+    return true
   }
 }

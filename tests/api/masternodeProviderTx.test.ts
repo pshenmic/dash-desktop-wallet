@@ -79,6 +79,7 @@ describe('MasternodeService provider transactions', () => {
   let broadcast: string[]
   // Nodes the source still returns but the network's list no longer carries.
   let gone: Set<string>
+  let v24Active: boolean
   let masternodes: MasternodeService
 
   const key = (chain: MasternodeKeyChain, index: number): string =>
@@ -112,6 +113,7 @@ describe('MasternodeService provider transactions', () => {
     list = []
     broadcast = []
     gone = new Set()
+    v24Active = true
 
     const provider = {
       ensureReady: async () => undefined,
@@ -121,7 +123,7 @@ describe('MasternodeService provider transactions', () => {
       watchMasternodes: async () => [],
     }
     const walletSync = {
-      getListedMasternodes: () => ({proTxHashes: new Set((list ?? []).map(({proTxHash}) => proTxHash).filter(hash => !gone.has(hash))), askedAt: 0}),
+      getListedMasternodes: () => ({proTxHashes: new Set((list ?? []).map(({proTxHash}) => proTxHash).filter(hash => !gone.has(hash))), askedAt: 0, v24Active}),
       refreshListedMasternodes: () => undefined,
       broadcastTransaction: async (hex: string) => {
         broadcast.push(hex)
@@ -151,13 +153,14 @@ describe('MasternodeService provider transactions', () => {
     expect(fee).toBeGreaterThan(0n)
   })
 
-  it('takes the lowest index of each chain no listed node carries', async () => {
-    list = [node('11'.repeat(32), {ownerAddress: key('owner', 0), operatorPublicKey: key('operator', 0)})]
+  // A node not confirmed yet lists its voting and operator keys but no owner key.
+  it('takes one index for all three keys, the lowest no listed node carries on any chain', async () => {
+    list = [node('11'.repeat(32), {ownerAddress: null, votingAddress: key('voting', 0), operatorPublicKey: key('operator', 0)})]
     const {payload} = await register()
 
     expect(payload.getOwnerAddress('testnet')).toBe(key('owner', 1))
     expect(payload.pubKeyOperator).toBe(key('operator', 1))
-    expect(payload.getVotingAddress('testnet')).toBe(key('voting', 0))
+    expect(payload.getVotingAddress('testnet')).toBe(key('voting', 1))
   })
 
   it('carries the platform node id and ports an Evo is given', async () => {
@@ -289,7 +292,19 @@ describe('MasternodeService provider transactions', () => {
       expect(tx.inputs.map(input => input.txId)).toEqual(['aa'.repeat(32)])
     })
 
-    it('puts an Evo service and its platform endpoints in v3 netInfo on testnet', async () => {
+    it('keeps an Evo service at v2 with its ports as fields until v24 is active', async () => {
+      v24Active = false
+      utxos[0] = utxo(owned[0], 4_000n * DASH, 'cc'.repeat(32))
+      list = [operated({type: 'Evo'})]
+      await masternodes.updateService(walletId, PRO_TX_HASH, {
+        ...SERVICE, platformNodeId: EVO_FIELDS.platformNodeId, platformP2PPort: 36656, platformHttpPort: 1443,
+      }, PASSWORD)
+      const payload = lastBroadcast().extraPayload as ProUpServTx
+
+      expect([payload.version, payload.platformP2PPort, payload.platformHTTPPort]).toEqual([2, 36656, 1443])
+    })
+
+    it('puts an Evo service and its platform endpoints in v3 netInfo once v24 is active', async () => {
       utxos[0] = utxo(owned[0], 4_000n * DASH, 'cc'.repeat(32))
       list = [operated({type: 'Evo'})]
       await masternodes.updateService(walletId, PRO_TX_HASH, {

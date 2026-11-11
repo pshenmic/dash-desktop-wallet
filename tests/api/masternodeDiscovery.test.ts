@@ -151,14 +151,14 @@ describe('MasternodeService.discover', () => {
     expect(await listed()).toEqual(['a', 'b'])
     expect(refreshes).toHaveBeenCalled()
 
-    network = {proTxHashes: new Set(['b']), askedAt: Date.now() + 1}
+    network = {proTxHashes: new Set(['b']), askedAt: Date.now() + 1, v24Active: false}
     await discover(source([gone, node('b', {ownerAddress: key('owner', 1)})]))
     expect(await listed()).toEqual(['b'])
     expect(await storedCollaterals()).toEqual(['b:bb:0'])
   })
 
   it('keeps a node an older list could not know of, and asks for a newer one', async () => {
-    network = {proTxHashes: new Set(), askedAt: 0}
+    network = {proTxHashes: new Set(), askedAt: 0, v24Active: false}
     await discover(source([node('a', {ownerAddress: key('owner', 0)})]))
     expect(await listed()).toEqual(['a'])
     expect(refreshes).toHaveBeenCalled()

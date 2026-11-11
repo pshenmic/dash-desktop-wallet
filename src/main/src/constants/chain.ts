@@ -11,8 +11,7 @@ export const DUST_THRESHOLD_DUFFS = 546n
 export const MASTERNODE_COLLATERAL_DUFFS: Record<MasternodeType, bigint> = {Regular: 1_000n * DUFFS_PER_DASH, Evo: 4_000n * DUFFS_PER_DASH}
 // nType of a ProTx.
 export const MASTERNODE_TYPE_CODE: Record<MasternodeType, number> = {Regular: 0, Evo: 1}
-// Basic-scheme BLS, for ProRegTx and ProUpRegTx alike. Valid before and after
-// v24; v3 (ExtNetInfo) only after it.
+// Basic-scheme BLS. Valid before and after v24; v3 (ExtNetInfo) only after it.
 export const PROTX_VERSION = 2
 // 100%, in the hundredths of a percent ProRegTx carries.
 export const MAX_OPERATOR_REWARD = 10_000
@@ -28,9 +27,6 @@ export const NON_ROUTABLE_IPV4: Array<[string, number]> = [
   ['172.16.0.0', 12], ['192.0.2.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15],
   ['198.51.100.0', 24], ['203.0.113.0', 24], ['255.255.255.255', 32],
 ]
-// v24 refuses an Evo service update below v3 (ExtNetInfo) and refuses v3
-// before it activates: active on testnet, signaling on mainnet from 2026-11-09.
-export const EVO_SERVICE_TX_VERSION: Record<Network, number> = {mainnet: 2, testnet: 3}
 export const REVOCATION_REASON_CODE: Record<RevocationReason, number> = {notSpecified: 0, termination: 1, compromisedKeys: 2, changeOfKeys: 3}
 export const BLS_SIGNATURE_SIZE = 96
 

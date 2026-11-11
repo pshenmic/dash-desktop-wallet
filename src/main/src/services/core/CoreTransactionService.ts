@@ -21,7 +21,6 @@ import {Network} from '../../types/Network'
 import {ADDRESS_DECODED_LENGTH, ADDRESS_PREFIX} from '../../constants/addresses'
 import {
   DUST_THRESHOLD_DUFFS,
-  EVO_SERVICE_TX_VERSION,
   MASTERNODE_TYPE_CODE,
   PROTX_VERSION,
   REVOCATION_REASON_CODE,
@@ -154,12 +153,12 @@ export class CoreTransactionService {
     )
   }
 
-  // From v3 the service, and an Evo's platform endpoints, travel in netInfo; the
-  // platform node id stays a field of its own.
-  proUpServPayload(type: MasternodeType, proTxHash: string, update: MasternodeServiceUpdate, network: Network): ProUpServTx {
+  // v24 refuses an Evo's update below v3, and anything at v3 before it is active.
+  // From v3 the service and the platform endpoints travel in netInfo.
+  proUpServPayload(type: MasternodeType, proTxHash: string, update: MasternodeServiceUpdate, v24Active: boolean, network: Network): ProUpServTx {
     const {ip, port} = serviceAddressParts(update.serviceAddress, network)
-    const version = type === 'Evo' ? EVO_SERVICE_TX_VERSION[network] : PROTX_VERSION
-    const extended = version >= PROTX_VERSION_EXT_ADDR
+    const extended = type === 'Evo' && v24Active
+    const version = extended ? PROTX_VERSION_EXT_ADDR : PROTX_VERSION
     const endpoints: Array<[NetInfoPurpose, number | null]> = [
       [NetInfoPurpose.CORE_P2P, port],
       [NetInfoPurpose.PLATFORM_P2P, update.platformP2PPort],

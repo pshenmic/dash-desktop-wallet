@@ -10,6 +10,9 @@ export interface GovernanceOptions {
   events: Pick<SyncServiceEvents, 'proposals' | 'proposalVotes' | 'voteRelayed'>
 }
 
+export type InventoryMessage = Message & {inventory?: Array<{type: number; hash: Uint8Array}>}
+export type PayloadMessage = Message & {payload: Uint8Array}
+
 // The factories addGovernanceMessages registers, beside the built-ins sent with them.
 export interface GovernanceMessages {
   GovSync: (arg: {payload: Uint8Array}) => Message

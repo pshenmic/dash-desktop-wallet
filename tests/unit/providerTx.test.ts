@@ -174,7 +174,7 @@ describe('proUpServPayload', () => {
       platformNodeId: mined.platformNodeID!,
       platformP2PPort: 36656,
       platformHttpPort: 1443,
-    }, 'testnet')
+    }, true, 'testnet')
     built.inputsHash = mined.inputsHash
     built.payloadSig = mined.payloadSig
     expect(bytesToHex(built.bytes())).toBe(bytesToHex(mined.bytes()))

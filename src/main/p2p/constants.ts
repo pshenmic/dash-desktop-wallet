@@ -45,6 +45,12 @@ export const INV_GOVERNANCE_VOTE = 18
 // for the object list or for one object's votes.
 export const GOVERNANCE_RESYNC_MS = 60 * 60_000
 export const GOVERNANCE_SYNC_PEERS = 2
+// How many peers must announce a proposal before it is fetched.
+export const PROPOSAL_ANNOUNCERS = 2
+// Announced hashes, and one proposal's votes, held at most against a flooding peer.
+// Mainnet has ~3,000 nodes, each voting per signal and again on a change of mind.
+export const GOVERNANCE_ANNOUNCED_MAX = 10_000
+export const PROPOSAL_VOTES_MAX = 50_000
 // A peer asked for governance data answers with invs; only these are requested.
 export const GOVERNANCE_REPLY_WINDOW_MS = 60_000
 export const GOVERNANCE_EMIT_DELAY_MS = 1_000
@@ -52,9 +58,8 @@ export const GOVERNANCE_EMIT_DELAY_MS = 1_000
 export const VOTE_RELAY_WINDOW_MS = 10_000
 // Then how long the peers that took it have to serve it back.
 export const VOTE_CONFIRM_WINDOW_MS = 5_000
-// govsync's bloom filter (vData, nHashFuncs, nTweak, nFlags). Core reads an empty
-// one beside a proposal hash as a fetch of the object alone, so the vote sync
-// sends one byte that matches no vote.
+// govsync's bloom filter. Core reads an empty one beside a proposal hash as a fetch
+// of the object alone, so the vote sync sends one byte that matches no vote.
 export const GOVSYNC_OBJECTS_FILTER = Uint8Array.of(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 export const GOVSYNC_VOTES_FILTER = Uint8Array.of(1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0)
 
@@ -402,6 +407,9 @@ export const MNLIST_REPLY_TIMEOUT_MS = 5_000
 
 // Lock peers asked for each quorum update; most never answer getmnlistd.
 export const PLATFORM_QUORUM_PEERS = 6
+
+// The coinbase payload version Core requires while v24 is active and refuses before.
+export const CBTX_VERSION_V24 = 4
 
 // Core's nMasternodeMinimumConfirmations: a list entry's confirmedHash names the
 // block this far above the one its ProRegTx was mined in.

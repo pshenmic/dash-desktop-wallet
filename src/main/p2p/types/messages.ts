@@ -276,14 +276,14 @@ export interface P2PMasternodeListMessage {
   masternodes: NetworkMasternode[]
 }
 
-// Every node of a full list fetched on the lock pool, in both modes, whose entries
-// its coinbase's merkleRootMNList covers: which nodes exist, not whose they are.
-// askedAt is when the list was asked for, at the latest block announced then.
+// Every node of a list its coinbase's merkleRootMNList covers, in both modes: which
+// nodes exist, not whose. askedAt is when it was asked for, 0 if it was not.
 export interface P2PListedMasternodesMessage {
   type: 'listedMasternodes'
   network: Network
   proTxHashes: string[]
   askedAt: number
+  v24Active: boolean
 }
 
 // Every stored proposal still in its payment window, as govsync delivered it.

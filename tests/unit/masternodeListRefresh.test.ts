@@ -1,4 +1,4 @@
-import {beforeEach, describe, expect, it, vi} from 'vitest'
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 import type {Peer} from 'dash-core-p2p'
 import {MasternodeList} from '../../src/main/p2p/sync/masternodeList'
 
@@ -7,6 +7,7 @@ vi.mock('../../src/main/p2p/utils/masternodeList', async original => ({
   ...await original<typeof import('../../src/main/p2p/utils/masternodeList')>(),
   evonodeDapiUrls: () => [],
   committedQuorums: () => [],
+  isV24Active: (diff: {v24?: boolean}) => diff.v24 ?? false,
   committedList: (diff: {blockHash: string; deletedMNs: string[]; mnList: {proRegTxHash: string}[]}, _header: unknown, previous: {proRegTxHash: string}[]) =>
     diff.blockHash === 'forged' ? null : [...previous.filter(({proRegTxHash}) => !diff.deletedMNs.includes(proRegTxHash)), ...diff.mnList],
 }))
@@ -35,25 +36,35 @@ describe('the lock pool masternode list', () => {
     })
   })
 
-  const answer = (from: Peer, blockHash: string, proTxHashes: string[]): void =>
-    list.onDiff(from, {mnlistdiff: {baseBlockHash: ZERO, blockHash, mnList: proTxHashes.map(proRegTxHash => ({proRegTxHash}))}} as never)
+  afterEach(() => list.resetPool())
 
-  it('hands main every node of a verified full list, with when it was asked for', () => {
+  const answer = async (from: Peer, blockHash: string, proTxHashes: string[]): Promise<void> => {
+    list.onDiff(from, {mnlistdiff: {baseBlockHash: ZERO, blockHash, mnList: proTxHashes.map(proRegTxHash => ({proRegTxHash}))}} as never)
+    await new Promise(resolve => setTimeout(resolve, 0))
+  }
+
+  it('hands main every node of a verified full list, with when it was asked for', async () => {
     list.onBlockAnnounced(first, 'b1')
-    answer(first, 'b1', ['aa', 'bb'])
-    expect(listed).toHaveBeenCalledWith('testnet', ['aa', 'bb'], expect.any(Number))
+    await answer(first, 'b1', ['aa', 'bb'])
+    expect(listed.mock.calls).toEqual([['testnet', ['aa', 'bb'], expect.any(Number), false]])
+    expect(listed.mock.calls[0][2]).toBeGreaterThan(0)
   })
 
-  it('refreshes at the newest announced block, once per reply window', () => {
+  it('stamps a list nobody asked for with no ask time, so it can drop no node', async () => {
+    await answer(first, 'b9', ['aa'])
+    expect(listed).toHaveBeenCalledWith('testnet', ['aa'], 0, false)
+  })
+
+  it('refreshes at the newest announced block, once per reply window', async () => {
     list.onBlockAnnounced(first, 'b1')
-    answer(first, 'b1', ['aa'])
+    await answer(first, 'b1', ['aa'])
     list.onBlockAnnounced(second, 'b2')
     list.refresh()
     list.refresh()
     expect(second.sendMessage).toHaveBeenCalledTimes(1)
     expect(second.sendMessage).toHaveBeenCalledWith({blockHash: 'b2'})
-    answer(second, 'b2', ['aa', 'cc'])
-    expect(listed).toHaveBeenLastCalledWith('testnet', ['aa', 'cc'], expect.any(Number))
+    await answer(second, 'b2', ['aa', 'cc'])
+    expect(listed).toHaveBeenLastCalledWith('testnet', ['aa', 'cc'], expect.any(Number), false)
   })
 
   it('asks for nothing before any block is announced', () => {
@@ -66,6 +77,8 @@ describe('the lock pool masternode list', () => {
 describe('following the tip', () => {
   const listed = vi.fn()
   let first: ReturnType<typeof peer>
+  let second: ReturnType<typeof peer>
+  let readyPeers: Set<Peer>
   let list: MasternodeList
   const store = {
     network: 'testnet', getHeaderByHeight: async () => new Uint8Array(80), getRegistrations: async () => new Map(),
@@ -75,7 +88,9 @@ describe('following the tip', () => {
   beforeEach(() => {
     listed.mockReset()
     first = peer('1.1.1.1')
-    const pool = {network: 'testnet', readyPeers: new Set([first]), messages: {GetMnListDiff: (args: unknown) => args}}
+    second = peer('2.2.2.2')
+    readyPeers = new Set([first])
+    const pool = {network: 'testnet', readyPeers, messages: {GetMnListDiff: (args: unknown) => args}}
     list = new MasternodeList({
       pool: () => pool as never,
       chain: () => store as never,
@@ -83,8 +98,13 @@ describe('following the tip', () => {
     })
   })
 
-  const answer = async (baseBlockHash: string, blockHash: string, coinbaseHeight: number, mnList: string[], deletedMNs: string[] = []): Promise<void> => {
-    list.onDiff(first, {mnlistdiff: {baseBlockHash, blockHash, coinbaseHeight, deletedMNs,
+  afterEach(() => {
+    list.closeChain()
+    vi.useRealTimers()
+  })
+
+  const answer = async (baseBlockHash: string, blockHash: string, coinbaseHeight: number, mnList: string[], deletedMNs: string[] = [], v24 = false): Promise<void> => {
+    list.onDiff(first, {mnlistdiff: {baseBlockHash, blockHash, coinbaseHeight, deletedMNs, v24,
       mnList: mnList.map(proRegTxHash => ({proRegTxHash, confirmedHash: ZERO, keyIDVoting: '00'.repeat(20), pubKeyOperator: '00'.repeat(48)}))}} as never)
     await new Promise(resolve => setTimeout(resolve, 0))
   }
@@ -118,6 +138,29 @@ describe('following the tip', () => {
 
     list.followTip('b3')
     expect(first.sendMessage).toHaveBeenLastCalledWith({baseBlockHash: 'b2', blockHash: 'b3'})
+  })
+
+  it('asks one peer at a time for the full list, another when the reply window passes', () => {
+    vi.useFakeTimers()
+    readyPeers.add(second)
+    const asks = (): number => first.sendMessage.mock.calls.length + second.sendMessage.mock.calls.length
+    list.followTip('b1')
+    expect(asks()).toBe(1)
+    vi.advanceTimersByTime(5_000)
+    expect(asks()).toBe(2)
+  })
+
+  it('tells main a full list once, with when its block was asked for', async () => {
+    list.followTip('b1')
+    await answer(ZERO, 'b1', 1, ['aa'])
+    expect(listed.mock.calls).toEqual([['testnet', ['aa'], expect.any(Number), false]])
+    expect(listed.mock.calls[0][2]).toBeGreaterThan(0)
+  })
+
+  it('tells main when v24 activates in a block that changed no node', async () => {
+    await answer(ZERO, 'b1', 1, ['aa'])
+    await answer('b1', 'b2', 2, [], [], true)
+    expect(listed).toHaveBeenLastCalledWith('testnet', ['aa'], 0, true)
   })
 
   it('asks the full list again once a rewind leaves the list it holds', async () => {

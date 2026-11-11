@@ -21,7 +21,7 @@ import {MasternodePlatformFields, MasternodeRegistration, MasternodeServiceUpdat
 import {Network} from '../types/Network'
 
 // uint256 hex is printed byte-reversed, as Core's ToString() does.
-function uint256Hex(hash: Uint8Array): string {
+export function uint256Hex(hash: Uint8Array): string {
   return bytesToHex(hash.toReversed())
 }
 
@@ -85,9 +85,8 @@ function isRoutable(ip: string): boolean {
     Math.floor(value / 2 ** (32 - bits)) === Math.floor(ipv4Number(network) / 2 ** (32 - bits)))
 }
 
-// Core's MnNetInfo::ValidateService: a routable IPv4 address, on the mainnet
-// Core port on mainnet and on any other port elsewhere. IPv4 only: a v2 ProTx
-// on mainnet is refused any other address.
+// Core's MnNetInfo::ValidateService: a routable IPv4 address (all a v2 ProTx may
+// carry on mainnet), on the mainnet Core port on mainnet and off it elsewhere.
 export function serviceAddressParts(serviceAddress: string, network: Network): {ip: string; port: number} {
   const match = /^(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})$/.exec(serviceAddress.trim())
   if (match == null || match[1].split('.').some(octet => Number(octet) > 255) || !isPort(Number(match[2]))) {
