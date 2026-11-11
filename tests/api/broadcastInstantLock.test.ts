@@ -1,4 +1,4 @@
-import {beforeEach, describe, expect, it} from 'vitest'
+import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {Input, Output, Script, Transaction} from 'dash-core-sdk'
 import {Preferences} from '../../src/main/src/preferences'
 import {WalletSyncService} from '../../src/main/src/services/core/WalletSyncService'
@@ -96,5 +96,28 @@ describe('an InstantSend lock reaches the pending row', () => {
     sent = []
     await internals.rebroadcastPending()
     expect(sent.filter(({type}) => type === 'broadcast')).toHaveLength(1)
+  })
+
+  // Peers announce a tx once, so a re-push of one they hold times out with no witness.
+  it('reports a first send that fails as rejected, but not a re-push that times out', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    internals.send = command => {
+      sent.push(command)
+      if (command.type === 'broadcast') internals.handleP2PEvent(broadcastResult(command.requestId!, null))
+    }
+    await sync.broadcastTransaction(tx.hex())
+    internals.send = command => {
+      if (command.type === 'broadcast') {
+        internals.handleP2PEvent({...broadcastResult(command.requestId!, null) as object, ok: false, errorMessage: 'no witness saw the tx'})
+      }
+    }
+
+    await internals.rebroadcastPending()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(errors).not.toHaveBeenCalled()
+
+    await expect(sync.broadcastTransaction(tx.hex())).rejects.toThrow('no witness saw the tx')
+    expect(errors).toHaveBeenCalledWith(expect.stringContaining('broadcast rejected'))
+    errors.mockRestore()
   })
 })

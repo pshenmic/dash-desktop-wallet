@@ -329,6 +329,12 @@ export class CFilterSyncWorker extends Worker {
     this.clearInflightBatches()
     this.matchedBlocks.clear()
     this.cfilter.cursor = target
+    // The walk began at the old cursor's checkpoint and the scan holds at a height
+    // with no filter header, so a cursor below that takes the walk down with it.
+    if (this.anchorHeight > 0 && this.anchorHeight >= target) {
+      this.anchorWalk(target)
+      log.info(`cursor is below the filter headers held; walking them again from h=${this.cfHeaders.walkStart}`)
+    }
     this.emit('cursorReset', {walletId: this.walletId, height: target})
   }
 
@@ -339,6 +345,7 @@ export class CFilterSyncWorker extends Worker {
       return
     }
     this.emitStatus('cfilters')
+    this.walkCFHeadersNext()
     this.pumpCFilters()
   }
 
@@ -541,7 +548,14 @@ export class CFilterSyncWorker extends Worker {
       })
     }
 
-    const start = Math.max(this.birthdayHeight, this.cfilter.cursor)
+    this.anchorWalk(Math.max(this.birthdayHeight, this.cfilter.cursor))
+    log.info(`received ${headers.length} checkpoints; anchor at h=${this.anchorHeight}; cached headers=${this.heightToFilterHeader.size}`)
+    this.walkCFHeadersNext()
+  }
+
+  // Starts the filter-header walk at the checkpoint below `start`, the lowest
+  // height the scan will ask a filter for.
+  private anchorWalk(start: number): void {
     const anchorCkpt = Math.floor((start - 1) / 1000) * 1000
     if (anchorCkpt > 0 && this.checkpoints.has(anchorCkpt)) {
       this.anchorHeight = anchorCkpt
@@ -549,9 +563,7 @@ export class CFilterSyncWorker extends Worker {
     } else {
       this.anchorHeight = 0
     }
-    log.info(`received ${headers.length} checkpoints; anchor at h=${this.anchorHeight}; cached headers=${this.heightToFilterHeader.size}`)
     this.cfHeaders.walkStart = Math.max(this.anchorHeight + 1, this.birthdayHeight)
-    this.walkCFHeadersNext()
   }
 
   // ── cfheaders walk ────────────────────────────────────────────────────────

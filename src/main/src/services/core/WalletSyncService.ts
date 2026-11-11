@@ -884,7 +884,9 @@ export class WalletSyncService {
   // connection modes: it goes over the lock pool, which is also the only pool
   // that can hear the resulting isdlock. Defaults come from
   // p2p/constants.BROADCAST_POLICY; `policy` overrides the lock knobs.
-  broadcastTransaction = async (txHex: string, policy?: BroadcastPolicyOverrides): Promise<BroadcastResult> => {
+  // `resend` is a tx already broadcast once: peers announce a tx a single time, so
+  // one they hold can show no witness, and that timeout is not a rejection.
+  broadcastTransaction = async (txHex: string, policy?: BroadcastPolicyOverrides, resend = false): Promise<BroadcastResult> => {
     // Re-forks the utility process if it died since the last send.
     if (this.lockListenNetwork) {
       await this.startLockListen(this.lockListenNetwork, this.lockListenWalletId)
@@ -900,7 +902,8 @@ export class WalletSyncService {
         if (ok) {
           resolve(result)
         } else {
-          log.error(`broadcast rejected ${txid ?? '(unparsed)'}: ${errorMessage}`)
+          if (resend) log.debug(`re-sent ${txid ?? '(unparsed)'} while it waits for a block: ${errorMessage}`)
+          else log.error(`broadcast rejected ${txid ?? '(unparsed)'}: ${errorMessage}`)
           const err = new Error(errorMessage ?? 'broadcastTransaction failed') as Error & {result: BroadcastResult}
           err.result = result
           reject(err)
@@ -948,7 +951,7 @@ export class WalletSyncService {
     for (const p of pending) {
       if (p.instantLocked || !p.isLocal) continue
       const hex = Buffer.from(p.raw).toString('hex')
-      this.broadcastTransaction(hex).catch(() => { /* best-effort re-push */ })
+      this.broadcastTransaction(hex, undefined, true).catch(() => { /* best-effort re-push */ })
     }
     await this.refreshWatchedTxids()
   }

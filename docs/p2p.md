@@ -36,6 +36,11 @@ Things the code cannot tell you, and that a plausible-looking change breaks:
   proceeds with a warning, while contradicting answers keep asking rather than
   picking a side. A pinned pool takes that answer at once — waiting out the race
   would wait on a peer that cannot join.
+- **The filter-header walk starts at the checkpoint below the scan cursor, not
+  at genesis**, and the scan holds at any height with no filter header. A
+  cursor rewound below that checkpoint (new addresses, a followed masternode)
+  therefore has to restart the walk from its own checkpoint, or the scan waits
+  forever without a log line. A full filter-header cache hides this.
 - **A ChainLock is a statement about a block, not about a height.** `clsig`
   carries the locked hash. Flooring the reorg depth on the height alone pins us
   to whatever branch we happen to hold there, and since the floor then sits at or
