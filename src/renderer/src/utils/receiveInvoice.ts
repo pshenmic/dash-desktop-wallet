@@ -51,13 +51,8 @@ export function wrapByWidth(units: string[], maxWidth: number, measure: (line: s
   return line === '' ? lines : [...lines, line.trimEnd()]
 }
 
-export function balancedAddressLines(address: string, maxCharsPerLine = 22): string[] {
-  if (address.length === 0) return ['']
-  const lineCount = Math.max(1, Math.ceil(address.length / maxCharsPerLine))
-  const chunkSize = Math.ceil(address.length / lineCount)
-  const lines: string[] = []
-  for (let i = 0; i < address.length; i += chunkSize) {
-    lines.push(address.slice(i, i + chunkSize))
-  }
-  return lines
+export function balancedAddressLines(address: string, singleLineMax = 50): string[] {
+  if (address.length <= singleLineMax) return [address]
+  const mid = Math.ceil(address.length / 2)
+  return [address.slice(0, mid), address.slice(mid)]
 }

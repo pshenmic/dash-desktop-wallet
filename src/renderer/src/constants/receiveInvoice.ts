@@ -1,4 +1,4 @@
-export const RECEIVE_QR_SIZE = 225
+export const RECEIVE_QR_SIZE = 256
 
 export const RECEIVE_QR_COPY = {
   copyImage: 'Copy image',

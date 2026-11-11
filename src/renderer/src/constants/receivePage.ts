@@ -41,18 +41,21 @@ export const RECEIVE_REQUESTS_STORAGE_PREFIX = 'wallet.receiveRequests.'
 export const RECEIVE_LABEL_MAX_LENGTH = 80
 
 export const RECEIVE_FORM_COPY = {
+  title: 'Request a payment',
   labelField: 'Label',
-  labelPlaceholder: 'Enter a label for this address',
+  labelPlaceholder: 'e.g. Invoice #42',
   amountField: 'Amount',
   amountPlaceholder: '0.00000000',
-  generateButton: 'Save payment address',
-  generatingButton: 'Saving…',
+  generateButton: 'Copy payment link',
+  generatingButton: 'Copying…',
   clearButton: 'Clear',
+  clickToCopyTooltip: 'Click to copy',
+  copiedTooltip: 'Copied!',
 } as const
 
 export const RECEIVE_HISTORY_COPY = {
   title: 'Requested payments history',
-  empty: 'No payment requests yet. Save a payment address above to add one.',
+  empty: 'No payment requests yet. Copy a payment link above to add one.',
   loadFailed: 'Failed to load payment requests',
   dateHeader: 'Date',
   labelHeader: 'Label',
@@ -66,7 +69,7 @@ export const RECEIVE_HISTORY_COPY = {
   copyLinkAction: 'Copy payment link',
   copyAmountAction: 'Copy requested amount',
   deleteAction: 'Remove payment request',
-  requestCreated: 'Payment address saved',
+  requestCreated: 'Payment link copied',
   requestFailed: 'Could not save payment address',
   deleteSuccess: 'Payment request removed',
   deleteFailed: 'Could not remove payment request',

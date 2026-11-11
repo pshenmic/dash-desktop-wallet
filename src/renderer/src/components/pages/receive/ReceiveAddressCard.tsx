@@ -78,7 +78,6 @@ export default function ReceiveAddressCard({
       )
       setLabel('')
       setAmount('')
-      toast.success(RECEIVE_HISTORY_COPY.requestCreated)
     } catch (error) {
       const message = error instanceof Error ? error.message : RECEIVE_HISTORY_COPY.requestFailed
       setFormError(message)

@@ -130,7 +130,6 @@ export default function ShieldedReceiveCard({ walletId }: ShieldedReceiveCardPro
         )
         setLabel('')
         setAmount('')
-        toast.success(RECEIVE_HISTORY_COPY.requestCreated)
       } catch (err) {
         const message = err instanceof Error ? err.message : RECEIVE_HISTORY_COPY.requestFailed
         setError(message)
