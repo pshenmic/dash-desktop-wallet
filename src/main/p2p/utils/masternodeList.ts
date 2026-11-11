@@ -9,7 +9,7 @@ import type {NetworkMasternode} from '../../src/types/Masternode'
 import type {Network} from '../../src/types/Network'
 import {CBTX_VERSION_V24} from '../constants'
 import type {PayoutUpdate, ProviderRegistration} from '../types/masternodeList'
-import {wireToDisplayHex} from './byteOrder'
+import {isZeroHash, wireToDisplayHex} from './byteOrder'
 import {hashHeaderRaw} from './pow'
 
 // Null when the entries do not hash to the merkleRootMNList the coinbase commits to.
@@ -60,7 +60,7 @@ export function providerRegistration(tx: Transaction, proTxHash: string, height:
   if (tx.type !== TransactionType.TRANSACTION_PROVIDER_REGISTER || tx.hash() !== proTxHash) return null
   const payload = tx.extraPayload as ProRegTX
   const {txId, vOut} = payload.collateralOutpoint
-  const internal = !/[^0]/.test(txId)
+  const internal = isZeroHash(txId)
   return {
     height,
     isEvo: payload.type === MnType.Evo,

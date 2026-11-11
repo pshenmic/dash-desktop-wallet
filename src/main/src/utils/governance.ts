@@ -4,14 +4,16 @@ import {utils as sdkUtils} from 'dash-core-sdk'
 import {
   DUFFS_PER_DASH,
   GOVERNANCE_PROPOSAL_TYPE,
+  GOVERNANCE_UPDATE_MIN_SECONDS,
   MASTERNODE_VOTE_WEIGHT,
+  POSE_BANNED_STATUS,
   SUPERBLOCK_CYCLE_SECONDS,
   VOTE_OUTCOME_CODE,
   VOTE_SIGNAL_FUNDING,
 } from '../constants/chain'
 import {DashscanProposal} from '../types/Dashscan'
-import {GovernanceObject, GovernanceVote, Proposal, ProposalTally, UnsignedVote, VoteOutcome} from '../types/Governance'
-import {MasternodeType, NetworkMasternode} from '../types/Masternode'
+import {GovernanceObject, GovernanceVote, Proposal, ProposalTally, UnsignedVote, VoteOutcome, VotingNode} from '../types/Governance'
+import {Masternode, MasternodeType, NetworkMasternode} from '../types/Masternode'
 import {Network} from '../types/Network'
 import {isHash, requireProTxHash, signedMessageHash, uint256Hex} from './providerTx'
 
@@ -179,6 +181,22 @@ export function lastVoteTime(votes: GovernanceVote[], {collateralTxid, collatera
   const own = votes.filter(vote => vote.signal === VOTE_SIGNAL_FUNDING && vote.voter === votingAddress
     && vote.collateralTxid === collateralTxid && vote.collateralVout === collateralVout)
   return own.length === 0 ? null : Math.max(...own.map(({time}) => time))
+}
+
+// The checks Core's own wallet runs before relaying. `votes` is null where the
+// source has none to check the hour against; `time` is the new vote's, unix seconds.
+export function requireVotingNode(owned: Masternode[], proTxHash: string, votes: GovernanceVote[] | null, time: number): VotingNode {
+  const node = owned.find(candidate => candidate.proTxHash === proTxHash)
+  if (node == null) throw new Error(`Masternode ${proTxHash} is not one of this wallet's`)
+  if (node.status === POSE_BANNED_STATUS) throw new Error(`Masternode ${proTxHash} is PoSe-banned`)
+  const {votingKeyIndex, votingAddress, collateralTxid, collateralVout} = node
+  if (votingKeyIndex == null) throw new Error(`Masternode ${proTxHash} carries a voting key this wallet does not derive`)
+  if (collateralTxid == null || collateralVout == null) throw new Error(`Masternode ${proTxHash} has no known collateral yet`)
+  const last = votes == null ? null : lastVoteTime(votes, node)
+  if (last != null && last > time - GOVERNANCE_UPDATE_MIN_SECONDS) {
+    throw new Error(`Masternode ${proTxHash} voted on this proposal at ${new Date(last * 1000).toISOString()}; Core drops another vote within the hour`)
+  }
+  return {proTxHash, votingKeyIndex, votingAddress, collateralTxid, collateralVout}
 }
 
 // Core keeps each node's latest vote per signal and drops one whose key is not

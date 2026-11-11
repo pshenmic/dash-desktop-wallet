@@ -36,6 +36,15 @@ export interface GovernanceVote {
   voter: string | null
 }
 
+// What signing a node's vote needs, once the node passed the checks before relaying.
+export interface VotingNode {
+  proTxHash: string
+  votingKeyIndex: number
+  votingAddress: string
+  collateralTxid: string
+  collateralVout: number
+}
+
 // What a vote signs, before it is signed.
 export type UnsignedVote = Omit<GovernanceVote, 'hash' | 'voter'>
 

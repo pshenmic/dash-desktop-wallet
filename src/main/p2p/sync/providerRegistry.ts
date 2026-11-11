@@ -4,7 +4,7 @@ import {MASTERNODE_MIN_CONFIRMATIONS, REGISTRATION_BLOCKS_INFLIGHT} from '../con
 import {PeerRotation} from '../net/peerRotation'
 import type {ChainStore} from '../store/ChainStore'
 import type {MasternodeListOptions, PayoutUpdate, ProviderRegistration} from '../types/masternodeList'
-import {displayHexToWire} from '../utils/byteOrder'
+import {displayHexToWire, isZeroHash} from '../utils/byteOrder'
 import {listedMasternode, providerRegistration} from '../utils/masternodeList'
 import {txsMatchMerkleRoot} from '../utils/merkle'
 import {hashHeaderRaw} from '../utils/pow'
@@ -60,7 +60,7 @@ export class ProviderRegistry {
     const queued = new Set([...this.wanted.values()].flatMap(({proTxHashes}) => proTxHashes))
     // Not confirmed yet: no block to look for, and a hash the walk down the chain
     // could never find would stop it ending early. A later list confirms it.
-    const confirmed = entries.filter(({proRegTxHash, confirmedHash}) => /[^0]/.test(confirmedHash) &&
+    const confirmed = entries.filter(({proRegTxHash, confirmedHash}) => !isZeroHash(confirmedHash) &&
       !this.registrations.has(proRegTxHash) && !this.unresolvable.has(proRegTxHash) && !queued.has(proRegTxHash))
     const confirmedWire = (entry: SimplifiedMNListEntry): string => Buffer.from(displayHexToWire(entry.confirmedHash)).toString('hex')
     const heights = await store.findHeights(new Set(confirmed.map(confirmedWire)), height)

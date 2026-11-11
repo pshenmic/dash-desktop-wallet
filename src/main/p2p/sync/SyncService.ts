@@ -148,7 +148,7 @@ export class SyncService {
   // Main waits on the answer, so a throw has to become one.
   relayVote = (cmd: P2PRelayVoteMessage): void => {
     try {
-      this.governance.relay(cmd.requestId, cmd.vote)
+      this.governance.voteRelay.relay(cmd.requestId, cmd.vote)
     } catch (err) {
       this.events.voteRelayed(cmd.requestId, 0, 0, err instanceof Error ? err.message : String(err))
     }
@@ -296,7 +296,7 @@ export class SyncService {
     this.lockPool.on('peerinv', this.governance.onInv)
     this.lockPool.on('peergovobj', this.governance.onObject)
     this.lockPool.on('peergovobjvote', this.governance.onVote)
-    this.lockPool.on('peergetdata', this.governance.onGetData)
+    this.lockPool.on('peergetdata', this.governance.voteRelay.onGetData)
     this.lockPool.on('peerready', this.governance.onPeerReady)
     // Nothing else emits status while the bulk layer is down, so lock-pool
     // churn is a lazy-mode wallet's only signal.

@@ -5,7 +5,7 @@ import {MasternodeDAO} from '../../database/MasternodeDAO'
 import {MasternodeKeyDAO} from '../../database/MasternodeKeyDAO'
 import {WalletProviderFactory} from '../../providers/WalletProviderFactory'
 import {MASTERNODE_KEY_CHAINS, MASTERNODE_KEY_WINDOW, MASTERNODE_WALKED_CHAINS} from '../../constants/addresses'
-import {DUFFS_PER_DASH, DUST_THRESHOLD_DUFFS, MASTERNODE_COLLATERAL_DUFFS, REVOCATION_REASON_CODE} from '../../constants/chain'
+import {DUST_THRESHOLD_DUFFS, REVOCATION_REASON_CODE} from '../../constants/chain'
 import {Preferences} from '../../preferences'
 import {
   ImportedMasternodeKey,
@@ -37,6 +37,9 @@ import {
   operatedNode,
   ownedCollaterals,
   ownedMasternodes,
+  ownerNode,
+  requireCollateral,
+  requirePayout,
   unusedKeyIndex,
   withoutCollaterals,
 } from '../../utils/masternodes'
@@ -135,14 +138,7 @@ export class MasternodeService {
     this.coreTransactionService.classifyAddress(registration.payoutAddress, walletNetwork)
     const {txid, fee, peersAcked} = await this.sendProviderTx(walletId, password, async ({network, keys, owned, grouped, utxos, collaterals}) => {
       const {txid, vout} = registration.collateral
-      const coin = utxos.find(({txId, vOut}) => txId === txid && vOut === vout)
-      if (coin == null) throw new Error('The collateral is not an unspent coin of this wallet')
-      // Core checks a collateral against the UTXO set alone, never the mempool.
-      if (coin.height === 0) throw new Error('The collateral needs a confirmation first: Core does not accept a mempool output as collateral')
-      if (coin.satoshis !== MASTERNODE_COLLATERAL_DUFFS[registration.type]) {
-        throw new Error(`A ${registration.type} masternode's collateral is exactly ${MASTERNODE_COLLATERAL_DUFFS[registration.type] / DUFFS_PER_DASH} DASH`)
-      }
-      if (collaterals.some(row => row.txid === txid && row.vout === vout)) throw new Error('This coin is already a masternode collateral')
+      const coin = requireCollateral(utxos, collaterals, registration)
       const collateralPath = addressPaths(grouped).get(coin.address)
       if (collateralPath == null) throw new Error(`No derivation path for address ${coin.address}`)
 
@@ -151,7 +147,7 @@ export class MasternodeService {
       const index = unusedKeyIndex(owned, ...MASTERNODE_KEY_CHAINS)
       const derived = (chain: MasternodeKeyChain): string => masternodeKeyDeriver(keys, network, chain).derive(index).address
       const keyId = (chain: MasternodeKeyChain): string => bytesToHex(sdkUtils.addressToPublicKeyHash(derived(chain)))
-      if ([derived('owner'), derived('voting')].includes(registration.payoutAddress)) throw new Error('The payout may not pay the owner or voting key')
+      requirePayout(registration.payoutAddress, derived('owner'), derived('voting'))
       log.info(`register ${registration.type} on ${txid}:${vout}: wallet keys #${index}, service ${registration.serviceAddress ?? 'none'}`)
       return {
         payload: this.coreTransactionService.proRegPayload(registration, {
@@ -177,9 +173,7 @@ export class MasternodeService {
     if (update.payoutAddress != null) this.coreTransactionService.classifyAddress(update.payoutAddress, walletNetwork)
     return this.sendProviderTx(walletId, password, async context => {
       const {network, keys, owned, utxos} = context
-      const node = owned.find(entry => entry.proTxHash === proTxHash)
-      if (node == null) throw new Error('Not a masternode of this wallet')
-      if (node.ownerKeyIndex == null) throw new Error("This wallet does not derive the masternode's owner key")
+      const node = ownerNode(owned, proTxHash)
       const owner = masternodeKeyDeriver(keys, network, 'owner').derive(node.ownerKeyIndex)
 
       const votingAddress = update.voting.kind === 'keep' ? node.votingAddress
@@ -188,9 +182,7 @@ export class MasternodeService {
       if (this.coreTransactionService.classifyAddress(votingAddress, network) !== 'p2pkh') throw new Error('A voting key is a P2PKH address')
       if (votingAddress === node.collateralAddress) throw new Error('The voting key may not be the collateral address')
 
-      const payoutAddress = update.payoutAddress ?? node.payeeAddress
-      if (payoutAddress == null) throw new Error('The current payout is not known yet; pass a payout address')
-      if (payoutAddress === owner.address || payoutAddress === votingAddress) throw new Error('The payout may not pay the owner or voting key')
+      const payoutAddress = requirePayout(update.payoutAddress ?? node.payeeAddress, owner.address, votingAddress)
       log.info(`update registrar ${proTxHash}: operator ${update.operator.kind}, voting ${update.voting.kind}, ` +
         `payout ${update.payoutAddress == null ? 'kept' : 'set'}`)
 

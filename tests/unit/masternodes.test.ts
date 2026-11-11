@@ -14,6 +14,9 @@ import {
   networkMasternode,
   ownedCollaterals,
   ownedMasternodes,
+  ownerNode,
+  requireCollateral,
+  requirePayout,
   collateralsToStore,
   withCollateralFlag,
   withoutCollaterals,
@@ -182,6 +185,48 @@ describe('unusedKeyIndex', () => {
 
   it('skips an index any of several chains carries', () => {
     expect(unusedKeyIndex([owned(null, 0), owned(1, null)], 'owner', 'voting', 'operator')).toBe(2)
+  })
+})
+
+describe('requireCollateral', () => {
+  const DASH = 100_000_000n
+  const coin = (satoshis: bigint, height = 10): UTXO => ({txId: 'aa'.repeat(32), vOut: 1, satoshis, height, address: 'Xcoin'}) as UTXO
+  const wanted = {type: 'Regular' as const, collateral: {txid: 'aa'.repeat(32), vout: 1}}
+
+  it('answers the confirmed coin of the type\'s exact amount', () => {
+    const utxo = coin(1_000n * DASH)
+    expect(requireCollateral([utxo], [], wanted)).toBe(utxo)
+  })
+
+  it('refuses a coin that is missing, unconfirmed, of another amount or already a collateral', () => {
+    expect(() => requireCollateral([], [], wanted)).toThrow('not an unspent coin')
+    expect(() => requireCollateral([coin(1_000n * DASH, 0)], [], wanted)).toThrow('needs a confirmation')
+    expect(() => requireCollateral([coin(4_000n * DASH)], [], wanted)).toThrow('exactly 1000 DASH')
+    const taken = [{proTxHash: 'bb', txid: 'aa'.repeat(32), vout: 1, followed: false}]
+    expect(() => requireCollateral([coin(1_000n * DASH)], taken, wanted)).toThrow('already a masternode collateral')
+  })
+})
+
+describe('requirePayout', () => {
+  it('answers a payout that pays neither the owner nor the voting key', () => {
+    expect(requirePayout('Xpayout', 'Xowner', 'Xvoting')).toBe('Xpayout')
+  })
+
+  it('refuses an unknown payout, and one paying the owner or voting key', () => {
+    expect(() => requirePayout(null, 'Xowner', 'Xvoting')).toThrow('not known yet')
+    expect(() => requirePayout('Xowner', 'Xowner', 'Xvoting')).toThrow('may not pay')
+    expect(() => requirePayout('Xvoting', 'Xowner', 'Xvoting')).toThrow('may not pay')
+  })
+})
+
+describe('ownerNode', () => {
+  const owned = (proTxHash: string, ownerKeyIndex: number | null): Masternode =>
+    ({...node(proTxHash), ownerKeyIndex, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: []})
+
+  it('answers a node whose owner key the wallet derives, and refuses any other', () => {
+    expect(ownerNode([owned('aa', 3)], 'aa').ownerKeyIndex).toBe(3)
+    expect(() => ownerNode([owned('aa', null)], 'aa')).toThrow('does not derive')
+    expect(() => ownerNode([], 'aa')).toThrow('Not a masternode')
   })
 })
 

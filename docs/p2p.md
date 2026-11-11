@@ -101,7 +101,7 @@ Things the code cannot tell you, and that a plausible-looking change breaks:
   ProUpRegTx's proTxHash in the block filter. A node the wallet starts following
   rewinds the scan to its registration once.
 
-## Governance (`sync/governance.ts`)
+## Governance (`sync/governance.ts`, `sync/voteRelay.ts`)
 
 - **Proposals and votes come from peers with `govsync`, in p2p mode only**, and
   live in chain.db (`g:` objects, `v:<proposal>:` votes). rpc mode reads Dashscan
@@ -115,8 +115,9 @@ Things the code cannot tell you, and that a plausible-looking change breaks:
   beside a proposal hash is a fetch of the object alone; the vote sync sends a
   one-byte filter.
 - **Nothing checks a proposal's collateral**, so one peer could invent one: an
-  object is fetched once `PROPOSAL_ANNOUNCERS` peers announced it (fewer only
-  when the pool holds fewer). A vote whose signature recovers to no key is not
+  object is fetched once `PROPOSAL_ANNOUNCERS` hosts announced it (fewer only
+  when the pool holds fewer; counted by host, so a reconnect is not a second
+  one). A vote whose signature recovers to no key is not
   kept, and a proposal holds at most `PROPOSAL_VOTES_MAX`.
 - **A vote counts only where its signature recovers to the node's current voting
   key**, the node found by collateral outpoint in the proven list. Mainnet signs

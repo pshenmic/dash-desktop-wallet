@@ -2,9 +2,9 @@ import {HDKey} from '@scure/bip32'
 import {WalletDAO} from '../../database/WalletDAO'
 import {WalletProviderFactory} from '../../providers/WalletProviderFactory'
 import {HD_VERSIONS} from '../../constants/addresses'
-import {GOVERNANCE_UPDATE_MIN_SECONDS, POSE_BANNED_STATUS, VOTE_OUTCOME_CODE, VOTE_SIGNAL_FUNDING} from '../../constants/chain'
+import {VOTE_OUTCOME_CODE, VOTE_SIGNAL_FUNDING} from '../../constants/chain'
 import {Proposal, ProposalTally, VoteOutcome, VoteResult} from '../../types/Governance'
-import {governanceVote, lastVoteTime, requireVoteRequest, voteBytes, voteDigest} from '../../utils/governance'
+import {governanceVote, requireVoteRequest, requireVotingNode, voteBytes, voteDigest} from '../../utils/governance'
 import {masternodeAccountPath} from '../../utils/masternodeKeys'
 import {signHash} from '../../utils/providerTx'
 import {requireWallet} from '../../utils/requireWallet'
@@ -51,18 +51,7 @@ export class GovernanceService {
     const owned = await this.masternodeService.getMasternodes(walletId)
     if (owned == null) throw new Error('The masternode list has not arrived yet')
     const time = Math.floor(Date.now() / 1000)
-    const nodes = proTxHashes.map(proTxHash => {
-      const node = owned.find(candidate => candidate.proTxHash === proTxHash)
-      if (node == null) throw new Error(`Masternode ${proTxHash} is not one of this wallet's`)
-      if (node.status === POSE_BANNED_STATUS) throw new Error(`Masternode ${proTxHash} is PoSe-banned`)
-      if (node.votingKeyIndex == null) throw new Error(`Masternode ${proTxHash} carries a voting key this wallet does not derive`)
-      if (node.collateralTxid == null || node.collateralVout == null) throw new Error(`Masternode ${proTxHash} has no known collateral yet`)
-      const last = votes == null ? null : lastVoteTime(votes, node)
-      if (last != null && last > time - GOVERNANCE_UPDATE_MIN_SECONDS) {
-        throw new Error(`Masternode ${proTxHash} voted on this proposal at ${new Date(last * 1000).toISOString()}; Core drops another vote within the hour`)
-      }
-      return {proTxHash, votingKeyIndex: node.votingKeyIndex, votingAddress: node.votingAddress, collateralTxid: node.collateralTxid, collateralVout: node.collateralVout}
-    })
+    const nodes = proTxHashes.map(proTxHash => requireVotingNode(owned, proTxHash, votes, time))
 
     const signed = await withUnlockedWallet(this.walletDAO, walletId, password, async ({seed}) => {
       const account = HDKey.fromMasterSeed(seed, HD_VERSIONS[network]).derive(masternodeAccountPath(network, 'voting'))

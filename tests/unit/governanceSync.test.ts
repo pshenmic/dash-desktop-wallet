@@ -109,12 +109,15 @@ describe('governance sync', () => {
     expect(sentBy('govsync')).toHaveLength(2)
   })
 
-  it('fetches no proposal a single peer announced', async () => {
+  it('fetches no proposal a single host announced, reconnected or not', async () => {
     await governance.open()
     const asked = peers.find(peer => peer.sent.length > 0)!
+    const reconnected = fakePeer(asked.host)
     governance.onInv(asked as never, inv(17, PROPOSAL))
     governance.onInv(asked as never, inv(17, PROPOSAL))
+    governance.onInv(reconnected as never, inv(17, PROPOSAL))
     expect(sentBy('getdata')).toHaveLength(0)
+    expect(reconnected.sent).toHaveLength(0)
   })
 
   it('asks the peers left once the first ones let the reply window pass unanswered', async () => {
@@ -187,12 +190,12 @@ describe('governance sync', () => {
   })
 
   it('announces a vote, hands it to each peer that asks once, and asks them back', async () => {
-    governance.relay('r1', hexToBytes(MAINNET_VOTES[0]))
+    governance.voteRelay.relay('r1', hexToBytes(MAINNET_VOTES[0]))
     expect(sentBy('inv')).toHaveLength(3)
 
-    governance.onGetData(peers[1] as never, inv(18, VOTE_HASH))
-    governance.onGetData(peers[1] as never, inv(18, VOTE_HASH))
-    governance.onGetData(peers[2] as never, inv(18, VOTE_HASH))
+    governance.voteRelay.onGetData(peers[1] as never, inv(18, VOTE_HASH))
+    governance.voteRelay.onGetData(peers[1] as never, inv(18, VOTE_HASH))
+    governance.voteRelay.onGetData(peers[2] as never, inv(18, VOTE_HASH))
     expect(sentBy('govobjvote')).toHaveLength(2)
 
     await vi.advanceTimersByTimeAsync(10_000)
@@ -209,14 +212,14 @@ describe('governance sync', () => {
     await governance.open()
     await governance.syncVotes(PROPOSAL)
 
-    governance.relay('r1', hexToBytes(MAINNET_VOTES[0]))
-    governance.onGetData(peers[0] as never, inv(18, VOTE_HASH))
+    governance.voteRelay.relay('r1', hexToBytes(MAINNET_VOTES[0]))
+    governance.voteRelay.onGetData(peers[0] as never, inv(18, VOTE_HASH))
     await vi.advanceTimersByTimeAsync(16_000)
     expect(relayed).toEqual([['r1', 1, 0, null]])
     expect(store.votes.get(PROPOSAL)).toBeUndefined()
 
-    governance.relay('r2', hexToBytes(MAINNET_VOTES[0]))
-    governance.onGetData(peers[0] as never, inv(18, VOTE_HASH))
+    governance.voteRelay.relay('r2', hexToBytes(MAINNET_VOTES[0]))
+    governance.voteRelay.onGetData(peers[0] as never, inv(18, VOTE_HASH))
     await vi.advanceTimersByTimeAsync(10_000)
     governance.onVote(peers[0] as never, payload(MAINNET_VOTES[0]))
     await vi.advanceTimersByTimeAsync(6_000)

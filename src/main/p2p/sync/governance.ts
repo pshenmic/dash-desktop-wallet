@@ -1,4 +1,3 @@
-import {Inventory} from 'dash-core-p2p'
 import type {Peer} from 'dash-core-p2p'
 import {concatBytes} from '@noble/hashes/utils.js'
 import {
@@ -13,24 +12,21 @@ import {
   INV_GOVERNANCE_VOTE,
   PROPOSAL_ANNOUNCERS,
   PROPOSAL_VOTES_MAX,
-  VOTE_CONFIRM_WINDOW_MS,
-  VOTE_RELAY_WINDOW_MS,
 } from '../constants'
 import type {ChainStore} from '../store/ChainStore'
 import type {GovernanceSyncState} from '../types/chainStore'
-import type {GovernanceMessages, GovernanceOptions, InventoryMessage, PayloadMessage} from '../types/governance'
-import type {PoolService} from '../net/PoolService'
+import type {GovernanceOptions, InventoryMessage, PayloadMessage} from '../types/governance'
+import {governanceMessages} from '../net/governanceMessages'
 import {displayHexToWire, wireToDisplayHex} from '../utils/byteOrder'
 import {peerTarget} from '../net/peerAddress'
 import {governanceObject, governanceVote, isStaleProposal, proposalOf} from '../../src/utils/governance'
 import type {GovernanceVote, Proposal} from '../../src/types/Governance'
 import {Logger} from '../../src/utils/logger'
+import {VoteRelay} from './voteRelay'
 
 const log = new Logger('governance')
 
 const nowSeconds = (): number => Math.floor(Date.now() / 1000)
-
-const messagesOf = (pool: PoolService): GovernanceMessages => pool.messages as unknown as GovernanceMessages
 
 // Proposals and their votes, read from peers with govsync and kept in chain.db.
 // Votes are fetched per proposal when main asks, since a full set is thousands.
@@ -45,8 +41,8 @@ export class Governance {
   // Peers asked for the object list and those that answered, until enough have.
   private objectsAsked = new Set<Peer>()
   private objectAnswers = new Set<Peer>()
-  // Object hash → the peers that announced it.
-  private announced = new Map<string, Set<Peer>>()
+  // Object hash → the hosts that announced it: a peer reconnecting is still one.
+  private announced = new Map<string, Set<string>>()
   // Until when a peer's vote invs answer our govsync; votes are not fetched otherwise.
   private voteWindows = new Map<Peer, {until: number; proposalHash: string}>()
   // Hash → when it was asked for; a peer that never delivers frees it after the window.
@@ -58,11 +54,11 @@ export class Governance {
   private unsavedObjects = new Map<string, Uint8Array>()
   private unsavedVotes = new Map<string, Map<string, Uint8Array>>()
   private flushTimer: ReturnType<typeof setTimeout> | null = null
-  // peers asked for the vote; asked back are those sent a getdata for it once
-  // the window closed, and accepted those that served it.
-  private relays = new Map<string, {payload: Uint8Array; peers: Set<Peer>; askedBack: Set<Peer>; accepted: Set<Peer>}>()
+  readonly voteRelay: VoteRelay
 
-  constructor(private readonly opts: GovernanceOptions) {}
+  constructor(private readonly opts: GovernanceOptions) {
+    this.voteRelay = new VoteRelay(opts)
+  }
 
   // Drops what ended before the current superblock cycle, its votes with it.
   async open(): Promise<void> {
@@ -104,7 +100,6 @@ export class Governance {
     this.waiting.clear()
   }
 
-  // A relay waiting on the old pool can no longer be asked for.
   resetPool(): void {
     this.voteWindows.clear()
     this.objectsAsked.clear()
@@ -112,7 +107,7 @@ export class Governance {
     this.announced.clear()
     this.waiting.clear()
     this.requested.clear()
-    this.relays.clear()
+    this.voteRelay.resetPool()
   }
 
   // Answers from chain.db at once.
@@ -136,7 +131,7 @@ export class Governance {
     for (const peer of peers) {
       log.info(`asking ${peerTarget(peer)} for governance objects`)
       this.objectsAsked.add(peer)
-      peer.sendMessage(messagesOf(pool).GovSync({payload: concatBytes(new Uint8Array(32), GOVSYNC_OBJECTS_FILTER)}))
+      peer.sendMessage(governanceMessages(pool).GovSync({payload: concatBytes(new Uint8Array(32), GOVSYNC_OBJECTS_FILTER)}))
     }
   }
 
@@ -160,42 +155,12 @@ export class Governance {
     for (const peer of peers) {
       log.info(`asking ${peerTarget(peer)} for the votes on ${proposalHash}`)
       this.voteWindows.set(peer, {until: Date.now() + GOVERNANCE_REPLY_WINDOW_MS, proposalHash})
-      peer.sendMessage(messagesOf(pool).GovSync({payload: concatBytes(displayHexToWire(proposalHash), GOVSYNC_VOTES_FILTER)}))
+      peer.sendMessage(governanceMessages(pool).GovSync({payload: concatBytes(displayHexToWire(proposalHash), GOVSYNC_VOTES_FILTER)}))
     }
   }
 
-  // Core accepts a vote only from a peer that announced it or was asked for it,
-  // so it goes out as an inv and is handed over on getdata.
-  relay(requestId: string, payload: Uint8Array): void {
-    const pool = this.opts.pool()
-    if (pool == null || pool.readyPeers.size === 0) {
-      this.opts.events.voteRelayed(requestId, 0, 0, 'No peer is connected')
-      return
-    }
-    const vote = governanceVote(payload, pool.network)
-    const relay = {payload, peers: new Set<Peer>(), askedBack: new Set<Peer>(), accepted: new Set<Peer>()}
-    this.relays.set(vote.hash, relay)
-    const inv = messagesOf(pool).Inventory([Inventory.forItem(INV_GOVERNANCE_VOTE, vote.hash)])
-    for (const peer of pool.readyPeers) peer.sendMessage(inv)
-    // Core serves a vote on getdata only from the votes it kept, so asking the
-    // peers that took it is what tells a kept vote from a silently dropped one.
-    setTimeout(() => {
-      const getData = messagesOf(pool).GetData([{type: INV_GOVERNANCE_VOTE, hash: displayHexToWire(vote.hash)}])
-      for (const peer of relay.peers) {
-        if (!pool.readyPeers.has(peer)) continue
-        relay.askedBack.add(peer)
-        peer.sendMessage(getData)
-      }
-      setTimeout(() => {
-        if (this.relays.get(vote.hash) === relay) this.relays.delete(vote.hash)
-        log.info(`vote ${vote.hash} on ${vote.parentHash}: ${relay.peers.size} peer(s) asked for it, ${relay.accepted.size} kept it`)
-        this.opts.events.voteRelayed(requestId, relay.peers.size, relay.accepted.size, null)
-      }, VOTE_CONFIRM_WINDOW_MS).unref?.()
-    }, VOTE_RELAY_WINDOW_MS).unref?.()
-  }
-
-  // A vote inv counts only from a peer answering our vote sync. The first inv of
-  // an answer is what marks the sync done, so an unanswered one is asked again.
+  // The first inv of an answer is what marks a sync done, so an unanswered one is
+  // asked again. A vote inv counts only from a peer answering our vote sync.
   onInv = (peer: Peer, msg: InventoryMessage): void => {
     const pool = this.opts.pool()
     const store = this.store
@@ -203,31 +168,37 @@ export class Governance {
     const now = Date.now()
     const items = msg.inventory ?? []
     const needed = Math.min(PROPOSAL_ANNOUNCERS, pool.readyPeers.size)
-    const votes = this.voteWindows.get(peer)
-    const votesOpen = votes != null && votes.until > now
-    if (this.objectsAsked.has(peer) && items.some(({type}) => type === INV_GOVERNANCE_OBJECT)) {
-      this.objectAnswers.add(peer)
-      if (this.objectAnswers.size >= needed) {
-        this.objectsAsked.clear()
-        this.objectAnswers.clear()
-        this.state.syncedAt = now
-        this.saveState(store)
-      }
-    }
-    if (votesOpen && now - (this.state.votesSyncedAt[votes.proposalHash] ?? 0) >= GOVERNANCE_RESYNC_MS
-      && items.some(({type}) => type === INV_GOVERNANCE_VOTE)) {
-      this.state.votesSyncedAt[votes.proposalHash] = now
-      this.saveState(store)
-    }
+    const window = this.voteWindows.get(peer)
+    const votesFor = window != null && window.until > now ? window.proposalHash : null
+    if (items.some(({type}) => type === INV_GOVERNANCE_OBJECT)) this.objectsAnswered(store, peer, needed)
+    if (votesFor != null && items.some(({type}) => type === INV_GOVERNANCE_VOTE)) this.votesAnswered(store, votesFor)
+
     const wanted = items.filter(item => {
       const hash = wireToDisplayHex(item.hash)
       if (now - (this.requested.get(hash) ?? 0) < GOVERNANCE_REPLY_WINDOW_MS) return false
       if (item.type === INV_GOVERNANCE_OBJECT) return this.announcedEnough(peer, hash, needed)
-      return item.type === INV_GOVERNANCE_VOTE && votesOpen
+      return item.type === INV_GOVERNANCE_VOTE && votesFor != null
     })
     if (wanted.length === 0) return
     for (const item of wanted) this.requested.set(wireToDisplayHex(item.hash), now)
-    peer.sendMessage(messagesOf(pool).GetData(wanted))
+    peer.sendMessage(governanceMessages(pool).GetData(wanted))
+  }
+
+  // The object list is synced once `needed` of the peers asked have answered.
+  private objectsAnswered(store: ChainStore, peer: Peer, needed: number): void {
+    if (!this.objectsAsked.has(peer)) return
+    this.objectAnswers.add(peer)
+    if (this.objectAnswers.size < needed) return
+    this.objectsAsked.clear()
+    this.objectAnswers.clear()
+    this.state.syncedAt = Date.now()
+    this.saveState(store)
+  }
+
+  private votesAnswered(store: ChainStore, proposalHash: string): void {
+    if (Date.now() - (this.state.votesSyncedAt[proposalHash] ?? 0) < GOVERNANCE_RESYNC_MS) return
+    this.state.votesSyncedAt[proposalHash] = Date.now()
+    this.saveState(store)
   }
 
   // Nothing here checks a proposal's collateral, so one peer alone could invent
@@ -235,10 +206,10 @@ export class Governance {
   private announcedEnough(peer: Peer, hash: string, needed: number): boolean {
     if (this.proposals.has(hash) || this.ignored.has(hash)) return false
     if (this.announced.size >= GOVERNANCE_ANNOUNCED_MAX) this.announced.clear()
-    const peers = this.announced.get(hash) ?? new Set<Peer>()
-    peers.add(peer)
-    this.announced.set(hash, peers)
-    if (peers.size < needed) return false
+    const hosts = this.announced.get(hash) ?? new Set<string>()
+    hosts.add(peer.host)
+    this.announced.set(hash, hosts)
+    if (hosts.size < needed) return false
     this.announced.delete(hash)
     return true
   }
@@ -278,24 +249,10 @@ export class Governance {
       log.debug(`unreadable governance vote from ${peerTarget(peer)}:`, err)
       return
     }
-    const relay = this.relays.get(vote.hash)
-    if (relay?.askedBack.has(peer)) {
-      if (relay.accepted.size === 0 && this.store != null) this.keepVote(vote, relay.payload)
-      relay.accepted.add(peer)
-    } else if (this.store != null && this.requested.delete(vote.hash)) {
-      this.keepVote(vote, msg.payload)
-    }
-  }
-
-  onGetData = (peer: Peer, msg: InventoryMessage): void => {
-    const pool = this.opts.pool()
-    if (pool == null) return
-    for (const item of msg.inventory ?? []) {
-      const relay = item.type === INV_GOVERNANCE_VOTE ? this.relays.get(wireToDisplayHex(item.hash)) : undefined
-      if (relay == null || relay.peers.has(peer)) continue
-      relay.peers.add(peer)
-      peer.sendMessage(messagesOf(pool).GovObjVote({payload: relay.payload}))
-    }
+    const ours = this.voteRelay.confirmed(peer, vote.hash)
+    if (this.store == null) return
+    if (ours?.first) this.keepVote(vote, ours.payload)
+    if (ours == null && this.requested.delete(vote.hash)) this.keepVote(vote, msg.payload)
   }
 
   // Ready peers not asked for this within the hour, in random order; none while

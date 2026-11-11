@@ -20,3 +20,8 @@ export function reverseHex(hex: string): string {
   for (let i = hex.length - 2; i >= 0; i -= 2) out += hex.slice(i, i + 2)
   return out
 }
+
+// Core's null hash: no base block, no confirmation yet, no outside collateral.
+export function isZeroHash(hex: string): boolean {
+  return !/[^0]/.test(hex)
+}

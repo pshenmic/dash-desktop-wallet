@@ -2,7 +2,7 @@ import {describe, expect, it} from 'vitest'
 import {bytesToHex, hexToBytes, utf8ToBytes} from '@noble/hashes/utils.js'
 import {PrivateKey} from 'dash-core-sdk'
 import {GovernanceVote, UnsignedVote} from '../../src/main/src/types/Governance'
-import {NetworkMasternode} from '../../src/main/src/types/Masternode'
+import {Masternode, NetworkMasternode} from '../../src/main/src/types/Masternode'
 import {
   governanceObject,
   governanceVote,
@@ -10,6 +10,7 @@ import {
   lastVoteTime,
   proposalOf,
   proposalTally,
+  requireVotingNode,
   voteBytes,
   voteDigest,
 } from '../../src/main/src/utils/governance'
@@ -111,6 +112,26 @@ describe('lastVoteTime', () => {
       vote({time: 400, collateralVout: 1}),
     ], listed)).toBe(200)
     expect(lastVoteTime([], listed)).toBeNull()
+  })
+})
+
+describe('requireVotingNode', () => {
+  const TXID = 'aa'.repeat(32)
+  const owned = (fields: Partial<Masternode> = {}): Masternode =>
+    ({...node(TXID, 0, 'Xvoter'), ownerKeyIndex: null, votingKeyIndex: 2, operatorKeyIndex: null, importedRoles: [], ...fields})
+
+  it('answers what signing the vote needs', () => {
+    expect(requireVotingNode([owned()], TXID, [vote({time: 100})], 100 + 3600)).toEqual(
+      {proTxHash: TXID, votingKeyIndex: 2, votingAddress: 'Xvoter', collateralTxid: TXID, collateralVout: 0})
+    expect(requireVotingNode([owned()], TXID, null, 0).votingKeyIndex).toBe(2)
+  })
+
+  it('refuses a node Core would not let vote', () => {
+    expect(() => requireVotingNode([], TXID, null, 0)).toThrow("not one of this wallet's")
+    expect(() => requireVotingNode([owned({status: 'POSE_BANNED'})], TXID, null, 0)).toThrow('PoSe-banned')
+    expect(() => requireVotingNode([owned({votingKeyIndex: null})], TXID, null, 0)).toThrow('does not derive')
+    expect(() => requireVotingNode([owned({collateralTxid: null})], TXID, null, 0)).toThrow('no known collateral')
+    expect(() => requireVotingNode([owned()], TXID, [vote({time: 100})], 100 + 3599)).toThrow('within the hour')
   })
 })
 

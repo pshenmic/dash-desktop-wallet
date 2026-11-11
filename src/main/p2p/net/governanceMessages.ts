@@ -1,4 +1,6 @@
 import {Message, MessageOptions, Messages} from 'dash-core-p2p'
+import type {GovernanceMessages} from '../types/governance'
+import type {PoolService} from './PoolService'
 
 // dash-core-p2p drops these three commands unparsed. Their payloads stay raw:
 // sync/governance reads them with the shared governance helpers.
@@ -32,4 +34,9 @@ export function addGovernanceMessages(messages: Messages): void {
   messages.add('govsync', 'GovSync', command('govsync'))
   messages.add('govobj', 'GovObj', command('govobj'))
   messages.add('govobjvote', 'GovObjVote', command('govobjvote'))
+}
+
+// `pool.messages` typed with the factories registered above.
+export function governanceMessages(pool: PoolService): GovernanceMessages {
+  return pool.messages as unknown as GovernanceMessages
 }

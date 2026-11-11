@@ -1,6 +1,6 @@
 import {bytesToHex, hexToBytes} from '@noble/hashes/utils.js'
 import {MASTERNODE_KEY_CHAINS} from '../constants/addresses'
-import {MASTERNODE_COLLATERAL_DUFFS} from '../constants/chain'
+import {DUFFS_PER_DASH, MASTERNODE_COLLATERAL_DUFFS} from '../constants/chain'
 import {DerivedAddress} from '../types/AddressWindow'
 import {DashscanMasternode} from '../types/Dashscan'
 import {CoreSpendSource, ListedUtxo, SelectableUtxo} from '../types/CoinSelection'
@@ -11,6 +11,7 @@ import {
   MasternodeCollateral,
   MasternodeKeyChain,
   MasternodeKeyFilter,
+  MasternodeRegistration,
   NetworkMasternode,
   OwnedCollateral,
 } from '../types/Masternode'
@@ -88,6 +89,39 @@ export function existingMasternodes(
   const decided = (node: Masternode): boolean => listed != null && listed.askedAt > (firstSeen.get(node.proTxHash) ?? Infinity)
   const existing = owned.filter(node => isListed(node) || !decided(node))
   return {existing, unsettled: existing.some(node => !isListed(node))}
+}
+
+// Core takes a collateral from the UTXO set alone, never the mempool, and only
+// at the exact amount of the node's type.
+export function requireCollateral(
+  utxos: UTXO[],
+  collaterals: MasternodeCollateral[],
+  {type, collateral: {txid, vout}}: Pick<MasternodeRegistration, 'type' | 'collateral'>,
+): UTXO {
+  const coin = utxos.find(({txId, vOut}) => txId === txid && vOut === vout)
+  if (coin == null) throw new Error('The collateral is not an unspent coin of this wallet')
+  if (coin.height === 0) throw new Error('The collateral needs a confirmation first: Core does not accept a mempool output as collateral')
+  if (coin.satoshis !== MASTERNODE_COLLATERAL_DUFFS[type]) {
+    throw new Error(`A ${type} masternode's collateral is exactly ${MASTERNODE_COLLATERAL_DUFFS[type] / DUFFS_PER_DASH} DASH`)
+  }
+  if (collaterals.some(row => row.txid === txid && row.vout === vout)) throw new Error('This coin is already a masternode collateral')
+  return coin
+}
+
+// Null is a payout the list has not given yet, which an update would have to restate.
+export function requirePayout(payoutAddress: string | null, ownerAddress: string, votingAddress: string): string {
+  if (payoutAddress == null) throw new Error('The current payout is not known yet; pass a payout address')
+  if (payoutAddress === ownerAddress || payoutAddress === votingAddress) throw new Error('The payout may not pay the owner or voting key')
+  return payoutAddress
+}
+
+// A node whose owner key the wallet derives, which is what lets it sign as owner.
+export function ownerNode(owned: Masternode[], proTxHash: string): Masternode & {ownerKeyIndex: number} {
+  const node = owned.find(entry => entry.proTxHash === proTxHash)
+  if (node == null) throw new Error('Not a masternode of this wallet')
+  const {ownerKeyIndex} = node
+  if (ownerKeyIndex == null) throw new Error("This wallet does not derive the masternode's owner key")
+  return {...node, ownerKeyIndex}
 }
 
 // A node whose operator key the wallet derives, which is what lets it sign as operator.
