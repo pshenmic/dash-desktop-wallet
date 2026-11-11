@@ -1,7 +1,24 @@
 import { DestinationKind } from '../enums/DestinationKind'
 import type { DropdownFieldOption } from '../types/DropdownField'
+import type { SendRecipientDraft } from '../types/SendDraft'
 import type { OwnRecipientInventory } from '../types/SendRecipients'
 import { creditsToDash, davToDash } from './balance'
+
+export function availableOwnRecipientOptions(
+  options: DropdownFieldOption[] | undefined,
+  recipients: SendRecipientDraft[],
+  currentId: string,
+): DropdownFieldOption[] | undefined {
+  if (options == null) return undefined
+  const taken = new Set(
+    recipients
+      .filter(recipient => recipient.id !== currentId)
+      .map(recipient => recipient.address.trim())
+      .filter(Boolean),
+  )
+  if (taken.size === 0) return options
+  return options.filter(option => !taken.has(option.value))
+}
 
 export function ownRecipientOptions(kind: DestinationKind, inventory: OwnRecipientInventory): DropdownFieldOption[] {
   let options: DropdownFieldOption[]

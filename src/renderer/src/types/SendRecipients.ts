@@ -36,6 +36,7 @@ export interface RecipientInputProps {
   invalid?: boolean
   valueAvatar?: boolean
   ownOptions?: DropdownFieldOption[]
+  ownOptionsHeading?: string
   ownOptionsLoading?: boolean
   ownOptionsError?: string | null
   onRetryOwnOptions?: () => void
@@ -69,5 +70,9 @@ export interface SendRecipientsEditorProps {
   feeCredits: bigint | null
   budgetIsEstimate: boolean
   amountDenominations?: readonly bigint[]
+  ownOptions?: DropdownFieldOption[]
+  ownOptionsLoading?: boolean
+  ownOptionsError?: string | null
+  onRetryOwnOptions?: () => void
   onChange: (recipients: SendRecipientDraft[]) => void
 }

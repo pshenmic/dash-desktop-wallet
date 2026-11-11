@@ -23,6 +23,7 @@ export default function RecipientInput({
   invalid = false,
   valueAvatar = false,
   ownOptions,
+  ownOptionsHeading = 'Your addresses',
   ownOptionsLoading = false,
   ownOptionsError = null,
   onRetryOwnOptions,
@@ -100,7 +101,7 @@ export default function RecipientInput({
         value={value}
         onChange={onChange}
         options={ownOptions ?? []}
-        menuHeading={hasOwnOptions ? 'Your addresses' : undefined}
+        menuHeading={hasOwnOptions ? ownOptionsHeading : undefined}
         placeholder={data.placeholder}
         textSize={style.textSize}
         triggerClassName={`${style.field} ${invalidRecipient ? FIELD_INVALID : ''}`}

@@ -8,15 +8,31 @@ import { CHIP_ACTION, SURFACE_PANEL } from '@renderer/constants/surfaces'
 import type { SendRecipientsEditorProps } from '@renderer/types/SendRecipients'
 import { creditsToDuffs, dashToDuffs, davToDash, duffsToCredits } from '@renderer/utils/balance'
 import { isValidDestinationAddress } from '@renderer/utils/destinationAddress'
+import { availableOwnRecipientOptions } from '@renderer/utils/ownRecipients'
 import { capSendAmount, recipientPercent, recipientRemainingDuffs, recipientSliderAmount, recipientTotalDuffs } from '@renderer/utils/sendRecipients'
 import AllocationAmountRow from '@renderer/components/ui/AllocationAmountRow'
 import CreditsAmount from '@renderer/components/ui/CreditsAmount'
 import DenominationChips from '@renderer/components/ui/DenominationChips'
 import RecipientInput from './RecipientInput'
-import FadingScrollArea from '@renderer/components/ui/FadingScrollArea'
 
 export default function SendRecipientsEditor({
-  recipients, errors, limit, destination, budgetDuffs, feeRecipientId, feeCredits, budgetIsEstimate, amountDenominations, headerAction, beforeRecipients, footer, onChange,
+  recipients,
+  errors,
+  limit,
+  destination,
+  budgetDuffs,
+  feeRecipientId,
+  feeCredits,
+  budgetIsEstimate,
+  amountDenominations,
+  ownOptions,
+  ownOptionsLoading = false,
+  ownOptionsError = null,
+  onRetryOwnOptions,
+  headerAction,
+  beforeRecipients,
+  footer,
+  onChange,
 }: SendRecipientsEditorProps): React.JSX.Element {
   const {status} = useAuth()
   const network = status?.network ?? null
@@ -29,13 +45,13 @@ export default function SendRecipientsEditor({
   }
 
   return (
-    <div className={`flex h-[calc(100dvh-16.125rem)] min-h-80 min-w-0 flex-col ${SURFACE_PANEL}`}>
-      <div className="mb-6 flex shrink-0 flex-wrap items-center justify-between gap-3">
-        <div className="text-sm dash-text-default">
-          <span className="opacity-50">Total: </span>
-          {recipients.length} {recipients.length === 1 ? 'Recipient' : 'Recipients'} - {davToDash(recipientTotalDuffs(recipients))} Dash
+    <div className={`flex min-w-0 flex-col gap-3 ${SURFACE_PANEL}`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm font-medium dash-text-default">
+          <span>Recipients ({recipients.length}/{limit})</span>
+          <span className="opacity-50"> · {davToDash(recipientTotalDuffs(recipients))} Dash</span>
         </div>
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-6">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-4">
           {headerAction}
           {limit > 1 && (
             <button
@@ -51,8 +67,8 @@ export default function SendRecipientsEditor({
           )}
         </div>
       </div>
-      {beforeRecipients && <div className="mb-2.5 shrink-0">{beforeRecipients}</div>}
-      <FadingScrollArea className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto scrollbar-hide">
+      {beforeRecipients && <div className="shrink-0">{beforeRecipients}</div>}
+      <div className="flex min-w-0 flex-col gap-3">
         {recipients.map((recipient, index) => {
           const amount = dashToDuffs(recipient.amount)
           const remaining = budgetDuffs == null ? null : recipientRemainingDuffs(recipients, recipient.id, budgetDuffs)
@@ -62,6 +78,7 @@ export default function SendRecipientsEditor({
           const creatingIdentity = destination === DestinationKind.NewIdentity
           const addressError = !creatingIdentity && recipient.address.length > 0 && errors[index]?.address
           const amountError = recipient.amount.length > 0 && errors[index]?.amount
+          const recipientOwnOptions = availableOwnRecipientOptions(ownOptions, recipients, recipient.id)
           let recipientLabel = `Recipient ${index + 1}`
           let inputLabel = `Recipient ${index + 1} address`
           if (destination === DestinationKind.Identity) {
@@ -93,10 +110,27 @@ export default function SendRecipientsEditor({
                 <input aria-label={inputLabel} value="New identity" readOnly className={`${ADDRESS_INPUT} ${ADDRESS_INPUT_TEXT_SIZES[12]} opacity-50`} />
               </div>
             )
-            : <RecipientInput compact appearance="subtle" ariaLabel={inputLabel} value={recipient.address} onChange={value => update(recipient.id, 'address', value)} validate={address => isValidDestinationAddress(destination, address, network)} invalid={!!addressError} valueAvatar={destination === DestinationKind.Identity} data={recipientData} />
+            : (
+              <RecipientInput
+                compact
+                appearance="subtle"
+                ariaLabel={inputLabel}
+                value={recipient.address}
+                onChange={value => update(recipient.id, 'address', value)}
+                validate={address => isValidDestinationAddress(destination, address, network)}
+                invalid={!!addressError}
+                valueAvatar={destination === DestinationKind.Identity}
+                ownOptions={recipientOwnOptions}
+                ownOptionsHeading={destination === DestinationKind.Identity ? 'Your identities' : 'Your addresses'}
+                ownOptionsLoading={ownOptionsLoading}
+                ownOptionsError={ownOptionsError}
+                onRetryOwnOptions={onRetryOwnOptions}
+                data={recipientData}
+              />
+            )
 
           return (
-            <section key={recipient.id} className="flex min-w-0 shrink-0 flex-col gap-3 rounded-[.875rem] dash-block px-3.5 py-3">
+            <section key={recipient.id} className="flex min-w-0 flex-col gap-3 rounded-[.875rem] dash-block px-4 py-3.5">
               <div className="flex items-center justify-between gap-3">
                 <Text size={12} weight="medium" color="brand" opacity={50}>{recipientLabel}</Text>
                 {recipients.length > 1 && (
@@ -110,56 +144,56 @@ export default function SendRecipientsEditor({
                   </button>
                 )}
               </div>
-              <div className="grid min-w-0 grid-cols-1 items-center gap-x-12 gap-y-3 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]!">
-                <div className="min-w-0">
-                  {recipientField}
-                  {addressError && (
-                    <Text size={12} weight="medium" color="red" className="mt-1 block px-1">{addressError}</Text>
-                  )}
-                </div>
-                <div className="flex min-w-0 flex-col gap-1.5">
-                  {amountDenominations != null && (
-                    <DenominationChips
-                      denominations={amountDenominations}
-                      selected={duffsToCredits(amount)}
-                      onSelect={denomination => update(recipient.id, 'amount', davToDash(creditsToDuffs(denomination)))}
-                    />
-                  )}
-                  <AllocationAmountRow
-                    value={recipient.amount}
-                    onChange={changeAmount}
-                    fiatDuffs={amount}
-                    ariaLabel={`Recipient ${index + 1} amount`}
-                    invalid={!!amountError}
-                    disabled={budgetDuffs == null}
-                    slider={amountDenominations == null ? {
-                      percent,
-                      onPercentChange: changePercent,
-                      disabled: budgetDuffs == null || budgetDuffs <= 0n,
-                      label: `Recipient ${index + 1} amount percentage`,
-                      valueText: `${percent}% · ${allocationHint}`,
-                      title: allocationHint,
-                      onMax: useRemaining,
-                      maxDisabled: remaining == null || budgetIsEstimate,
-                      maxTitle: 'Use remaining',
-                    } : undefined}
+              <div className="flex min-w-0 flex-col gap-1">
+                {recipientField}
+                {addressError && (
+                  <Text size={12} weight="medium" color="red" className="block px-1">{addressError}</Text>
+                )}
+              </div>
+              <div className="flex min-w-0 flex-col gap-2">
+                {amountDenominations != null && (
+                  <DenominationChips
+                    denominations={amountDenominations}
+                    selected={duffsToCredits(amount)}
+                    onSelect={denomination => update(recipient.id, 'amount', davToDash(creditsToDuffs(denomination)))}
                   />
-                  {budgetIsEstimate && <Text size={10} weight="medium" color="brand" opacity={50}>{allocationHint}</Text>}
-                  {isFeeRecipient && (
-                    <Text size={10} weight="medium" color="brand">
-                      Estimated receives: <CreditsAmount credits={receivedCredits} exact /> (fee deducted)
-                    </Text>
-                  )}
-                  {amountError && (
-                    <Text size={12} weight="medium" color="red" className="px-1">{amountError}</Text>
-                  )}
-                </div>
+                )}
+                <AllocationAmountRow
+                  value={recipient.amount}
+                  onChange={changeAmount}
+                  fiatDuffs={amount}
+                  ariaLabel={`Recipient ${index + 1} amount`}
+                  invalid={!!amountError}
+                  disabled={budgetDuffs == null}
+                  slider={amountDenominations == null ? {
+                    percent,
+                    onPercentChange: changePercent,
+                    disabled: budgetDuffs == null || budgetDuffs <= 0n,
+                    label: `Recipient ${index + 1} amount percentage`,
+                    valueText: `${percent}% · ${allocationHint}`,
+                    title: allocationHint,
+                    onMax: useRemaining,
+                    maxDisabled: remaining == null || budgetIsEstimate,
+                    maxTitle: 'Use remaining',
+                  } : undefined}
+                />
+                {amountDenominations == null && (
+                  <Text size={10} weight="medium" color="brand" opacity={50} className="px-0.5 tabular-nums">{allocationHint}</Text>
+                )}
+                {isFeeRecipient && (
+                  <Text size={10} weight="medium" color="brand" className="px-0.5">
+                    Estimated receives: <CreditsAmount credits={receivedCredits} exact /> (fee deducted)
+                  </Text>
+                )}
+                {amountError && (
+                  <Text size={12} weight="medium" color="red" className="px-1">{amountError}</Text>
+                )}
               </div>
             </section>
           )
         })}
-      </FadingScrollArea>
-      {footer && <div className="mt-6 shrink-0">{footer}</div>}
+      </div>
+      {footer && <div className="mt-2 shrink-0">{footer}</div>}
     </div>
   )
 }

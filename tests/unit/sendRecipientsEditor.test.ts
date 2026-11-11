@@ -79,4 +79,32 @@ describe('SendRecipientsEditor', () => {
     ;(row.props.onChange as (value: string) => void)('5')
     expect(onChange).toHaveBeenCalledWith([{id: 'a', address: '', amount: '1'}])
   })
+
+  it('forwards wallet address suggestions to each recipient and excludes addresses chosen in other rows', () => {
+    const onRetryOwnOptions = vi.fn()
+    const ownOptions = [
+      {value: 'addr-1', label: 'addr-1'},
+      {value: 'addr-2', label: 'addr-2'},
+    ]
+    const inputs = elements(SendRecipientsEditor(props({
+      destination: DestinationKind.Identity,
+      recipients: [
+        {id: 'a', address: 'addr-1', amount: '0.5'},
+        {id: 'b', address: '', amount: '0.5'},
+      ],
+      errors: [{address: null, amount: null}, {address: null, amount: null}],
+      ownOptions,
+      ownOptionsLoading: true,
+      ownOptionsError: 'Failed',
+      onRetryOwnOptions,
+    }))).filter(node => node.type === 'recipient-input')
+
+    expect(inputs).toHaveLength(2)
+    expect(inputs[0].props.ownOptions).toEqual(ownOptions)
+    expect(inputs[1].props.ownOptions).toEqual([{value: 'addr-2', label: 'addr-2'}])
+    expect(inputs[0].props.ownOptionsHeading).toBe('Your identities')
+    expect(inputs[0].props.ownOptionsLoading).toBe(true)
+    expect(inputs[0].props.ownOptionsError).toBe('Failed')
+    expect(inputs[0].props.onRetryOwnOptions).toBe(onRetryOwnOptions)
+  })
 })

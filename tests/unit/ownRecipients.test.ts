@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DestinationKind } from '../../src/renderer/src/enums/DestinationKind'
 import type { OwnRecipientInventory } from '../../src/renderer/src/types/SendRecipients'
-import { ownRecipientOptions } from '../../src/renderer/src/utils/ownRecipients'
+import { availableOwnRecipientOptions, ownRecipientOptions } from '../../src/renderer/src/utils/ownRecipients'
 
 function inventory(): OwnRecipientInventory {
   const address = {walletId: 'wallet', accountId: 0, derivationPath: '', index: 0, isUsed: false, balance: 0n, txCount: 0, label: null, usdBalance: null}
@@ -76,5 +76,20 @@ describe('own recipient options', () => {
     expect(ownRecipientOptions(DestinationKind.Shielded, addresses)).toHaveLength(1)
     addresses.shieldedAddresses = []
     expect(ownRecipientOptions(DestinationKind.Shielded, addresses)).toEqual([])
+  })
+
+  it('excludes own addresses already selected in other recipient rows while keeping the current row selection', () => {
+    const options = [
+      {value: 'addr-1', label: 'addr-1'},
+      {value: 'addr-2', label: 'addr-2'},
+      {value: 'addr-3', label: 'addr-3'},
+    ]
+    const recipients = [
+      {id: 'r1', address: ' addr-1 ', amount: '1'},
+      {id: 'r2', address: '', amount: '2'},
+    ]
+    expect(availableOwnRecipientOptions(options, recipients, 'r1')?.map(option => option.value)).toEqual(['addr-1', 'addr-2', 'addr-3'])
+    expect(availableOwnRecipientOptions(options, recipients, 'r2')?.map(option => option.value)).toEqual(['addr-2', 'addr-3'])
+    expect(availableOwnRecipientOptions(undefined, recipients, 'r1')).toBeUndefined()
   })
 })

@@ -105,15 +105,9 @@ export function SourcePicker({
   return (
     <div className={'flex flex-col gap-2.5'}>
       <Text size={14} weight={"medium"} color={"brand"} opacity={50}>{label}</Text>
-      <div className="flex flex-col sm:flex-row! gap-3">
-        <div className="sm:w-[11.75rem]! shrink-0">
-          <KindDropdown kinds={kinds} selected={kind} onSelect={k => onKindChange(k as SourceKind)} />
-        </div>
-        <div className="min-w-0 flex-1 flex flex-col gap-2">
-          {sourceControl}
-          {trailingControl}
-        </div>
-      </div>
+      <KindDropdown kinds={kinds} selected={kind} onSelect={k => onKindChange(k as SourceKind)} />
+      {sourceControl}
+      {trailingControl}
     </div>
   )
 }
@@ -174,15 +168,9 @@ export function DestinationPicker({
   return (
     <div className={'flex flex-col gap-2.5'}>
       <Text size={14} weight={"medium"} color={"brand"} opacity={50}>To</Text>
-      <div className="flex flex-col sm:flex-row! gap-3">
-        <div className="sm:w-[11.75rem]! shrink-0">
-          <KindDropdown kinds={kinds} selected={kind} onSelect={k => onKindChange(k as DestinationKind)} />
-        </div>
-        <div className="min-w-0 flex-1">
-          {valueControl}
-          {trailingControl}
-        </div>
-      </div>
+      <KindDropdown kinds={kinds} selected={kind} onSelect={k => onKindChange(k as DestinationKind)} />
+      {valueControl}
+      {trailingControl}
       {showValueInput && kind !== DestinationKind.NewIdentity && error && <Text size={12} weight={"medium"} color={"red"} className={"px-1"}>{error}</Text>}
       {showValueInput && kind === DestinationKind.NewIdentity && (
         <Text size={12} weight={"medium"} color={"brand"} opacity={50} className={"px-1 leading-[130%]"}>

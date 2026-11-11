@@ -11,3 +11,5 @@ export const ALLOCATION_MAX_LABEL = 'Max'
 export const ALLOCATION_EMPTY_VALUE = '0'
 
 export const ALLOCATION_UNDERLINE = 'flex items-center gap-2 rounded-b-lg border-b px-2 py-1'
+
+export const SLIDER_STOPS = [0, 25, 50, 75, 100] as const
