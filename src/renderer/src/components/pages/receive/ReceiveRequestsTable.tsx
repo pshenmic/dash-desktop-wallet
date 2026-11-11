@@ -184,7 +184,7 @@ export default function ReceiveRequestsTable({
                       }}
                       className={"size-5 rounded-[.3125rem] flex items-center justify-center dash-block-5 hover:opacity-80 transition-opacity duration-200 cursor-pointer disabled:pointer-events-none disabled:opacity-25"}
                     >
-                      <DollarIcon size={8} color={"currentColor"} className={"dash-text-default opacity-50"} />
+                      <DollarIcon size={18} color={"currentColor"} className={"dash-text-default opacity-50"} />
                     </button>
                   </Tooltip>
 

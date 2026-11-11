@@ -1,5 +1,6 @@
 import {describe, expect, it} from 'vitest'
 import {
+  balancedAddressLines,
   corePaymentUri,
   receiveAmountDuffs,
   receiveAmountParam,
@@ -76,5 +77,21 @@ describe('wrapByWidth', () => {
 
   it('returns no lines for empty text', () => {
     expect(wrapByWidth([], 4, width)).toEqual([])
+  })
+})
+
+describe('balancedAddressLines', () => {
+  it('splits a 34-character Core address into two equal 17-character lines', () => {
+    const core = 'ybKB1cXmRoF7BxqVU5H2i9GMEyYjuD9GUn'
+    const lines = balancedAddressLines(core)
+    expect(lines).toEqual(['ybKB1cXmRoF7BxqVU', '5H2i9GMEyYjuD9GUn'])
+    expect(lines.join('')).toBe(core)
+  })
+
+  it('splits longer addresses into balanced lines without short orphan tails', () => {
+    const shielded = 'tdash1zqyvt595745255yj6pf2x9nz7y0qhqujdr0dw2qm6ncqtwqexrxg5p2s9'
+    const lines = balancedAddressLines(shielded)
+    expect(lines.join('')).toBe(shielded)
+    expect(lines.every((line) => line.length >= 20 && line.length <= 22)).toBe(true)
   })
 })
