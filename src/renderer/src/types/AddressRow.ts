@@ -8,5 +8,6 @@ export interface AddressRowProps {
   meta?: ReactNode
   explorerUrl?: string
   onQr?: () => void
+  onExportKey?: () => void
   hidden?: boolean
 }
