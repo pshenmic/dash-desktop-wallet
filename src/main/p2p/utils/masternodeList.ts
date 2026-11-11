@@ -39,14 +39,15 @@ export function committedQuorums(diff: MnListDiff, header: Uint8Array, previous:
     diff.calcBlockMerkleRoot() === wireToDisplayHex(header.subarray(36, 68)) ? quorums : null
 }
 
-// A full list (zero base) is trusted only when `header`, the block at its
-// coinbase height on our own chain, proves the coinbase and that coinbase's
-// merkleRootMNList covers every entry.
-export function listCommitted(diff: MnListDiff, header: Uint8Array): boolean {
-  return !/[^0]/.test(diff.baseBlockHash) &&
-    hashHeaderRaw(header) === diff.blockHash &&
+// The list after applying `diff` to `previous` (empty under a full list), or null
+// unless `header`, the block at its coinbase height on our own chain, proves the
+// coinbase and that coinbase's merkleRootMNList covers every entry.
+export function committedList(diff: MnListDiff, header: Uint8Array, previous: SimplifiedMNListEntry[]): SimplifiedMNListEntry[] | null {
+  const replaced = new Set([...diff.deletedMNs, ...diff.mnList.map(({proRegTxHash}) => proRegTxHash)])
+  const entries = [...previous.filter(({proRegTxHash}) => !replaced.has(proRegTxHash)), ...diff.mnList]
+  return hashHeaderRaw(header) === diff.blockHash &&
     diff.calcBlockMerkleRoot() === wireToDisplayHex(header.subarray(36, 68)) &&
-    diff.merkleRootMNList === MnListDiff.calcMerkleRootMNList(diff.mnList)
+    diff.merkleRootMNList === MnListDiff.calcMerkleRootMNList(entries) ? entries : null
 }
 
 // Null unless `tx` is the ProRegTx of `proTxHash`. A null collateral outpoint

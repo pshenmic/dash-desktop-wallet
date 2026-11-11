@@ -421,7 +421,7 @@ export class WalletBackend {
         discoveryLog.error('post-sync address discovery failed:', err))
       resolvePrevOuts(walletId)
     }
-    // A p2p list arrives on its own schedule, hours apart, so it is matched at once.
+    // A p2p list arrives on its own schedule, with the block that changed a node, so it is matched at once.
     const rediscoverMasternodes = (network: Network): void => {
       walletDAO.getSelectedWallet()
         .then(selected => selected?.network === network ? masternodeService.discover(selected.walletId) : undefined)

@@ -62,13 +62,21 @@ Things the code cannot tell you, and that a plausible-looking change breaks:
 
 ## Masternode list (`sync/providerRegistry.ts`)
 
-- **The wallet's masternodes come from a full list proven against our own
-  header chain**, never from the DAPI-url refresh's check alone: the header at
-  the coinbase height must hash to the diff's block, carry the coinbase's merkle
+- **The wallet's masternodes come from a list proven against our own header
+  chain**, never from the DAPI-url refresh's check alone: the header at the
+  coinbase height must hash to the diff's block, carry the coinbase's merkle
   root, and that coinbase's `merkleRootMNList` must cover every entry.
+- **The list follows the tip block by block, as a diff.** The full list
+  (~500 KB mainnet) is asked once, then each new tip asks for the diff from the
+  block the list is proven at (a few KB), applies it, and proves the result the
+  same way; the quorums ride the same diff. Only a rewind below that block asks
+  for the full list again. A diff based on a list already replaced is dropped,
+  since several peers answer each ask.
 - **Which nodes still exist comes from the lock pool, in both modes.** Every
-  full list the hourly DAPI-url refresh verifies also goes to main as its set of
-  proTxHashes (`listedMasternodes`), with when it was asked for. Dashscan keeps
+  list proven at the tip, and every full list the hourly DAPI-url refresh
+  verifies (rpc mode has no chain to follow), goes to main as its set of
+  proTxHashes (`listedMasternodes`), with when it was asked for. A block that
+  changed no node sends nothing, since main rediscovers on every list. Dashscan keeps
   the row of a node whose collateral was spent, frozen in its last state, so
   discovery drops an owned node once a list asked for after the node was first
   seen does not carry it; one missing from an older list makes main send

@@ -2,10 +2,13 @@ import {beforeEach, describe, expect, it, vi} from 'vitest'
 import type {Peer} from 'dash-core-p2p'
 import {MasternodeList} from '../../src/main/p2p/sync/masternodeList'
 
-// The coinbase check has its own tests; here every full list passes it.
+// The coinbase checks have their own tests; here every list passes them but a forged one.
 vi.mock('../../src/main/p2p/utils/masternodeList', async original => ({
   ...await original<typeof import('../../src/main/p2p/utils/masternodeList')>(),
   evonodeDapiUrls: () => [],
+  committedQuorums: () => [],
+  committedList: (diff: {blockHash: string; deletedMNs: string[]; mnList: {proRegTxHash: string}[]}, _header: unknown, previous: {proRegTxHash: string}[]) =>
+    diff.blockHash === 'forged' ? null : [...previous.filter(({proRegTxHash}) => !diff.deletedMNs.includes(proRegTxHash)), ...diff.mnList],
 }))
 
 const ZERO = '00'.repeat(32)
@@ -57,5 +60,70 @@ describe('the lock pool masternode list', () => {
     list.refresh()
     expect(first.sendMessage).not.toHaveBeenCalled()
     expect(second.sendMessage).not.toHaveBeenCalled()
+  })
+})
+
+describe('following the tip', () => {
+  const listed = vi.fn()
+  let first: ReturnType<typeof peer>
+  let list: MasternodeList
+  const store = {
+    network: 'testnet', getHeaderByHeight: async () => new Uint8Array(80), getRegistrations: async () => new Map(),
+    writeRegistrations: async () => undefined, findHeights: async () => new Map(),
+  }
+
+  beforeEach(() => {
+    listed.mockReset()
+    first = peer('1.1.1.1')
+    const pool = {network: 'testnet', readyPeers: new Set([first]), messages: {GetMnListDiff: (args: unknown) => args}}
+    list = new MasternodeList({
+      pool: () => pool as never,
+      chain: () => store as never,
+      events: {evonodeDapiUrls: vi.fn(), platformQuorums: vi.fn(), masternodeList: vi.fn(), listedMasternodes: listed},
+    })
+  })
+
+  const answer = async (baseBlockHash: string, blockHash: string, coinbaseHeight: number, mnList: string[], deletedMNs: string[] = []): Promise<void> => {
+    list.onDiff(first, {mnlistdiff: {baseBlockHash, blockHash, coinbaseHeight, deletedMNs,
+      mnList: mnList.map(proRegTxHash => ({proRegTxHash, confirmedHash: ZERO, keyIDVoting: '00'.repeat(20), pubKeyOperator: '00'.repeat(48)}))}} as never)
+    await new Promise(resolve => setTimeout(resolve, 0))
+  }
+  const lastListed = (): string[] => listed.mock.calls.at(-1)![1]
+
+  it('asks the full list once, then each block only for a diff from the list it holds', async () => {
+    list.followTip('b1')
+    expect(first.sendMessage).toHaveBeenLastCalledWith({baseBlockHash: undefined, blockHash: 'b1'})
+    await answer(ZERO, 'b1', 1, ['aa', 'bb'])
+
+    list.followTip('b2')
+    expect(first.sendMessage).toHaveBeenLastCalledWith({baseBlockHash: 'b1', blockHash: 'b2'})
+    await answer('b1', 'b2', 2, ['cc'], ['aa'])
+    expect(lastListed()).toEqual(['bb', 'cc'])
+  })
+
+  // Several peers answer each ask, and the same diff must not apply twice.
+  it('drops a diff based on a list already replaced, and one its coinbase does not commit to', async () => {
+    await answer(ZERO, 'b1', 1, ['aa'])
+    await answer('b1', 'b2', 2, ['bb'])
+    await answer('b1', 'b2', 2, ['cc'])
+    await answer('b2', 'forged', 3, ['dd'])
+    expect(lastListed()).toEqual(['aa', 'bb'])
+  })
+
+  it('hands main no list for a block that changed no node', async () => {
+    await answer(ZERO, 'b1', 1, ['aa'])
+    const calls = listed.mock.calls.length
+    await answer('b1', 'b2', 2, [])
+    expect(listed.mock.calls.length).toBe(calls)
+
+    list.followTip('b3')
+    expect(first.sendMessage).toHaveBeenLastCalledWith({baseBlockHash: 'b2', blockHash: 'b3'})
+  })
+
+  it('asks the full list again once a rewind leaves the list it holds', async () => {
+    await answer(ZERO, 'b5', 5, ['aa'])
+    list.rewound(4)
+    list.followTip('b5x')
+    expect(first.sendMessage).toHaveBeenLastCalledWith({baseBlockHash: undefined, blockHash: 'b5x'})
   })
 })

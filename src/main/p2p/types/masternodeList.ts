@@ -1,4 +1,4 @@
-import type {FinalCommitment} from 'dash-core-p2p'
+import type {FinalCommitment, SimplifiedMNListEntry} from 'dash-core-p2p'
 import type {PoolService} from '../net/PoolService'
 import type {ChainStore} from '../store/ChainStore'
 import type {SyncServiceEvents} from './sync'
@@ -35,8 +35,10 @@ export interface PayoutUpdate {
   height: number
 }
 
-export interface QuorumSet {
+// The list and the quorums at one block of our chain, which the next diff is based on.
+export interface ProvenList {
   blockHash: string
   height: number
+  entries: SimplifiedMNListEntry[]
   commitments: FinalCommitment[]
 }

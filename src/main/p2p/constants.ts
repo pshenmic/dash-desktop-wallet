@@ -392,9 +392,10 @@ export const BROADCAST_POLICY = {
 
 // ── Masternode list ─────────────────────────────────────────────────────────
 
+// The evonode DAPI urls only, which rpc mode has no chain to follow block by block for.
 export const MNLIST_REFRESH_MS = 60 * 60_000
 
-// A full list is several MB, so one peer is asked at a time and another only
+// A full list is ~500 KB on mainnet, so one peer is asked at a time and another only
 // once this passes without a verified answer. Answering peers take about a
 // second; this must stay well under the platform worker's DAPI_URLS_WAIT_MS.
 export const MNLIST_REPLY_TIMEOUT_MS = 5_000
@@ -405,11 +406,6 @@ export const PLATFORM_QUORUM_PEERS = 6
 // Core's nMasternodeMinimumConfirmations: a list entry's confirmedHash names the
 // block this far above the one its ProRegTx was mined in.
 export const MASTERNODE_MIN_CONFIRMATIONS: Record<Network, number> = {mainnet: 15, testnet: 1}
-
-// How soon a list is asked again while one of its nodes is not confirmed yet, so
-// a node just registered is not shown without its owner and collateral for an
-// hour. Mainnet confirms in 15 blocks, so this costs a few full lists per registration.
-export const MNLIST_PENDING_REFRESH_MS = 5 * 60_000
 
 // Registration blocks requested at once while the index is built, out of the
 // ~3,000 a mainnet list needs the first time.

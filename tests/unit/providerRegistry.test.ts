@@ -1,5 +1,5 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
-import {MnListDiff, MnType, SimplifiedMNListEntry} from 'dash-core-p2p'
+import {MnType, SimplifiedMNListEntry} from 'dash-core-p2p'
 import {Transaction} from 'dash-core-sdk'
 import {ProviderRegistry} from '../../src/main/p2p/sync/providerRegistry'
 import type {ChainStore} from '../../src/main/p2p/store/ChainStore'
@@ -8,12 +8,6 @@ import type {ProviderRegistration} from '../../src/main/p2p/types/masternodeList
 import type {NetworkMasternode} from '../../src/main/src/types/Masternode'
 import {displayHexToWire} from '../../src/main/p2p/utils/byteOrder'
 import {hashHeaderRaw} from '../../src/main/p2p/utils/pow'
-
-// The proof of the list is listCommitted's own test; here the list is taken as proven.
-vi.mock('../../src/main/p2p/utils/masternodeList', async importOriginal => ({
-  ...await importOriginal<typeof import('../../src/main/p2p/utils/masternodeList')>(),
-  listCommitted: () => true,
-}))
 
 const EVO = '8e11eb784883d3dc9d0d74a74633f067dc61c408dfdee49b8f93bb161f2916c0'
 const EVO_TX = '03000100016ebca7f8c2852d1034b37fa4e464d6710dd952acad4f252752d9fb703bed2928200000006a47304402202ec687b9f4e8f8047690521d18196644b33b8310f64f854c0b05d2a2d90010380220120fefc98587fc0fe66a89727b1b9bb3880f7fd382148bd35be25e09d2287f760121020a25e4e16b91a17a5ef5627755d9cb81f1cd6d84026262f94ce0f4a4f2cb829dfeffffff01307af505000000001976a914f53e3ff160dab7ec3cc2a6b0afa6dd8d36e3879488ac00000000fd2a01020001000000593aaec65459ca9a97bd34b2657c8201ae83952d062715ba3af0d4255e54e86c2000000000000000000000000000ffff34599a304e1f0063eb51fcfd121e6c3eae23b90b26cd1100217b8160877a911d8bb7d1e75e2320e98cc3233c1f6972cb642424bfcec7c182c56d2c0ebb59e45f788f4d5dbfa2ebff3e3a0063eb51fcfd121e6c3eae23b90b26cd1100217b00001976a914c69a0bda7daaae481be8def95e5f347a1d00a4b488acddb1df193e8da1e028e7985d096ac11e8f38e5f85df16508487ff4ec434af2ae357cb7f558f264c99460327d48066e197c70576d308fa305412084722e83388b959b26cca1ef4aef3106b849f91e1d345c620cafece7b97426164dce31a56ca0736608b0b8ba6969a6c91e763d13db90bd9b213f7bd2a36f8ea5'
@@ -53,12 +47,6 @@ const entry = (proRegTxHash: string, confirmedHash: string): SimplifiedMNListEnt
   platformHTTPPort: 1443, platformNodeID: '6d'.repeat(20),
 })
 
-const fullList = (mnList: SimplifiedMNListEntry[]): MnListDiff => {
-  const diff = Object.assign(new MnListDiff(), {mnList, baseBlockHash: '00'.repeat(32), blockHash: hashHeaderRaw(headerAt(TIP))})
-  Object.defineProperty(diff, 'coinbaseHeight', {value: TIP})
-  return diff
-}
-
 // The block confirmedHash points below: one transaction, so the merkle root is its txid.
 const registrationBlock = () => {
   const tx = Transaction.fromHex(EVO_TX)
@@ -90,7 +78,7 @@ describe('provider registry', () => {
   })
 
   it('reads a new node\'s ProRegTx from the block below its confirmedHash, then lists it', async () => {
-    await registry.offer(fullList([entry(EVO, CONFIRMED_HASH)]))
+    await registry.offer(store as never, TIP, [entry(EVO, CONFIRMED_HASH)])
     expect(lists).toEqual([])
     expect(peer.sent).toHaveLength(1)
 
@@ -102,7 +90,7 @@ describe('provider registry', () => {
   })
 
   it('lists at once, with no block asked, a node already indexed', async () => {
-    await registry.offer(fullList([entry(EVO, CONFIRMED_HASH)]))
+    await registry.offer(store as never, TIP, [entry(EVO, CONFIRMED_HASH)])
     registry.onBlock(peer as never, {block: registrationBlock()} as never)
     await vi.waitFor(() => expect(lists).toHaveLength(1))
 
@@ -112,27 +100,24 @@ describe('provider registry', () => {
       events: {masternodeList: (_network, masternodes) => lists.push(masternodes), evonodeDapiUrls: () => undefined, platformQuorums: () => undefined, listedMasternodes: () => undefined},
     })
     peer.sent = []
-    await restarted.offer(fullList([entry(EVO, CONFIRMED_HASH)]))
+    await restarted.offer(store as never, TIP, [entry(EVO, CONFIRMED_HASH)])
 
     expect(peer.sent).toEqual([])
     expect(lists[1][0].ownerAddress).toBe('yLMWYiFxCpPwim9YuosKAozkqsGf283XCa')
   })
 
-  // A node registered moments ago would otherwise show without owner and collateral for an hour.
-  it('asks again within minutes while a node is not confirmed yet, and hourly once all are indexed', async () => {
-    await registry.offer(fullList([entry('cd'.repeat(32), '00'.repeat(32))]))
-    vi.advanceTimersByTime(60_000)
-    expect(registry.due).toBe(false)
-    vi.advanceTimersByTime(4 * 60_000)
-    expect(registry.due).toBe(true)
+  // A node registered moments ago has a zero confirmedHash until a later block's list.
+  it('indexes a node once a later list confirms it', async () => {
+    await registry.offer(store as never, TIP, [entry(EVO, '00'.repeat(32))])
+    expect(peer.sent).toEqual([])
+    expect(lists).toHaveLength(1)
 
-    await registry.offer(fullList([]))
-    vi.advanceTimersByTime(5 * 60_000)
-    expect(registry.due).toBe(false)
+    await registry.offer(store as never, TIP + 1, [entry(EVO, CONFIRMED_HASH)])
+    expect(peer.sent).toHaveLength(1)
   })
 
-  // Several peers answer one getmnlistd; only one of their lists is indexed at a time.
-  it('indexes one of two lists that arrive together, and asks each block once', async () => {
+  // A list arriving mid-index waits for it, and a node already queued is not asked again.
+  it('indexes two lists that arrive together in turn, and asks each block once', async () => {
     // More registration blocks than are fetched at once, so some wait in the queue.
     const others = Array.from({length: 8}, (_, i) => {
       const confirmedHash = (i + 16).toString(16).repeat(32)
@@ -140,7 +125,7 @@ describe('provider registry', () => {
       return entry((i + 16).toString(16).repeat(32).replace(/^../, 'ee'), confirmedHash)
     })
     const list = [entry(EVO, CONFIRMED_HASH), ...others]
-    await Promise.all([registry.offer(fullList(list)), registry.offer(fullList(list))])
+    await Promise.all([registry.offer(store as never, TIP, list), registry.offer(store as never, TIP + 1, list)])
     expect(peer.sent).toHaveLength(8)
 
     const warn = vi.mocked(console.warn)
@@ -158,7 +143,7 @@ describe('provider registry', () => {
 
   // A peer that answers with a block whose transactions are not under its root.
   it('does not read a block that fails its merkle root', async () => {
-    await registry.offer(fullList([entry(EVO, CONFIRMED_HASH)]))
+    await registry.offer(store as never, TIP, [entry(EVO, CONFIRMED_HASH)])
     const forged = {...registrationBlock(), blockHeader: {merkleRoot: 'ff'.repeat(32)}}
 
     registry.onBlock(peer as never, {block: forged} as never)
@@ -169,14 +154,14 @@ describe('provider registry', () => {
 
   it('drops a node that left the list', async () => {
     store.registrations.set('cd'.repeat(32), {...{} as ProviderRegistration, height: 1, payouts: [{height: 1, address: null}]})
-    await registry.offer(fullList([]))
+    await registry.offer(store as never, TIP, [])
 
     expect(store.registrations.size).toBe(0)
     expect(lists).toEqual([[]])
   })
 
   it('keeps payout changes in height order, ignoring one replayed by a rescan', async () => {
-    await registry.offer(fullList([entry(EVO, CONFIRMED_HASH)]))
+    await registry.offer(store as never, TIP, [entry(EVO, CONFIRMED_HASH)])
     registry.onBlock(peer as never, {block: registrationBlock()} as never)
     await vi.waitFor(() => expect(lists).toHaveLength(1))
 
@@ -191,7 +176,7 @@ describe('provider registry', () => {
 
   // The registration outlives a reorg that only crosses its payout changes.
   it('drops only the payout changes above a rewind, and takes the rescan\'s again', async () => {
-    await registry.offer(fullList([entry(EVO, CONFIRMED_HASH)]))
+    await registry.offer(store as never, TIP, [entry(EVO, CONFIRMED_HASH)])
     registry.onBlock(peer as never, {block: registrationBlock()} as never)
     await vi.waitFor(() => expect(lists).toHaveLength(1))
     await registry.applyPayouts([
@@ -207,7 +192,7 @@ describe('provider registry', () => {
   })
 
   it('reads again a registration whose own block was rewound', async () => {
-    await registry.offer(fullList([entry(EVO, CONFIRMED_HASH)]))
+    await registry.offer(store as never, TIP, [entry(EVO, CONFIRMED_HASH)])
     registry.onBlock(peer as never, {block: registrationBlock()} as never)
     await vi.waitFor(() => expect(lists).toHaveLength(1))
 
@@ -215,24 +200,17 @@ describe('provider registry', () => {
     expect(store.registrations.has(EVO)).toBe(false)
   })
 
-  // followTip's quorum diffs race the full list, and only a full list is indexed.
-  it('lets a full list through while a quorum diff is being received', async () => {
-    const quorumDiff = Object.assign(fullList([]), {baseBlockHash: '11'.repeat(32)})
-    await Promise.all([registry.offer(quorumDiff), registry.offer(fullList([entry(EVO, CONFIRMED_HASH)]))])
-    expect(peer.sent).toHaveLength(1)
-  })
-
   // An all-zero confirmedHash can never be found, so the walk could not stop early.
   it('does not look up the height of a node that is not confirmed yet', async () => {
     const asked = vi.spyOn(store, 'findHeights')
-    await registry.offer(fullList([entry(EVO, CONFIRMED_HASH), entry('cd'.repeat(32), '00'.repeat(32))]))
+    await registry.offer(store as never, TIP, [entry(EVO, CONFIRMED_HASH), entry('cd'.repeat(32), '00'.repeat(32))])
 
     expect([...asked.mock.calls[0][0]]).toEqual([Buffer.from(displayHexToWire(CONFIRMED_HASH)).toString('hex')])
   })
 
   it('reads again an entry stored without a payout history', async () => {
     store.registrations.set(EVO, {height: REGISTERED} as ProviderRegistration)
-    await registry.offer(fullList([entry(EVO, CONFIRMED_HASH)]))
+    await registry.offer(store as never, TIP, [entry(EVO, CONFIRMED_HASH)])
     expect(peer.sent).toHaveLength(1)
   })
 })
