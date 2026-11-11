@@ -34,7 +34,7 @@ export class WalletCredentialsService {
     this.pbkdf2Iterations = pbkdf2Iterations
   }
 
-  async exportAddressKey(walletId: string, address: string, password: string): Promise<AddressKeyInfo> {
+  async exportKeyByAddress(walletId: string, address: string, password: string): Promise<AddressKeyInfo> {
     const owned = await this.ownedAddress(walletId, row => row.address === address)
     if (owned == null) {
       throw new Error(`${address} is not an address of this wallet`)
@@ -42,7 +42,7 @@ export class WalletCredentialsService {
     return this.exportKey(walletId, owned.derivationPath, password, owned.address)
   }
 
-  async exportPathKey(walletId: string, path: string, password: string): Promise<AddressKeyInfo> {
+  async exportKeyByPath(walletId: string, path: string, password: string): Promise<AddressKeyInfo> {
     if (!DERIVATION_PATH.test(path)) {
       throw new Error(`Invalid derivation path: ${path}`)
     }

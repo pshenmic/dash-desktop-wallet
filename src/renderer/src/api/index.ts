@@ -246,12 +246,12 @@ export class API {
     return this.api.exportMnemonic(walletId, password)
   }
 
-  static async exportAddressKey(walletId: string, address: string, password: string): Promise<AddressKeyInfoDto> {
-    return this.api.exportAddressKey(walletId, address, password) as Promise<AddressKeyInfoDto>
+  static async exportKeyByAddress(walletId: string, address: string, password: string): Promise<AddressKeyInfoDto> {
+    return this.api.exportKeyByAddress(walletId, address, password) as Promise<AddressKeyInfoDto>
   }
 
-  static async exportPathKey(walletId: string, path: string, password: string): Promise<AddressKeyInfoDto> {
-    return this.api.exportPathKey(walletId, path, password) as Promise<AddressKeyInfoDto>
+  static async exportKeyByPath(walletId: string, path: string, password: string): Promise<AddressKeyInfoDto> {
+    return this.api.exportKeyByPath(walletId, path, password) as Promise<AddressKeyInfoDto>
   }
 
   static async verifyWalletMnemonic(walletId: string, mnemonic: string): Promise<boolean> {

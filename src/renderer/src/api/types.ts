@@ -111,7 +111,7 @@ export interface IdentityKeysUpdateDto {
   disable: number[]
 }
 
-// exportAddressKey / exportPathKey: a path no wallet row holds reports its L1 P2PKH address.
+// exportKeyByAddress / exportKeyByPath: a path no wallet row holds reports its L1 P2PKH address.
 export interface AddressKeyInfoDto {
   address: string
   path: string

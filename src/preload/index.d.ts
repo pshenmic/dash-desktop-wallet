@@ -143,8 +143,8 @@ declare global {
       createWallet: (seedphrase: string, network: Network, password: string) => Promise<string>
       verifyWalletPassword: (walletId: string, password: string) => Promise<boolean>
       exportMnemonic: (walletId: string, password: string) => Promise<string>
-      exportAddressKey: (walletId: string, address: string, password: string) => Promise<unknown>
-      exportPathKey: (walletId: string, path: string, password: string) => Promise<unknown>
+      exportKeyByAddress: (walletId: string, address: string, password: string) => Promise<unknown>
+      exportKeyByPath: (walletId: string, path: string, password: string) => Promise<unknown>
       verifyWalletMnemonic: (walletId: string, mnemonic: string) => Promise<boolean>
       resetWalletPassword: (walletId: string, mnemonic: string, newPassword: string) => Promise<boolean>
       getAddresses: (walletId: string) => Promise<unknown>
