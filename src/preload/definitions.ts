@@ -43,6 +43,8 @@ export const apiDefinitions = (ipcRenderer) => ({
   deleteWallet: (walletId: string) => ipcRenderer.invoke('deleteWallet', walletId),
   verifyWalletPassword: (walletId: string, password: string) => ipcRenderer.invoke('verifyWalletPassword', walletId, password),
   exportMnemonic: (walletId: string, password: string): Promise<string> => ipcRenderer.invoke('exportMnemonic', walletId, password),
+  exportAddressKey: (walletId: string, address: string, password: string) => ipcRenderer.invoke('exportAddressKey', walletId, address, password),
+  exportPathKey: (walletId: string, path: string, password: string) => ipcRenderer.invoke('exportPathKey', walletId, path, password),
   verifyWalletMnemonic: (walletId: string, mnemonic: string) => ipcRenderer.invoke('verifyWalletMnemonic', walletId, mnemonic),
   resetWalletPassword: (walletId: string, mnemonic: string, newPassword: string) => ipcRenderer.invoke('resetWalletPassword', walletId, mnemonic, newPassword),
   getAddresses: (walletId: string) => ipcRenderer.invoke('getAddresses', walletId),

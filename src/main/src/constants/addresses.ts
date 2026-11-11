@@ -16,6 +16,9 @@ export const HD_VERSIONS: Record<'mainnet' | 'testnet', {private: number; public
   testnet: {private: 0x04358394, public: 0x043587cf},
 }
 
+// A level is decimal or, for DIP-14's 256-bit indexes, 0x-prefixed hex.
+export const DERIVATION_PATH = /^m(\/(\d+|0x[0-9a-fA-F]+)'?)+$/
+
 // base58check payload: 1 version byte + 20 hash bytes.
 export const ADDRESS_DECODED_LENGTH = 21
 
