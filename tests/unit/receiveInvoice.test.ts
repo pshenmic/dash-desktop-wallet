@@ -1,8 +1,10 @@
 import {describe, expect, it} from 'vitest'
 import {
   corePaymentUri,
+  receiveAmountDuffs,
   receiveAmountParam,
   receiveInvoiceHeadline,
+  receiveRequestAmountDash,
   wrapByWidth,
 } from '../../src/renderer/src/utils/receiveInvoice'
 
@@ -28,9 +30,23 @@ describe('receiveAmountParam', () => {
 })
 
 describe('corePaymentUri', () => {
-  it('adds the amount only when one is requested', () => {
+  it('adds the amount and label query parameters when present', () => {
     expect(corePaymentUri('yAddress', null)).toBe('dash:yAddress')
     expect(corePaymentUri('yAddress', '1.5')).toBe('dash:yAddress?amount=1.5')
+    expect(corePaymentUri('yAddress', null, 'ZP')).toBe('dash:yAddress?label=ZP')
+    expect(corePaymentUri('yAddress', '1.5', 'Coffee & Tea')).toBe('dash:yAddress?amount=1.5&label=Coffee%20%26%20Tea')
+    expect(corePaymentUri('yAddress', null, '   ')).toBe('dash:yAddress')
+  })
+})
+
+describe('receiveAmountDuffs and receiveRequestAmountDash', () => {
+  it('converts between Dash input strings and duff bigints', () => {
+    expect(receiveAmountDuffs('')).toBeNull()
+    expect(receiveAmountDuffs('0')).toBeNull()
+    expect(receiveAmountDuffs('1.5')).toBe(150_000_000n)
+    expect(receiveRequestAmountDash(150_000_000n)).toBe('1.5')
+    expect(receiveRequestAmountDash(null)).toBeNull()
+    expect(receiveRequestAmountDash(0n)).toBeNull()
   })
 })
 

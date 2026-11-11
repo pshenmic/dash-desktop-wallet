@@ -11,6 +11,7 @@ import AddAddressSection from './AddAddressSection'
 import SyncGateNotice from '@renderer/components/ui/SyncGateNotice'
 import { refreshAddresses, useAdresses } from '@renderer/hooks/useAdresses'
 import { refreshPlatformAddresses, usePlatformAddresses } from '@renderer/hooks/usePlatformAddresses'
+import { useReceiveRequests } from '@renderer/hooks/useReceiveRequests'
 import { useAuth } from '@renderer/contexts/AuthContext'
 import ListSkeleton from '@renderer/components/ui/Skeleton'
 import NoResults from '@renderer/components/ui/NoResults'
@@ -80,10 +81,17 @@ export default function AddressList({ coreGated = false }: { coreGated?: boolean
     loading: platformLoading,
     err: platformErr,
   } = usePlatformAddresses(walletId)
+  const { labelsByAddress } = useReceiveRequests(walletId)
   const retryAddresses = walletId === undefined ? undefined : () => refreshAddresses(walletId)
   const retryPlatformAddresses = walletId === undefined ? undefined : () => refreshPlatformAddresses(walletId)
 
-  const renderAddress = (item: WalletAddressDto): React.JSX.Element => <AddressCard key={item.address} {...item} />
+  const renderAddress = (item: WalletAddressDto): React.JSX.Element => (
+    <AddressCard
+      key={item.address}
+      {...item}
+      label={item.label ?? labelsByAddress.get(item.address) ?? null}
+    />
+  )
 
   const tabItems = [
     {
@@ -135,7 +143,13 @@ export default function AddressList({ coreGated = false }: { coreGated?: boolean
             err={platformErr}
             errorMessage={"Failed to load platform addresses"}
             emptyMessage={"No platform addresses found"}
-            renderItem={(item) => <PlatformAddressCard key={item.platformAddress} {...item} />}
+            renderItem={(item) => (
+              <PlatformAddressCard
+                key={item.platformAddress}
+                {...item}
+                label={labelsByAddress.get(item.platformAddress) ?? null}
+              />
+            )}
             onRetry={retryPlatformAddresses}
           />
           {!platformLoading && !platformErr && (

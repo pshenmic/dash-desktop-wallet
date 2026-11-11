@@ -13,6 +13,7 @@ export const RECEIVE_INVOICE_COPY = {
   pay: 'Pay',
   testnet: 'Testnet',
   brand: 'Dash',
+  label: 'Label',
   paymentLink: 'Payment link',
 } as const
 

@@ -46,9 +46,7 @@ export default function Receive({pageData}: {pageData: ReceivePageType}): React.
       label: pageData.tabs.core,
       content: syncIncomplete
         ? <SyncGateNotice />
-        : address
-          ? <ReceiveAddressCard addresses={receiving} defaultAddress={address} data={pageData.receiveAddressCard} />
-          : <></>,
+        : <ReceiveAddressCard walletId={walletId} addresses={receiving} defaultAddress={address} />,
     },
     {
       value: 'platform',
