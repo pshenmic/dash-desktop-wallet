@@ -8,6 +8,7 @@ export interface SelectableUtxo {
   height: number
   timestamp: Date | null
   confirmations: number
+  isLocked: boolean
 }
 
 export interface Outpoint {

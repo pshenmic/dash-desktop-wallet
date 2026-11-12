@@ -120,6 +120,7 @@ export const apiDefinitions = (ipcRenderer) => ({
   stopWalletSync: () => ipcRenderer.invoke('stopWalletSync'),
   resetWalletSync: (network: Network) => ipcRenderer.invoke('resetWalletSync', network),
   getUtxos: (walletId: string) => ipcRenderer.invoke('getUtxos', walletId),
+  setUtxoLocked: (walletId: string, txid: string, vout: number, locked: boolean) => ipcRenderer.invoke('setUtxoLocked', walletId, txid, vout, locked),
   hasSyncProgress: (walletId: string) => ipcRenderer.invoke('hasSyncProgress', walletId),
   broadcastTransaction: (txHex: string) => ipcRenderer.invoke('broadcastTransaction', txHex),
 

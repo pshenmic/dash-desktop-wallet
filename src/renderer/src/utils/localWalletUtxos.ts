@@ -24,6 +24,7 @@ export function localWalletUtxos(
         height: tx.blockHeight,
         timestamp: tx.date,
         confirmations: tx.confirmations,
+        isLocked: false,
       }
       const key = outpointKey(utxo)
       if (output.spentTxId) spent.add(key)

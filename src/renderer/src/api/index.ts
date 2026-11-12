@@ -151,6 +151,10 @@ export class API {
     return this.api.getUtxos(walletId)
   }
 
+  static async setUtxoLocked(walletId: string, txid: string, vout: number, locked: boolean): Promise<void> {
+    return this.api.setUtxoLocked(walletId, txid, vout, locked)
+  }
+
   static async getTransactionByHash(hash: string, network: Network): Promise<WalletTxDto> {
     return this.api.getTransactionByHash(hash, network) as Promise<WalletTxDto>
   }

@@ -90,7 +90,7 @@ export async function harness(): Promise<Harness> {
   } as unknown as PlatformHistoryService
 
   const walletService = new WalletService(
-    walletDAO, addressDAO, identityDAO, new PlatformTransactionDAO(knex), identityService, platformHistoryService, walletSyncService, platform,
+    walletDAO, addressDAO, transactionDAO, identityDAO, new PlatformTransactionDAO(knex), identityService, platformHistoryService, walletSyncService, platform,
     providers, coreDiscoveryService, coreTransactionService, preferences, TEST_PBKDF2_ITERATIONS,
   )
 

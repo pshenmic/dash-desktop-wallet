@@ -13,7 +13,7 @@ const FOREIGN = 'yPx8DNt1oQt3yubB2Sh73vAQRQ1AoyyLCS'
 const MINED_AT = new Date('2024-01-01T00:00:00.000Z')
 
 const utxo = (address: string, satoshis: bigint, txId: string, height: number): UTXO =>
-  ({address, satoshis, txId, vOut: 0, script: Script.fromHex(SCRIPT_HEX), height, timestamp: MINED_AT, confirmations: 4})
+  ({address, satoshis, txId, vOut: 0, script: Script.fromHex(SCRIPT_HEX), height, timestamp: MINED_AT, confirmations: 4, isLocked: false})
 
 const providerStub = (utxos: UTXO[], ready = true): WalletProvider => ({
   getWalletUtxos: async () => utxos,
@@ -52,7 +52,7 @@ describe('listing the coins a send can draw on', () => {
     vi.spyOn(providers, 'forWallet').mockReturnValue(providerStub([utxo(owned, 50_000n, 'aa', 2_300_000)]))
 
     expect(await walletService.getUtxos(walletId)).toEqual([
-      {txid: 'aa', vout: 0, satoshis: 50_000n, address: owned, height: 2_300_000, timestamp: MINED_AT, confirmations: 4},
+      {txid: 'aa', vout: 0, satoshis: 50_000n, address: owned, height: 2_300_000, timestamp: MINED_AT, confirmations: 4, isLocked: false},
     ])
   })
 

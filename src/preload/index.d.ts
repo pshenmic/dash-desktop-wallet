@@ -60,6 +60,7 @@ interface SelectableUtxoDTO {
   height: number
   timestamp: Date | null
   confirmations: number
+  isLocked: boolean
 }
 
 // Hand-maintained alongside definitions.ts, and deliberately a second
@@ -220,6 +221,7 @@ declare global {
       stopWalletSync: () => Promise<void>
       resetWalletSync: (network: Network) => Promise<void>
       getUtxos: (walletId: string) => Promise<SelectableUtxoDTO[]>
+      setUtxoLocked: (walletId: string, txid: string, vout: number, locked: boolean) => Promise<void>
       hasSyncProgress: (walletId: string) => Promise<boolean>
       getExchangeRates: () => Promise<unknown>
       saveTextFile: (defaultFileName: string, content: string) => Promise<boolean>

@@ -127,6 +127,7 @@ import {StartWalletSyncHandler} from './api/walletSync/startWalletSync'
 import {StopWalletSyncHandler} from './api/walletSync/stopWalletSync'
 import {ResetWalletSyncHandler} from './api/walletSync/resetWalletSync'
 import {GetUtxosHandler} from './api/wallet/getUtxos'
+import {SetUtxoLockedHandler} from './api/wallet/setUtxoLocked'
 import {DISCOVERY_INTERVAL_MS} from './constants/addresses'
 import {CoreDiscoveryService} from './services/core/CoreDiscoveryService'
 import {CorePrevOutService} from './services/core/CorePrevOutService'
@@ -258,6 +259,7 @@ export class WalletBackend {
     registerHandler('stopWalletSync', new StopWalletSyncHandler(this.walletSyncService).handle)
     registerHandler('resetWalletSync', new ResetWalletSyncHandler(this.walletSyncService).handle)
     registerHandler('getUtxos', new GetUtxosHandler(this.walletService).handle)
+    registerHandler('setUtxoLocked', new SetUtxoLockedHandler(this.walletService).handle)
     registerHandler('hasSyncProgress', new HasSyncProgressHandler(this.walletSyncService).handle)
     registerHandler('broadcastTransaction', new BroadcastTransactionHandler(this.walletSyncService).handle)
     registerHandler('getExchangeRates', new GetExchangeRatesHandler(this.ratesService).handle)
@@ -334,7 +336,7 @@ export class WalletBackend {
     const platformTransactionDAO = new PlatformTransactionDAO(knex)
     const shieldedPoolDAO = new ShieldedPoolDAO(knex)
     this.platformHistoryService = new PlatformHistoryService(walletDAO, identityDAO, platformAddressDAO, platformTransactionDAO, shieldedNoteDAO, shieldedPoolDAO)
-    this.walletService = new WalletService(walletDAO, addressDAO, identityDAO, platformTransactionDAO, this.identityService, this.platformHistoryService, this.walletSyncService, this.platformWorkerService, providers, this.coreDiscoveryService, coreTransactionService, preferences, calibratedIterations)
+    this.walletService = new WalletService(walletDAO, addressDAO, transactionDAO, identityDAO, platformTransactionDAO, this.identityService, this.platformHistoryService, this.walletSyncService, this.platformWorkerService, providers, this.coreDiscoveryService, coreTransactionService, preferences, calibratedIterations)
     this.assetLockService = new AssetLockService(walletDAO, new AssetLockDAO(knex), this.coreLockService, this.platformWorkerService)
     this.shieldedService = new ShieldedService(walletDAO, identityDAO, shieldedNoteDAO, shieldedPoolDAO, shieldedAddressDAO, this.platformWorkerService, this.assetLockService, this.platformHistoryService, preferences)
     this.platformAddressService = new PlatformAddressService(walletDAO, platformAddressDAO, this.platformWorkerService)

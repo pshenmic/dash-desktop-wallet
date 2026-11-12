@@ -67,7 +67,11 @@ export class P2PWalletProvider implements WalletProvider {
   async getWalletUtxos(): Promise<UTXO[]> {
     const {receiving, change, dashPay = []} = await this.addressDAO.getAddressesByWalletId(this.walletId)
     const addresses = [...receiving, ...change, ...dashPay].map(a => a.address)
-    const utxos = await this.transactionDAO.getUtxosByAddresses(this.walletId, addresses)
+    const [utxos, lockedOutpoints] = await Promise.all([
+      this.transactionDAO.getUtxosByAddresses(this.walletId, addresses),
+      this.transactionDAO.getLockedOutpoints(this.walletId),
+    ])
+    const locked = new Set(lockedOutpoints.map(({txid, vout}) => `${txid}:${vout}`))
     const {tipHeight} = this.walletSyncService.getStatus()
     return utxos.map(u => ({
       address: u.address,
@@ -78,6 +82,7 @@ export class P2PWalletProvider implements WalletProvider {
       height: u.height,
       timestamp: new Date(u.blockTime * 1000),
       confirmations: confirmationsAt(u.height, tipHeight),
+      isLocked: locked.has(`${u.txid}:${u.vout}`),
     }))
   }
 

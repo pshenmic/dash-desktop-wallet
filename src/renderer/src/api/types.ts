@@ -207,6 +207,7 @@ export interface SelectableUtxo {
   // Null when the source cannot date the coin.
   timestamp: Date | null
   confirmations: number
+  isLocked: boolean
 }
 
 // the backend's business; this carries only what the user chose.
