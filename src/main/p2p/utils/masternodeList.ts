@@ -1,4 +1,4 @@
-import {FinalCommitment, MnListDiff, MnType, NetInfoPurpose, NetInfoType} from 'dash-core-p2p'
+import {MnListDiff, MnType, NetInfoPurpose, NetInfoType} from 'dash-core-p2p'
 import type {NetAddress, SimplifiedMNListEntry} from 'dash-core-p2p'
 import {TransactionType, utils as sdkUtils} from 'dash-core-sdk'
 import type {Transaction} from 'dash-core-sdk'
@@ -7,10 +7,8 @@ import type {ProUpRegTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRegTx.j
 import {hexToBytes} from '@noble/hashes/utils.js'
 import type {NetworkMasternode} from '../../src/types/Masternode'
 import type {Network} from '../../src/types/Network'
-import {CBTX_VERSION_V24} from '../constants'
 import type {PayoutUpdate, ProviderRegistration} from '../types/masternodeList'
-import {isZeroHash, wireToDisplayHex} from './byteOrder'
-import {hashHeaderRaw} from './pow'
+import {isZeroHash} from './byteOrder'
 
 // Null when the entries do not hash to the merkleRootMNList the coinbase commits to.
 export function evonodeDapiUrls(diff: MnListDiff): string[] | null {
@@ -29,29 +27,6 @@ export function evonodeDapiUrls(diff: MnListDiff): string[] | null {
 // because two types can share a hash.
 export function quorumKey({llmqType, quorumHash}: {llmqType: number; quorumHash: string}): string {
   return `${llmqType}:${quorumHash}`
-}
-
-// The quorum set after applying `diff` to `previous`, or null unless `header`
-// proves the diff's coinbase and that coinbase's merkleRootQuorums covers the set.
-export function committedQuorums(diff: MnListDiff, header: Uint8Array, previous: FinalCommitment[]): FinalCommitment[] | null {
-  const deleted = new Set(diff.deletedQuorums.map(quorumKey))
-  const quorums = [...previous.filter(quorum => !deleted.has(quorumKey(quorum))), ...diff.newQuorums]
-  return MnListDiff.calcMerkleRootQuorums(quorums) === diff.merkleRootQuorums &&
-    diff.calcBlockMerkleRoot() === wireToDisplayHex(header.subarray(36, 68)) ? quorums : null
-}
-
-// The list after applying `diff` to `previous`, or null unless `header`, our own
-// chain's at the coinbase height, proves the coinbase and its merkleRootMNList the list.
-export function committedList(diff: MnListDiff, header: Uint8Array, previous: SimplifiedMNListEntry[]): SimplifiedMNListEntry[] | null {
-  const replaced = new Set([...diff.deletedMNs, ...diff.mnList.map(({proRegTxHash}) => proRegTxHash)])
-  const entries = [...previous.filter(({proRegTxHash}) => !replaced.has(proRegTxHash)), ...diff.mnList]
-  return hashHeaderRaw(header) === diff.blockHash &&
-    diff.calcBlockMerkleRoot() === wireToDisplayHex(header.subarray(36, 68)) &&
-    diff.merkleRootMNList === MnListDiff.calcMerkleRootMNList(entries) ? entries : null
-}
-
-export function isV24Active(diff: MnListDiff): boolean {
-  return ((diff.cbTx.extraPayload as {version?: number} | undefined)?.version ?? 0) >= CBTX_VERSION_V24
 }
 
 // Null unless `tx` is the ProRegTx of `proTxHash`. A null collateral outpoint

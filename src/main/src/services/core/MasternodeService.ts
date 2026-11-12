@@ -1,4 +1,4 @@
-import {utils as sdkUtils} from 'dash-core-sdk'
+import {bls, utils as sdkUtils} from 'dash-core-sdk'
 import {AddressDAO} from '../../database/AddressDAO'
 import {WalletDAO} from '../../database/WalletDAO'
 import {MasternodeDAO} from '../../database/MasternodeDAO'
@@ -26,7 +26,7 @@ import {
 } from '../../types/Masternode'
 import {memoryWindowStore, runAddressWindow} from '../../utils/addressWindow'
 import {coreFeeDuffsFor} from '../../utils/coreFeeRate'
-import {basicOperatorKey, masternodeKeyDeriver, masternodePublicKey, requireBasicOperatorKey} from '../../utils/masternodeKeys'
+import {masternodeKeyDeriver, masternodePublicKey, requireBasicOperatorKey} from '../../utils/masternodeKeys'
 import {
   carriesKey,
   collateralsToStore,
@@ -44,7 +44,6 @@ import {
   withoutCollaterals,
 } from '../../utils/masternodes'
 import {
-  providerPayloadBytes,
   requireProTxHash,
   requireRegistrationFields,
   requireServiceUpdate,
@@ -55,7 +54,7 @@ import {withUnlockedWallet} from '../../utils/walletSeed'
 import {CoreTransactionService} from './CoreTransactionService'
 import {WalletSyncService} from './WalletSyncService'
 import {requireWallet} from '../../utils/requireWallet'
-import {bytesToHex} from '@noble/hashes/utils.js'
+import {bytesToHex, hexToBytes} from '@noble/hashes/utils.js'
 import createCoreClient from 'dash-core-sdk/src/createCoreClient.js'
 import {EVONODE_STATUS_TIMEOUT_MS} from '../../constants/dapi'
 import {Network} from '../../types/Network'
@@ -238,7 +237,8 @@ export class MasternodeService {
     if (choice.kind === 'wallet') return deriver.derive(unusedKeyIndex(owned, 'operator')).address
     if (choice.kind === 'keep') {
       if (node.operatorKeyIndex != null) return deriver.derive(node.operatorKeyIndex).address
-      return imported.find(key => key.role === 'operator' && carriesKey(node, key))?.publicKey ?? basicOperatorKey(node.operatorPublicKey)
+      return imported.find(key => key.role === 'operator' && carriesKey(node, key))?.publicKey
+        ?? bytesToHex(bls.toBasicPublicKey(hexToBytes(node.operatorPublicKey)))
     }
     const publicKey = requireBasicOperatorKey(choice.publicKey)
     const listed = await provider.getMasternodes('operator', masternodeFilterValues('operator', publicKey))
@@ -282,7 +282,7 @@ export class MasternodeService {
         grouped,
         withoutCollaterals(spendable, collaterals),
         DUST_THRESHOLD_DUFFS,
-        inputsCount => coreFeeDuffsFor(coreFeeMultiplier, inputsCount, 1, false, providerPayloadBytes(payload)),
+        inputsCount => coreFeeDuffsFor(coreFeeMultiplier, inputsCount, 1, false, payload.signedSize()),
       )
       const tx = await this.coreTransactionService.buildSignedProviderTx({
         payload, signer, inputs: transferInputs, changeAddress, inputTotal, feeDuffs, seed, network,

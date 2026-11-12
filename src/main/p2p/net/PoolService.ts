@@ -1,7 +1,6 @@
 import {EventEmitter} from 'events'
 import {AddrInfo, Message, Messages, Networks, NODE_COMPACT_FILTERS, Peer, Pool} from 'dash-core-p2p'
 import {Network} from '../../src/types/Network'
-import {addGovernanceMessages} from './governanceMessages'
 import {bannedSet, dialTarget, parsePeerAddress, peerTarget} from './peerAddress'
 import {PeerRegistry} from './peerRegistry'
 import {FALLBACK_PEERS, PEER_KEEPALIVE_DELAY_MS, POOL_ADDRESS_RESERVE, POOL_CONNECT_HEADROOM, POOL_DIAL_REPORT_TICKS, POOL_FALLBACK_TICKS, POOL_FILL_STALL_LIMIT, POOL_MAX_CONNECTIONS, POOL_MIN_PEERS, POOL_PING_FIRST_MS, POOL_PING_INTERVAL_MS, POOL_READY_PEERS, POOL_REFILL_INTERVAL_MS, POOL_SHORT_REPORT_TICKS, POOL_SILENCE_PROBE_MS, POOL_SILENCE_TIMEOUT_MS} from '../constants'
@@ -11,7 +10,7 @@ import {FALLBACK_PEERS, PEER_KEEPALIVE_DELAY_MS, POOL_ADDRESS_RESERVE, POOL_CONN
 // coordination (who serves filters, who leads a race) impossible.
 
 import {PeerInfo, PoolServiceEventMap, PoolServiceOptions} from '../types/pool'
-import {DIAL_LIFECYCLE_EVENTS, FORWARDED_EVENTS, GOVERNANCE_COMMANDS} from '../constants'
+import {DIAL_LIFECYCLE_EVENTS, FORWARDED_EVENTS} from '../constants'
 import {Logger} from '../../src/utils/logger'
 
 export class PoolService extends EventEmitter {
@@ -96,7 +95,6 @@ export class PoolService extends EventEmitter {
     super()
     this.network = network
     this.messages = new Messages({network} as never)
-    addGovernanceMessages(this.messages)
     this.label = options.label ?? 'pool'
     this.log = new Logger(this.label)
     this.readyTarget = options.readyPeers ?? POOL_READY_PEERS
@@ -498,13 +496,6 @@ export class PoolService extends EventEmitter {
       socket.setKeepAlive?.(true, PEER_KEEPALIVE_DELAY_MS)
       if (this.noDelayPeers++ === 0) {
         this.log.info(`TCP_NODELAY and keepalive set on peer sockets`)
-      }
-    })
-
-    // Pool forwards only the commands it knows, so ours are taken off each peer.
-    this.pool.on('peerconnect', (peer: Peer) => {
-      for (const command of GOVERNANCE_COMMANDS) {
-        peer.on(command, (message: Message) => super.emit(`peer${command}`, peer, message))
       }
     })
 

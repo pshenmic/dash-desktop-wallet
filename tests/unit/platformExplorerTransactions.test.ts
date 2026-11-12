@@ -51,6 +51,8 @@ function transfer(overrides: Partial<PlatformExplorerTransfer> = {}): PlatformEx
     type: 'IDENTITY_CREATE',
     blockHash: 'DDDD',
     gasUsed: 120337200,
+    status: null,
+    error: null,
     ...overrides,
   }
 }

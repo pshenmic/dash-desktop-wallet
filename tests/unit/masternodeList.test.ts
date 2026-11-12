@@ -3,9 +3,7 @@ import {MnListDiff, MnType, SimplifiedMNListEntry} from 'dash-core-p2p'
 import {Script, Transaction, TransactionType, utils as sdkUtils} from 'dash-core-sdk'
 import {ProUpRegTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRegTx.js'
 import {
-  committedList,
   evonodeDapiUrls,
-  isV24Active,
   listedMasternode,
   payoutUpdate,
   providerRegistration,
@@ -117,34 +115,29 @@ describe('provider registrations', () => {
 
 })
 
-// Core requires coinbase payload version 4 exactly while v24 is active.
-describe('isV24Active', () => {
-  const diff = (version?: number): MnListDiff => ({cbTx: {extraPayload: version == null ? undefined : {version}}}) as never
-
-  it('reads v24 off the coinbase payload version', () => {
-    expect(isV24Active(diff(3))).toBe(false)
-    expect(isV24Active(diff(4))).toBe(true)
-    expect(isV24Active(diff())).toBe(false)
-  })
-})
-
-describe('committedList', () => {
+describe('applying and proving a diff', () => {
   const header = Uint8Array.from({length: 80}, (_, i) => i)
   // A diff under `header` whose coinbase commits to `committed`.
   const diffUnder = (mnList: SimplifiedMNListEntry[], deletedMNs: string[], committed: SimplifiedMNListEntry[]): MnListDiff =>
     Object.assign(diffOf(mnList, MnListDiff.calcMerkleRootMNList(committed)), {
-      deletedMNs, blockHash: hashHeaderRaw(header), calcBlockMerkleRoot: () => wireToDisplayHex(header.subarray(36, 68)),
+      deletedMNs, blockHash: hashHeaderRaw(header),
+      cbTx: {extraPayload: {version: 2, merkleRootQuorums: '0'.repeat(64)}},
+      calcBlockMerkleRoot: () => wireToDisplayHex(header.subarray(36, 68)),
     })
   const [a, b, c] = [1, 2, 3].map(n => entry(n, MnType.Regular, true, '1.1.1.1'))
   const bBanned = {...b, isValid: false}
 
   it('applies a diff to the previous list: changed entries replaced, deleted ones dropped, new ones added', () => {
-    const next = committedList(diffUnder([bBanned, c], [a.proRegTxHash], [bBanned, c]), header, [a, b])
+    const diff = diffUnder([bBanned, c], [a.proRegTxHash], [bBanned, c])
+    const next = diff.applyTo([a, b])
     expect(next).toEqual([bBanned, c])
+    expect(() => diff.verify(header, next, [])).not.toThrow()
   })
 
   it('refuses a list its coinbase does not commit to, or one under another header', () => {
-    expect(committedList(diffUnder([c], [], [c]), header, [a])).toBeNull()
-    expect(committedList(Object.assign(diffUnder([a], [], [a]), {blockHash: 'ff'.repeat(32)}), header, [])).toBeNull()
+    const wrong = diffUnder([c], [], [c])
+    expect(() => wrong.verify(header, wrong.applyTo([a]), [])).toThrow('merkleRootMNList')
+    const other = Object.assign(diffUnder([a], [], [a]), {blockHash: 'ff'.repeat(32)})
+    expect(() => other.verify(header, other.applyTo([]), [])).toThrow('header hash')
   })
 })

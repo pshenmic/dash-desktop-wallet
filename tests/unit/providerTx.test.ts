@@ -1,27 +1,16 @@
 import {describe, expect, it} from 'vitest'
-import {secp256k1} from '@noble/curves/secp256k1.js'
 import {bls12_381} from '@noble/curves/bls12-381.js'
-import {bytesToHex, concatBytes, hexToBytes} from '@noble/hashes/utils.js'
-import {PrivateKey, Transaction, utils as sdkUtils} from 'dash-core-sdk'
+import {bytesToHex, hexToBytes} from '@noble/hashes/utils.js'
+import {bls, recoverHashSigner, recoverMessageSigner, Transaction, utils as sdkUtils} from 'dash-core-sdk'
 import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
 import {ProUpRegTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRegTx.js'
 import {ProUpServTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpServTx.js'
 import {CoreTransactionService} from '../../src/main/src/services/core/CoreTransactionService'
-import {KeyPairController} from 'dash-platform-sdk/src/keyPair/index.js'
-import {getCompactVariableSize} from 'dash-core-sdk/src/utils.js'
-import {basicOperatorKey, legacyG1} from '../../src/main/src/utils/masternodeKeys'
 import {
-  payloadDigest,
-  proRegSignString,
-  providerInputsHash,
-  providerPayloadBytes,
   requireProTxHash,
   requireRegistrationFields,
   requireServiceUpdate,
   serviceAddressParts,
-  signBls,
-  signedMessageHash,
-  signMessage,
 } from '../../src/main/src/utils/providerTx'
 
 // Testnet ProRegTxs with external collateral, mined and so accepted by consensus:
@@ -35,7 +24,8 @@ const EVO = {
   collateralAddress: 'yMehWJgHg1iLmn4iCWQx5jQtsTpPZcMgPP',
 }
 
-const keyPair = new KeyPairController()
+const testnetAddress = (publicKey: {getAddress: (network: number) => string}): string =>
+  publicKey.getAddress(sdkUtils.networkValueToEnumValue('testnet'))
 
 // Testnet ProUpRegTxs (3175fc8a…, e4feb1dc…) and the keyIDOwner of the node each updates.
 const UPDATES = [
@@ -43,38 +33,24 @@ const UPDATES = [
   {hex: '0300030001da7649d8c1c48c0499223df3d8cc629ad0c131f12baaa76b78b6f76263c0e85a000000006a473044022068b1200113694c62633f0cb9e3aacb8f68dca35b2694bf8a6c64ac13a8f307510220650bcc29f2094acabea071ba4a6150174bdb911311b7fd82c5d19fa6b28d6097012102c954446d702d23863e63ccf0c29c9f5e23c6f3cdf2e70e07a5877eba9ba7e53cfeffffff01f81cf505000000001976a9143a39ea82b1f0fc909a3fdd7702de9121e2541c3a88ac00000000e40200aec208a41915cdbaa027f592408cb915d6aeac2dbb1177cf1c67bc98df6f62b20000a334883b2a84f96be809d884b36eb4b4f40975357b291ff504aceac6457fecb1cfe5f9d9d45fbc518cc19493a253580bbbc99516dfc15780b31b03d1462eb7d0e80282671976a9146e6c9189021b6e38326dff6886104054a110990d88acf25de22cedc67ee09c0cb4ccfe281deef0270fa95c134ea9e75222d1e31b3c6f411f67d0fa8687c96d9207a99ca210c5f9cf7996eea4b72a8f165e576696d43bf72e37e86c66abdd79475b883072fd155c11559f073405fea2bd751288ee7a4dd710', keyIdOwner: 'b72320db0cf2899cd3c656f25992cadb9f7efa3a'},
 ]
 
-function signer(signature: Uint8Array, hash: Uint8Array): string {
-  const recovered = concatBytes(Uint8Array.of((signature[0] - 27) & 3), signature.slice(1))
-  return keyPair.p2pkhAddress(secp256k1.recoverPublicKey(recovered, hash, {prehash: false}), 'testnet')
-}
-
 describe.each([['v1 Regular', REGULAR], ['v2 Evo', EVO]])('%s ProRegTx', (_, vector) => {
   const tx = Transaction.fromHex(vector.hex)
   const payload = tx.extraPayload as ProRegTX
 
   it('hashes and prices the unsigned payload as it went out signed', () => {
-    const unsigned = Object.assign(Object.create(Object.getPrototypeOf(payload)), payload, {payloadSig: ''})
-    const signed = payload.bytes().length
-    expect(payloadDigest(unsigned)).toEqual(payloadDigest(payload))
-    expect(providerPayloadBytes(unsigned)).toBe(signed + getCompactVariableSize(signed))
+    const unsigned = Transaction.fromHex(vector.hex).extraPayload as ProRegTX
+    unsigned.payloadSig = ''
+    expect(unsigned.payloadHash()).toEqual(payload.payloadHash())
+    expect(unsigned.signedSize()).toBe(payload.bytes().length)
   })
 
   it('hashes its inputs into inputsHash', () => {
-    expect(providerInputsHash(tx.inputs.map(input => ({txId: input.txId, vOut: input.vOut})))).toBe(payload.inputsHash)
+    expect(tx.providerInputsHash()).toBe(payload.inputsHash)
   })
 
   it('was signed over our sign string by the collateral key', () => {
-    expect(signer(hexToBytes(payload.payloadSig), signedMessageHash(proRegSignString(payload, 'testnet')))).toBe(vector.collateralAddress)
-  })
-})
-
-describe('signMessage', () => {
-  it('produces a compressed-key compact signature its own key recovers from', () => {
-    const key = PrivateKey.fromBytes(new Uint8Array(32).fill(7), 'testnet', true)
-    const signature = signMessage('a|0|b|c|d', key.key)
-    expect(signature.length).toBe(65)
-    expect(signature[0]).toBeGreaterThanOrEqual(31)
-    expect(signer(signature, signedMessageHash('a|0|b|c|d'))).toBe(key.getAddress())
+    expect(testnetAddress(recoverMessageSigner(payload.signString('testnet'), hexToBytes(payload.payloadSig))))
+      .toBe(vector.collateralAddress)
   })
 })
 
@@ -83,23 +59,23 @@ describe.each(UPDATES)('ProUpRegTx %#', ({hex, keyIdOwner}) => {
   const payload = tx.extraPayload as ProUpRegTx
 
   it('hashes and prices the unsigned payload as it went out signed', () => {
-    const unsigned = Object.assign(Object.create(Object.getPrototypeOf(payload)), payload, {payloadSig: ''})
-    const signed = payload.bytes().length
-    expect(payloadDigest(unsigned)).toEqual(payloadDigest(payload))
-    expect(providerPayloadBytes(unsigned)).toBe(signed + getCompactVariableSize(signed))
+    const unsigned = Transaction.fromHex(hex).extraPayload as ProUpRegTx
+    unsigned.payloadSig = ''
+    expect(unsigned.payloadHash()).toEqual(payload.payloadHash())
+    expect(unsigned.signedSize()).toBe(payload.bytes().length)
   })
 
   it('hashes its inputs into inputsHash', () => {
-    expect(providerInputsHash(tx.inputs)).toBe(payload.inputsHash)
+    expect(tx.providerInputsHash()).toBe(payload.inputsHash)
   })
 
   it('was signed over the payload hash itself by the owner key', () => {
-    expect(signer(hexToBytes(payload.payloadSig), payloadDigest(payload)))
+    expect(testnetAddress(recoverHashSigner(payload.payloadHash(), hexToBytes(payload.payloadSig))))
       .toBe(sdkUtils.publicKeyHashToAddress(hexToBytes(keyIdOwner), 'testnet'))
   })
 })
 
-describe('basicOperatorKey', () => {
+describe('operator key encodings', () => {
   const keyWithSign = (sign: boolean): Uint8Array => {
     for (let scalar = 1n; ; scalar++) {
       const key = bls12_381.G1.Point.BASE.multiply(scalar).toBytes(true)
@@ -109,16 +85,16 @@ describe('basicOperatorKey', () => {
 
   it('reads back a legacy key whose y-sign is clear', () => {
     const basic = keyWithSign(false)
-    expect(basicOperatorKey(bytesToHex(legacyG1(basic)))).toBe(bytesToHex(basic))
+    expect(bytesToHex(bls.toBasicPublicKey(bls.basicToLegacyPublicKey(basic)))).toBe(bytesToHex(basic))
   })
 
   it('passes a basic key whose y-sign is set', () => {
     const basic = bytesToHex(keyWithSign(true))
-    expect(basicOperatorKey(basic)).toBe(basic)
+    expect(bytesToHex(bls.toBasicPublicKey(hexToBytes(basic)))).toBe(basic)
   })
 
   it('refuses a key either encoding could have produced', () => {
-    expect(() => basicOperatorKey(bytesToHex(keyWithSign(false)))).toThrow('either BLS encoding')
+    expect(() => bls.toBasicPublicKey(keyWithSign(false))).toThrow('both the legacy and the basic')
   })
 })
 
@@ -139,29 +115,23 @@ const OPERATOR_SIGNED = [
     hex: '030004000176e01d2dbf0b6ba5e7a61bcd45d6df112e9472cb7c7ac220b4551504abd99ac8000000006a47304402200d06f373a2b9133ca2816a7c047bf4316300d8d13ad002829345f6c145afae9c02203aab1c8ac4bcfe10ac42fcd040eee4c789b9190eb3743b5306ce9ccb8a86999901210389c2bc8088d56da1f940db47a0c25ba3fb53ffb540a7e347bd6b6275d4ab4bcffeffffff018317023b000000001976a9144e0c37c67b0bf8d9cd52da576437a92379dfb40488ac00000000a40300499f136ec3e87499770c98e991b6084822d3ee78472e39f1d8ebca17ad3ceb5a0000c126fb5552fa4be0d7dd02dc685ef80aeb42c9bd4f6f1ab59ede1d64e69b5d3b95ba4190ac6e7cd13b6c54f52912ccfaae7d46fd40ac32de59b4d9906b3e4628273dfaf4145ee619c58a5a5697a08c7b15458291e476d96b8ccaefb68a68a27eb78d57578895948a29ea1d6a4d0e6e520db52d3c4f82f2cfc84cc561e98f77af'},
 ]
 
-const verifyBls = (signature: string, hash: Uint8Array, publicKey: string): boolean => {
-  const {longSignatures} = bls12_381
-  return longSignatures.verify(hexToBytes(signature), longSignatures.hash(hash), hexToBytes(publicKey))
-}
-
 describe.each(OPERATOR_SIGNED)('operator-signed $txid', ({hex, operatorPublicKey}) => {
   const tx = Transaction.fromHex(hex)
   const payload = tx.extraPayload as ProUpServTx
 
   it('hashes its inputs into inputsHash', () => {
-    expect(providerInputsHash(tx.inputs)).toBe(payload.inputsHash)
+    expect(tx.providerInputsHash()).toBe(payload.inputsHash)
   })
 
   it('was BLS-signed over the payload hash by the operator key', () => {
-    expect(verifyBls(payload.payloadSig, payloadDigest(payload), operatorPublicKey)).toBe(true)
+    expect(bls.blsVerify(hexToBytes(payload.payloadSig), payload.payloadHash(), hexToBytes(operatorPublicKey))).toBe(true)
   })
 
-  const unsigned = Object.assign(Object.create(Object.getPrototypeOf(payload)), payload, {payloadSig: ''})
-
   it('hashes and prices the unsigned payload as it went out signed', () => {
-    const signed = payload.bytes().length
-    expect(payloadDigest(unsigned)).toEqual(payloadDigest(payload))
-    expect(providerPayloadBytes(unsigned)).toBe(signed + getCompactVariableSize(signed))
+    const unsigned = Transaction.fromHex(hex).extraPayload as ProUpServTx
+    unsigned.payloadSig = ''
+    expect(unsigned.payloadHash()).toEqual(payload.payloadHash())
+    expect(unsigned.signedSize()).toBe(payload.bytes().length)
   })
 })
 
@@ -178,15 +148,6 @@ describe('proUpServPayload', () => {
     built.inputsHash = mined.inputsHash
     built.payloadSig = mined.payloadSig
     expect(bytesToHex(built.bytes())).toBe(bytesToHex(mined.bytes()))
-  })
-})
-
-describe('signBls', () => {
-  it('signs in the scheme the mined operator signatures verify under', () => {
-    const secret = new Uint8Array(32).fill(9)
-    const publicKey = bytesToHex(bls12_381.longSignatures.getPublicKey(secret).toBytes(true))
-    const hash = new Uint8Array(32).fill(1)
-    expect(verifyBls(bytesToHex(signBls(hash, secret)), hash, publicKey)).toBe(true)
   })
 })
 

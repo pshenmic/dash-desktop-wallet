@@ -1,4 +1,5 @@
 import {bytesToHex, hexToBytes} from '@noble/hashes/utils.js'
+import {bls} from 'dash-core-sdk'
 import {MASTERNODE_KEY_CHAINS} from '../constants/addresses'
 import {DUFFS_PER_DASH, MASTERNODE_COLLATERAL_DUFFS} from '../constants/chain'
 import {DerivedAddress} from '../types/AddressWindow'
@@ -16,7 +17,6 @@ import {
   OwnedCollateral,
 } from '../types/Masternode'
 import {UTXO} from '../types/UTXO'
-import {legacyG1} from './masternodeKeys'
 
 export function networkMasternode(row: DashscanMasternode): NetworkMasternode {
   const [collateralTxid, collateralVout] = row.outpoint.split('-')
@@ -45,7 +45,7 @@ export function networkMasternode(row: DashscanMasternode): NetworkMasternode {
 // What a derived key is listed as. An operator key may be registered in either
 // BLS encoding, so both are searched.
 export function masternodeFilterValues(chain: MasternodeKeyFilter, address: string): string[] {
-  return chain === 'operator' ? [address, bytesToHex(legacyG1(hexToBytes(address)))] : [address]
+  return chain === 'operator' ? [address, bytesToHex(bls.basicToLegacyPublicKey(hexToBytes(address)))] : [address]
 }
 
 // The value a filter searches the node by. Null where the list does not know it

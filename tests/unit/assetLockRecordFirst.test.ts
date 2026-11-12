@@ -11,6 +11,7 @@ vi.mock('dash-core-sdk', () => ({
   InstantLock: {fromHex: vi.fn()},
   Transaction: {fromHex: stub.fromHex},
   utils: {createAssetLockProof: stub.createAssetLockProof},
+  VoteOutcome: {YES: 1, NO: 2, ABSTAIN: 3},
 }))
 
 import {WalletDAO} from '../../src/main/src/database/WalletDAO'

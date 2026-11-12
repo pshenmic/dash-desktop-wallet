@@ -1,7 +1,7 @@
 import {Inventory} from 'dash-core-p2p'
 import type {Peer} from 'dash-core-p2p'
+import {GovernanceVote as SDKGovernanceVote} from 'dash-core-sdk'
 import {INV_GOVERNANCE_VOTE, VOTE_CONFIRM_WINDOW_MS, VOTE_RELAY_WINDOW_MS} from '../constants'
-import {governanceMessages} from '../net/governanceMessages'
 import type {GovernanceOptions, InventoryMessage, RelayedVote} from '../types/governance'
 import {displayHexToWire, wireToDisplayHex} from '../utils/byteOrder'
 import {governanceVote} from '../../src/utils/governance'
@@ -29,8 +29,8 @@ export class VoteRelay {
       this.opts.events.voteRelayed(requestId, 0, 0, 'No peer is connected')
       return
     }
-    const messages = governanceMessages(pool)
-    const vote = governanceVote(payload, pool.network)
+    const messages = pool.messages
+    const vote = governanceVote(SDKGovernanceVote.fromBytes(payload), pool.network)
     const relay: RelayedVote = {payload, peers: new Set(), askedBack: new Set(), accepted: new Set()}
     this.relays.set(vote.hash, relay)
     const inv = messages.Inventory([Inventory.forItem(INV_GOVERNANCE_VOTE, vote.hash)])
@@ -62,7 +62,7 @@ export class VoteRelay {
       const relay = item.type === INV_GOVERNANCE_VOTE ? this.relays.get(wireToDisplayHex(item.hash)) : undefined
       if (relay == null || relay.peers.has(peer)) continue
       relay.peers.add(peer)
-      peer.sendMessage(governanceMessages(pool).GovObjVote({payload: relay.payload}))
+      peer.sendMessage(pool.messages.GovObjVote(SDKGovernanceVote.fromBytes(relay.payload)))
     }
   }
 

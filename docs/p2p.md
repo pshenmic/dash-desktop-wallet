@@ -113,15 +113,16 @@ Things the code cannot tell you, and that a plausible-looking change breaks:
   what the child last sent and never fetch; `refreshGovernance`, from the
   discovery tick and the renderer, is what asks (a proposal's votes only when
   it names one). rpc mode reads Dashscan
-  and never asks a peer. dash-core-p2p drops `govobj` and `govobjvote`
-  unparsed, so `net/governanceMessages.ts` registers them and `PoolService` takes
-  them off each peer itself.
+  and never asks a peer. dash-core-p2p parses `govsync`, `govobj` and
+  `govobjvote` natively into the SDK's governance types, and the pool forwards
+  them like any other command; a payload it cannot parse never reaches sync.
 - **Core scores a peer that asks twice within an hour**, for the list or for one
   proposal's votes, so who was asked when is persisted and no peer is asked
   twice in that hour. A sync counts as done only once it is answered: until
-  then other peers are asked, a reply window apart. An empty bloom filter
-  beside a proposal hash is a fetch of the object alone; the vote sync sends a
-  one-byte filter.
+  then other peers are asked, a reply window apart. `GovSyncMessage` defaults
+  the bloom filter per request: an empty one for the object list, a one-byte
+  filter beside a proposal hash, which Core reads as a fetch of the object
+  alone.
 - **Nothing checks a proposal's collateral**, so one peer could invent one: an
   object is fetched once `PROPOSAL_ANNOUNCERS` hosts announced it (fewer only
   when the pool holds fewer; counted by host, so a reconnect is not a second

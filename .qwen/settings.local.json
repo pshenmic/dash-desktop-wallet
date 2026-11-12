@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git log --oneline -30 && echo --- && git branch -a | head -20)",
+      "Bash(git:*)",
+      "Bash(ls -R /Volumes/990/Dash/dash-platform-wallet-desktop/src/main/src/database /Volumes/990/Dash/dash-platform-wallet-desktop/src/main/src/api /Volumes/990/Dash/dash-platform-wallet-desktop/src/main/src/services /Volumes/990/Dash/dash-platform-wallet-desktop/src/main/src/providers | head -120)",
+      "Bash(git -C /Volumes/990/Dash/dash-platform-wallet-desktop log --oneline --all -- src/main/src/api/wallet/exportKeyByPath.ts src/main/src/api/wallet/exportKeyByAddress.ts | head -20)",
+      "Bash(git -C /Volumes/990/Dash/dash-platform-wallet-desktop branch -a && git -C /Volumes/990/Dash/dash-platform-wallet-desktop status -sb | head -5)",
+      "Bash(git -C /Volumes/990/Dash/dash-platform-wallet-desktop log develop..feat/coin-control --oneline; echo '--- STAT ---'; git -C /Volumes/990/Dash/dash-platform-wallet-desktop diff develop...feat/coin-control --stat | tail -40)",
+      "Bash(git -C /Volumes/990/Dash/dash-platform-wallet-desktop log develop..feat/coin-control-outputs --oneline; echo '--- STAT ---'; git -C /Volumes/990/Dash/dash-platform-wallet-desktop diff develop...feat/coin-control-outputs --stat | tail -60)",
+      "Bash(git -C /Volumes/990/Dash/dash-platform-wallet-desktop log \"develop..feat/add-confirmations-and-timestamp-for-utxo's\" --oneline; echo '--- STAT ---'; git -C /Volumes/990/Dash/dash-platform-wallet-desktop diff \"develop...feat/add-confirmations-and-timestamp-for-utxo's\" --stat | tail -40)",
+      "Bash(git -C /Volumes/990/Dash/dash-platform-wallet-desktop ls-tree origin/master --name-only src/main/migrations/ 2>/dev/null | tail -5; git -C /Volumes/990/Dash/dash-platform-wallet-desktop status --short | head -5)",
+      "any read operations inside project folder",
+      "Bash(for b in feat/coin-control feat/coin-control-outputs \"feat/add-confirmations-and-timestamp-for-utxo's\"; do echo \"== $b ==\"; git -C /Volumes/990/Dash/dash-platform-wallet-desktop log -1 --format='%h %ad %s' --date=short \"$b\"; git -C /Volumes/990/Dash/dash-platform-wallet-desktop merge-base --is-ancestor \"$b\" develop && echo 'ANCESTOR OF develop \\(fully merged\\)' || echo 'NOT ancestor'; done; echo; git -C /Volumes/990/Dash/dash-platform-wallet-desktop log -1 --format='%h %ad %s' --date=short develop)",
+      "Bash(git -C /Volumes/990/Dash/dash-platform-wallet-desktop log --oneline -i --grep='coin.control' --all | head -20; echo '---'; git -C /Volumes/990/Dash/dash-platform-wallet-desktop log --oneline -i --grep='utxo' develop | head -20)",
+      "Bash(ls /Volumes/990/Dash/dash-platform-wallet-desktop/src; wc -l /Volumes/990/Dash/dash-platform-wallet-desktop/src/main/src/providers/*.ts /Volumes/990/Dash/dash-platform-wallet-desktop/src/main/src/services/wallet/WalletService.ts /Volumes/990/Dash/dash-platform-wallet-desktop/src/main/src/services/core/*.ts /Volumes/990/Dash/dash-platform-wallet-desktop/src/main/src/WalletBackend.ts)",
+      "Bash(git -C /Volumes/990/Dash/dash-platform-wallet-desktop show --stat --format='%h %s' 8814964b | head -30; echo '==='; git -C /Volumes/990/Dash/dash-platform-wallet-desktop show --stat --format='%h %s' e2bb57a7 | head -25; echo '==='; git -C /Volumes/990/Dash/dash-platform-wallet-desktop show --stat --format='%h %s' 21fa595f | head -20)"
+    ]
+  }
+}

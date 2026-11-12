@@ -34,11 +34,10 @@ export const FORWARDED_EVENTS: Array<keyof PoolServiceEventMap> = [
   'peercfcheckpt', 'peercfheaders', 'peercfilter',
   'peerislock', 'peerisdlock', 'peerclsig',
   'peergetheaders', 'peermnlistdiff', 'peergetdata',
+  'peergovobj', 'peergovobjvote',
   'seederror',
 ]
 
-// Commands dash-core-p2p's pool does not forward from its peers.
-export const GOVERNANCE_COMMANDS = ['govobj', 'govobjvote'] as const
 export const INV_GOVERNANCE_OBJECT = 17
 export const INV_GOVERNANCE_VOTE = 18
 // Core scores a peer asking twice within its fulfilled-request expiry, an hour,
@@ -58,11 +57,6 @@ export const GOVERNANCE_EMIT_DELAY_MS = 1_000
 export const VOTE_RELAY_WINDOW_MS = 10_000
 // Then how long the peers that took it have to serve it back.
 export const VOTE_CONFIRM_WINDOW_MS = 5_000
-// govsync's bloom filter. Core reads an empty one beside a proposal hash as a fetch
-// of the object alone, so the vote sync sends one byte that matches no vote.
-export const GOVSYNC_OBJECTS_FILTER = Uint8Array.of(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-export const GOVSYNC_VOTES_FILTER = Uint8Array.of(1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0)
-
 // Forwarded events that say nothing about whether the far end is reachable: a
 // dial that never completes emits peerdisconnect just as a live peer leaving does.
 export const DIAL_LIFECYCLE_EVENTS: ReadonlySet<keyof PoolServiceEventMap> = new Set([
@@ -407,9 +401,6 @@ export const MNLIST_REPLY_TIMEOUT_MS = 5_000
 
 // Lock peers asked for each quorum update; most never answer getmnlistd.
 export const PLATFORM_QUORUM_PEERS = 6
-
-// The coinbase payload version Core requires while v24 is active and refuses before.
-export const CBTX_VERSION_V24 = 4
 
 // Core's nMasternodeMinimumConfirmations: a list entry's confirmedHash names the
 // block this far above the one its ProRegTx was mined in.

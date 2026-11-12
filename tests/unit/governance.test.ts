@@ -1,23 +1,20 @@
 import {describe, expect, it} from 'vitest'
 import {bytesToHex, hexToBytes, utf8ToBytes} from '@noble/hashes/utils.js'
-import {PrivateKey} from 'dash-core-sdk'
-import {GovernanceVote, UnsignedVote} from '../../src/main/src/types/Governance'
+import {GovernanceObject, GovernanceObjectType, GovernanceVote as SDKGovernanceVote, OutPoint, PrivateKey, VoteOutcome, VoteSignal} from 'dash-core-sdk'
+import {GovernanceVote} from '../../src/main/src/types/Governance'
 import {Masternode, NetworkMasternode} from '../../src/main/src/types/Masternode'
 import {
-  governanceObject,
   governanceVote,
   isStaleProposal,
   lastVoteTime,
   proposalOf,
   proposalTally,
   requireVotingNode,
-  voteBytes,
-  voteDigest,
 } from '../../src/main/src/utils/governance'
-import {signHash} from '../../src/main/src/utils/providerTx'
 import {MAINNET_PROPOSAL_OBJECT, MAINNET_VOTES, TESTNET_VOTE} from '../fixtures/governance'
 
 const PROPOSAL = 'a5465cdb6caf234cc9b8b776b1e3b60f319367504527e80a669bf41811419901'
+const ZERO = '0'.repeat(32)
 
 function node(collateralTxid: string, collateralVout: number, votingAddress: string, type = 'Regular'): NetworkMasternode {
   return {
@@ -32,10 +29,13 @@ function vote(fields: Partial<GovernanceVote>): GovernanceVote {
   return {hash: 'h', collateralTxid: 'aa'.repeat(32), collateralVout: 0, parentHash: PROPOSAL, outcome: 1, signal: 1, time: 100, voter: 'Xvoter', ...fields}
 }
 
+const objectWithData = (data: string, type: GovernanceObjectType): GovernanceObject =>
+  new GovernanceObject(ZERO, 1, 0, ZERO, data, type, new OutPoint(ZERO, 0xffffffff), '')
+
 describe('governance objects', () => {
   it('hashes a mainnet proposal as Core does and reads its data', () => {
-    const object = governanceObject(hexToBytes(MAINNET_PROPOSAL_OBJECT))
-    expect(object.hash).toBe(PROPOSAL)
+    const object = GovernanceObject.fromBytes(hexToBytes(MAINNET_PROPOSAL_OBJECT))
+    expect(object.hash()).toBe(PROPOSAL)
     expect(proposalOf(object)).toEqual({
       hash: PROPOSAL,
       name: 'Dash-Pay-name-registration-rules',
@@ -52,13 +52,13 @@ describe('governance objects', () => {
   it('reads the data clients older than v0.14 wrapped in an array', () => {
     const fields = {name: 'old', url: 'u', payment_address: 'Xpay', payment_amount: 12.5, start_epoch: 1, end_epoch: 2}
     const data = bytesToHex(utf8ToBytes(JSON.stringify([['proposal', fields]])))
-    expect(proposalOf({hash: 'h', type: 1, time: 0, collateralHash: 'c', data})?.paymentDuffs).toBe(1_250_000_000n)
+    expect(proposalOf(objectWithData(data, GovernanceObjectType.PROPOSAL))?.paymentDuffs).toBe(1_250_000_000n)
   })
 
   it('reads no proposal from a trigger or from data that is not one', () => {
     const data = bytesToHex(utf8ToBytes('{"event_block_height":1}'))
-    expect(proposalOf({hash: 'h', type: 2, time: 0, collateralHash: 'c', data})).toBeNull()
-    expect(proposalOf({hash: 'h', type: 1, time: 0, collateralHash: 'c', data})).toBeNull()
+    expect(proposalOf(objectWithData(data, GovernanceObjectType.TRIGGER))).toBeNull()
+    expect(proposalOf(objectWithData(data, GovernanceObjectType.PROPOSAL))).toBeNull()
   })
 
   it('counts a proposal stale once it ended before the current superblock cycle', () => {
@@ -71,7 +71,7 @@ describe('governance objects', () => {
 
 describe('governance votes', () => {
   it('reads a mainnet vote, its hash and the voting key that signed it', () => {
-    expect(governanceVote(hexToBytes(MAINNET_VOTES[0]), 'mainnet')).toEqual({
+    expect(governanceVote(SDKGovernanceVote.fromBytes(hexToBytes(MAINNET_VOTES[0])), 'mainnet')).toEqual({
       hash: 'c6813959d49cb8c81cb0c3b9587af312cc90f0b4d86feb877dc1100754012eda',
       collateralTxid: 'd788faeb2a26cb60c8f607b9c2371c08f989edef528bea4d7dd3026aad199f14',
       collateralVout: 0,
@@ -84,20 +84,22 @@ describe('governance votes', () => {
   })
 
   it('checks a testnet vote as a signed hash, not a message', () => {
-    const parsed = governanceVote(hexToBytes(TESTNET_VOTE), 'testnet')
+    const parsed = governanceVote(SDKGovernanceVote.fromBytes(hexToBytes(TESTNET_VOTE)), 'testnet')
     expect(parsed).toMatchObject({
       collateralTxid: '4ee3ff5074723d995f4cb957a954587c6c637a42655ada8f4054037b28d1e7a8', collateralVout: 113,
       parentHash: 'c6f5059ca0055fb327a6a0b15b9dd80c64b8c0956c1621061b294f8b93edab7f', outcome: 3, signal: 1, time: 1792968939,
       voter: 'ycpPVZe1GUggvDT7secTBUinDJjXz9jW8J',
     })
-    expect(governanceVote(hexToBytes(MAINNET_VOTES[0]), 'testnet').voter).not.toBe('Xumt2BNf5UYGhNvZkBUmeemy1xN8iLybrz')
+    expect(governanceVote(SDKGovernanceVote.fromBytes(hexToBytes(MAINNET_VOTES[0])), 'testnet').voter).not.toBe('Xumt2BNf5UYGhNvZkBUmeemy1xN8iLybrz')
   })
 
   it.each(['mainnet', 'testnet'] as const)('signs a %s vote its voting key recovers from', network => {
     const key = PrivateKey.fromBytes(new Uint8Array(32).fill(9), network)
-    const unsigned: UnsignedVote = {collateralTxid: 'ab'.repeat(32), collateralVout: 3, parentHash: PROPOSAL, outcome: 2, signal: 1, time: 1_800_000_000}
-    const parsed = governanceVote(voteBytes(unsigned, signHash(voteDigest(unsigned, network), key.bytes())), network)
-    expect(parsed).toMatchObject({...unsigned, voter: key.getAddress()})
+    const signed = new SDKGovernanceVote(new OutPoint('ab'.repeat(32), 3), PROPOSAL, VoteOutcome.NO, VoteSignal.FUNDING, 1_800_000_000)
+    signed.sign(key, network)
+    expect(governanceVote(signed, network)).toMatchObject({
+      collateralTxid: 'ab'.repeat(32), collateralVout: 3, parentHash: PROPOSAL, outcome: 2, signal: 1, time: 1_800_000_000, voter: key.getAddress(),
+    })
   })
 })
 

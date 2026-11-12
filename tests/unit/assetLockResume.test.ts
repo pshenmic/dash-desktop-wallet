@@ -4,6 +4,7 @@ const stub = vi.hoisted(() => ({getTransaction: vi.fn()}))
 
 vi.mock('dash-core-sdk', () => ({
   DashCoreSDK: class { getTransaction = stub.getTransaction },
+  VoteOutcome: {YES: 1, NO: 2, ABSTAIN: 3},
 }))
 
 import {WalletDAO} from '../../src/main/src/database/WalletDAO'

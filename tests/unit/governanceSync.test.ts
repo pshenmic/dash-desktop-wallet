@@ -1,5 +1,6 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 import {hexToBytes} from '@noble/hashes/utils.js'
+import {GovernanceObject, GovernanceVote as SDKGovernanceVote} from 'dash-core-sdk'
 import {Governance} from '../../src/main/p2p/sync/governance'
 import type {ChainStore} from '../../src/main/p2p/store/ChainStore'
 import type {PoolService} from '../../src/main/p2p/net/PoolService'
@@ -53,7 +54,8 @@ describe('governance sync', () => {
   let governance: Governance
 
   const inv = (type: number, hash: string) => ({inventory: [{type, hash: displayHexToWire(hash)}]}) as never
-  const payload = (hex: string) => ({payload: hexToBytes(hex)}) as never
+  const objectMsg = (hex: string) => ({object: GovernanceObject.fromBytes(hexToBytes(hex))}) as never
+  const voteMsg = (bytes: Uint8Array) => ({vote: SDKGovernanceVote.fromBytes(bytes)}) as never
 
   beforeEach(() => {
     vi.useFakeTimers({now: (PROPOSAL_END - 100) * 1000})
@@ -67,8 +69,8 @@ describe('governance sync', () => {
       network: 'mainnet',
       readyPeers: new Set(peers),
       messages: {
-        GovSync: (arg: {payload: Uint8Array}) => ({command: 'govsync', ...arg}),
-        GovObjVote: (arg: {payload: Uint8Array}) => ({command: 'govobjvote', ...arg}),
+        GovSync: (arg?: {parentHash?: string}) => ({command: 'govsync', parentHash: arg?.parentHash ?? '0'.repeat(64)}),
+        GovObjVote: (vote: unknown) => ({command: 'govobjvote', vote}),
         Inventory: (items: unknown) => ({command: 'inv', items}),
         GetData: (items: unknown) => ({command: 'getdata', items}),
       },
@@ -100,7 +102,7 @@ describe('governance sync', () => {
     expect(sentBy('getdata')).toHaveLength(0)
     governance.onInv(second as never, inv(17, PROPOSAL))
     expect(second.sent.filter(({command}) => command === 'getdata')).toHaveLength(1)
-    governance.onObject(second as never, payload(MAINNET_PROPOSAL_OBJECT))
+    governance.onObject(second as never, objectMsg(MAINNET_PROPOSAL_OBJECT))
     await vi.advanceTimersByTimeAsync(60_000)
 
     expect(proposals.at(-1)?.map(({hash}) => hash)).toEqual([PROPOSAL])
@@ -136,7 +138,7 @@ describe('governance sync', () => {
 
   it('takes no object it did not ask for', async () => {
     await governance.open()
-    governance.onObject(peers[0] as never, payload(MAINNET_PROPOSAL_OBJECT))
+    governance.onObject(peers[0] as never, objectMsg(MAINNET_PROPOSAL_OBJECT))
     await vi.advanceTimersByTimeAsync(1_000)
     expect(store.objects.size).toBe(0)
   })
@@ -165,7 +167,7 @@ describe('governance sync', () => {
     expect(votes.at(-1)).toEqual([])
     const asked = peers.find(peer => peer.sent.some(({command}) => command === 'govsync'))!
     governance.onInv(asked as never, inv(18, VOTE_HASH))
-    governance.onVote(asked as never, payload(MAINNET_VOTES[0]))
+    governance.onVote(asked as never, voteMsg(hexToBytes(MAINNET_VOTES[0])))
     await vi.advanceTimersByTimeAsync(1_000)
 
     expect(votes.at(-1)?.map(({hash, voter}) => [hash, voter])).toEqual([[VOTE_HASH, 'Xumt2BNf5UYGhNvZkBUmeemy1xN8iLybrz']])
@@ -184,7 +186,7 @@ describe('governance sync', () => {
     unsigned[85] = 0
     const asked = peers.find(peer => peer.sent.some(({command}) => command === 'govsync'))!
     governance.onInv(asked as never, inv(18, VOTE_HASH))
-    governance.onVote(asked as never, {payload: unsigned} as never)
+    governance.onVote(asked as never, voteMsg(unsigned))
     await vi.advanceTimersByTimeAsync(1_000)
     expect(store.votes.size).toBe(0)
   })
@@ -200,7 +202,7 @@ describe('governance sync', () => {
 
     await vi.advanceTimersByTimeAsync(10_000)
     expect(peers.map(peer => peer.sent.filter(({command}) => command === 'getdata').length)).toEqual([0, 1, 1])
-    governance.onVote(peers[1] as never, payload(MAINNET_VOTES[0]))
+    governance.onVote(peers[1] as never, voteMsg(hexToBytes(MAINNET_VOTES[0])))
     await vi.advanceTimersByTimeAsync(5_000)
     expect(relayed).toEqual([['r1', 2, 1, null]])
   })
@@ -221,7 +223,7 @@ describe('governance sync', () => {
     governance.voteRelay.relay('r2', hexToBytes(MAINNET_VOTES[0]))
     governance.voteRelay.onGetData(peers[0] as never, inv(18, VOTE_HASH))
     await vi.advanceTimersByTimeAsync(10_000)
-    governance.onVote(peers[0] as never, payload(MAINNET_VOTES[0]))
+    governance.onVote(peers[0] as never, voteMsg(hexToBytes(MAINNET_VOTES[0])))
     await vi.advanceTimersByTimeAsync(6_000)
     expect(relayed.at(-1)).toEqual(['r2', 1, 1, null])
     expect([...store.votes.get(PROPOSAL)!.keys()]).toEqual([VOTE_HASH])

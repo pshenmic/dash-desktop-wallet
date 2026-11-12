@@ -1,13 +1,11 @@
-import type {Peer} from 'dash-core-p2p'
-import {concatBytes} from '@noble/hashes/utils.js'
+import type {GovObjMessage, GovObjVoteMessage, Peer} from 'dash-core-p2p'
+import {GovernanceObject, GovernanceVote as SDKGovernanceVote} from 'dash-core-sdk'
 import {
   GOVERNANCE_ANNOUNCED_MAX,
   GOVERNANCE_EMIT_DELAY_MS,
   GOVERNANCE_REPLY_WINDOW_MS,
   GOVERNANCE_RESYNC_MS,
   GOVERNANCE_SYNC_PEERS,
-  GOVSYNC_OBJECTS_FILTER,
-  GOVSYNC_VOTES_FILTER,
   INV_GOVERNANCE_OBJECT,
   INV_GOVERNANCE_VOTE,
   PROPOSAL_ANNOUNCERS,
@@ -15,11 +13,10 @@ import {
 } from '../constants'
 import type {ChainStore} from '../store/ChainStore'
 import type {GovernanceSyncState} from '../types/chainStore'
-import type {GovernanceOptions, InventoryMessage, PayloadMessage} from '../types/governance'
-import {governanceMessages} from '../net/governanceMessages'
-import {displayHexToWire, wireToDisplayHex} from '../utils/byteOrder'
+import type {GovernanceOptions, InventoryMessage} from '../types/governance'
+import {wireToDisplayHex} from '../utils/byteOrder'
 import {peerTarget} from '../net/peerAddress'
-import {governanceObject, governanceVote, isStaleProposal, proposalOf} from '../../src/utils/governance'
+import {governanceVote, isStaleProposal, proposalOf} from '../../src/utils/governance'
 import type {GovernanceVote, Proposal} from '../../src/types/Governance'
 import {Logger} from '../../src/utils/logger'
 import {VoteRelay} from './voteRelay'
@@ -70,9 +67,9 @@ export class Governance {
     const stale: string[] = []
     const proposals = new Map<string, Proposal>()
     for (const bytes of objects) {
-      const object = governanceObject(bytes)
+      const object = GovernanceObject.fromBytes(bytes)
       const proposal = proposalOf(object)
-      if (proposal == null || isStaleProposal(proposal, now, store.network)) stale.push(object.hash)
+      if (proposal == null || isStaleProposal(proposal, now, store.network)) stale.push(object.hash())
       else proposals.set(proposal.hash, proposal)
     }
     for (const hash of stale) delete state.votesSyncedAt[hash]
@@ -131,7 +128,7 @@ export class Governance {
     for (const peer of peers) {
       log.info(`asking ${peerTarget(peer)} for governance objects`)
       this.objectsAsked.add(peer)
-      peer.sendMessage(governanceMessages(pool).GovSync({payload: concatBytes(new Uint8Array(32), GOVSYNC_OBJECTS_FILTER)}))
+      peer.sendMessage(pool.messages.GovSync())
     }
   }
 
@@ -143,7 +140,7 @@ export class Governance {
       const stored = await store.getVotes(proposalHash)
       if (store !== this.store) return
       this.votes.set(proposalHash, new Map(stored.map(bytes => {
-        const vote = governanceVote(bytes, store.network)
+        const vote = governanceVote(SDKGovernanceVote.fromBytes(bytes), store.network)
         return [vote.hash, vote]
       })))
     }
@@ -155,7 +152,7 @@ export class Governance {
     for (const peer of peers) {
       log.info(`asking ${peerTarget(peer)} for the votes on ${proposalHash}`)
       this.voteWindows.set(peer, {until: Date.now() + GOVERNANCE_REPLY_WINDOW_MS, proposalHash})
-      peer.sendMessage(governanceMessages(pool).GovSync({payload: concatBytes(displayHexToWire(proposalHash), GOVSYNC_VOTES_FILTER)}))
+      peer.sendMessage(pool.messages.GovSync({parentHash: proposalHash}))
     }
   }
 
@@ -181,7 +178,7 @@ export class Governance {
     })
     if (wanted.length === 0) return
     for (const item of wanted) this.requested.set(wireToDisplayHex(item.hash), now)
-    peer.sendMessage(governanceMessages(pool).GetData(wanted))
+    peer.sendMessage(pool.messages.GetData(wanted))
   }
 
   // The object list is synced once `needed` of the peers asked have answered.
@@ -214,45 +211,33 @@ export class Governance {
     return true
   }
 
-  onObject = (peer: Peer, msg: PayloadMessage): void => {
+  onObject = (peer: Peer, msg: GovObjMessage): void => {
     const store = this.store
     if (store == null) return
-    let proposal: Proposal | null = null
-    let hash: string
-    try {
-      const object = governanceObject(msg.payload)
-      hash = object.hash
-      proposal = proposalOf(object)
-    } catch (err) {
-      log.debug(`unreadable governance object from ${peerTarget(peer)}:`, err)
-      return
-    }
+    const object = msg.object
+    const hash = object.hash()
+    const proposal = proposalOf(object)
     if (!this.requested.delete(hash)) return
     if (proposal == null || isStaleProposal(proposal, nowSeconds(), store.network)) {
+      log.debug(`ignoring governance object ${hash} from ${peerTarget(peer)}`)
       this.ignored.add(hash)
       return
     }
     this.proposals.set(hash, proposal)
-    this.unsavedObjects.set(hash, msg.payload)
+    this.unsavedObjects.set(hash, object.bytes())
     this.scheduleFlush()
   }
 
   // Our own vote served back is the proof a peer kept it, and only then is it
   // ours to count; that runs in rpc mode too, where nothing is stored.
-  onVote = (peer: Peer, msg: PayloadMessage): void => {
+  onVote = (peer: Peer, msg: GovObjVoteMessage): void => {
     const pool = this.opts.pool()
     if (pool == null) return
-    let vote: GovernanceVote
-    try {
-      vote = governanceVote(msg.payload, pool.network)
-    } catch (err) {
-      log.debug(`unreadable governance vote from ${peerTarget(peer)}:`, err)
-      return
-    }
+    const vote = governanceVote(msg.vote, pool.network)
     const ours = this.voteRelay.confirmed(peer, vote.hash)
     if (this.store == null) return
     if (ours?.first) this.keepVote(vote, ours.payload)
-    if (ours == null && this.requested.delete(vote.hash)) this.keepVote(vote, msg.payload)
+    if (ours == null && this.requested.delete(vote.hash)) this.keepVote(vote, msg.vote.bytes())
   }
 
   // Ready peers not asked for this within the hour, in random order; none while
