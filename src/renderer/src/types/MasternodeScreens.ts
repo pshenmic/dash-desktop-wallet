@@ -1,5 +1,5 @@
 import type { Network } from '@renderer/api/types'
-import type { ContestSegment, ContestSort, NodeSegment } from '@renderer/enums/Masternodes'
+import type { ContestSegment, ContestSort, NodeSegment, ProposalSegment, ProposalSort } from '@renderer/enums/Masternodes'
 
 export interface MasternodesPageProps {
   walletId: string
@@ -9,6 +9,7 @@ export interface SummaryStripProps extends MasternodesPageProps {
   network: Network | undefined
   now: number
   onSelectNodes: (segment: NodeSegment) => void
+  onSelectProposals: (segment: ProposalSegment) => void
   onSelectContests: (segment: ContestSegment) => void
 }
 
@@ -24,6 +25,26 @@ export interface NodesTabProps extends MasternodesPageProps {
 
 export interface NodeDetailProps extends MasternodesPageProps {
   proTxHash: string
+  onBack: () => void
+}
+
+export interface ProposalsTabProps extends MasternodesPageProps {
+  network: Network | undefined
+  now: number
+  segment: ProposalSegment
+  onSegmentChange: (segment: ProposalSegment) => void
+  query: string
+  onQueryChange: (query: string) => void
+  sort: ProposalSort
+  onSortChange: (sort: ProposalSort) => void
+  visibleCount: number
+  onShowMore: () => void
+  onOpenProposal: (hash: string) => void
+}
+
+export interface ProposalDetailProps extends MasternodesPageProps {
+  now: number
+  proposalHash: string
   onBack: () => void
 }
 

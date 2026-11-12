@@ -4,8 +4,10 @@ import { useRipple } from '@renderer/hooks/useRipple'
 import { useLocation } from 'react-router-dom'
 import { refreshActiveAsyncCaches, useAsyncRefreshFailures } from '@renderer/hooks/useAsyncWithCache'
 import { refreshDashPay } from '@renderer/hooks/useDashPayRefresh'
+import { refreshGovernanceProposals } from '@renderer/hooks/useGovernanceProposals'
 import { useAuth } from '@renderer/contexts/AuthContext'
 import { DASHPAY_ROUTES } from '@renderer/constants/dashPay'
+import { MASTERNODES_ROUTE } from '@renderer/constants/masternodes'
 import { toast } from '@renderer/components/ui/Toast'
 import { REFRESH_DATA_LABEL, REFRESH_FAILED_MESSAGE } from '@renderer/constants/connection'
 
@@ -18,6 +20,7 @@ export default function RefreshButton(): React.JSX.Element {
   const { status } = useAuth()
   const walletId = status?.selectedWalletId ?? null
   const onDashPay = pathname.startsWith(DASHPAY_ROUTES.root)
+  const onMasternodes = pathname.startsWith(MASTERNODES_ROUTE)
 
   useEffect(() => {
     if (refreshing || unreportedFailures.current === 0) return
@@ -29,8 +32,9 @@ export default function RefreshButton(): React.JSX.Element {
     if (refreshing) return
     setRefreshing(true)
     try {
-      const dashPayFailures = walletId != null && onDashPay ? await refreshDashPay(walletId).then(() => 0, () => 1) : 0
-      unreportedFailures.current = dashPayFailures + await refreshActiveAsyncCaches()
+      const dashPayFailures = walletId != null && (onDashPay || onMasternodes) ? await refreshDashPay(walletId).then(() => 0, () => 1) : 0
+      const govFailures = walletId != null && onMasternodes ? await refreshGovernanceProposals(walletId).then(() => 0, () => 1) : 0
+      unreportedFailures.current = dashPayFailures + govFailures + await refreshActiveAsyncCaches()
     } finally {
       setRefreshing(false)
     }

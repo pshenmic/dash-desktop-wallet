@@ -1,6 +1,6 @@
 import { WalletTxDto } from '@renderer/types/WalletTransaction'
 import { TransferOperation } from '../enums/TransferOperation'
-import { UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, ListedUtxo, MasternodeDto, ImportedMasternodeKeyDto, MasternodeKeyRole, MasternodeRegistrationDto, MasternodeRegistrationResult, MasternodeRegistrarUpdateDto, MasternodeServiceUpdateDto, MasternodeUpdateResult, RevocationReason, ProposalDto, ProposalTally, VoteOutcome, VoteResult} from './types'
+import { UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, ListedUtxo, MasternodeDto, MasternodeCollateralDto, ImportedMasternodeKeyDto, MasternodeKeyRole, MasternodeRegistrationDto, MasternodeRegistrationResult, MasternodeRegistrarUpdateDto, MasternodeServiceUpdateDto, MasternodeUpdateResult, RevocationReason, ProposalDto, ProposalTally, VoteOutcome, VoteResult} from './types'
 
 export class API {
   private static get api() {
@@ -161,6 +161,10 @@ export class API {
 
   static async getMasternodes(walletId: string): Promise<MasternodeDto[] | null> {
     return this.api.getMasternodes(walletId)
+  }
+
+  static async getMasternodeCollaterals(walletId: string): Promise<MasternodeCollateralDto[]> {
+    return this.api.getMasternodeCollaterals(walletId)
   }
 
   static async getImportedMasternodeKeys(walletId: string): Promise<ImportedMasternodeKeyDto[]> {

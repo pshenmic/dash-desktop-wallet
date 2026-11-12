@@ -216,6 +216,13 @@ export interface ImportedMasternodeKeyDto {
   publicKey: string
 }
 
+export interface MasternodeCollateralDto {
+  proTxHash: string
+  txid: string
+  vout: number
+  address: string | null
+}
+
 // getMasternodes — a masternode this wallet holds a key or the collateral of, as
 // last listed; null until the first discovery run after startup. A null key
 // index is a key the seed does not derive; importedRoles are held by an imported

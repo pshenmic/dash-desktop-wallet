@@ -1,5 +1,6 @@
 export enum MasternodesTab {
   Nodes = 'nodes',
+  Proposals = 'proposals',
   ContestedResources = 'contested-resources',
 }
 
@@ -8,6 +9,43 @@ export enum NodeSegment {
   VotingKey = 'voting-key',
   NoVotingKey = 'no-voting-key',
   Issues = 'issues',
+}
+
+export enum MasternodeDetailModal {
+  UpdateRegistrar = 'update-registrar',
+  UpdateService = 'update-service',
+  Revoke = 'revoke',
+}
+
+export enum RegistrarKeyChoiceKind {
+  Keep = 'keep',
+  Wallet = 'wallet',
+  External = 'external',
+}
+
+export enum PayoutChoiceKind {
+  Keep = 'keep',
+  Custom = 'custom',
+}
+
+export enum ProposalStatus {
+  Active = 'active',
+  Upcoming = 'upcoming',
+  Ended = 'ended',
+}
+
+export enum ProposalSegment {
+  Active = 'active',
+  EndingSoon = 'ending-soon',
+  Upcoming = 'upcoming',
+  Ended = 'ended',
+}
+
+export enum ProposalSort {
+  EndingSoon = 'ending-soon',
+  Newest = 'newest',
+  HighestAmount = 'highest-amount',
+  Name = 'name',
 }
 
 export enum ContestStatus {

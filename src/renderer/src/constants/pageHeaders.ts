@@ -71,10 +71,13 @@ export const PAGE_HEADERS = {
   },
   masternodes: {
     title: 'Masternodes',
-    subtitle: 'View your masternodes and contested resources.',
+    subtitle: 'Manage your masternodes, governance proposals and contested resources.',
   },
   masternodeDetail: {
     back: 'Back to masternodes',
+  },
+  proposalDetail: {
+    back: 'Back to Proposals',
   },
   nameContest: {
     back: 'Back to Contested Resources',
