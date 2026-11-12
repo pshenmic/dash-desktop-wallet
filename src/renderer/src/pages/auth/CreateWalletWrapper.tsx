@@ -11,11 +11,11 @@ import VerifySeedPhrase from "../../components/pages/auth/VerifySeedPhrase";
 import Success from "../../components/pages/auth/Success";
 import WelcomeDashDesktopWallet from "@renderer/components/pages/auth/WelcomeDashDesktopWallet"
 import ImportSeedPhrase from "@renderer/components/pages/auth/ImportSeedPhrase";
-import SeedPassphrase from '@renderer/components/pages/auth/SeedPassphrase'
+// import SeedPassphrase from '@renderer/components/pages/auth/SeedPassphrase'
 import ConnectionModeStep from '@renderer/components/pages/auth/ConnectionModeStep'
 import NetworkBadge from "@renderer/components/ui/NetworkBadge";
 import { useAuth } from "@renderer/contexts/AuthContext";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate /* , useSearchParams */ } from "react-router-dom";
 import { useEffect, type ReactNode } from "react";
 import { useWallets, refreshWallets } from "@renderer/hooks/useWallets";
 import { CREATE_WALLET_PROGRESS, PASSPHRASE_PREVIEW, SEED_PASSPHRASE_COPY } from '@renderer/constants/auth'
@@ -23,13 +23,14 @@ import { WALLET_PASSWORD_LABEL } from '@renderer/constants/password'
 import type { CreateWalletFlowProps, CreateWalletStep, WalletCreationPath } from '@renderer/types/auth'
 
 export default function CreateWalletWrapper(): React.JSX.Element {
-  const [params] = useSearchParams()
-  const passphrasePreview = import.meta.env.DEV && params.get(PASSPHRASE_PREVIEW.query) === PASSPHRASE_PREVIEW.value
-  return <CreateWalletFlow key={String(passphrasePreview)} passphrasePreview={passphrasePreview} />
+  // const [params] = useSearchParams()
+  // const passphrasePreview = import.meta.env.DEV && params.get(PASSPHRASE_PREVIEW.query) === PASSPHRASE_PREVIEW.value
+  // return <CreateWalletFlow key={String(passphrasePreview)} passphrasePreview={passphrasePreview} />
+  return <CreateWalletFlow passphrasePreview={false} />
 }
 
 function CreateWalletFlow({ passphrasePreview }: CreateWalletFlowProps): React.JSX.Element {
-  const passphraseAvailable = import.meta.env.DEV
+  const passphraseAvailable = false // import.meta.env.DEV
   const {
     createWallet,
     saveYourSeedPhrase,
@@ -48,7 +49,7 @@ function CreateWalletFlow({ passphrasePreview }: CreateWalletFlowProps): React.J
     setPassword,
     password,
     passphrase,
-    setPassphrase,
+    // setPassphrase,
     seedPhrase,
     importedSeedPhrase,
     wordCount,
@@ -236,7 +237,7 @@ function CreateWalletFlow({ passphrasePreview }: CreateWalletFlowProps): React.J
             wordCount={wordCount}
             setWordCount={setWordCount}
           >
-            {passphraseAvailable && <SeedPassphrase path={'create'} value={passphrase} onChange={setPassphrase} />}
+            {/* {passphraseAvailable && <SeedPassphrase path={'create'} value={passphrase} onChange={setPassphrase} />} */}
           </SeedPhrase>
         }
         {step === 'verify' &&
@@ -259,7 +260,7 @@ function CreateWalletFlow({ passphrasePreview }: CreateWalletFlowProps): React.J
               seedPhraseWarning: recoveryWarning
             }}
           >
-            {passphraseAvailable && <SeedPassphrase path={'import'} value={passphrase} onChange={setPassphrase} />}
+            {/* {passphraseAvailable && <SeedPassphrase path={'import'} value={passphrase} onChange={setPassphrase} />} */}
           </ImportSeedPhrase>
         }
 

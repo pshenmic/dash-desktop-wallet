@@ -5,8 +5,8 @@ import type { ReceivePageType } from '../constants/receivePage'
 export interface ReceiveInvoice {
   addressLabel: string
   address: string
+  label?: string | null
   amount: string | null
-  paymentLink: string | null
   network: Network | null
 }
 
@@ -20,21 +20,13 @@ export interface ReceiveQrProps {
   invoice: ReceiveInvoice
 }
 
-export interface ReceiveAddressOption {
+export interface ReceiveAddressPanelProps {
   address: string
-  balance: bigint
-}
-
-export interface ReceiveAddressSelectProps {
-  addresses: ReceiveAddressOption[]
-  selected: ReceiveAddressOption
-  onSelect: (address: string) => void
   wideAddress?: boolean
-}
-
-export interface ReceiveAddressPanelProps extends ReceiveAddressSelectProps {
+  title?: string
   addressLabel: string
   addressBadge?: ReactNode
+  label?: string | null
   amount?: string | null
   paymentLink?: string
   children?: ReactNode

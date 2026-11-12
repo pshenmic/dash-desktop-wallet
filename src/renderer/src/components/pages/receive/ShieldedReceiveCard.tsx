@@ -6,7 +6,6 @@ import PasswordField from '@renderer/components/ui/PasswordField'
 import ShieldedUnlockModal from '@renderer/components/modal/ShieldedUnlockModal'
 import ShieldedNotesAlert from '@renderer/components/ui/ShieldedNotesAlert'
 import ReceiveAddressPanel from './ReceiveAddressPanel'
-import { creditsToDuffs } from '@renderer/utils/balance'
 import { defaultReceiveShieldedAddress, receiveShieldedAddresses } from '@renderer/utils/receiveDefaults'
 import { shieldedBalancesByAddress } from '@renderer/utils/shieldedBalances'
 import { API } from '@renderer/api'
@@ -93,8 +92,7 @@ export default function ShieldedReceiveCard({ walletId }: { walletId: string | u
 
   if (addresses !== null) {
     const receiveAddresses = receiveShieldedAddresses(addresses, balances)
-      .map(address => ({ address, balance: creditsToDuffs(balances.get(address) ?? 0n) }))
-    const selected = receiveAddresses.find(option => option.address === selectedAddress) ?? receiveAddresses[0]
+    const selected = (selectedAddress && receiveAddresses.includes(selectedAddress) ? selectedAddress : null) ?? receiveAddresses[0]
     if (!selected) {
       return (
         <div className={`flex max-w-115 flex-col gap-3 ${SURFACE_SECTION}`}>
@@ -134,9 +132,7 @@ export default function ShieldedReceiveCard({ walletId }: { walletId: string | u
         <div className={`flex w-full flex-col gap-4 ${RECEIVE_WIDE_PANEL_CLASS}`}>
           <ShieldedNotesAlert walletId={walletId} onSync={() => setSyncOpen(true)} syncing={syncRunning} />
           <ReceiveAddressPanel
-            addresses={receiveAddresses}
-            selected={selected}
-            onSelect={setSelectedAddress}
+            address={selected}
             wideAddress
             addressLabel={RECEIVE_INVOICE_ADDRESS_LABELS.shielded}
             addressBadge={

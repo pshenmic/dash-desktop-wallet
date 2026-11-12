@@ -21,7 +21,7 @@ export default function HashField({ hash, label = 'State transition hash', explo
 
   return (
     <div className={"flex flex-col gap-[.375rem]"}>
-      <Text size={12} weight={"medium"} color={"brand"} opacity={50}>{label}</Text>
+      {label && <Text size={12} weight={"medium"} color={"brand"} opacity={50}>{label}</Text>}
       <div className={"flex items-center gap-2"}>
         {!readOnly && copyOnClick ? (
           <button

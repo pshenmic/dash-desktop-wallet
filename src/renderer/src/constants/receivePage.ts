@@ -1,4 +1,6 @@
 
+export const RECEIVE_LABEL_MAX_LENGTH = 80
+
 export interface ReceivePageType {
   tabs: {
     core: string
@@ -6,6 +8,9 @@ export interface ReceivePageType {
     platform: string
   },
   receiveAddressCard: {
+    title: string
+    label: string
+    labelPlaceholder: string
     amount: string
     placeholder: string
   }
@@ -18,8 +23,11 @@ export const receivePage = {
     platform: 'Platform',
   },
   receiveAddressCard: {
-    amount: 'Enter amount',
-    placeholder: 'Optional',
+    title: 'Request a payment',
+    label: 'Label',
+    labelPlaceholder: 'e.g. Invoice #42',
+    amount: 'Amount',
+    placeholder: '0.00000000',
   },
 }
 

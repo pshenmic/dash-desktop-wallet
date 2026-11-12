@@ -11,8 +11,12 @@ export function receiveAmountParam(amount: string): string | null {
   return decimals === '' ? units : `${units}.${decimals}`
 }
 
-export function corePaymentUri(address: string, amount: string | null): string {
-  return amount == null ? `dash:${address}` : `dash:${address}?amount=${amount}`
+export function corePaymentUri(address: string, amount: string | null, label?: string | null): string {
+  const params: string[] = []
+  if (amount != null) params.push(`amount=${amount}`)
+  const trimmedLabel = label?.trim() ?? ''
+  if (trimmedLabel !== '') params.push(`label=${encodeURIComponent(trimmedLabel)}`)
+  return params.length === 0 ? `dash:${address}` : `dash:${address}?${params.join('&')}`
 }
 
 export function receiveInvoiceHeadline(amount: string | null): string {

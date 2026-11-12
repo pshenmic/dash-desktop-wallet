@@ -19,7 +19,7 @@ import { useRipple } from '@renderer/hooks/useRipple'
 import AuthBackground from '@renderer/components/pages/auth/AuthBackground'
 import WalletSelect from '@renderer/components/ui/WalletSelect'
 import ImportSeedPhrase from '@renderer/components/pages/auth/ImportSeedPhrase'
-import SeedPassphrase from '@renderer/components/pages/auth/SeedPassphrase'
+// import SeedPassphrase from '@renderer/components/pages/auth/SeedPassphrase'
 import { PASSPHRASE_PREVIEW, SEED_PASSPHRASE_COPY } from '@renderer/constants/auth'
 import { FORGOT_PASSWORD_PREVIEW } from '@renderer/constants/forgotPassword'
 import { API } from '@renderer/api'
@@ -173,7 +173,7 @@ export default function ForgotPasswordPage(): React.JSX.Element {
                 seedPhraseWarning: recoveryWarning
               }}
             >
-              {import.meta.env.DEV && <SeedPassphrase path={'import'} value={passphrase} onChange={setPassphrase} />}
+              {/* {import.meta.env.DEV && <SeedPassphrase path={'import'} value={passphrase} onChange={setPassphrase} />} */}
             </ImportSeedPhrase>
           </div>
         )}

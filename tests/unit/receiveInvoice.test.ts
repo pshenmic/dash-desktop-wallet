@@ -28,9 +28,12 @@ describe('receiveAmountParam', () => {
 })
 
 describe('corePaymentUri', () => {
-  it('adds the amount only when one is requested', () => {
+  it('adds the amount and label query parameters when present', () => {
     expect(corePaymentUri('yAddress', null)).toBe('dash:yAddress')
     expect(corePaymentUri('yAddress', '1.5')).toBe('dash:yAddress?amount=1.5')
+    expect(corePaymentUri('yAddress', null, 'Invoice #42')).toBe('dash:yAddress?label=Invoice%20%2342')
+    expect(corePaymentUri('yAddress', '1.5', 'Coffee & Tea')).toBe('dash:yAddress?amount=1.5&label=Coffee%20%26%20Tea')
+    expect(corePaymentUri('yAddress', null, '   ')).toBe('dash:yAddress')
   })
 })
 
