@@ -16,6 +16,7 @@ import ListSkeleton from '@renderer/components/ui/Skeleton'
 import NoResults from '@renderer/components/ui/NoResults'
 import RetryButton from '@renderer/components/ui/RetryButton'
 import { NoResultsTone } from '@renderer/enums/NoResultsTone'
+import type { AddressListProps } from '@renderer/types/ExportKey'
 import type { RetryButtonProps } from '@renderer/types/RetryButton'
 import { WalletAddressDto } from '@renderer/api/types'
 
@@ -63,7 +64,7 @@ function TabContent<T>({
 
 const TAB_VALUES = ['receiving', 'change', 'platform', 'shielded']
 
-export default function AddressList({ coreGated = false }: { coreGated?: boolean }): React.JSX.Element {
+export default function AddressList({ coreGated = false, onExportKey }: AddressListProps): React.JSX.Element {
   const [searchParams] = useSearchParams()
   const requestedTab = searchParams.get('tab')
   const [activeTab, setActiveTab] = useState(
@@ -83,7 +84,13 @@ export default function AddressList({ coreGated = false }: { coreGated?: boolean
   const retryAddresses = walletId === undefined ? undefined : () => refreshAddresses(walletId)
   const retryPlatformAddresses = walletId === undefined ? undefined : () => refreshPlatformAddresses(walletId)
 
-  const renderAddress = (item: WalletAddressDto): React.JSX.Element => <AddressCard key={item.address} {...item} />
+  const renderAddress = (item: WalletAddressDto): React.JSX.Element => (
+    <AddressCard
+      key={item.address}
+      {...item}
+      onExportKey={onExportKey ? () => onExportKey({ address: item.address, path: item.derivationPath }) : undefined}
+    />
+  )
 
   const tabItems = [
     {
@@ -135,7 +142,13 @@ export default function AddressList({ coreGated = false }: { coreGated?: boolean
             err={platformErr}
             errorMessage={"Failed to load platform addresses"}
             emptyMessage={"No platform addresses found"}
-            renderItem={(item) => <PlatformAddressCard key={item.platformAddress} {...item} />}
+            renderItem={(item) => (
+              <PlatformAddressCard
+                key={item.platformAddress}
+                {...item}
+                onExportKey={onExportKey ? () => onExportKey({ address: item.platformAddress }) : undefined}
+              />
+            )}
             onRetry={retryPlatformAddresses}
           />
           {!platformLoading && !platformErr && (
