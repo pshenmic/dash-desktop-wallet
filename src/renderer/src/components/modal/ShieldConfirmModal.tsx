@@ -20,7 +20,7 @@ import { TxEndpointKind } from '@renderer/enums/TxEndpointKind'
 import { TX_SUMMARY_LABELS } from '@renderer/constants/txSummary'
 import { INVALID_WALLET_PASSWORD_MESSAGE } from '@renderer/constants'
 import { SURFACE_SECTION } from '@renderer/constants/surfaces'
-import { SEND_INPUTS_CHANGED_MESSAGE, SHIELD_PROGRESS_TITLE, SHIELD_PROVING_PENDING_LABEL } from '@renderer/constants/sendConfirmModal'
+import { SEND_CANCEL_DELAY_MS, SEND_INPUTS_CHANGED_MESSAGE, SHIELD_PROGRESS_TITLE, SHIELD_PROVING_PENDING_LABEL } from '@renderer/constants/sendConfirmModal'
 
 export default function ShieldConfirmModal({
   isOpen,
@@ -47,7 +47,9 @@ export default function ShieldConfirmModal({
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ShieldResult | null>(null)
   const [auto, setAuto] = useState(false)
+  const [canCancel, setCanCancel] = useState(false)
   const autoStarted = useRef(false)
+  const runId = useRef(0)
   const [seenOpen, setSeenOpen] = useState(false)
   const autoPassword = proverReady ? presetPassword : undefined
 
@@ -59,10 +61,12 @@ export default function ShieldConfirmModal({
       setError(null)
       setResult(null)
       setAuto(Boolean(autoPassword))
+      setCanCancel(false)
     }
   }
 
   const abort = (preset: boolean): void => {
+    setCanCancel(false)
     if (preset) onClose()
     else setPhase(ConfirmModalPhase.Confirm)
   }
@@ -73,20 +77,40 @@ export default function ShieldConfirmModal({
       abort(preset)
       return
     }
+    const id = ++runId.current
+    setCanCancel(false)
     try {
       const res = await API.shieldToPool(walletId, source, toAddress, amountCredits, secret)
+      if (runId.current !== id) {
+        onSuccess()
+        return
+      }
+      setCanCancel(false)
       setResult(res)
       setPhase(ConfirmModalPhase.Done)
       onSuccess()
     } catch (e) {
+      if (runId.current !== id) return
       console.error('Shield failed', e)
       toast.error(getErrorMessage(e))
       abort(preset)
     }
   }
 
+  const shielding = phase === ConfirmModalPhase.Sending
+
+  useEffect(() => {
+    if (!isOpen || !shielding) {
+      setCanCancel(false)
+      return
+    }
+    const timer = setTimeout(() => setCanCancel(true), SEND_CANCEL_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [isOpen, shielding])
+
   useEffect(() => {
     if (!isOpen) {
+      runId.current++
       autoStarted.current = false
       return
     }
@@ -97,27 +121,36 @@ export default function ShieldConfirmModal({
     }
   }, [isOpen])
 
-  const shielding = phase === ConfirmModalPhase.Sending
+  const cancelAllowed = !shielding || canCancel
 
   const handleConfirm = async (): Promise<void> => {
     if (!walletId || password.length === 0 || shielding || !proverReady || !sourceValidRef.current) return
+    const id = ++runId.current
     setPhase(ConfirmModalPhase.Sending)
     setError(null)
+    setCanCancel(false)
     try {
-      if (await API.verifyWalletPassword(walletId, password)) {
+      const valid = await API.verifyWalletPassword(walletId, password)
+      if (runId.current !== id) return
+      if (valid) {
         await submit(password, false)
         return
       }
       setError(INVALID_WALLET_PASSWORD_MESSAGE)
     } catch (e) {
+      if (runId.current !== id) return
       console.error('Shield failed', e)
       toast.error(getErrorMessage(e))
     }
+    setCanCancel(false)
     setPhase(ConfirmModalPhase.Confirm)
   }
 
   const requestClose = (): void => {
-    if (shielding) return
+    if (!cancelAllowed) return
+    runId.current++
+    setCanCancel(false)
+    if (shielding) setPhase(ConfirmModalPhase.Confirm)
     onClose()
   }
 
@@ -134,7 +167,7 @@ export default function ShieldConfirmModal({
       onClose={requestClose}
       title={modalTitle}
       size={ModalSize.Lg}
-      dismissible={!shielding}
+      dismissible={cancelAllowed}
     >
       {phase !== ConfirmModalPhase.Done ? auto ? (
         <div className={"phase-fade-in"} key={"pending"}>
@@ -166,7 +199,7 @@ export default function ShieldConfirmModal({
           )}
 
           <ModalActions
-            secondary={{ label: 'Cancel', onClick: requestClose, disabled: shielding }}
+            secondary={{ label: 'Cancel', onClick: requestClose, disabled: !cancelAllowed }}
             primary={{
               label: confirmLabel,
               onClick: handleConfirm,
