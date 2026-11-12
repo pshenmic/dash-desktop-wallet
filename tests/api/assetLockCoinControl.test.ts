@@ -30,6 +30,7 @@ const providerStub = (utxos: UTXO[]): WalletProvider => ({
   getWalletBalance: async () => 0n,
   getBalance: async () => 0n,
   ensureReady: async () => undefined,
+  ensureReadyToList: async () => undefined,
   getConnectionStatus: async () => 'online',
   scanAddressUsage: async () => null,
   getUsedAddresses: async () => [],

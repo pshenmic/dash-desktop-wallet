@@ -5,6 +5,7 @@ import {CreateWalletHandler} from '../../src/main/src/api/wallet/createWallet'
 import {WalletProvider} from '../../src/main/src/providers/WalletProvider'
 import {WalletProviderFactory} from '../../src/main/src/providers/WalletProviderFactory'
 import {UTXO} from '../../src/main/src/types/UTXO'
+import {TransactionDAO} from '../../src/main/src/database/TransactionDAO'
 import {harness, PASSWORD, VALID_SEEDPHRASE} from './harness'
 
 const SCRIPT_HEX = '76a9143a2d4145a4f098523b3e8127f1da87cfc55b8e7988ac'
@@ -22,6 +23,9 @@ const providerStub = (utxos: UTXO[], ready = true): WalletProvider => ({
   ensureReady: async () => {
     if (!ready) throw new Error('Wallet sync is not complete')
   },
+  ensureReadyToList: async () => {
+    if (!ready) throw new Error('Wallet sync is not complete')
+  },
   getConnectionStatus: async () => 'online',
   scanAddressUsage: async () => null,
   getUsedAddresses: async () => [],
@@ -36,6 +40,7 @@ describe('listing the coins a send can draw on', () => {
   let walletService: WalletService
   let providers: WalletProviderFactory
   let createWalletHandler: CreateWalletHandler
+  let transactionDAO: TransactionDAO
   let walletId: string
   let owned: string
 
@@ -44,6 +49,7 @@ describe('listing the coins a send can draw on', () => {
     walletService = wired.walletService
     providers = wired.providers
     createWalletHandler = wired.createWalletHandler
+    transactionDAO = wired.transactionDAO
     walletId = await createWalletHandler.handle(null as never, VALID_SEEDPHRASE, 'testnet', PASSWORD)
     owned = (await walletService.getAddressesByWalletId(walletId)).receiving[0].address
   })
@@ -72,6 +78,24 @@ describe('listing the coins a send can draw on', () => {
     vi.spyOn(providers, 'forWallet').mockReturnValue(providerStub([utxo(owned, 50_000n, 'aa', 0)]))
 
     expect((await walletService.getUtxos(walletId))[0].height).toBe(0)
+  })
+
+  // A paused store is a stable snapshot, so the picker lists it without a
+  // running sync — locks included.
+  it('lists locally saved coins while sync is paused, locks included', async () => {
+    await transactionDAO.applyBlock({
+      walletId,
+      height: 2_300_000,
+      blockHash: 'hash',
+      blockTime: 1_700_000_000,
+      txs: [{txid: 'aa', raw: new Uint8Array([1]), inputs: [], outputs: [{vout: 0, address: owned, satoshis: '500', isMine: true}]}],
+      spends: [],
+    })
+
+    expect((await walletService.getUtxos(walletId))[0]).toMatchObject({txid: 'aa', vout: 0, satoshis: 500n, address: owned, isLocked: false})
+
+    await walletService.setUtxoLocked(walletId, 'aa', 0, true)
+    expect((await walletService.getUtxos(walletId))[0].isLocked).toBe(true)
   })
 
   // Listing a partial set does not under-display, it narrows what can be picked

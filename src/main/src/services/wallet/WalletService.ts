@@ -380,14 +380,13 @@ export class WalletService {
     return dashPayPayments(core, addresses('receiving'), addresses('external'))
   }
 
-  // Guarded like a send rather than like a read: a picker fed a partial set does
-  // not under-display, it narrows what the user can pick to coins they cannot
-  // tell are only some of theirs.
+  // Mid-scan the set grows under the picker, so listing refuses; a paused store
+  // is a stable snapshot. Sends keep the stricter ensureReady gate.
   async getUtxos(walletId: string): Promise<SelectableUtxo[]> {
     const wallet = await requireWallet(this.walletDAO, walletId)
 
     const provider = this.providers.forWallet(wallet.walletId, wallet.network)
-    await provider.ensureReady()
+    await provider.ensureReadyToList()
     const grouped = await this.addressDAO.getAddressesByWalletId(walletId)
 
     return selectableTransferUtxos(grouped, await provider.getWalletUtxos())

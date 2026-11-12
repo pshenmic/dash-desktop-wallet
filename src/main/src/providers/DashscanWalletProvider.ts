@@ -233,6 +233,10 @@ export class DashscanWalletProvider implements WalletProvider {
     if (!response.ok) throw new Error(`Dashscan status request failed (${response.status})`)
   }
 
+  async ensureReadyToList(): Promise<void> {
+    return this.ensureReady()
+  }
+
   // The renderer polls this every second, so it answers from cache and leaves
   // the probe running detached.
   async getConnectionStatus(): Promise<ConnectionStatus> {

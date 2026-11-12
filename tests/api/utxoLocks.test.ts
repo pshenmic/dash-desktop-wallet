@@ -1,4 +1,4 @@
-import {describe, it, expect, beforeEach, afterEach, vi} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import type {Knex} from 'knex'
 import type {AppliedBlock, AppliedTx} from '../../src/main/p2p/types/walletSync'
 import {TransactionDAO} from '../../src/main/src/database/TransactionDAO'
@@ -116,9 +116,6 @@ describe('listing locked coins', () => {
 
   it('setUtxoLocked flips what getUtxos lists', async () => {
     const {wired, walletId} = await setup()
-    const provider = wired.providers.forWallet(walletId, 'testnet')
-    vi.spyOn(provider, 'ensureReady').mockResolvedValue(undefined)
-    vi.spyOn(wired.providers, 'forWallet').mockReturnValue(provider)
     const handler = new SetUtxoLockedHandler(wired.walletService)
 
     expect((await wired.walletService.getUtxos(walletId))[0].isLocked).toBe(false)

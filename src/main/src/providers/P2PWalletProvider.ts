@@ -97,6 +97,12 @@ export class P2PWalletProvider implements WalletProvider {
     }
   }
 
+  async ensureReadyToList(): Promise<void> {
+    if (await this.getConnectionStatus() === 'syncing') {
+      throw new Error('Wallet sync is not complete — wait for sync to finish before listing coins')
+    }
+  }
+
   async getConnectionStatus(): Promise<ConnectionStatus> {
     const status = this.walletSyncService.getStatus()
     if (status.walletId !== this.walletId || status.phase === 'idle' || status.phase === 'stopped') {

@@ -22,6 +22,8 @@ export interface WalletProvider {
   getWalletUtxos(): Promise<UTXO[]>
   getTxLockStatus(txid: string): Promise<TxLockStatus>
   ensureReady(): Promise<void>
+  // Listing tolerates a stable paused snapshot; spending does not.
+  ensureReadyToList(): Promise<void>
   getConnectionStatus(): Promise<ConnectionStatus>
   // "Unused" is whatever the provider's own source of truth says: chain state
   // over the API, or the local SPV store.
