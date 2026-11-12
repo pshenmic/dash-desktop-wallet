@@ -14,7 +14,7 @@ const addr = (address: string, balance: bigint, isUsed = false, txCount = 0): Wa
   ({ walletId: 'wallet', accountId: 0, address, derivationPath: '', index: 0, isChange: 0, isUsed, balance, txCount, label: null, usdBalance: null })
 
 const platformAddr = (platformAddress: string, balanceCredits: bigint, nonce: number) =>
-  ({ platformAddress, balanceCredits, nonce, label: null })
+  ({ platformAddress, balanceCredits, nonce })
 
 describe('isUnusedPlatformAddress', () => {
   it('is true for zero balance and zero nonce', () => {

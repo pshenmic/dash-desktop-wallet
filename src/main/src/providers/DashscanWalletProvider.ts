@@ -286,10 +286,10 @@ export class DashscanWalletProvider implements WalletProvider {
     }
   }
 
-  async nextUnusedAddress(): Promise<string> {
+  async nextUnusedAddress(exclude: Set<string> = new Set()): Promise<string> {
     const { receiving } = await this.addressDAO.getAddressesByWalletId(this.walletId)
     if (receiving.length === 0) throw new Error('Wallet has no receiving addresses')
-    const unused = receiving.find(a => !a.isUsed)
+    const unused = receiving.find(a => !a.isUsed && !exclude.has(a.address))
     return (unused ?? receiving[receiving.length - 1]).address
   }
 

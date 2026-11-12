@@ -20,8 +20,8 @@ describe('transaction address ownership', () => {
 
   it('recognizes Platform addresses and identities without marking unknown participants or empty sources as owned', () => {
     const owned = platformOwnedParticipants([
-      { platformAddress: 'platform-address', balanceCredits: 0n, nonce: 1, label: null },
-      { platformAddress: '', balanceCredits: 0n, nonce: 0, label: null },
+      { platformAddress: 'platform-address', balanceCredits: 0n, nonce: 1 },
+      { platformAddress: '', balanceCredits: 0n, nonce: 0 },
     ], [{ identifier: 'identity-id' }, { identifier: '' }])
     expect(owned.has('platform-address')).toBe(true)
     expect(owned.has('external-address')).toBe(false)

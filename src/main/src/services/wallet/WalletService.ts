@@ -4,6 +4,7 @@ import {PlatformWorkerService} from '../platform/PlatformWorkerService'
 import {WalletDAO} from '../../database/WalletDAO'
 import {AddressDAO} from '../../database/AddressDAO'
 import {TransactionDAO} from '../../database/TransactionDAO'
+import {PaymentRequestDAO} from '../../database/PaymentRequestDAO'
 import {IdentityDAO} from '../../database/IdentityDAO'
 import {PlatformTransactionDAO} from '../../database/PlatformTransactionDAO'
 import {WalletProviderFactory} from '../../providers/WalletProviderFactory'
@@ -54,6 +55,7 @@ export class WalletService {
   private walletDAO: WalletDAO
   private addressDAO: AddressDAO
   private transactionDAO: TransactionDAO
+  private paymentRequestDAO: PaymentRequestDAO
   private identityDAO: IdentityDAO
   private platformTransactionDAO: PlatformTransactionDAO
   private identities: IdentityService
@@ -73,6 +75,7 @@ export class WalletService {
     walletDAO: WalletDAO,
     addressDAO: AddressDAO,
     transactionDAO: TransactionDAO,
+    paymentRequestDAO: PaymentRequestDAO,
     identityDAO: IdentityDAO,
     platformTransactionDAO: PlatformTransactionDAO,
     identities: IdentityService,
@@ -88,6 +91,7 @@ export class WalletService {
     this.walletDAO = walletDAO
     this.addressDAO = addressDAO
     this.transactionDAO = transactionDAO
+    this.paymentRequestDAO = paymentRequestDAO
     this.identityDAO = identityDAO
     this.platformTransactionDAO = platformTransactionDAO
     this.identities = identities
@@ -270,8 +274,9 @@ export class WalletService {
   async getReceiveAddress(walletId: string): Promise<string> {
     const wallet = await requireWallet(this.walletDAO, walletId)
 
+    const reserved = new Set((await this.paymentRequestDAO.getRequests(walletId)).map(request => request.address))
     const provider = this.providers.forWallet(wallet.walletId, wallet.network)
-    return provider.nextUnusedAddress()
+    return provider.nextUnusedAddress(reserved)
   }
 
   async getAddressesByWalletId(walletId: string): Promise<GroupedAddresses> {

@@ -7,7 +7,6 @@ import ListSkeleton from '@renderer/components/ui/Skeleton'
 import ShieldedUnlockModal from '@renderer/components/modal/ShieldedUnlockModal'
 import ShieldedNotesAlert from '@renderer/components/ui/ShieldedNotesAlert'
 import { API } from '@renderer/api'
-import type { ShieldedAddressDto } from '@renderer/api/types'
 import { useShieldedSyncState } from '@renderer/hooks/useShielded'
 import { shieldedBalancesByAddress } from '@renderer/utils/shieldedBalances'
 import { creditsToDuffs } from '@renderer/utils/balance'
@@ -22,7 +21,7 @@ import {
 import { useBalanceVisibility } from '@renderer/hooks/useBalanceVisibility'
 
 export default function ShieldedAddressTab({ walletId }: { walletId: string | undefined }): React.JSX.Element {
-  const [addresses, setAddresses] = useState<ShieldedAddressDto[] | null>(null)
+  const [addresses, setAddresses] = useState<string[] | null>(null)
   const [checking, setChecking] = useState(true)
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -141,7 +140,7 @@ export default function ShieldedAddressTab({ walletId }: { walletId: string | un
     <>
     <div className={"flex flex-col gap-[.625rem]"}>
       <ShieldedNotesAlert walletId={walletId} onSync={() => setSyncOpen(true)} syncing={syncRunning} />
-      {addresses.map(({address}) => {
+      {addresses.map((address) => {
         const credits = balances.get(address) ?? 0n
         return (
           <AddressRow

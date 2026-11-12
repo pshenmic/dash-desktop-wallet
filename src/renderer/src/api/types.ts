@@ -45,13 +45,6 @@ export interface PlatformAddressDto {
   platformAddress: string
   balanceCredits: bigint
   nonce: number
-  label: string | null
-}
-
-// getShieldedAddresses
-export interface ShieldedAddressDto {
-  address: string
-  label: string | null
 }
 
 // getDashPayContacts, sendDashPayContactRequest. Timestamps are milliseconds.

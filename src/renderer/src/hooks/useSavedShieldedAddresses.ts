@@ -19,7 +19,7 @@ export function useSavedShieldedAddresses(enabled: boolean, refreshKey: unknown)
     setLoading(true)
     setErrorMessage(null)
     API.getShieldedAddresses(walletId)
-      .then(addresses => { if (!cancelled) setAddresses((addresses ?? []).map(a => a.address)) })
+      .then(addresses => { if (!cancelled) setAddresses(addresses ?? []) })
       .catch(error => { if (!cancelled) setErrorMessage(getErrorMessage(error)) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }

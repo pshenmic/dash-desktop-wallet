@@ -71,7 +71,6 @@ describe('bulk inserts past the compound-select limit', () => {
       address: `platform-${index}`,
       derivationPath: `m/9'/1'/17'/0'/0'/${index}`,
       isUsed: false,
-      label: null,
     })))
 
     expect(await dao.getAddresses(WALLET)).toHaveLength(OVER_LIMIT)
@@ -84,7 +83,6 @@ describe('bulk inserts past the compound-select limit', () => {
       index,
       address: `shielded-${index}`,
       isUsed: false,
-      label: null,
     })))
 
     expect(await dao.getAddresses(WALLET)).toHaveLength(OVER_LIMIT)

@@ -16,7 +16,7 @@ import {requireWallet} from '../../utils/requireWallet'
 // The wallet's DIP-17 transparent addresses: the account xpub, the gap window
 // over it, and the balance and nonce that decide what each one can fund.
 //
-// Reads and labels. Everything that spends what these hold is PlatformTransferService.
+// Reads only. Everything that spends what these hold is PlatformTransferService.
 export class PlatformAddressService {
   private walletDAO: WalletDAO
   private platformAddressDAO: PlatformAddressDAO
@@ -37,7 +37,6 @@ export class PlatformAddressService {
       platformAddress: candidate.platformAddress,
       balanceCredits: candidate.balanceCredits,
       nonce: candidate.nonce,
-      label: candidate.label,
     }))
   }
 
@@ -60,7 +59,6 @@ export class PlatformAddressService {
       index: row.index,
       balanceCredits: infos.get(row.address)?.balance ?? 0n,
       nonce: infos.get(row.address)?.nonce ?? 0,
-      label: row.label,
     }))
   }
 
@@ -78,10 +76,6 @@ export class PlatformAddressService {
     await this.platformAddressDAO.insertAddresses([this.addressRow(walletId, derived)])
 
     return this.getPlatformAddresses(walletId)
-  }
-
-  async setAddressLabel(walletId: string, address: string, label: string): Promise<void> {
-    return this.platformAddressDAO.setAddressLabel(walletId, address, label)
   }
 
   // A walk is several sequential worker round trips, on a channel the renderer
@@ -171,7 +165,6 @@ export class PlatformAddressService {
       address: derived.address,
       derivationPath: derived.derivationPath,
       isUsed: false,
-      label: null,
     }
   }
 }

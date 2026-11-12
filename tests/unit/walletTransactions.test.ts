@@ -305,7 +305,7 @@ describe('transaction ownership', () => {
       })),
       getPlatformAddresses: vi.fn(async (walletId: string) => [{platformAddress: `${walletId}-platform`}]),
       getIdentities: vi.fn(async (walletId: string) => [{identifier: `${walletId}-identity`}]),
-      getShieldedAddresses: vi.fn(async (walletId: string) => [{address: `${walletId}-shielded`, label: null}]),
+      getShieldedAddresses: vi.fn(async (walletId: string) => [`${walletId}-shielded`]),
     }
     vi.stubGlobal('window', {electronAPI: api})
     expect(await fetchTransactionOwnership('wallet-a')).toEqual({

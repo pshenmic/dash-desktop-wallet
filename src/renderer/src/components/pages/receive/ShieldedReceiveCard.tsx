@@ -12,7 +12,6 @@ import { useAuth } from '@renderer/contexts/AuthContext'
 import { defaultReceiveShieldedAddress, receiveShieldedAddresses } from '@renderer/utils/receiveDefaults'
 import { shieldedBalancesByAddress } from '@renderer/utils/shieldedBalances'
 import { API } from '@renderer/api'
-import type { ShieldedAddressDto } from '@renderer/api/types'
 import { addressFormCopy, INVALID_WALLET_PASSWORD_MESSAGE, receiveCardCopy } from '@renderer/constants'
 import { SURFACE_SECTION } from '@renderer/constants/surfaces'
 import { RECEIVE_INVOICE_ADDRESS_LABELS } from '@renderer/constants/receiveInvoice'
@@ -20,7 +19,7 @@ import { useShieldedSyncState } from '@renderer/hooks/useShielded'
 import { ShieldedSyncPhase } from '@renderer/enums/ShieldedSyncPhase'
 
 export default function ShieldedReceiveCard({ walletId }: { walletId: string | undefined }): React.JSX.Element {
-  const [addresses, setAddresses] = useState<ShieldedAddressDto[] | null>(null)
+  const [addresses, setAddresses] = useState<string[] | null>(null)
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null)
   const [checking, setChecking] = useState(true)
   const [password, setPassword] = useState('')
@@ -64,7 +63,7 @@ export default function ShieldedReceiveCard({ walletId }: { walletId: string | u
       }
       const nextAddresses = await API.addShieldedAddress(walletId, password)
       setAddresses(nextAddresses)
-      setSelectedAddress(defaultReceiveShieldedAddress(nextAddresses.map(a => a.address), balances) ?? null)
+      setSelectedAddress(defaultReceiveShieldedAddress(nextAddresses, balances) ?? null)
       setPassword('')
     } catch {
       setError(addressFormCopy.addFailed)
@@ -96,7 +95,7 @@ export default function ShieldedReceiveCard({ walletId }: { walletId: string | u
   }
 
   if (addresses !== null) {
-    const receiveAddresses = receiveShieldedAddresses(addresses.map(a => a.address), balances)
+    const receiveAddresses = receiveShieldedAddresses(addresses, balances)
     if (receiveAddresses.length === 0) {
       return (
         <div className={`flex max-w-115 flex-col gap-3 ${SURFACE_SECTION}`}>

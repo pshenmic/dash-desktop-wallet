@@ -63,9 +63,14 @@ interface SelectableUtxoDTO {
   isLocked: boolean
 }
 
-interface ShieldedAddressDTO {
+interface PaymentRequestDTO {
+  id: number
+  walletId: string
   address: string
+  amountDuffs: bigint | null
   label: string | null
+  message: string | null
+  createdAt: number
 }
 
 // Hand-maintained alongside definitions.ts, and deliberately a second
@@ -175,7 +180,6 @@ declare global {
       getIdentityNonce: (identifier: string) => Promise<bigint>
       getPlatformAddresses: (walletId: string) => Promise<unknown>
       addPlatformAddress: (walletId: string) => Promise<unknown>
-      setPlatformAddressLabel: (walletId: string, address: string, label: string) => Promise<void>
       deleteWallet: (walletId: string) => Promise<void>
       selectWallet: (walletId: string) => Promise<void>
       getWalletBalance: (walletId: string) => Promise<unknown>
@@ -237,6 +241,9 @@ declare global {
       getContacts: (network?: Network) => Promise<unknown>
       addContact: (label: string, address: string, network: Network) => Promise<void>
       deleteContact: (id: number) => Promise<void>
+      createPaymentRequest: (walletId: string, address: string, amountDuffs: bigint | null, label: string | null, message: string | null) => Promise<void>
+      getPaymentRequests: (walletId: string) => Promise<PaymentRequestDTO[]>
+      deletePaymentRequest: (walletId: string, id: number) => Promise<void>
       getShieldedStatus: () => Promise<{ prover: 'idle' | 'preparing' | 'ready' | 'error'; ready: boolean; error: string | null }>
       getShieldedPoolInfo: (network: Network) => Promise<{ poolState: bigint | null; notesCount: bigint | null }>
       getShieldedNotesInfo: (walletId: string) => Promise<{ undecodedCount: number }>
@@ -249,9 +256,8 @@ declare global {
       startShieldedIdentityCreate: (walletId: string, denominationCredits: bigint, password: string) => Promise<{ phase: 'idle' | 'syncing' | 'proving' | 'broadcasting' | 'done' | 'error'; fetched: number; total: number; stHash: string | null; identityId: string | null; error: string | null }>
       getShieldedSpendState: (walletId: string) => Promise<{ phase: 'idle' | 'syncing' | 'proving' | 'broadcasting' | 'done' | 'error'; fetched: number; total: number; stHash: string | null; identityId: string | null; error: string | null }>
       getShieldedAddress: (walletId: string, password?: string) => Promise<string | null>
-      getShieldedAddresses: (walletId: string, password?: string) => Promise<ShieldedAddressDTO[] | null>
-      addShieldedAddress: (walletId: string, password: string) => Promise<ShieldedAddressDTO[]>
-      setShieldedAddressLabel: (walletId: string, address: string, label: string) => Promise<void>
+      getShieldedAddresses: (walletId: string, password?: string) => Promise<string[] | null>
+      addShieldedAddress: (walletId: string, password: string) => Promise<string[]>
     }
     darkMode: {
       get: () => Promise<boolean>

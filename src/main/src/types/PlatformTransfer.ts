@@ -6,7 +6,6 @@ export interface PlatformSourceCandidate {
   index: number
   balanceCredits: bigint
   nonce: number
-  label: string | null
 }
 
 export interface PlatformInputSelection {

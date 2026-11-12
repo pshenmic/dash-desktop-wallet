@@ -27,7 +27,7 @@ export interface WalletProvider {
   getConnectionStatus(): Promise<ConnectionStatus>
   // "Unused" is whatever the provider's own source of truth says: chain state
   // over the API, or the local SPV store.
-  nextUnusedAddress(): Promise<string>
+  nextUnusedAddress(exclude?: Set<string>): Promise<string>
   getUsedAddresses(addresses: string[]): Promise<string[]>
   // Null means the source cannot run the gap walk itself, and the caller has to
   // widen the window round by round through getUsedAddresses.

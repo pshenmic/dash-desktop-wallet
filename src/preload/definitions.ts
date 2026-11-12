@@ -71,7 +71,6 @@ export const apiDefinitions = (ipcRenderer) => ({
   getIdentityNonce: (identifier: string): Promise<bigint> => ipcRenderer.invoke('getIdentityNonce', identifier),
   getPlatformAddresses: (walletId: string) => ipcRenderer.invoke('getPlatformAddresses', walletId),
   addPlatformAddress: (walletId: string) => ipcRenderer.invoke('addPlatformAddress', walletId),
-  setPlatformAddressLabel: (walletId: string, address: string, label: string) => ipcRenderer.invoke('setPlatformAddressLabel', walletId, address, label),
   setAddressLabel: (walletId: string, address: string, label: string) => ipcRenderer.invoke('setAddressLabel', walletId, address, label),
   setWalletLabel: (walletId: string, label: string | null) => ipcRenderer.invoke('setWalletLabel', walletId, label),
   sendTransaction: (walletId: string, recipients: CoreRecipient[], password: string, source?: CoreSpendSource, changeTo?: string) => ipcRenderer.invoke('sendTransaction', walletId, recipients, password, source, changeTo),
@@ -136,6 +135,10 @@ export const apiDefinitions = (ipcRenderer) => ({
   addContact: (label: string, address: string, network: Network) => ipcRenderer.invoke('addContact', label, address, network),
   deleteContact: (id: number) => ipcRenderer.invoke('deleteContact', id),
 
+  createPaymentRequest: (walletId: string, address: string, amountDuffs: bigint | null, label: string | null, message: string | null) => ipcRenderer.invoke('createPaymentRequest', walletId, address, amountDuffs, label, message),
+  getPaymentRequests: (walletId: string) => ipcRenderer.invoke('getPaymentRequests', walletId),
+  deletePaymentRequest: (walletId: string, id: number) => ipcRenderer.invoke('deletePaymentRequest', walletId, id),
+
   getShieldedStatus: () => ipcRenderer.invoke('getShieldedStatus'),
   getShieldedPoolInfo: (network: Network) => ipcRenderer.invoke('getShieldedPoolInfo', network),
   getShieldedNotesInfo: (walletId: string) => ipcRenderer.invoke('getShieldedNotesInfo', walletId),
@@ -150,5 +153,4 @@ export const apiDefinitions = (ipcRenderer) => ({
   getShieldedAddress: (walletId: string, password?: string) => ipcRenderer.invoke('getShieldedAddress', walletId, password),
   getShieldedAddresses: (walletId: string, password?: string) => ipcRenderer.invoke('getShieldedAddresses', walletId, password),
   addShieldedAddress: (walletId: string, password: string) => ipcRenderer.invoke('addShieldedAddress', walletId, password),
-  setShieldedAddressLabel: (walletId: string, address: string, label: string) => ipcRenderer.invoke('setShieldedAddressLabel', walletId, address, label),
 })

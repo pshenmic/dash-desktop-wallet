@@ -111,7 +111,7 @@ export class P2PWalletProvider implements WalletProvider {
     return status.phase === 'synced' ? 'synced' : 'syncing'
   }
 
-  async nextUnusedAddress(): Promise<string> {
+  async nextUnusedAddress(exclude: Set<string> = new Set()): Promise<string> {
     const {receiving} = await this.addressDAO.getAddressesByWalletId(this.walletId)
     if (receiving.length === 0) throw new Error('Wallet has no receiving addresses')
 
@@ -119,7 +119,7 @@ export class P2PWalletProvider implements WalletProvider {
       await this.transactionDAO.getUsedAddresses(this.walletId, receiving.map(a => a.address)),
     )
 
-    return (receiving.find(({address}) => !used.has(address)) ?? receiving[receiving.length - 1]).address
+    return (receiving.find(({address}) => !used.has(address) && !exclude.has(address)) ?? receiving[receiving.length - 1]).address
   }
 
   async getUsedAddresses(addresses: string[]): Promise<string[]> {
