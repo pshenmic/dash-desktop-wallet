@@ -20,7 +20,7 @@ import type { TransferConfirmModalProps } from '@renderer/types/TransferConfirmM
 import { API } from '@renderer/api'
 import { INVALID_WALLET_PASSWORD_MESSAGE } from '@renderer/constants'
 import { SURFACE_SECTION } from '@renderer/constants/surfaces'
-import { SEND_BROADCASTING_LABEL, SEND_INPUTS_CHANGED_MESSAGE } from '@renderer/constants/sendConfirmModal'
+import { SEND_BROADCASTING_LABEL, SEND_CANCEL_DELAY_MS, SEND_INPUTS_CHANGED_MESSAGE } from '@renderer/constants/sendConfirmModal'
 
 export default function TransferConfirmModal({
   isOpen,
@@ -49,7 +49,9 @@ export default function TransferConfirmModal({
   const [result, setResult] = useState<PlatformSendResult | null>(null)
   const [sentRecipients, setSentRecipients] = useState<RecipientSummaryProps | null>(null)
   const [auto, setAuto] = useState(false)
+  const [cancellable, setCancellable] = useState(false)
   const autoStarted = useRef(false)
+  const runId = useRef(0)
   const [seenOpen, setSeenOpen] = useState(false)
 
   if (isOpen !== seenOpen) {
@@ -61,10 +63,12 @@ export default function TransferConfirmModal({
       setResult(null)
       setSentRecipients(null)
       setAuto(Boolean(presetPassword))
+      setCancellable(false)
     }
   }
 
   const abort = (preset: boolean): void => {
+    setCancellable(false)
     if (preset) onClose()
     else setPhase(ConfirmModalPhase.Confirm)
   }
@@ -75,6 +79,8 @@ export default function TransferConfirmModal({
       abort(preset)
       return
     }
+    const id = ++runId.current
+    setCancellable(false)
     try {
       setSentRecipients(recipients ? {
         recipients: recipients.map(recipient => ({ ...recipient })),
@@ -82,18 +88,36 @@ export default function TransferConfirmModal({
         feeCredits,
       } : null)
       const res = await run(secret)
+      if (runId.current !== id) {
+        onSuccess()
+        return
+      }
+      setCancellable(false)
       setResult(res)
       setPhase(ConfirmModalPhase.Done)
       onSuccess()
     } catch (e) {
+      if (runId.current !== id) return
       console.error('Transfer failed', e)
       toast.error(getErrorMessage(e))
       abort(preset)
     }
   }
 
+  const sending = phase === ConfirmModalPhase.Sending
+
+  useEffect(() => {
+    if (!isOpen || !sending) {
+      setCancellable(false)
+      return
+    }
+    const timer = setTimeout(() => setCancellable(true), SEND_CANCEL_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [isOpen, sending])
+
   useEffect(() => {
     if (!isOpen) {
+      runId.current++
       autoStarted.current = false
       return
     }
@@ -104,27 +128,36 @@ export default function TransferConfirmModal({
     }
   }, [isOpen])
 
-  const sending = phase === ConfirmModalPhase.Sending
+  const cancelAllowed = !sending || cancellable
 
   const handleConfirm = async (): Promise<void> => {
     if (!walletId || password.length === 0 || sending || !sourceValidRef.current) return
+    const id = ++runId.current
     setPhase(ConfirmModalPhase.Sending)
     setPasswordInvalid(false)
+    setCancellable(false)
     try {
-      if (await API.verifyWalletPassword(walletId, password)) {
+      const valid = await API.verifyWalletPassword(walletId, password)
+      if (runId.current !== id) return
+      if (valid) {
         await submit(password, false)
         return
       }
       setPasswordInvalid(true)
     } catch (e) {
+      if (runId.current !== id) return
       console.error('Transfer failed', e)
       toast.error(getErrorMessage(e))
     }
+    setCancellable(false)
     setPhase(ConfirmModalPhase.Confirm)
   }
 
   const requestClose = (): void => {
-    if (sending) return
+    if (!cancelAllowed) return
+    runId.current++
+    setCancellable(false)
+    if (sending) setPhase(ConfirmModalPhase.Confirm)
     onClose()
   }
 
@@ -134,7 +167,7 @@ export default function TransferConfirmModal({
       onClose={requestClose}
       title={phase === ConfirmModalPhase.Done ? successTitle : title}
       size={ModalSize.Lg}
-      dismissible={!sending}
+      dismissible={cancelAllowed}
     >
       {phase !== ConfirmModalPhase.Done ? auto ? (
         <div className={"phase-fade-in"} key={"pending"}>
@@ -155,7 +188,7 @@ export default function TransferConfirmModal({
           />
 
           <ModalActions
-            secondary={{ label: 'Cancel', onClick: requestClose, disabled: sending }}
+            secondary={{ label: 'Cancel', onClick: requestClose, disabled: !cancelAllowed }}
             primary={{
               label: sending ? 'Sending…' : advanced ? 'Sign & Send' : 'Confirm',
               onClick: handleConfirm,
