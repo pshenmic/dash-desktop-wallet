@@ -75,6 +75,7 @@ import {ShieldToPoolHandler} from "./api/wallet/shieldToPool";
 import {SelectWallet} from "./api/wallet/selectWallet";
 import {VerifyWalletPasswordHandler} from "./api/wallet/verifyWalletPassword";
 import {ExportMnemonicHandler} from "./api/wallet/exportMnemonic";
+import {ExportKeyByAddressHandler} from './api/wallet/exportKeyByAddress'
 import {VerifyWalletMnemonicHandler} from "./api/wallet/verifyWalletMnemonic";
 import {ResetWalletPasswordHandler} from "./api/wallet/resetWalletPassword";
 import {SetLanguageHandler} from "./api/setLanguage";
@@ -239,6 +240,7 @@ export class WalletBackend {
     registerHandler('shieldToPool', new ShieldToPoolHandler(this.platformTransferService).handle)
     registerHandler('verifyWalletPassword', new VerifyWalletPasswordHandler(this.walletCredentialsService).handle)
     registerHandler('exportMnemonic', new ExportMnemonicHandler(this.walletCredentialsService).handle)
+    registerHandler('exportKeyByAddress', new ExportKeyByAddressHandler(this.walletCredentialsService).handle)
     registerHandler('verifyWalletMnemonic', new VerifyWalletMnemonicHandler(this.walletCredentialsService).handle)
     registerHandler('resetWalletPassword', new ResetWalletPasswordHandler(this.walletCredentialsService).handle)
     registerHandler('getPreferences', new GetPreferencesHandler(this.applicationService).handle)
@@ -343,9 +345,9 @@ export class WalletBackend {
     const masternodeKeyDAO = new MasternodeKeyDAO(knex)
     this.masternodeService = new MasternodeService(walletDAO, masternodeKeyDAO, masternodeDAO, providers)
     this.walletSyncService.watchedProvidersOf = masternodeDAO.getFollowedProTxHashes
-    this.walletCredentialsService = new WalletCredentialsService(walletDAO, addressDAO, masternodeKeyDAO, calibratedIterations)
-    this.identityService = new IdentityService(walletDAO, identityDAO, dashPayCache, this.platformWorkerService)
     const platformAddressDAO = new PlatformAddressDAO(knex)
+    this.walletCredentialsService = new WalletCredentialsService(walletDAO, addressDAO, masternodeKeyDAO, platformAddressDAO, calibratedIterations)
+    this.identityService = new IdentityService(walletDAO, identityDAO, dashPayCache, this.platformWorkerService)
     const shieldedNoteDAO = new ShieldedNoteDAO(knex)
     const platformTransactionDAO = new PlatformTransactionDAO(knex)
     const shieldedPoolDAO = new ShieldedPoolDAO(knex)

@@ -10,6 +10,7 @@ import {WalletDAO} from '../../src/main/src/database/WalletDAO'
 import {AddressDAO} from '../../src/main/src/database/AddressDAO'
 import {IdentityDAO} from '../../src/main/src/database/IdentityDAO'
 import {DashPayCache} from '../../src/main/src/database/DashPayCache'
+import {PlatformAddressDAO} from '../../src/main/src/database/PlatformAddressDAO'
 import {PlatformTransactionDAO} from '../../src/main/src/database/PlatformTransactionDAO'
 import {MasternodeKeyDAO} from '../../src/main/src/database/MasternodeKeyDAO'
 import {MasternodeDAO} from '../../src/main/src/database/MasternodeDAO'
@@ -83,7 +84,7 @@ export async function harness(): Promise<Harness> {
   const coreLockService = new CoreLockService(walletDAO, addressDAO, walletSyncService, coreTransactionService, providers, preferences)
 
   const masternodeKeyDAO = new MasternodeKeyDAO(knex)
-  const walletCredentialsService = new WalletCredentialsService(walletDAO, addressDAO, masternodeKeyDAO, TEST_PBKDF2_ITERATIONS)
+  const walletCredentialsService = new WalletCredentialsService(walletDAO, addressDAO, masternodeKeyDAO, new PlatformAddressDAO(knex), TEST_PBKDF2_ITERATIONS)
   const identityService = new IdentityService(walletDAO, identityDAO, dashPayCache, platform)
 
   // Stubbed rather than built: the real one reads the platform explorer, and
