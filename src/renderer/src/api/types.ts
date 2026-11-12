@@ -111,6 +111,14 @@ export interface IdentityKeysUpdateDto {
   disable: number[]
 }
 
+export interface AddressKeyInfoDto {
+  address: string
+  path: string
+  publicKey: Uint8Array
+  privateKey: Uint8Array
+  wif: string
+}
+
 // getIdentityPrivateKeys: a key another wallet added is absent.
 export interface IdentityPrivateKeyDto {
   keyId: number

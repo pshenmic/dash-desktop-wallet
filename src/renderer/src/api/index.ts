@@ -1,6 +1,6 @@
 import { WalletTxDto } from '@renderer/types/WalletTransaction'
 import { TransferOperation } from '../enums/TransferOperation'
-import { UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, SelectableUtxo} from './types'
+import { AddressKeyInfoDto, UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, SelectableUtxo} from './types'
 
 export class API {
   private static get api() {
@@ -244,6 +244,10 @@ export class API {
 
   static async exportMnemonic(walletId: string, password: string): Promise<string> {
     return this.api.exportMnemonic(walletId, password)
+  }
+
+  static async exportKeyByAddress(walletId: string, address: string, password: string): Promise<AddressKeyInfoDto> {
+    return this.api.exportKeyByAddress(walletId, address, password) as Promise<AddressKeyInfoDto>
   }
 
   static async verifyWalletMnemonic(walletId: string, mnemonic: string): Promise<boolean> {
