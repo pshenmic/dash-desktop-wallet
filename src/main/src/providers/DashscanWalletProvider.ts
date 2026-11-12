@@ -10,12 +10,15 @@ import {WalletDAO} from '../database/WalletDAO'
 import {dashscanToWalletTransactions} from '../utils/dashscanTransactions'
 import {dedupeTransactions} from '../utils/dedupeTransactions'
 import {networkMasternode} from '../utils/masternodes'
+import {dashscanProposal, isStaleProposal} from '../utils/governance'
+import {Proposal, ProposalTally} from '../types/Governance'
 import {MasternodeKeyFilter, NetworkMasternode} from '../types/Masternode'
 import {
   DashscanAddressInfo,
   DashscanCursorPage,
   DashscanMasternode,
   DashscanPage,
+  DashscanProposal,
   DashscanTransaction,
   DashscanUTXO,
   DashscanXpubAddress,
@@ -330,6 +333,30 @@ export class DashscanWalletProvider implements WalletProvider {
   // Each list answer carries the live payout, so there is nothing to follow.
   async watchMasternodes(): Promise<string[]> {
     return []
+  }
+
+  // The endpoint serves triggers and long-ended proposals as well.
+  async getProposals(): Promise<Proposal[]> {
+    const now = Math.floor(Date.now() / 1000)
+    return (await this.proposalRows()).map(dashscanProposal).filter(proposal => !isStaleProposal(proposal, now, this.network))
+  }
+
+  async getProposalTally(proposalHash: string): Promise<ProposalTally> {
+    const row = (await this.proposalRows()).find(({hash}) => hash === proposalHash)
+    if (row == null) throw new Error(`Unknown proposal ${proposalHash}`)
+    return {yes: row.yesCount, no: row.noCount, abstain: row.abstainCount}
+  }
+
+  async getProposalVotes(): Promise<null> {
+    return null
+  }
+
+  // Every read asks Dashscan afresh.
+  async refreshGovernance(): Promise<void> {}
+
+  private async proposalRows(): Promise<DashscanProposal[]> {
+    const rows = await requestJson<DashscanProposal[]>(this.request, '/governance/proposals')
+    return rows.filter(({objectType}) => objectType === 'Proposal')
   }
 
   // A provider instance serves one operation, and getTransactions runs once per

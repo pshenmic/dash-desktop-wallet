@@ -15,6 +15,8 @@ import {ConnectionStatus} from '../types/ConnectionStatus'
 import {Masternode, MasternodeKeyFilter, NetworkMasternode} from '../types/Masternode'
 import {Network} from '../types/Network'
 import {nodeKey} from '../utils/masternodes'
+import {GovernanceVote, Proposal, ProposalTally} from '../types/Governance'
+import {isStaleProposal, proposalTally} from '../utils/governance'
 import {Logger} from '../utils/logger'
 
 const log = new Logger('prevout')
@@ -149,6 +151,27 @@ export class P2PWalletProvider implements WalletProvider {
     await this.walletSyncService.watchProviders(this.walletId, owned.map(({proTxHash}) => proTxHash),
       rewound.length > 0 ? Math.min(...rewound.map(({registeredHeight}) => registeredHeight!)) : undefined)
     return rewound.map(({proTxHash}) => proTxHash)
+  }
+
+  // chain.db drops stale proposals as it opens; one that went stale since is dropped here.
+  async getProposals(): Promise<Proposal[] | null> {
+    const now = Math.floor(Date.now() / 1000)
+    return this.walletSyncService.getProposals(this.network)?.filter(proposal => !isStaleProposal(proposal, now, this.network)) ?? null
+  }
+
+  // Each vote is checked against the proven list's current voting key.
+  async getProposalTally(proposalHash: string): Promise<ProposalTally | null> {
+    const votes = await this.getProposalVotes(proposalHash)
+    const masternodes = this.walletSyncService.getMasternodeList(this.network)
+    return votes == null || masternodes == null ? null : proposalTally(votes, masternodes)
+  }
+
+  async getProposalVotes(proposalHash: string): Promise<GovernanceVote[] | null> {
+    return this.walletSyncService.getProposalVotes(this.network, proposalHash)
+  }
+
+  async refreshGovernance(proposalHash?: string): Promise<void> {
+    this.walletSyncService.refreshGovernance(proposalHash)
   }
 
   private p2pkhScript(address: string): Script {

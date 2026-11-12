@@ -7,8 +7,9 @@ import type {ProUpRegTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRegTx.j
 import {hexToBytes} from '@noble/hashes/utils.js'
 import type {NetworkMasternode} from '../../src/types/Masternode'
 import type {Network} from '../../src/types/Network'
+import {CBTX_VERSION_V24} from '../constants'
 import type {PayoutUpdate, ProviderRegistration} from '../types/masternodeList'
-import {wireToDisplayHex} from './byteOrder'
+import {isZeroHash, wireToDisplayHex} from './byteOrder'
 import {hashHeaderRaw} from './pow'
 
 // Null when the entries do not hash to the merkleRootMNList the coinbase commits to.
@@ -39,14 +40,18 @@ export function committedQuorums(diff: MnListDiff, header: Uint8Array, previous:
     diff.calcBlockMerkleRoot() === wireToDisplayHex(header.subarray(36, 68)) ? quorums : null
 }
 
-// A full list (zero base) is trusted only when `header`, the block at its
-// coinbase height on our own chain, proves the coinbase and that coinbase's
-// merkleRootMNList covers every entry.
-export function listCommitted(diff: MnListDiff, header: Uint8Array): boolean {
-  return !/[^0]/.test(diff.baseBlockHash) &&
-    hashHeaderRaw(header) === diff.blockHash &&
+// The list after applying `diff` to `previous`, or null unless `header`, our own
+// chain's at the coinbase height, proves the coinbase and its merkleRootMNList the list.
+export function committedList(diff: MnListDiff, header: Uint8Array, previous: SimplifiedMNListEntry[]): SimplifiedMNListEntry[] | null {
+  const replaced = new Set([...diff.deletedMNs, ...diff.mnList.map(({proRegTxHash}) => proRegTxHash)])
+  const entries = [...previous.filter(({proRegTxHash}) => !replaced.has(proRegTxHash)), ...diff.mnList]
+  return hashHeaderRaw(header) === diff.blockHash &&
     diff.calcBlockMerkleRoot() === wireToDisplayHex(header.subarray(36, 68)) &&
-    diff.merkleRootMNList === MnListDiff.calcMerkleRootMNList(diff.mnList)
+    diff.merkleRootMNList === MnListDiff.calcMerkleRootMNList(entries) ? entries : null
+}
+
+export function isV24Active(diff: MnListDiff): boolean {
+  return ((diff.cbTx.extraPayload as {version?: number} | undefined)?.version ?? 0) >= CBTX_VERSION_V24
 }
 
 // Null unless `tx` is the ProRegTx of `proTxHash`. A null collateral outpoint
@@ -55,7 +60,7 @@ export function providerRegistration(tx: Transaction, proTxHash: string, height:
   if (tx.type !== TransactionType.TRANSACTION_PROVIDER_REGISTER || tx.hash() !== proTxHash) return null
   const payload = tx.extraPayload as ProRegTX
   const {txId, vOut} = payload.collateralOutpoint
-  const internal = !/[^0]/.test(txId)
+  const internal = isZeroHash(txId)
   return {
     height,
     isEvo: payload.type === MnType.Evo,

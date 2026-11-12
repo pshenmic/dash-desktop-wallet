@@ -1,11 +1,11 @@
 import type {Block} from 'dash-core-sdk'
-import type {Message, MnListDiff, Peer, SimplifiedMNListEntry} from 'dash-core-p2p'
-import {MASTERNODE_MIN_CONFIRMATIONS, MNLIST_PENDING_REFRESH_MS, MNLIST_REFRESH_MS, REGISTRATION_BLOCKS_INFLIGHT} from '../constants'
+import type {Message, Peer, SimplifiedMNListEntry} from 'dash-core-p2p'
+import {MASTERNODE_MIN_CONFIRMATIONS, REGISTRATION_BLOCKS_INFLIGHT} from '../constants'
 import {PeerRotation} from '../net/peerRotation'
 import type {ChainStore} from '../store/ChainStore'
 import type {MasternodeListOptions, PayoutUpdate, ProviderRegistration} from '../types/masternodeList'
-import {displayHexToWire} from '../utils/byteOrder'
-import {listCommitted, listedMasternode, providerRegistration} from '../utils/masternodeList'
+import {displayHexToWire, isZeroHash} from '../utils/byteOrder'
+import {listedMasternode, providerRegistration} from '../utils/masternodeList'
 import {txsMatchMerkleRoot} from '../utils/merkle'
 import {hashHeaderRaw} from '../utils/pow'
 import {BlockFetcher} from './blockFetcher'
@@ -13,80 +13,70 @@ import {Logger} from '../../src/utils/logger'
 
 const log = new Logger('p2p')
 
-// The masternode list as the wallet sees it: each verified full list joined with
-// what every node's ProRegTx committed to, which the list itself does not carry.
+// The masternode list as the wallet sees it: each proven list joined with what
+// every node's ProRegTx committed to, which the list itself does not carry.
 // A registration is read once from the block confirmedHash points below and kept
 // in chain.db, so only nodes new since the last list cost a block.
 export class ProviderRegistry {
   private store: ChainStore | null = null
   private registrations = new Map<string, ProviderRegistration>()
   private entries: SimplifiedMNListEntry[] | null = null
-  private acceptedAt = 0
+  // The newest list handed in while one is being indexed.
+  private next: {store: ChainStore; height: number; entries: SimplifiedMNListEntry[]} | null = null
   private fetcher: BlockFetcher | null = null
   // Block hash (display) → height and the registrations it holds.
   private wanted = new Map<string, {height: number; proTxHashes: string[]}>()
   // Not where confirmedHash says, so not asked again this session.
   private unresolvable = new Set<string>()
-  // The last list held a node whose registration could not be read yet.
-  private pending = false
   private offering = false
 
   constructor(private readonly opts: MasternodeListOptions) {}
 
-  get due(): boolean {
-    return !this.offering && this.wanted.size === 0 &&
-      Date.now() - this.acceptedAt >= (this.pending ? MNLIST_PENDING_REFRESH_MS : MNLIST_REFRESH_MS)
-  }
-
-  // A full list only counts once our own chain proves it; one the header sync has
-  // not reached yet is dropped, and the next tip asks again. Several peers answer
-  // the same request, so a second list arriving mid-offer is turned away.
-  async offer(diff: MnListDiff): Promise<void> {
-    const store = this.opts.chain()
-    const height = diff.coinbaseHeight
-    // A quorum diff from followTip races the full list; it must not hold the slot.
-    if (store == null || height == null || /[^0]/.test(diff.baseBlockHash) || !this.due) return
+  // Takes a list already proven at `height` on our chain.
+  async offer(store: ChainStore, height: number, entries: SimplifiedMNListEntry[]): Promise<void> {
+    this.next = {store, height, entries}
+    if (this.offering) return
     this.offering = true
     try {
-      await this.index(diff, store, height)
+      while (this.next != null) {
+        const next = this.next
+        this.next = null
+        await this.index(next.store, next.height, next.entries)
+      }
     } finally {
       this.offering = false
     }
   }
 
-  private async index(diff: MnListDiff, store: ChainStore, height: number): Promise<void> {
-    const header = await store.getHeaderByHeight(height)
-    if (header == null || !listCommitted(diff, header) || !await this.load(store)) return
-    this.acceptedAt = Date.now()
-    this.entries = diff.mnList
+  private async index(store: ChainStore, height: number, entries: SimplifiedMNListEntry[]): Promise<void> {
+    if (!await this.load(store)) return
+    this.entries = entries
 
-    const listed = new Set(diff.mnList.map(({proRegTxHash}) => proRegTxHash))
+    const listed = new Set(entries.map(({proRegTxHash}) => proRegTxHash))
     const gone = [...this.registrations.keys()].filter(proTxHash => !listed.has(proTxHash))
     for (const proTxHash of gone) this.registrations.delete(proTxHash)
     await store.writeRegistrations(new Map(), gone)
 
-    const missing = diff.mnList.filter(({proRegTxHash}) => !this.registrations.has(proRegTxHash) && !this.unresolvable.has(proRegTxHash))
+    const queued = new Set([...this.wanted.values()].flatMap(({proTxHashes}) => proTxHashes))
     // Not confirmed yet: no block to look for, and a hash the walk down the chain
-    // could never find would stop it ending early.
-    const confirmed = missing.filter(({confirmedHash}) => /[^0]/.test(confirmedHash))
+    // could never find would stop it ending early. A later list confirms it.
+    const confirmed = entries.filter(({proRegTxHash, confirmedHash}) => !isZeroHash(confirmedHash) &&
+      !this.registrations.has(proRegTxHash) && !this.unresolvable.has(proRegTxHash) && !queued.has(proRegTxHash))
     const confirmedWire = (entry: SimplifiedMNListEntry): string => Buffer.from(displayHexToWire(entry.confirmedHash)).toString('hex')
     const heights = await store.findHeights(new Set(confirmed.map(confirmedWire)), height)
-    this.pending = confirmed.length < missing.length
+    let queuing = 0
     for (const entry of confirmed) {
       const confirmedAt = heights.get(confirmedWire(entry))
       const registeredAt = confirmedAt == null ? null : confirmedAt - MASTERNODE_MIN_CONFIRMATIONS[store.network]
       const registeredHeader = registeredAt == null ? null : await store.getHeaderByHeight(registeredAt)
-      if (registeredAt == null || registeredHeader == null) {
-        this.pending = true
-        continue
-      }
+      if (registeredAt == null || registeredHeader == null) continue
       const blockHash = hashHeaderRaw(registeredHeader)
       const block = this.wanted.get(blockHash) ?? {height: registeredAt, proTxHashes: []}
       block.proTxHashes.push(entry.proRegTxHash)
       this.wanted.set(blockHash, block)
+      queuing++
     }
-    const indexing = [...this.wanted.values()].reduce((n, {proTxHashes}) => n + proTxHashes.length, 0)
-    if (indexing > 0) log.info(`indexing ${indexing} masternode registration(s) from ${this.wanted.size} block(s)`)
+    if (queuing > 0) log.info(`indexing ${queuing} masternode registration(s), ${this.wanted.size} block(s) to fetch`)
     this.pump()
     this.emitIfSettled()
   }
@@ -138,7 +128,6 @@ export class ProviderRegistry {
     }
     for (const proTxHash of gone) this.registrations.delete(proTxHash)
     trimmed.forEach((registration, proTxHash) => this.registrations.set(proTxHash, registration))
-    this.acceptedAt = 0
     await this.store?.writeRegistrations(trimmed, gone)
   }
 
@@ -147,15 +136,14 @@ export class ProviderRegistry {
     this.fetcher?.stop()
     this.fetcher = null
     this.wanted.clear()
-    this.acceptedAt = 0
   }
 
   closeChain(): void {
     this.store = null
     this.registrations = new Map()
     this.entries = null
+    this.next = null
     this.wanted.clear()
-    this.acceptedAt = 0
     this.fetcher?.reset()
   }
 

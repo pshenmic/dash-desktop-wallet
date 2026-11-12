@@ -22,7 +22,7 @@ export const NODE_BLOOM = 1 << 2
 
 export const INV_TYPE_NAMES: Record<number, string> = {
   0: 'ERROR', 1: 'TX', 2: 'BLOCK', 3: 'FILTERED_BLOCK',
-  16: 'DSTX', 29: 'CLSIG', 30: 'ISLOCK', 31: 'ISDLOCK',
+  16: 'DSTX', 17: 'GOVOBJ', 18: 'GOVOBJVOTE', 29: 'CLSIG', 30: 'ISLOCK', 31: 'ISDLOCK',
 }
 
 export const FORWARDED_EVENTS: Array<keyof PoolServiceEventMap> = [
@@ -33,9 +33,35 @@ export const FORWARDED_EVENTS: Array<keyof PoolServiceEventMap> = [
   'peerping', 'peerpong',
   'peercfcheckpt', 'peercfheaders', 'peercfilter',
   'peerislock', 'peerisdlock', 'peerclsig',
-  'peergetheaders', 'peermnlistdiff',
+  'peergetheaders', 'peermnlistdiff', 'peergetdata',
   'seederror',
 ]
+
+// Commands dash-core-p2p's pool does not forward from its peers.
+export const GOVERNANCE_COMMANDS = ['govobj', 'govobjvote'] as const
+export const INV_GOVERNANCE_OBJECT = 17
+export const INV_GOVERNANCE_VOTE = 18
+// Core scores a peer asking twice within its fulfilled-request expiry, an hour,
+// for the object list or for one object's votes.
+export const GOVERNANCE_RESYNC_MS = 60 * 60_000
+export const GOVERNANCE_SYNC_PEERS = 2
+// How many peers must announce a proposal before it is fetched.
+export const PROPOSAL_ANNOUNCERS = 2
+// Announced hashes, and one proposal's votes, held at most against a flooding peer.
+// Mainnet has ~3,000 nodes, each voting per signal and again on a change of mind.
+export const GOVERNANCE_ANNOUNCED_MAX = 10_000
+export const PROPOSAL_VOTES_MAX = 50_000
+// A peer asked for governance data answers with invs; only these are requested.
+export const GOVERNANCE_REPLY_WINDOW_MS = 60_000
+export const GOVERNANCE_EMIT_DELAY_MS = 1_000
+// How long an announced vote waits for peers to ask for it.
+export const VOTE_RELAY_WINDOW_MS = 10_000
+// Then how long the peers that took it have to serve it back.
+export const VOTE_CONFIRM_WINDOW_MS = 5_000
+// govsync's bloom filter. Core reads an empty one beside a proposal hash as a fetch
+// of the object alone, so the vote sync sends one byte that matches no vote.
+export const GOVSYNC_OBJECTS_FILTER = Uint8Array.of(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+export const GOVSYNC_VOTES_FILTER = Uint8Array.of(1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0)
 
 // Forwarded events that say nothing about whether the far end is reachable: a
 // dial that never completes emits peerdisconnect just as a live peer leaving does.
@@ -371,9 +397,10 @@ export const BROADCAST_POLICY = {
 
 // ── Masternode list ─────────────────────────────────────────────────────────
 
+// The evonode DAPI urls only, which rpc mode has no chain to follow block by block for.
 export const MNLIST_REFRESH_MS = 60 * 60_000
 
-// A full list is several MB, so one peer is asked at a time and another only
+// A full list is ~500 KB on mainnet, so one peer is asked at a time and another only
 // once this passes without a verified answer. Answering peers take about a
 // second; this must stay well under the platform worker's DAPI_URLS_WAIT_MS.
 export const MNLIST_REPLY_TIMEOUT_MS = 5_000
@@ -381,14 +408,12 @@ export const MNLIST_REPLY_TIMEOUT_MS = 5_000
 // Lock peers asked for each quorum update; most never answer getmnlistd.
 export const PLATFORM_QUORUM_PEERS = 6
 
+// The coinbase payload version Core requires while v24 is active and refuses before.
+export const CBTX_VERSION_V24 = 4
+
 // Core's nMasternodeMinimumConfirmations: a list entry's confirmedHash names the
 // block this far above the one its ProRegTx was mined in.
 export const MASTERNODE_MIN_CONFIRMATIONS: Record<Network, number> = {mainnet: 15, testnet: 1}
-
-// How soon a list is asked again while one of its nodes is not confirmed yet, so
-// a node just registered is not shown without its owner and collateral for an
-// hour. Mainnet confirms in 15 blocks, so this costs a few full lists per registration.
-export const MNLIST_PENDING_REFRESH_MS = 5 * 60_000
 
 // Registration blocks requested at once while the index is built, out of the
 // ~3,000 a mainnet list needs the first time.

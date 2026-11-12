@@ -1,14 +1,17 @@
 import {bytesToHex, hexToBytes} from '@noble/hashes/utils.js'
 import {MASTERNODE_KEY_CHAINS} from '../constants/addresses'
-import {MASTERNODE_COLLATERAL_DUFFS} from '../constants/chain'
+import {DUFFS_PER_DASH, MASTERNODE_COLLATERAL_DUFFS} from '../constants/chain'
 import {DerivedAddress} from '../types/AddressWindow'
 import {DashscanMasternode} from '../types/Dashscan'
 import {CoreSpendSource, ListedUtxo, SelectableUtxo} from '../types/CoinSelection'
 import {
   ImportedMasternodeKey,
+  ListedMasternodes,
   Masternode,
   MasternodeCollateral,
+  MasternodeKeyChain,
   MasternodeKeyFilter,
+  MasternodeRegistration,
   NetworkMasternode,
   OwnedCollateral,
 } from '../types/Masternode'
@@ -66,13 +69,77 @@ export function matchMasternodeKeys(chain: MasternodeKeyFilter, derived: Derived
   return matches
 }
 
+// The iOS wallet's rule: the lowest index no listed node carries on any of `chains`.
+// Every node carrying a derived key is one of ours, so ours are the ones to read.
+export function unusedKeyIndex(owned: Masternode[], ...chains: MasternodeKeyChain[]): number {
+  const used = new Set(owned.flatMap(node => chains.map(chain => node[`${chain}KeyIndex` as const])))
+  let index = 0
+  while (used.has(index)) index++
+  return index
+}
+
+// Dashscan keeps a row for every node it ever listed, so the network's own list
+// decides. Only one asked for after the node was first seen can say it is gone.
+export function existingMasternodes(
+  owned: Masternode[],
+  listed: ListedMasternodes | null,
+  firstSeen: Map<string, number>,
+): {existing: Masternode[]; unsettled: boolean} {
+  const isListed = (node: Masternode): boolean => listed?.proTxHashes.has(node.proTxHash) ?? false
+  const decided = (node: Masternode): boolean => listed != null && listed.askedAt > (firstSeen.get(node.proTxHash) ?? Infinity)
+  const existing = owned.filter(node => isListed(node) || !decided(node))
+  return {existing, unsettled: existing.some(node => !isListed(node))}
+}
+
+// Core takes a collateral from the UTXO set alone, never the mempool, and only
+// at the exact amount of the node's type.
+export function requireCollateral(
+  utxos: UTXO[],
+  collaterals: MasternodeCollateral[],
+  {type, collateral: {txid, vout}}: Pick<MasternodeRegistration, 'type' | 'collateral'>,
+): UTXO {
+  const coin = utxos.find(({txId, vOut}) => txId === txid && vOut === vout)
+  if (coin == null) throw new Error('The collateral is not an unspent coin of this wallet')
+  if (coin.height === 0) throw new Error('The collateral needs a confirmation first: Core does not accept a mempool output as collateral')
+  if (coin.satoshis !== MASTERNODE_COLLATERAL_DUFFS[type]) {
+    throw new Error(`A ${type} masternode's collateral is exactly ${MASTERNODE_COLLATERAL_DUFFS[type] / DUFFS_PER_DASH} DASH`)
+  }
+  if (collaterals.some(row => row.txid === txid && row.vout === vout)) throw new Error('This coin is already a masternode collateral')
+  return coin
+}
+
+// Null is a payout the list has not given yet, which an update would have to restate.
+export function requirePayout(payoutAddress: string | null, ownerAddress: string, votingAddress: string): string {
+  if (payoutAddress == null) throw new Error('The current payout is not known yet; pass a payout address')
+  if (payoutAddress === ownerAddress || payoutAddress === votingAddress) throw new Error('The payout may not pay the owner or voting key')
+  return payoutAddress
+}
+
+// A node whose owner key the wallet derives, which is what lets it sign as owner.
+export function ownerNode(owned: Masternode[], proTxHash: string): Masternode & {ownerKeyIndex: number} {
+  const node = owned.find(entry => entry.proTxHash === proTxHash)
+  if (node == null) throw new Error('Not a masternode of this wallet')
+  const {ownerKeyIndex} = node
+  if (ownerKeyIndex == null) throw new Error("This wallet does not derive the masternode's owner key")
+  return {...node, ownerKeyIndex}
+}
+
+// A node whose operator key the wallet derives, which is what lets it sign as operator.
+export function operatedNode(owned: Masternode[], proTxHash: string): Masternode & {operatorKeyIndex: number} {
+  const node = owned.find(entry => entry.proTxHash === proTxHash)
+  if (node == null) throw new Error('Not a masternode of this wallet')
+  const {operatorKeyIndex} = node
+  if (operatorKeyIndex == null) throw new Error("This wallet does not derive the masternode's operator key")
+  return {...node, operatorKeyIndex}
+}
+
 export function carriesKey(node: NetworkMasternode, {role, publicKey}: ImportedMasternodeKey): boolean {
   const key = nodeKey(role, node)
   return key != null && masternodeFilterValues(role, publicKey).includes(key)
 }
 
 export function collateralUtxos(utxos: UTXO[]): UTXO[] {
-  return utxos.filter(utxo => MASTERNODE_COLLATERAL_DUFFS.includes(utxo.satoshis))
+  return utxos.filter(utxo => Object.values(MASTERNODE_COLLATERAL_DUFFS).includes(utxo.satoshis))
 }
 
 // What a discovery run stores for each owned node. A p2p list knows a node's

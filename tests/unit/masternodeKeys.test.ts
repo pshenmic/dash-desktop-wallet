@@ -1,4 +1,6 @@
 import {describe, expect, it} from 'vitest'
+import {bls12_381} from '@noble/curves/bls12-381.js'
+import {bytesToNumberBE} from '@noble/curves/utils.js'
 import {bytesToHex, hexToBytes} from '@noble/hashes/utils.js'
 import {HDKey} from '@scure/bip32'
 import {PrivateKey} from 'dash-core-sdk'
@@ -9,6 +11,7 @@ import {
   masternodeKeys,
   masternodePublicKey,
   operatorPublicKey,
+  operatorSecretKey,
   platformNodeId,
 } from '../../src/main/src/utils/masternodeKeys'
 
@@ -31,6 +34,14 @@ describe('masternodeKeys', () => {
       '8c04974d14df3b5eb23787e21642d25c47609d966bb80f504854e4675657c63f4c4c7056f3f007671b911eb390dec4f7',
       '8d14cad34409c74f9dd587fc00be01ca0c527e3793f016eb2a612d78ec45c650e8942fbff3e1ab44a21a6e575ebe80a1',
     ])
+  })
+
+  it('derives the operator secret behind each pinned public key', () => {
+    for (const index of [0, 1, 2]) {
+      const secret = operatorSecretKey(SEED, 'mainnet', index)
+      expect(bls12_381.G1.Point.BASE.multiply(bytesToNumberBE(secret)).toBytes(true))
+        .toEqual(operatorPublicKey(mainnet.operatorPublicKey, mainnet.operatorChainCode, index))
+    }
   })
 
   it('derives the testnet operator key on coin type 1', () => {

@@ -79,5 +79,8 @@ export interface PoolServiceEventMap {
   peerclsig: (peer: Peer, message: Message & { height?: number; blockHash?: string }) => void
   peergetheaders: (peer: Peer, message: Message & { starts?: Uint8Array[] }) => void
   peermnlistdiff: (peer: Peer, message: Message & { mnlistdiff?: MnListDiff }) => void
+  peergetdata: (peer: Peer, message: Message & { inventory?: Array<{ type: number; hash: Uint8Array }> }) => void
+  peergovobj: (peer: Peer, message: Message & { payload: Uint8Array }) => void
+  peergovobjvote: (peer: Peer, message: Message & { payload: Uint8Array }) => void
   seederror: (err: Error) => void
 }
