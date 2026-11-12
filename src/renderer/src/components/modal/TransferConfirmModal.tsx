@@ -49,7 +49,7 @@ export default function TransferConfirmModal({
   const [result, setResult] = useState<PlatformSendResult | null>(null)
   const [sentRecipients, setSentRecipients] = useState<RecipientSummaryProps | null>(null)
   const [auto, setAuto] = useState(false)
-  const [canCancel, setCanCancel] = useState(false)
+  const [cancellable, setCancellable] = useState(false)
   const autoStarted = useRef(false)
   const runId = useRef(0)
   const [seenOpen, setSeenOpen] = useState(false)
@@ -63,12 +63,12 @@ export default function TransferConfirmModal({
       setResult(null)
       setSentRecipients(null)
       setAuto(Boolean(presetPassword))
-      setCanCancel(false)
+      setCancellable(false)
     }
   }
 
   const abort = (preset: boolean): void => {
-    setCanCancel(false)
+    setCancellable(false)
     if (preset) onClose()
     else setPhase(ConfirmModalPhase.Confirm)
   }
@@ -80,7 +80,7 @@ export default function TransferConfirmModal({
       return
     }
     const id = ++runId.current
-    setCanCancel(false)
+    setCancellable(false)
     try {
       setSentRecipients(recipients ? {
         recipients: recipients.map(recipient => ({ ...recipient })),
@@ -92,7 +92,7 @@ export default function TransferConfirmModal({
         onSuccess()
         return
       }
-      setCanCancel(false)
+      setCancellable(false)
       setResult(res)
       setPhase(ConfirmModalPhase.Done)
       onSuccess()
@@ -108,10 +108,10 @@ export default function TransferConfirmModal({
 
   useEffect(() => {
     if (!isOpen || !sending) {
-      setCanCancel(false)
+      setCancellable(false)
       return
     }
-    const timer = setTimeout(() => setCanCancel(true), SEND_CANCEL_DELAY_MS)
+    const timer = setTimeout(() => setCancellable(true), SEND_CANCEL_DELAY_MS)
     return () => clearTimeout(timer)
   }, [isOpen, sending])
 
@@ -128,14 +128,14 @@ export default function TransferConfirmModal({
     }
   }, [isOpen])
 
-  const cancelAllowed = !sending || canCancel
+  const cancelAllowed = !sending || cancellable
 
   const handleConfirm = async (): Promise<void> => {
     if (!walletId || password.length === 0 || sending || !sourceValidRef.current) return
     const id = ++runId.current
     setPhase(ConfirmModalPhase.Sending)
     setPasswordInvalid(false)
-    setCanCancel(false)
+    setCancellable(false)
     try {
       const valid = await API.verifyWalletPassword(walletId, password)
       if (runId.current !== id) return
@@ -149,14 +149,14 @@ export default function TransferConfirmModal({
       console.error('Transfer failed', e)
       toast.error(getErrorMessage(e))
     }
-    setCanCancel(false)
+    setCancellable(false)
     setPhase(ConfirmModalPhase.Confirm)
   }
 
   const requestClose = (): void => {
     if (!cancelAllowed) return
     runId.current++
-    setCanCancel(false)
+    setCancellable(false)
     if (sending) setPhase(ConfirmModalPhase.Confirm)
     onClose()
   }

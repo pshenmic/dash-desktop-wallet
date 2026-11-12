@@ -47,7 +47,7 @@ export default function ShieldConfirmModal({
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ShieldResult | null>(null)
   const [auto, setAuto] = useState(false)
-  const [canCancel, setCanCancel] = useState(false)
+  const [cancellable, setCancellable] = useState(false)
   const autoStarted = useRef(false)
   const runId = useRef(0)
   const [seenOpen, setSeenOpen] = useState(false)
@@ -61,12 +61,12 @@ export default function ShieldConfirmModal({
       setError(null)
       setResult(null)
       setAuto(Boolean(autoPassword))
-      setCanCancel(false)
+      setCancellable(false)
     }
   }
 
   const abort = (preset: boolean): void => {
-    setCanCancel(false)
+    setCancellable(false)
     if (preset) onClose()
     else setPhase(ConfirmModalPhase.Confirm)
   }
@@ -78,14 +78,14 @@ export default function ShieldConfirmModal({
       return
     }
     const id = ++runId.current
-    setCanCancel(false)
+    setCancellable(false)
     try {
       const res = await API.shieldToPool(walletId, source, toAddress, amountCredits, secret)
       if (runId.current !== id) {
         onSuccess()
         return
       }
-      setCanCancel(false)
+      setCancellable(false)
       setResult(res)
       setPhase(ConfirmModalPhase.Done)
       onSuccess()
@@ -101,10 +101,10 @@ export default function ShieldConfirmModal({
 
   useEffect(() => {
     if (!isOpen || !shielding) {
-      setCanCancel(false)
+      setCancellable(false)
       return
     }
-    const timer = setTimeout(() => setCanCancel(true), SEND_CANCEL_DELAY_MS)
+    const timer = setTimeout(() => setCancellable(true), SEND_CANCEL_DELAY_MS)
     return () => clearTimeout(timer)
   }, [isOpen, shielding])
 
@@ -121,14 +121,14 @@ export default function ShieldConfirmModal({
     }
   }, [isOpen])
 
-  const cancelAllowed = !shielding || canCancel
+  const cancelAllowed = !shielding || cancellable
 
   const handleConfirm = async (): Promise<void> => {
     if (!walletId || password.length === 0 || shielding || !proverReady || !sourceValidRef.current) return
     const id = ++runId.current
     setPhase(ConfirmModalPhase.Sending)
     setError(null)
-    setCanCancel(false)
+    setCancellable(false)
     try {
       const valid = await API.verifyWalletPassword(walletId, password)
       if (runId.current !== id) return
@@ -142,14 +142,14 @@ export default function ShieldConfirmModal({
       console.error('Shield failed', e)
       toast.error(getErrorMessage(e))
     }
-    setCanCancel(false)
+    setCancellable(false)
     setPhase(ConfirmModalPhase.Confirm)
   }
 
   const requestClose = (): void => {
     if (!cancelAllowed) return
     runId.current++
-    setCanCancel(false)
+    setCancellable(false)
     if (shielding) setPhase(ConfirmModalPhase.Confirm)
     onClose()
   }
