@@ -58,7 +58,7 @@ function utxo(satoshis: bigint, index: number): UTXO {
 function candidate(platformAddress: string, balanceCredits: bigint, hashByte: number): PlatformSourceCandidate {
   const addressBytes = new Uint8Array(21)
   addressBytes[1] = hashByte
-  return {platformAddress, addressBytes, index: 0, balanceCredits, nonce: 0}
+  return {platformAddress, addressBytes, index: 0, balanceCredits, nonce: 0, label: null}
 }
 
 const total = (entries: PreviewEntry[]): bigint =>

@@ -3,13 +3,14 @@ import {PlatformAddressRow} from '../types/PlatformAddress'
 import {INSERT_CHUNK_SIZE, SELECT_CHUNK_SIZE} from '../constants/database'
 import {chunk} from '../utils/chunk'
 
-function fromRow({wallet_id, address_index, address, derivation_path, is_used}): PlatformAddressRow {
+function fromRow({wallet_id, address_index, address, derivation_path, is_used, label}): PlatformAddressRow {
   return {
     walletId: wallet_id,
     index: address_index,
     address,
     derivationPath: derivation_path,
     isUsed: Boolean(is_used),
+    label,
   }
 }
 
@@ -22,7 +23,7 @@ export class PlatformAddressDAO {
 
   getAddresses = async (walletId: string): Promise<PlatformAddressRow[]> => {
     const rows = await this.knex('platform_addresses')
-      .select('wallet_id', 'address_index', 'address', 'derivation_path', 'is_used')
+      .select('wallet_id', 'address_index', 'address', 'derivation_path', 'is_used', 'label')
       .where('wallet_id', walletId)
       .orderBy('address_index', 'asc')
     return rows.map(fromRow)
@@ -37,9 +38,20 @@ export class PlatformAddressDAO {
           address: entry.address,
           derivation_path: entry.derivationPath,
           is_used: entry.isUsed,
+          label: entry.label,
         })))
         .onConflict(['wallet_id', 'address_index'])
         .ignore()
+    }
+  }
+
+  setAddressLabel = async (walletId: string, address: string, label: string): Promise<void> => {
+    const result = await this.knex('platform_addresses')
+      .where({wallet_id: walletId, address})
+      .update({label})
+
+    if (result === 0) {
+      throw new Error('address or wallet not found')
     }
   }
 

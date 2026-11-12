@@ -63,6 +63,11 @@ interface SelectableUtxoDTO {
   isLocked: boolean
 }
 
+interface ShieldedAddressDTO {
+  address: string
+  label: string | null
+}
+
 // Hand-maintained alongside definitions.ts, and deliberately a second
 // declaration of src/main/src/types/Transaction: the three bundles do not share
 // types. Amounts stay bigint — structured clone carries them as themselves.
@@ -170,6 +175,7 @@ declare global {
       getIdentityNonce: (identifier: string) => Promise<bigint>
       getPlatformAddresses: (walletId: string) => Promise<unknown>
       addPlatformAddress: (walletId: string) => Promise<unknown>
+      setPlatformAddressLabel: (walletId: string, address: string, label: string) => Promise<void>
       deleteWallet: (walletId: string) => Promise<void>
       selectWallet: (walletId: string) => Promise<void>
       getWalletBalance: (walletId: string) => Promise<unknown>
@@ -243,8 +249,9 @@ declare global {
       startShieldedIdentityCreate: (walletId: string, denominationCredits: bigint, password: string) => Promise<{ phase: 'idle' | 'syncing' | 'proving' | 'broadcasting' | 'done' | 'error'; fetched: number; total: number; stHash: string | null; identityId: string | null; error: string | null }>
       getShieldedSpendState: (walletId: string) => Promise<{ phase: 'idle' | 'syncing' | 'proving' | 'broadcasting' | 'done' | 'error'; fetched: number; total: number; stHash: string | null; identityId: string | null; error: string | null }>
       getShieldedAddress: (walletId: string, password?: string) => Promise<string | null>
-      getShieldedAddresses: (walletId: string, password?: string) => Promise<string[] | null>
-      addShieldedAddress: (walletId: string, password: string) => Promise<string[]>
+      getShieldedAddresses: (walletId: string, password?: string) => Promise<ShieldedAddressDTO[] | null>
+      addShieldedAddress: (walletId: string, password: string) => Promise<ShieldedAddressDTO[]>
+      setShieldedAddressLabel: (walletId: string, address: string, label: string) => Promise<void>
     }
     darkMode: {
       get: () => Promise<boolean>

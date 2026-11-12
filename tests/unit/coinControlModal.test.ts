@@ -62,8 +62,8 @@ function platformModalProps(operation = TransferOperation.Shield): CoinControlMo
   return {
     ...modalProps(), operation, selection: {kind: 'automatic'},
     platformAddresses: [
-      {platformAddress: 'platform-a', balanceCredits: 700_000_000n, nonce: 0},
-      {platformAddress: 'platform-b', balanceCredits: 500_000_000n, nonce: 0},
+      {platformAddress: 'platform-a', balanceCredits: 700_000_000n, nonce: 0, label: null},
+      {platformAddress: 'platform-b', balanceCredits: 500_000_000n, nonce: 0, label: null},
     ],
   }
 }

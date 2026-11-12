@@ -32,7 +32,7 @@ export async function fetchTransactionOwnership(walletId: string): Promise<Walle
     for (const identity of identities.value) if (identity.identifier) ownership.identities.add(identity.identifier)
   }
   if (shielded.status === 'fulfilled') {
-    for (const address of shielded.value ?? []) if (address) ownership.shielded.add(address)
+    for (const entry of shielded.value ?? []) if (entry.address) ownership.shielded.add(entry.address)
   }
   return ownership
 }

@@ -40,6 +40,7 @@ import {GetIdentityBalance} from "./api/wallet/getIdentityBalance";
 import {GetIdentityNonce} from "./api/wallet/getIdentityNonce";
 import {GetPlatformAddressesHandler} from "./api/wallet/getPlatformAddresses";
 import {AddPlatformAddressHandler} from "./api/wallet/addPlatformAddress";
+import {SetPlatformAddressLabelHandler} from "./api/wallet/setPlatformAddressLabel";
 import {AddWalletAddressHandler} from "./api/wallet/addWalletAddress";
 import {GetTransactionByHashHandler} from "./api/wallet/getTransactionByHash";
 import {GetBalance} from "./api/wallet/getBalance";
@@ -117,6 +118,7 @@ import {GetShieldedSpendStateHandler} from './api/shielded/getShieldedSpendState
 import {GetShieldedAddressHandler} from './api/shielded/getShieldedAddress'
 import {GetShieldedAddressesHandler} from './api/shielded/getShieldedAddresses'
 import {AddShieldedAddressHandler} from './api/shielded/addShieldedAddress'
+import {SetShieldedAddressLabelHandler} from './api/shielded/setShieldedAddressLabel'
 import {RatesService} from './services/app/RatesService'
 import {GetExchangeRatesHandler} from './api/getExchangeRates'
 import {ContactService} from './services/app/ContactService'
@@ -207,6 +209,7 @@ export class WalletBackend {
     registerHandler('getIdentityNonce', new GetIdentityNonce(this.identityService).handle)
     registerHandler('getPlatformAddresses', new GetPlatformAddressesHandler(this.platformAddressService).handle)
     registerHandler('addPlatformAddress', new AddPlatformAddressHandler(this.platformAddressService).handle)
+    registerHandler('setPlatformAddressLabel', new SetPlatformAddressLabelHandler(this.platformAddressService).handle)
     registerHandler('setAddressLabel', new SetAddressLabel(this.walletService).handle)
     registerHandler('setWalletLabel', new SetWalletLabel(this.walletService).handle)
     registerHandler('sendTransaction', new SendTransactionHandler(this.walletService).handle)
@@ -280,6 +283,7 @@ export class WalletBackend {
     registerHandler('getShieldedAddress', new GetShieldedAddressHandler(this.shieldedService).handle)
     registerHandler('getShieldedAddresses', new GetShieldedAddressesHandler(this.shieldedService).handle)
     registerHandler('addShieldedAddress', new AddShieldedAddressHandler(this.shieldedService).handle)
+    registerHandler('setShieldedAddressLabel', new SetShieldedAddressLabelHandler(this.shieldedService).handle)
     registerHandler('listLogFiles', new ListLogFiles(this.logService).handle)
     registerHandler('getLogFile', new GetLogFileHandler(this.logService).handle)
     registerHandler('showLogFileInFolder', new ShowLogFileInFolderHandler(this.logService).handle)

@@ -189,10 +189,10 @@ describe('Core and Evo address usage', () => {
       { address: 'unused-core', isUsed: false },
       { address: 'receiving', isUsed: true },
     ], [
-      { platformAddress: 'funded', balanceCredits: 1n, nonce: 0 },
-      { platformAddress: 'emptied', balanceCredits: 0n, nonce: 2 },
-      { platformAddress: 'unused-evo', balanceCredits: 0n, nonce: 0 },
-      { platformAddress: 'funded', balanceCredits: 1n, nonce: 0 },
+      { platformAddress: 'funded', balanceCredits: 1n, nonce: 0, label: null },
+      { platformAddress: 'emptied', balanceCredits: 0n, nonce: 2, label: null },
+      { platformAddress: 'unused-evo', balanceCredits: 0n, nonce: 0, label: null },
+      { platformAddress: 'funded', balanceCredits: 1n, nonce: 0, label: null },
     ])).toEqual([
       { source: 'core', used: 2, total: 3 },
       { source: 'evo', used: 2, total: 3 },

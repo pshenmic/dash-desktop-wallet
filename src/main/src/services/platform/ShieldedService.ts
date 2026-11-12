@@ -22,7 +22,7 @@ import {platformAccountXpub, platformAddressDeriver} from '../../utils/platformA
 import {shieldedAddressDeriver} from '../../utils/shieldedAddress'
 import {runAddressWindow} from '../../utils/addressWindow'
 import {AddressWindowStore, DerivedAddress, UsageOracle} from '../../types/AddressWindow'
-import {ShieldedAddressRow} from '../../types/ShieldedAddress'
+import {ShieldedAddressEntry, ShieldedAddressRow} from '../../types/ShieldedAddress'
 import {Preferences} from '../../preferences'
 import { creditsAfterFee, lockedDuffsFor } from '../../utils/assetLockTx'
 import { PlatformWorkerService } from './PlatformWorkerService'
@@ -98,7 +98,7 @@ export class ShieldedService {
   private notesSynced?: (walletId: string) => void
   private syncStates = new Map<string, ShieldedSyncState>()
   private spendStates = new Map<string, ShieldedSpendState>()
-  private addresses = new Map<string, string[]>()
+  private addresses = new Map<string, ShieldedAddressEntry[]>()
   private noteFetches = new Map<Network, Promise<void>>()
   private feeCurves = new Map<string, bigint[]>()
   private addQueue = new Map<string, Promise<unknown>>()
@@ -139,10 +139,10 @@ export class ShieldedService {
 
   async getAddress(walletId: string, password?: string): Promise<string | null> {
     const list = await this.getAddresses(walletId, password)
-    return list != null && list.length > 0 ? list[0] : null
+    return list != null && list.length > 0 ? list[0].address : null
   }
 
-  async getAddresses(walletId: string, password?: string): Promise<string[] | null> {
+  async getAddresses(walletId: string, password?: string): Promise<ShieldedAddressEntry[] | null> {
     const cached = this.addresses.get(walletId)
     if (cached != null) return cached
 
@@ -158,7 +158,7 @@ export class ShieldedService {
   // Serialised per wallet rather than joined: two clicks should reveal two
   // addresses, but the second has to read the count the first wrote or one of
   // them is silently lost.
-  async addAddress(walletId: string, password: string): Promise<string[]> {
+  async addAddress(walletId: string, password: string): Promise<ShieldedAddressEntry[]> {
     const prior = this.addQueue.get(walletId) ?? Promise.resolve()
     const run = prior.catch(() => {}).then(() => this.revealNextAddress(walletId, password))
     this.addQueue.set(walletId, run)
@@ -172,7 +172,12 @@ export class ShieldedService {
   // One index past the frontier. The walk already extended the window so a full
   // gap of unused diversifiers follows the last used one, which is what makes
   // the next index safe to hand out without re-checking it.
-  private revealNextAddress(walletId: string, password: string): Promise<string[]> {
+  async setAddressLabel(walletId: string, address: string, label: string): Promise<void> {
+    await this.shieldedAddressDAO.setAddressLabel(walletId, address, label)
+    this.addresses.delete(walletId)
+  }
+
+  private revealNextAddress(walletId: string, password: string): Promise<ShieldedAddressEntry[]> {
     return withUnlockedWallet(this.walletDAO, walletId, password, async ({wallet: {network}, seed}) => {
       // The used flags come from decrypted notes, so a wallet behind the pool
       // cannot tell a fresh diversifier from one that already received. Revealing
@@ -194,7 +199,7 @@ export class ShieldedService {
   // rather than a chain query, and the deriver needs the seed — ZIP-32 has no
   // watch-only key — so this only ever runs inside an already-unlocked
   // operation, on the seed that operation is holding anyway.
-  private async revealWindow(walletId: string, seed: Uint8Array, network: Network): Promise<string[]> {
+  private async revealWindow(walletId: string, seed: Uint8Array, network: Network): Promise<ShieldedAddressEntry[]> {
     await runAddressWindow(
       shieldedAddressDeriver(seed, network),
       this.shieldedOracle(walletId),
@@ -237,11 +242,12 @@ export class ShieldedService {
       index: derived.index,
       address: derived.address,
       isUsed: false,
+      label: null,
     }
   }
 
-  private cacheList(walletId: string, rows: ShieldedAddressRow[]): string[] {
-    const list = rows.map(row => row.address)
+  private cacheList(walletId: string, rows: ShieldedAddressRow[]): ShieldedAddressEntry[] {
+    const list = rows.map(row => ({address: row.address, label: row.label}))
     this.addresses.set(walletId, list)
     return list
   }

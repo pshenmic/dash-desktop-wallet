@@ -38,8 +38,8 @@ const funds: CoinControlFunds = {
     {txid: 'tx-b', vout: 1, satoshis: 99_999_999n, address: 'core-a', height: 1, timestamp: null, confirmations: 1, isLocked: false},
   ],
   platformAddresses: [
-    {platformAddress: 'platform-a', balanceCredits: 5_000_000n, nonce: 0},
-    {platformAddress: 'platform-b', balanceCredits: 7_000_000n, nonce: 0},
+    {platformAddress: 'platform-a', balanceCredits: 5_000_000n, nonce: 0, label: null},
+    {platformAddress: 'platform-b', balanceCredits: 7_000_000n, nonce: 0, label: null},
   ],
   shieldedNotes: [
     {index: 4, address: 'shielded-a', amount: 1_000n, spent: false},
@@ -127,7 +127,7 @@ describe('coin control', () => {
   it('preserves exact Platform balances and requires explicit reduction of oversized note selections', () => {
     const available = {
       ...funds,
-      platformAddresses: [{platformAddress: 'platform-a', balanceCredits: 9_007_199_254_740_993n, nonce: 0}],
+      platformAddresses: [{platformAddress: 'platform-a', balanceCredits: 9_007_199_254_740_993n, nonce: 0, label: null}],
       shieldedNotes: Array.from({length: SHIELDED_NOTE_LIMIT + 1}, (_, index) => ({index, address: 'shielded-a', amount: 1n, spent: false})),
     }
     expect(expandAddressCoinControlSelection({kind: 'platformAddress', address: 'platform-a'}, available)).toEqual({

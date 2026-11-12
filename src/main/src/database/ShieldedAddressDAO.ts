@@ -3,12 +3,13 @@ import {ShieldedAddressRow} from '../types/ShieldedAddress'
 import {INSERT_CHUNK_SIZE, SELECT_CHUNK_SIZE} from '../constants/database'
 import {chunk} from '../utils/chunk'
 
-function fromRow({wallet_id, address_index, address, is_used}): ShieldedAddressRow {
+function fromRow({wallet_id, address_index, address, is_used, label}): ShieldedAddressRow {
   return {
     walletId: wallet_id,
     index: address_index,
     address,
     isUsed: Boolean(is_used),
+    label,
   }
 }
 
@@ -21,7 +22,7 @@ export class ShieldedAddressDAO {
 
   getAddresses = async (walletId: string): Promise<ShieldedAddressRow[]> => {
     const rows = await this.knex('shielded_addresses')
-      .select('wallet_id', 'address_index', 'address', 'is_used')
+      .select('wallet_id', 'address_index', 'address', 'is_used', 'label')
       .where('wallet_id', walletId)
       .orderBy('address_index', 'asc')
     return rows.map(fromRow)
@@ -35,9 +36,20 @@ export class ShieldedAddressDAO {
           address_index: entry.index,
           address: entry.address,
           is_used: entry.isUsed,
+          label: entry.label,
         })))
         .onConflict(['wallet_id', 'address_index'])
         .ignore()
+    }
+  }
+
+  setAddressLabel = async (walletId: string, address: string, label: string): Promise<void> => {
+    const result = await this.knex('shielded_addresses')
+      .where({wallet_id: walletId, address})
+      .update({label})
+
+    if (result === 0) {
+      throw new Error('address or wallet not found')
     }
   }
 

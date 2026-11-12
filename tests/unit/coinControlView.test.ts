@@ -71,7 +71,7 @@ describe('coinControlSourceAddresses', () => {
       {txid: 'b', vout: 1, address: 'core-1', satoshis: 1n, height: 1, timestamp: null, confirmations: 1, isLocked: false},
       {txid: 'c', vout: 0, address: 'core-2', satoshis: 1n, height: 1, timestamp: null, confirmations: 1, isLocked: false},
     ],
-    platformAddresses: [{platformAddress: 'platform-1', balanceCredits: 1n, nonce: 0}],
+    platformAddresses: [{platformAddress: 'platform-1', balanceCredits: 1n, nonce: 0, label: null}],
     shieldedNotes: [
       {index: 1, amount: 1n, spent: false, address: 'shielded-1'},
       {index: 2, amount: 1n, spent: false, address: 'shielded-1'},

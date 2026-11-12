@@ -47,6 +47,7 @@ function candidate(
     index: 0,
     balanceCredits,
     nonce,
+    label: null,
   }
 }
 

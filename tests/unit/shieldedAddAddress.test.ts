@@ -17,7 +17,7 @@ function service(usedIndexes: number[], revealed = 0, {poolCount = 0, decoded = 
   const used = new Set(usedIndexes.map(i => `addr-${i}`))
   const seen: number[] = []
   const stored: ShieldedAddressRow[] = Array.from({length: revealed}, (_, index) => ({
-    walletId: WALLET, index, address: `addr-${index}`, isUsed: false,
+    walletId: WALLET, index, address: `addr-${index}`, isUsed: false, label: null,
   }))
 
   const walletDAO = {

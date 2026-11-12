@@ -1,6 +1,6 @@
 import { WalletTxDto } from '@renderer/types/WalletTransaction'
 import { TransferOperation } from '../enums/TransferOperation'
-import { AddressKeyInfoDto, UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, SelectableUtxo} from './types'
+import { AddressKeyInfoDto, UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedAddressDto, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, SelectableUtxo} from './types'
 
 export class API {
   private static get api() {
@@ -143,6 +143,10 @@ export class API {
     return this.api.setWalletLabel(walletId, label)
   }
 
+  static async setAddressLabel(walletId: string, address: string, label: string): Promise<void> {
+    return this.api.setAddressLabel(walletId, address, label)
+  }
+
   static async getTransactions(walletId: string): Promise<WalletHistory> {
     return this.api.getTransactions(walletId) as Promise<WalletHistory>
   }
@@ -212,6 +216,10 @@ export class API {
 
   static async addPlatformAddress(walletId: string): Promise<PlatformAddressDto[]> {
     return this.api.addPlatformAddress(walletId) as Promise<PlatformAddressDto[]>
+  }
+
+  static async setPlatformAddressLabel(walletId: string, address: string, label: string): Promise<void> {
+    return this.api.setPlatformAddressLabel(walletId, address, label)
   }
 
   static async estimateFee(
@@ -398,11 +406,15 @@ export class API {
     return this.api.getShieldedAddress(walletId, password)
   }
 
-  static async getShieldedAddresses(walletId: string, password?: string): Promise<string[] | null> {
+  static async getShieldedAddresses(walletId: string, password?: string): Promise<ShieldedAddressDto[] | null> {
     return this.api.getShieldedAddresses(walletId, password)
   }
 
-  static async addShieldedAddress(walletId: string, password: string): Promise<string[]> {
+  static async addShieldedAddress(walletId: string, password: string): Promise<ShieldedAddressDto[]> {
     return this.api.addShieldedAddress(walletId, password)
+  }
+
+  static async setShieldedAddressLabel(walletId: string, address: string, label: string): Promise<void> {
+    return this.api.setShieldedAddressLabel(walletId, address, label)
   }
 }

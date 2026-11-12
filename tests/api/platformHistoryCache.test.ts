@@ -69,7 +69,7 @@ let poolDAO: ShieldedPoolDAO
 
 const addAddress = (index: number, address: string): Promise<void> =>
   addressDAO.insertAddresses([
-    {walletId: WALLET, index, address, derivationPath: `m/9'/1'/17'/0'/0'/${index}`, isUsed: true},
+    {walletId: WALLET, index, address, derivationPath: `m/9'/1'/17'/0'/0'/${index}`, isUsed: true, label: null},
   ])
 
 beforeEach(async () => {
