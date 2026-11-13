@@ -158,7 +158,7 @@ function WalletTransferHub(): React.JSX.Element {
   const preview = useSendTransactionPreview(review)
   const [notesUnlockOpen, setNotesUnlockOpen] = useState(false)
   const [wizardKey, setWizardKey] = useState(0)
-  const { utxos, loading: utxosLoading, localSnapshot: utxosLocalSnapshot, error: utxosError, retry: retryUtxos } = useWalletUtxos(wizardKey)
+  const { utxos, loading: utxosLoading, localSnapshot: utxosLocalSnapshot, error: utxosError, retry: retryUtxos, toggleLock: toggleUtxoLock } = useWalletUtxos(wizardKey)
   const [fundingRefresh, setFundingRefresh] = useState(0)
   const [resumableFunding, setResumableFunding] = useState<AssetLockFundingState | null>(null)
   const [resumeOpen, setResumeOpen] = useState(false)
@@ -1248,6 +1248,7 @@ function WalletTransferHub(): React.JSX.Element {
         identityId={selectedIdentity?.identifier ?? null}
         platformAddress={undefined}
         onRetryUtxos={retryUtxos}
+        onToggleUtxoLock={toggleUtxoLock}
         onClose={() => setCoinControlOpen(false)}
         onApply={setCoinControl}
       />

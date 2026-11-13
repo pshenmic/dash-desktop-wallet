@@ -10,6 +10,7 @@ const harness = vi.hoisted(() => ({
   connectionType: 'p2p',
   phase: 'synced',
   getUtxos: vi.fn(),
+  setUtxoLocked: vi.fn(),
   index: 0,
   states: [] as unknown[],
   memos: [] as Array<{deps: unknown[]; value: unknown}>,
@@ -48,7 +49,7 @@ vi.mock('react', () => ({
   },
 }))
 
-vi.mock('@renderer/api', () => ({API: {getUtxos: harness.getUtxos}}))
+vi.mock('@renderer/api', () => ({API: {getUtxos: harness.getUtxos, setUtxoLocked: harness.setUtxoLocked}}))
 vi.mock('@renderer/contexts/AuthContext', () => ({
   useAuth: () => ({status: {selectedWalletId: harness.walletId, walletSync: {phase: harness.phase}}}),
 }))
@@ -102,6 +103,7 @@ beforeEach(() => {
   harness.effects = []
   harness.pendingEffects = []
   harness.getUtxos.mockReset()
+  harness.setUtxoLocked.mockReset()
 })
 
 describe('spendable UTXO refresh readiness', () => {
@@ -292,5 +294,15 @@ describe('spendable UTXO refresh readiness', () => {
     expect(render()).toMatchObject({utxos: [], loading: false, error: null})
     commitEffects()
     expect(harness.getUtxos).toHaveBeenCalledTimes(2)
+  })
+
+  it('toggles UTXO lock state in the snapshot after persisting via IPC', async () => {
+    await loadInitial()
+    harness.setUtxoLocked.mockResolvedValueOnce(undefined)
+
+    await render().toggleLock(selectedUtxo)
+    expect(harness.setUtxoLocked).toHaveBeenCalledWith('wallet-a', 'selected', 0, true)
+    expect(render().utxos).toEqual([{...selectedUtxo, isLocked: true}, otherUtxo])
+    expect(selectionStatus(render())).toEqual({canSubmit: false, unavailable: true})
   })
 })

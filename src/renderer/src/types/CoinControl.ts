@@ -43,6 +43,7 @@ export interface WalletUtxosResult {
   localSnapshot: boolean
   error: string | null
   retry: () => void
+  toggleLock: (utxo: SelectableUtxo) => Promise<void>
 }
 
 export interface CoinControlFixedSourceCopy {
@@ -73,6 +74,7 @@ export interface CoinControlModalProps {
   identityId: string | null
   platformAddress: PlatformAddressDto | undefined
   onRetryUtxos: () => void
+  onToggleUtxoLock?: (utxo: SelectableUtxo) => void | Promise<void>
   onClose: () => void
   onApply: (selection: CoinControlSelection) => void
 }

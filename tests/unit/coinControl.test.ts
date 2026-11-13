@@ -340,4 +340,30 @@ describe('coin control', () => {
       shieldedNoteIndexes: Array.from({length: SHIELDED_NOTE_LIMIT + 1}, (_, index) => index),
     })).toBe(false)
   })
+
+  it('excludes locked UTXOs from inventory, address expansion, totals, and spend sources', () => {
+    const withLocked: CoinControlFunds = {
+      ...funds,
+      utxos: [
+        {...funds.utxos[0], isLocked: true},
+        funds.utxos[1],
+      ],
+    }
+    const built = buildCoinControlInventory(withLocked)
+    expect(built.coreOutpoints).toEqual(['tx-b:1'])
+    expect(isCoinControlSelectionValid({kind: 'coreOutpoints', outpoints: ['tx-a:0']}, built)).toBe(false)
+    expect(expandAddressCoinControlSelection({kind: 'coreAddress', address: 'core-a'}, withLocked)).toEqual({
+      kind: 'coreOutpoints',
+      outpoints: ['tx-b:1'],
+    })
+    expect(coinControlSelectionTotals({kind: 'coreOutpoints', outpoints: ['tx-a:0', 'tx-b:1']}, withLocked)).toEqual({
+      count: 2,
+      duffs: 99_999_999n,
+      credits: 99_999_999_000n,
+    })
+    expect(toCoreSpendSource({kind: 'coreOutpoints', outpoints: ['tx-a:0', 'tx-b:1']}, withLocked.utxos)).toEqual({
+      kind: 'outpoints',
+      outpoints: [{txid: 'tx-b', vout: 1}],
+    })
+  })
 })
