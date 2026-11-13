@@ -31,11 +31,15 @@ export function orbitIdentifiers(contacts: DashPayContactDto[], identifier: stri
     .map(contact => contact.contactId)
 }
 
-export function overviewActions(identity: IdentityApiDto | null, readiness: DashPayReadinessInfo | null): OverviewAction[] {
+export function overviewActions(
+  identity: IdentityApiDto | null,
+  readiness: DashPayReadinessInfo | null,
+  usernameAction: OverviewAction | null = OverviewAction.RegisterUsername,
+): OverviewAction[] {
   if (identity == null || readiness == null) return [OverviewAction.CreateIdentity]
   const actions: OverviewAction[] = []
   if (readiness.missingKeys.length > 0) actions.push(OverviewAction.EnableDashPay)
-  if (identity.usernames.length === 0) actions.push(OverviewAction.RegisterUsername)
+  if (identity.usernames.length === 0 && usernameAction != null) actions.push(usernameAction)
   actions.push(OverviewAction.FindPeople)
   return actions.slice(0, 2)
 }

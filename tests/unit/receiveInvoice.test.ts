@@ -1,8 +1,11 @@
 import {describe, expect, it} from 'vitest'
 import {
+  balancedAddressLines,
   corePaymentUri,
+  receiveAmountDuffs,
   receiveAmountParam,
   receiveInvoiceHeadline,
+  receiveRequestAmountDash,
   wrapByWidth,
 } from '../../src/renderer/src/utils/receiveInvoice'
 
@@ -28,9 +31,23 @@ describe('receiveAmountParam', () => {
 })
 
 describe('corePaymentUri', () => {
-  it('adds the amount only when one is requested', () => {
+  it('adds the amount and label query parameters when present', () => {
     expect(corePaymentUri('yAddress', null)).toBe('dash:yAddress')
     expect(corePaymentUri('yAddress', '1.5')).toBe('dash:yAddress?amount=1.5')
+    expect(corePaymentUri('yAddress', null, 'Invoice #42')).toBe('dash:yAddress?label=Invoice%20%2342')
+    expect(corePaymentUri('yAddress', '1.5', 'Coffee & Tea')).toBe('dash:yAddress?amount=1.5&label=Coffee%20%26%20Tea')
+    expect(corePaymentUri('yAddress', null, '   ')).toBe('dash:yAddress')
+  })
+})
+
+describe('receiveAmountDuffs and receiveRequestAmountDash', () => {
+  it('converts between Dash input strings and duff bigints', () => {
+    expect(receiveAmountDuffs('')).toBeNull()
+    expect(receiveAmountDuffs('0')).toBeNull()
+    expect(receiveAmountDuffs('1.5')).toBe(150_000_000n)
+    expect(receiveRequestAmountDash(150_000_000n)).toBe('1.5')
+    expect(receiveRequestAmountDash(null)).toBeNull()
+    expect(receiveRequestAmountDash(0n)).toBeNull()
   })
 })
 
@@ -60,5 +77,23 @@ describe('wrapByWidth', () => {
 
   it('returns no lines for empty text', () => {
     expect(wrapByWidth([], 4, width)).toEqual([])
+  })
+})
+
+describe('balancedAddressLines', () => {
+  it('keeps Core and Platform addresses on a single line', () => {
+    const core = 'ybKB1cXmRoF7BxqVU5H2i9GMEyYjuD9GUn'
+    expect(balancedAddressLines(core)).toEqual([core])
+
+    const platform = 'tdash1kpkn7auxuku5z5y3k4tx9ydn6elwmuja0cga5vr4'
+    expect(balancedAddressLines(platform)).toEqual([platform])
+  })
+
+  it('splits Shielded addresses into two balanced lines', () => {
+    const shielded = 'tdash1zqyvt595745255yj6pf2x9nz7y0qhqujdr0dw2qm6ncqtwqexrxg5p2s9abcdef123456'
+    const shieldedLines = balancedAddressLines(shielded)
+    expect(shieldedLines).toHaveLength(2)
+    expect(shieldedLines.join('')).toBe(shielded)
+    expect(shieldedLines.every((line) => line.length >= 37 && line.length <= 38)).toBe(true)
   })
 })

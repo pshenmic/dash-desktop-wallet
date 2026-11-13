@@ -89,17 +89,17 @@ export function selectTransferInputs(
 ): TransferInputSelection {
   const pathByAddress = new Map([...grouped.receiving, ...grouped.change, ...grouped.dashPay ?? []].map(a => [a.address, a.derivationPath]))
 
-  const selectable = selectableTransferUtxos(grouped, utxos, source)
-
-  if (selectable.length === 0) {
-    throw new Error('No spendable funds in this wallet')
-  }
+  const selectable = selectableTransferUtxos(grouped, utxos, source).filter(utxo => !utxo.isLocked)
 
   // A quote prices whatever survived, but a send that quietly spent fewer coins
   // than were picked would break the one promise picking them makes.
   const picked = pickedOutpointKeys(source)
   if (picked != null && selectable.length !== picked.size) {
     throw new Error('Selected UTXO no longer available')
+  }
+
+  if (selectable.length === 0) {
+    throw new Error('No spendable funds in this wallet')
   }
 
   const selection = selectCoins(selectable, amountDuffs, feeForInputs, source)

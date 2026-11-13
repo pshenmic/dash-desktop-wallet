@@ -11,6 +11,7 @@ import AddAddressSection from './AddAddressSection'
 import SyncGateNotice from '@renderer/components/ui/SyncGateNotice'
 import { refreshAddresses, useAdresses } from '@renderer/hooks/useAdresses'
 import { refreshPlatformAddresses, usePlatformAddresses } from '@renderer/hooks/usePlatformAddresses'
+import { useReceiveRequests } from '@renderer/hooks/useReceiveRequests'
 import { useAuth } from '@renderer/contexts/AuthContext'
 import ListSkeleton from '@renderer/components/ui/Skeleton'
 import NoResults from '@renderer/components/ui/NoResults'
@@ -81,6 +82,7 @@ export default function AddressList({ coreGated = false, onExportKey }: AddressL
     loading: platformLoading,
     err: platformErr,
   } = usePlatformAddresses(walletId)
+  const { labelsByAddress } = useReceiveRequests(walletId)
   const retryAddresses = walletId === undefined ? undefined : () => refreshAddresses(walletId)
   const retryPlatformAddresses = walletId === undefined ? undefined : () => refreshPlatformAddresses(walletId)
 
@@ -88,6 +90,7 @@ export default function AddressList({ coreGated = false, onExportKey }: AddressL
     <AddressCard
       key={item.address}
       {...item}
+      label={labelsByAddress.get(item.address) ?? null}
       onExportKey={onExportKey ? () => onExportKey({ address: item.address, path: item.derivationPath }) : undefined}
     />
   )
@@ -146,6 +149,7 @@ export default function AddressList({ coreGated = false, onExportKey }: AddressL
               <PlatformAddressCard
                 key={item.platformAddress}
                 {...item}
+                label={labelsByAddress.get(item.platformAddress) ?? null}
                 onExportKey={onExportKey ? () => onExportKey({ address: item.platformAddress }) : undefined}
               />
             )}

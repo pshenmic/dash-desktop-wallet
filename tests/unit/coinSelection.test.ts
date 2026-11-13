@@ -167,4 +167,16 @@ describe('spending a picked set of coins', () => {
     expect(res.change).toBe(0n)
     expect(res.inputs).toHaveLength(6)
   })
+
+  it('skips locked UTXOs during automatic selection and refuses locked outpoint picks', () => {
+    const locked = {...utxo(ONE_DASH, 0), isLocked: true}
+    const unlocked = utxo(ONE_DASH / 2n, 1)
+
+    const res = selectCoins([locked, unlocked], ONE_DASH / 4n, FEE)
+    expect(res.inputs).toEqual([unlocked])
+    expect(maxSelectableAmount([locked, unlocked], FEE)).toBe(ONE_DASH / 2n - FEE(1))
+
+    expect(() => selectCoins([locked], ONE_DASH / 4n, FEE, picked([locked]))).toThrow('Insufficient funds')
+    expect(maxSelectableAmount([locked], FEE, picked([locked]))).toBe(0n)
+  })
 })

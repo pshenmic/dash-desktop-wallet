@@ -1,6 +1,6 @@
 import type { ReactNode, Ref } from 'react'
 import type { DashPayContactDto } from '@renderer/api/types'
-import type { ContactSegment, DashPayReadiness, DashPayTab, OverviewAction, OverviewBand } from '@renderer/enums/DashPay'
+import type { ContactSegment, DashPayReadiness, DashPayTab, OverviewAction, OverviewBand, UsernameStatus } from '@renderer/enums/DashPay'
 import type { IdentityApiDto } from '@renderer/hooks/useIdentities'
 import type { ContactSegmentCounts, DashPayReadinessInfo } from './DashPay'
 import type { IdentitySelectHandle } from './IdentitySelect'
@@ -16,8 +16,10 @@ export interface IdentitySwitcherProps {
   ref?: Ref<IdentitySelectHandle>
 }
 
+export type IdentitySwitcherStatus = DashPayReadiness | UsernameStatus.Voting
+
 export interface IdentityReadinessBadgeProps {
-  readiness: DashPayReadiness
+  status: IdentitySwitcherStatus | null
 }
 
 export interface OverviewBandModel {
@@ -55,6 +57,8 @@ export interface OnboardingHeroContentProps {
 export interface SetupChecklistProps {
   identity: IdentityApiDto | null
   readiness: DashPayReadinessInfo | null
+  votingUsername?: string
+  showRegisterUsername: boolean
   canSwitch: boolean
   onAction: (action: OverviewAction) => void
   onTopUp: () => void

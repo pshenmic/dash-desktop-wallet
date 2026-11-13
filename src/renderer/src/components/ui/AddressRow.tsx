@@ -1,5 +1,6 @@
 import { HighlightedIdentifier, Text, ExternalLinkIcon, KeyIcon } from '@renderer/components/dash-ui-kit-extended'
 import CopyButton from '@renderer/components/ui/CopyButton'
+import CustomBadge from '@renderer/components/ui/CustomBadge'
 import QrButton from '@renderer/components/ui/QrButton'
 import SensitiveValue from '@renderer/components/ui/SensitiveValue'
 import {
@@ -17,6 +18,7 @@ import { openExternal } from '@renderer/utils/explorer'
 
 export default function AddressRow({
   address,
+  label = null,
   amount,
   fiatDuffs = null,
   leading,
@@ -27,6 +29,7 @@ export default function AddressRow({
   hidden = false,
 }: AddressRowProps): React.JSX.Element {
   const { format: formatFiat, rateReady } = useFiat()
+  const trimmedLabel = label?.trim() ?? ''
 
   return (
     <div className={`flex items-center justify-between gap-4 ${SURFACE_ROW}`}>
@@ -35,6 +38,9 @@ export default function AddressRow({
         <div className={"flex min-w-0 flex-col gap-1"}>
           <div className={"flex min-w-0 items-center gap-[.3125rem]"}>
             <HighlightedIdentifier className={ADDRESS_ROW_IDENTIFIER_CLASS}>{address}</HighlightedIdentifier>
+            {trimmedLabel !== '' && (
+              <CustomBadge text={trimmedLabel} variant={"accent"} size={"xs"} className={"shrink-0"} />
+            )}
             <CopyButton text={address} className={"shrink-0"} />
             {onQr && <QrButton onClick={onQr} className={"shrink-0"} />}
             {onExportKey && (

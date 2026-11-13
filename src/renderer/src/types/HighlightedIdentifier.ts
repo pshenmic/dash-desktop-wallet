@@ -1,4 +1,6 @@
+import type { ReactNode } from 'react'
+
 export interface HighlightedIdentifierProps {
-  children: string
+  children: ReactNode
   className?: string
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { API } from '@renderer/api'
+import type { SelectableUtxo } from '@renderer/api/types'
 import { useAuth } from '@renderer/contexts/AuthContext'
 import { useConnectionModeContext } from '@renderer/contexts/ConnectionModeContext'
 import type { WalletUtxosRequest, WalletUtxosResult, WalletUtxosSnapshot } from '@renderer/types/CoinControl'
@@ -37,11 +38,26 @@ export function useWalletUtxos(refreshKey = 0): WalletUtxosResult {
     return () => { cancelled = true }
   }, [request])
 
+  const toggleLock = async (utxo: SelectableUtxo): Promise<void> => {
+    if (!walletId) return
+    const nextLocked = !utxo.isLocked
+    await API.setUtxoLocked(walletId, utxo.txid, utxo.vout, nextLocked)
+    setSnapshot(previous => {
+      if (!previous || previous.request.walletId !== walletId) return previous
+      return {
+        ...previous,
+        utxos: previous.utxos.map(item =>
+          item.txid === utxo.txid && item.vout === utxo.vout ? {...item, isLocked: nextLocked} : item,
+        ),
+      }
+    })
+  }
+
   const utxos = walletId != null && snapshot?.request.walletId === walletId
     && snapshot.request.connectionType === connectionType ? snapshot.utxos : []
   // A sync transition must block submission before its fetch effect runs.
   const current = snapshot?.request === request
   const loading = walletId != null && ((syncIncomplete && !localSnapshot) || !current)
   const error = current ? snapshot.error : null
-  return {utxos, loading, localSnapshot, error, retry: () => setReload(current => current + 1)}
+  return {utxos, loading, localSnapshot, error, retry: () => setReload(current => current + 1), toggleLock}
 }
