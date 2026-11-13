@@ -50,7 +50,6 @@ export default function ReceiveRequestModal({
               address: request.address,
               label: request.label,
               amount: amountDash,
-              paymentLink: paymentUri,
               network: status?.network ?? null,
             }}
           />

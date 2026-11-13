@@ -41,6 +41,10 @@ export interface IdentityNameProps {
   identity: IdentityApiDto
 }
 
+export interface IdentityHeadlineProps extends IdentityNameProps {
+  showCopy?: boolean
+}
+
 export interface IdentityMetaProps {
   identity: IdentityApiDto
   meta: ReactNode

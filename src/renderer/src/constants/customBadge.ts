@@ -6,4 +6,5 @@ export const CUSTOM_BADGE_VARIANTS: Record<CustomBadgeVariant, CustomBadgeColors
   muted: { variant: 'flat', colorLight: 'gray', colorDark: 'white' },
   accent: { variant: 'default', colorLight: 'blue', colorDark: 'turquoise', className: 'bg-dash-brand/10 dark:bg-dash-mint/5' },
   warning: { variant: 'flat', color: 'orange' },
+  premium: { variant: 'default', color: 'gray', className: 'bg-dash-yellow/45 text-yellow-800! dark:bg-dash-yellow/15 dark:text-dash-yellow!' },
 }

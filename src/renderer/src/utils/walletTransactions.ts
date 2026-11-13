@@ -1,4 +1,5 @@
 import type { PlatformTransaction } from '@renderer/api/types'
+import type { IdentityApiDto } from '@renderer/hooks/useIdentities'
 import type { TransactionCardAmount, TransactionCardDisplay, TransactionCardItem, WalletHistoryGroup, WalletHistoryItem, WalletHistoryWindow, WalletTxDto, WalletTxItem, WalletTxStatus } from '@renderer/types/WalletTransaction'
 import { formatCreationDate } from './date'
 import { creditsToDash, creditsToDuffs, dashToDuffs, davToDash } from './balance'
@@ -30,7 +31,12 @@ export function groupTransactionsByDay(items: WalletTxItem[]) {
   return Array.from(map, ([date, transactions]) => ({ date, transactions }))
 }
 
-export function mergeWalletTransactions(core: WalletTxItem[], platform: PlatformTransaction[]): WalletHistoryItem[] {
+export function mergeWalletTransactions(
+  core: WalletTxItem[],
+  platform: PlatformTransaction[],
+  identities: Pick<IdentityApiDto, 'identifier' | 'usernames'>[] = [],
+): WalletHistoryItem[] {
+  const namesById = new Map(identities.map(identity => [identity.identifier, identity.usernames]))
   const transactions: WalletHistoryItem[] = [
     ...core.map<WalletHistoryItem>((tx) => ({
       ...tx,
@@ -40,13 +46,17 @@ export function mergeWalletTransactions(core: WalletTxItem[], platform: Platform
       selection: { kind: 'core', transaction: tx },
       searchValues: [tx.id, tx.labelValue, ...tx.vin.map((input) => input.addr), ...tx.vout.map((output) => output.address)],
     })),
-    ...platform.map<WalletHistoryItem>((tx) => ({
-      ...mapPlatformTransaction(tx),
-      kind: 'platform',
-      type: `platform:${tx.type}`,
-      selection: { kind: 'platform', hash: tx.hash },
-      searchValues: [tx.hash, ...tx.sender.map(end => end.source), ...tx.recipient.map(end => end.source)],
-    })),
+    ...platform.map<WalletHistoryItem>((tx) => {
+      const participants = [...tx.sender, ...tx.recipient].map(participant => participant.source)
+      return {
+        ...mapPlatformTransaction(tx),
+        kind: 'platform',
+        type: `platform:${tx.type}`,
+        selection: { kind: 'platform', hash: tx.hash },
+        searchValues: [tx.hash, ...participants],
+        searchNames: participants.flatMap(identifier => namesById.get(identifier) ?? []),
+      }
+    }),
   ]
   return transactions.sort((a, b) => (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0))
 }
