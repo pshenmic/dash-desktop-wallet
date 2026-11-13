@@ -13,7 +13,6 @@ import { capSendAmount, recipientPercent, recipientRemainingDuffs, recipientSlid
 import AllocationAmountRow from '@renderer/components/ui/AllocationAmountRow'
 import CreditsAmount from '@renderer/components/ui/CreditsAmount'
 import DenominationChips from '@renderer/components/ui/DenominationChips'
-import FadingScrollArea from '@renderer/components/ui/FadingScrollArea'
 import RecipientInput from './RecipientInput'
 
 export default function SendRecipientsEditor({
@@ -33,7 +32,6 @@ export default function SendRecipientsEditor({
   addressLabels,
   headerAction,
   beforeRecipients,
-  footer,
   onChange,
 }: SendRecipientsEditorProps): React.JSX.Element {
   const {status} = useAuth()
@@ -47,7 +45,7 @@ export default function SendRecipientsEditor({
   }
 
   return (
-    <div className={`flex h-[calc(100dvh-17rem)] min-h-96 min-w-0 flex-col ${SURFACE_PANEL}`}>
+    <div className={`mx-auto flex w-full max-w-170 min-w-0 flex-col ${SURFACE_PANEL}`}>
       <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div className="text-sm font-medium dash-text-default">
           <span>Recipients ({recipients.length}/{limit})</span>
@@ -70,7 +68,7 @@ export default function SendRecipientsEditor({
         </div>
       </div>
       {beforeRecipients && <div className="mb-3 shrink-0">{beforeRecipients}</div>}
-      <FadingScrollArea className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto scrollbar-hide">
+      <div className="flex min-w-0 flex-col gap-3">
         {recipients.map((recipient, index) => {
           const amount = dashToDuffs(recipient.amount)
           const remaining = budgetDuffs == null ? null : recipientRemainingDuffs(recipients, recipient.id, budgetDuffs)
@@ -197,8 +195,7 @@ export default function SendRecipientsEditor({
             </section>
           )
         })}
-      </FadingScrollArea>
-      {footer && <div className="mt-5 shrink-0">{footer}</div>}
+      </div>
     </div>
   )
 }

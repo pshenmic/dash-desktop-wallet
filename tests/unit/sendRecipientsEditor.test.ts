@@ -9,7 +9,6 @@ vi.mock('@renderer/components/dash-ui-kit-extended', () => ({PlusIcon: 'svg', Te
 vi.mock('@renderer/contexts/AuthContext', () => ({useAuth: () => ({status: {network: 'testnet'}})}))
 vi.mock('@renderer/components/ui/AllocationAmountRow', () => ({default: 'allocation-row'}))
 vi.mock('@renderer/components/ui/CreditsAmount', () => ({default: 'span'}))
-vi.mock('@renderer/components/ui/FadingScrollArea', () => ({default: 'div'}))
 vi.mock('@renderer/components/pages/transfer/RecipientInput', () => ({default: 'recipient-input'}))
 
 import SendRecipientsEditor from '../../src/renderer/src/components/pages/transfer/SendRecipientsEditor'
@@ -109,5 +108,19 @@ describe('SendRecipientsEditor', () => {
     expect(inputs[0].props.ownOptionsLoading).toBe(true)
     expect(inputs[0].props.ownOptionsError).toBe('Failed')
     expect(inputs[0].props.onRetryOwnOptions).toBe(onRetryOwnOptions)
+  })
+
+  it('centers the panel at max-w-170 with natural height and renders no Apply or Reset buttons', () => {
+    const tree = SendRecipientsEditor(props())
+    const rootClassName = String((tree.props as {className?: string}).className ?? '')
+    expect(rootClassName).toContain('mx-auto')
+    expect(rootClassName).toContain('max-w-170')
+    expect(rootClassName).not.toContain('100dvh')
+
+    const buttonLabels = elements(tree)
+      .filter(node => node.type === 'button')
+      .map(node => elements(node.props.children as ReactNode).concat(node))
+      .map(nodes => nodes.flatMap(n => typeof n.props.children === 'string' ? [n.props.children] : []).join(''))
+    expect(buttonLabels.join(' ')).not.toMatch(/Apply|Reset/i)
   })
 })

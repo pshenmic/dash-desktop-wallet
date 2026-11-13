@@ -85,7 +85,6 @@ import { DASH_UNIT } from "@renderer/constants/balance";
 import { PAGE_HEADERS } from "@renderer/constants/pageHeaders";
 import { SEND_MODE_LABEL, SEND_MODE_OPTIONS } from "@renderer/constants/sendMode";
 import { CHIP_VALUE, SURFACE_SECTION } from "@renderer/constants/surfaces";
-import { TRANSFER_WIZARD_CTA_CLASS } from "@renderer/constants/transferWizard";
 import { coreSendChangeTo } from "@renderer/utils/changeAddress";
 import { INVALID_WALLET_PASSWORD_MESSAGE, sendPageData, WITHDRAWAL_SUCCESS_NOTE } from "@renderer/constants";
 import { AUTOMATIC_PLATFORM_SELECTION, AUTOMATIC_SOURCE_LABELS, DESTINATION_PLACEHOLDERS, INVALID_DESTINATION_MESSAGES, OPERATION_FUNDING_KINDS, UNFINISHED_FUNDING_LABELS } from "@renderer/constants/sendPages";
@@ -146,7 +145,7 @@ function WalletTransferHub(): React.JSX.Element {
   const setAcked = (acked: boolean): void => updateDraft(current => ({ ...current, acked }))
   const setCoinControl = (coinControl: CoinControlSelection): void => updateDraft(current => ({ ...current, coinControl }))
   const [coinControlOpen, setCoinControlOpen] = useState(false)
-  const [recipientDraft, setRecipientDraft] = useState<AdvancedSendRoute | null>(null)
+  const [recipientsOpen, setRecipientsOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [password, setPassword] = useState('')
   const [passwordError, setPasswordError] = useState<string | null>(null)
@@ -234,28 +233,16 @@ function WalletTransferHub(): React.JSX.Element {
   const recipientLimit = operation == null ? 1 : SEND_RECIPIENT_LIMITS[operation] ?? 1
   const advancedMulti = advanced && recipientLimit > 1
   const usesRecipientEditor = advanced && operation != null
-  const savedAdvancedRoute = useMemo(() => getAdvancedSendRoute(draft, operation), [draft.advancedRoutes, operation])
-  const advancedRoute = recipientDraft ?? savedAdvancedRoute
+  const advancedRoute = useMemo(() => getAdvancedSendRoute(draft, operation), [draft.advancedRoutes, operation])
   const updateAdvancedRoute = (update: Partial<AdvancedSendRoute>): void => {
-    if (recipientDraft != null) {
-      setRecipientDraft(current => current == null ? null : {...current, ...update})
-    } else {
-      updateDraft(current => ({
-        ...current,
-        advancedRoutes: operation == null ? current.advancedRoutes : {
-          ...current.advancedRoutes,
-          [operation]: {...getAdvancedSendRoute(current, operation), ...update},
-        },
-      }))
-    }
-  }
-  const applyRecipients = (): void => {
-    if (recipientDraft == null || operation == null) return
+    if (operation == null) return
     updateDraft(current => ({
       ...current,
-      advancedRoutes: {...current.advancedRoutes, [operation]: recipientDraft},
+      advancedRoutes: {
+        ...current.advancedRoutes,
+        [operation]: {...getAdvancedSendRoute(current, operation), ...update},
+      },
     }))
-    setRecipientDraft(null)
   }
   const activeRecipients = useMemo(() => usesRecipientEditor ? advancedRoute.recipients : [{id: 'simple', address: toValue, amount}], [usesRecipientEditor, advancedRoute.recipients, toValue, amount])
   const orderedRecipients = useMemo(
@@ -620,7 +607,7 @@ function WalletTransferHub(): React.JSX.Element {
   const resetForm = (): void => {
     clearPassword()
     setCoinControlOpen(false)
-    setRecipientDraft(null)
+    setRecipientsOpen(false)
     setPreviewOpen(false)
     setReview(null)
     const resetDraft = resetCurrentSendRoute(draftRef.current)
@@ -659,7 +646,7 @@ function WalletTransferHub(): React.JSX.Element {
     else if (toKind === DestinationKind.Shielded) savedShielded.retry()
   }
   const changeDestinationKind = (kind: DestinationKind): void => {
-    setRecipientDraft(null)
+    setRecipientsOpen(false)
     setToKind(kind)
     if (!advanced) setToValue('')
     setAcked(false)
@@ -667,7 +654,7 @@ function WalletTransferHub(): React.JSX.Element {
   const changeSendMode = (mode: boolean): void => {
     clearPassword()
     setCoinControlOpen(false)
-    setRecipientDraft(null)
+    setRecipientsOpen(false)
     updateDraft(current => setSendAdvanced(current, mode))
     setWizardKey(key => key + 1)
   }
@@ -682,7 +669,7 @@ function WalletTransferHub(): React.JSX.Element {
           <strong className="font-bold">{activeRecipients.length}</strong>
           <span className="opacity-[.48]">/{recipientLimit})</span>
         </>}
-        onClick={() => setRecipientDraft(savedAdvancedRoute)}
+        onClick={() => setRecipientsOpen(true)}
       />
     )
   } else if (coreRecipientInput) {
@@ -711,7 +698,7 @@ function WalletTransferHub(): React.JSX.Element {
               : undefined}
             kind={fromKind}
             onKindChange={k => {
-              setRecipientDraft(null)
+              setRecipientsOpen(false)
               setFromKind(k)
               setAcked(false)
               if (k === SourceKind.Identity && identities.length === 0) reloadIdentities()
@@ -1118,6 +1105,8 @@ function WalletTransferHub(): React.JSX.Element {
     || operation === TransferOperation.AddressWithdrawal || operation === TransferOperation.IdentityWithdrawal
     || operation === TransferOperation.IdentityToAddress || operation === TransferOperation.IdentityToIdentity || operation === TransferOperation.IdentityCreate
 
+  const recipientsViewOpen = recipientsOpen && usesRecipientEditor && !coinControlOpen && !previewOpen
+
   return (
     <div className={"relative flex flex-col h-[calc(100dvh-8rem)] pb-4"} inert={confirmOpen || verifying || notesUnlockOpen || resumeOpen || dismissConfirmOpen}>
       {previewOpen && review && <SendTransactionPreview
@@ -1130,12 +1119,12 @@ function WalletTransferHub(): React.JSX.Element {
         onRetry={showPreview}
         onSign={signTransaction}
       />}
-      {recipientDraft != null && !coinControlOpen && !previewOpen && (
-        <section className="px-12" aria-label={PAGE_HEADERS.recipients.title}>
+      {recipientsViewOpen && (
+        <section className="min-h-0 flex-1 overflow-y-auto px-12 pb-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label={PAGE_HEADERS.recipients.title}>
           <PageHeader
             title={PAGE_HEADERS.recipients.title}
             subtitle={PAGE_HEADERS.recipients.subtitle}
-            onBack={() => setRecipientDraft(null)}
+            onBack={() => setRecipientsOpen(false)}
             backLabel={PAGE_HEADERS.recipients.back}
           />
           <SendRecipientsEditor
@@ -1156,19 +1145,10 @@ function WalletTransferHub(): React.JSX.Element {
             headerAction={customChangeControl}
             beforeRecipients={withdrawalNotice || customChangeField ? <div className="flex flex-col gap-3">{withdrawalNotice}{customChangeField}</div> : undefined}
             onChange={recipients => updateAdvancedRoute({recipients})}
-            footer={<div className="flex gap-3">
-              <Button type="button" variant="solid" colorScheme="lightBlue-mint" size="md" className={TRANSFER_WIZARD_CTA_CLASS} onClick={() => updateAdvancedRoute({
-                recipients: [{id: activeRecipients[0]?.id ?? 'first', address: '', amount: ''}],
-                feeRecipientId: subtractFee ? activeRecipients[0]?.id ?? 'first' : null,
-                customChangeEnabled: false,
-                changeAddress: undefined,
-              })}>Reset</Button>
-              <Button type="button" variant="solid" colorScheme="primary" size="md" className={TRANSFER_WIZARD_CTA_CLASS} onClick={applyRecipients}>Apply</Button>
-            </div>}
           />
         </section>
       )}
-      <div className={previewOpen || coinControlOpen || recipientDraft != null ? 'hidden' : `flex flex-1 min-h-0 flex-col overflow-y-auto px-12 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${advanced ? '' : 'pb-8'}`}>
+      <div className={previewOpen || coinControlOpen || recipientsViewOpen ? 'hidden' : `flex flex-1 min-h-0 flex-col overflow-y-auto px-12 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${advanced ? '' : 'pb-8'}`}>
         <PageHeader
           title={PAGE_HEADERS.send.title}
           subtitle={PAGE_HEADERS.send.subtitle}
