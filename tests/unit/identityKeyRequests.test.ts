@@ -1,19 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildKeyRequests,
+  isValidContractId,
+  isValidDocumentType,
   keyBoundsLabel,
   keyLabel,
   keyRequestLabel,
   keysMatchingVariant,
   nextIdentityKeyId,
   projectedKeyIds,
+  validateKeyContractBounds,
   validateKeySelection,
   variantOfRequest,
   variantRequest,
 } from '../../src/renderer/src/utils/identityKeyRequests'
 import { IdentityKeyPurpose, IdentityKeySecurityLevel, IdentityKeyVariant } from '../../src/renderer/src/enums/IdentityKeys'
-import { DASHPAY_KEY_BOUNDS } from '../../src/renderer/src/constants/dashPay'
-import { IDENTITY_KEY_PURPOSE_LABELS, IDENTITY_KEY_VARIANTS } from '../../src/renderer/src/constants/identityKeys'
+import { DASHPAY_CONTRACT_ID, DASHPAY_KEY_BOUNDS } from '../../src/renderer/src/constants/dashPay'
+import { IDENTITY_KEY_PURPOSE_LABELS, IDENTITY_KEY_VARIANTS, KEY_BOUNDS_COPY } from '../../src/renderer/src/constants/identityKeys'
 import type { IdentityKeyDto } from '../../src/renderer/src/api/types'
+
+const CUSTOM_CONTRACT_ID = 'GWRSAVFMjXx8HpQFaNJMqBV7MBgMK4br5UESsB4S31Ec'
+const ZERO_CONTRACT_ID = '11111111111111111111111111111111'
 
 const DISABLED_AT = 1_700_000_000_000
 
@@ -72,7 +79,22 @@ describe('identity key variants', () => {
     for (const variant of Object.values(IdentityKeyVariant)) {
       expect(variantOfRequest(variantRequest(variant))).toBe(variant)
     }
+    expect(variantOfRequest({
+      purpose: IdentityKeyPurpose.Encryption,
+      securityLevel: IdentityKeySecurityLevel.Medium,
+      contractBounds: { contractId: DASHPAY_CONTRACT_ID, documentType: 'profile' },
+    })).toBe(IdentityKeyVariant.Enc)
     expect(variantOfRequest({ purpose: IdentityKeyPurpose.Transfer, securityLevel: IdentityKeySecurityLevel.Medium, contractBounds: null })).toBeNull()
+  })
+
+  it('applies custom contract bounds to bindable variants and ignores them on non-bindable variants', () => {
+    const customBounds = { contractId: CUSTOM_CONTRACT_ID, documentType: 'domain' }
+    expect(variantRequest(IdentityKeyVariant.AuthHigh, customBounds).contractBounds).toEqual(customBounds)
+    expect(variantRequest(IdentityKeyVariant.Enc, customBounds).contractBounds).toEqual(customBounds)
+    expect(variantRequest(IdentityKeyVariant.Dec, customBounds).contractBounds).toEqual(customBounds)
+    expect(variantRequest(IdentityKeyVariant.Transfer, customBounds).contractBounds).toBeNull()
+    expect(variantRequest(IdentityKeyVariant.EncDashPay, customBounds).contractBounds).toEqual(DASHPAY_KEY_BOUNDS)
+    expect(variantRequest(IdentityKeyVariant.DecDashPay, customBounds).contractBounds).toEqual(DASHPAY_KEY_BOUNDS)
   })
 
   it('counts the enabled keys an identity already has of a variant', () => {
@@ -117,19 +139,88 @@ describe('key labels', () => {
     expect(keyRequestLabel(variantRequest(IdentityKeyVariant.AuthHigh))).toBe('Authentication · High')
   })
 
-  it('names a request bound to another contract by its full id', () => {
-    const contractBounds = { contractId: 'GWRSAVFMjXx8HpQFaNJMqBV7MBgMK4br5UESsB4S31Ec', documentType: 'domain' }
-    expect(keyRequestLabel({ ...variantRequest(IdentityKeyVariant.AuthHigh), contractBounds }))
-      .toBe('Authentication · High · GWRSAVFMjXx8HpQFaNJMqBV7MBgMK4br5UESsB4S31Ec')
+  it('names a request with its bound contract and optional document type', () => {
+    const contractOnly = { contractId: CUSTOM_CONTRACT_ID, documentType: null }
+    const withDocumentType = { contractId: CUSTOM_CONTRACT_ID, documentType: 'domain' }
+    const dashPayOtherDoc = { contractId: DASHPAY_CONTRACT_ID, documentType: 'profile' }
+    expect(keyRequestLabel({ ...variantRequest(IdentityKeyVariant.AuthHigh), contractBounds: contractOnly }))
+      .toBe(`Authentication · High · ${CUSTOM_CONTRACT_ID}`)
+    expect(keyRequestLabel({ ...variantRequest(IdentityKeyVariant.AuthHigh), contractBounds: withDocumentType }))
+      .toBe(`Authentication · High · ${CUSTOM_CONTRACT_ID} · domain`)
+    expect(keyRequestLabel({ ...variantRequest(IdentityKeyVariant.Enc), contractBounds: dashPayOtherDoc }))
+      .toBe('Encryption · Medium · DashPay · profile')
   })
 
   it('labels DashPay bounds, other contracts by full id, and no bounds as null', () => {
     expect(keyBoundsLabel(DASHPAY_KEY_BOUNDS)).toEqual({ text: 'DashPay · contactRequest', isDashPay: true })
-    expect(keyBoundsLabel({ contractId: 'GWRSAVFMjXx8HpQFaNJMqBV7MBgMK4br5UESsB4S31Ec', documentType: 'domain' }))
-      .toEqual({ text: 'GWRSAVFMjXx8HpQFaNJMqBV7MBgMK4br5UESsB4S31Ec · domain', isDashPay: false })
-    expect(keyBoundsLabel({ contractId: 'GWRSAVFMjXx8HpQFaNJMqBV7MBgMK4br5UESsB4S31Ec', documentType: null }))
-      .toEqual({ text: 'GWRSAVFMjXx8HpQFaNJMqBV7MBgMK4br5UESsB4S31Ec', isDashPay: false })
+    expect(keyBoundsLabel({ contractId: CUSTOM_CONTRACT_ID, documentType: 'domain' }))
+      .toEqual({ text: `${CUSTOM_CONTRACT_ID} · domain`, isDashPay: false })
+    expect(keyBoundsLabel({ contractId: CUSTOM_CONTRACT_ID, documentType: null }))
+      .toEqual({ text: CUSTOM_CONTRACT_ID, isDashPay: false })
     expect(keyBoundsLabel(null)).toBeNull()
+  })
+})
+
+describe('contract bounds validation', () => {
+  it('validates 32-byte Base58 contract IDs', () => {
+    expect(isValidContractId(DASHPAY_CONTRACT_ID)).toBe(true)
+    expect(isValidContractId(`  ${CUSTOM_CONTRACT_ID}  `)).toBe(true)
+    expect(isValidContractId(ZERO_CONTRACT_ID)).toBe(true)
+    expect(isValidContractId('')).toBe(false)
+    expect(isValidContractId('not-base58-0OIl')).toBe(false)
+    expect(isValidContractId('2gR9w')).toBe(false)
+  })
+
+  it('validates document types against the Platform identifier pattern', () => {
+    expect(isValidDocumentType('domain')).toBe(true)
+    expect(isValidDocumentType('contact_request-v1')).toBe(true)
+    expect(isValidDocumentType('a'.repeat(64))).toBe(true)
+    expect(isValidDocumentType('a'.repeat(65))).toBe(false)
+    expect(isValidDocumentType('bad doc')).toBe(false)
+    expect(isValidDocumentType('bad.doc')).toBe(false)
+  })
+
+  it('normalizes empty document type to null and validates partial or invalid drafts', () => {
+    expect(validateKeyContractBounds()).toEqual({ bounds: null, contractIdError: null, documentTypeError: null, valid: true })
+    expect(validateKeyContractBounds({ contractId: `  ${CUSTOM_CONTRACT_ID} `, documentType: '   ' })).toEqual({
+      bounds: { contractId: CUSTOM_CONTRACT_ID, documentType: null },
+      contractIdError: null,
+      documentTypeError: null,
+      valid: true,
+    })
+    expect(validateKeyContractBounds({ contractId: CUSTOM_CONTRACT_ID, documentType: '  domain  ' })).toEqual({
+      bounds: { contractId: CUSTOM_CONTRACT_ID, documentType: 'domain' },
+      contractIdError: null,
+      documentTypeError: null,
+      valid: true,
+    })
+    expect(validateKeyContractBounds({ contractId: '', documentType: 'domain' })).toEqual({
+      bounds: null,
+      contractIdError: KEY_BOUNDS_COPY.contractIdRequired,
+      documentTypeError: null,
+      valid: false,
+    })
+    expect(validateKeyContractBounds({ contractId: 'invalid', documentType: 'bad doc' })).toEqual({
+      bounds: null,
+      contractIdError: KEY_BOUNDS_COPY.invalidContractId,
+      documentTypeError: KEY_BOUNDS_COPY.invalidDocumentType,
+      valid: false,
+    })
+  })
+
+  it('builds requests with custom bounds and ignores invalid drafts on unchecked variants', () => {
+    const drafts = {
+      [IdentityKeyVariant.AuthHigh]: { contractId: CUSTOM_CONTRACT_ID, documentType: 'domain' },
+      [IdentityKeyVariant.Enc]: { contractId: 'bad', documentType: '' },
+    }
+    expect(buildKeyRequests([IdentityKeyVariant.EncDashPay, IdentityKeyVariant.AuthHigh], drafts)).toEqual({
+      valid: true,
+      requests: [
+        variantRequest(IdentityKeyVariant.EncDashPay),
+        { ...variantRequest(IdentityKeyVariant.AuthHigh), contractBounds: { contractId: CUSTOM_CONTRACT_ID, documentType: 'domain' } },
+      ],
+    })
+    expect(buildKeyRequests([IdentityKeyVariant.AuthHigh, IdentityKeyVariant.Enc], drafts).valid).toBe(false)
   })
 })
 

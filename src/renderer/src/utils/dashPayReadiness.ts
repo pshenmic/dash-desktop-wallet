@@ -1,4 +1,4 @@
-import type { IdentityKeyDto, IdentityKeyRequestDto } from '@renderer/api/types'
+import type { IdentityKeyBoundsDto, IdentityKeyDto, IdentityKeyRequestDto } from '@renderer/api/types'
 import { DASHPAY_REQUIRED_KEYS, DASHPAY_SETUP_COPY, DASHPAY_SIGNING_KEY } from '@renderer/constants/dashPay'
 import { IDENTITY_KEY_TYPE_ECDSA } from '@renderer/constants/identityKeys'
 import { DashPayReadiness, DashPaySetupStep, SetupStepState } from '@renderer/enums/DashPay'
@@ -7,11 +7,19 @@ import type { DashPayReadinessInfo, SetupStepModel } from '@renderer/types/DashP
 import { identityLabel } from './identifierFormat'
 import { isIdentityKeyActive } from './identities'
 
+function boundsSatisfy(actual: IdentityKeyBoundsDto | null, required: IdentityKeyBoundsDto | null): boolean {
+  if (actual == null) return true
+  if (required == null) return false
+  return actual.contractId === required.contractId
+    && (actual.documentType == null || actual.documentType === required.documentType)
+}
+
 function keySatisfies(key: IdentityKeyDto, request: IdentityKeyRequestDto): boolean {
   return isIdentityKeyActive(key)
     && key.keyType.toUpperCase() === IDENTITY_KEY_TYPE_ECDSA
     && key.purpose.toUpperCase() === request.purpose
     && key.securityLevel.toUpperCase() === request.securityLevel
+    && boundsSatisfy(key.contractBounds, request.contractBounds)
 }
 
 export function dashPayMissingKeys(keys: IdentityKeyDto[]): IdentityKeyRequestDto[] {

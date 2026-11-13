@@ -13,15 +13,53 @@ const DASHPAY_BOUND_CAPTION = 'Bound to DashPay contact requests'
 const UNBOUND_CAPTION = 'Not bound'
 
 export const IDENTITY_KEY_VARIANTS: Record<IdentityKeyVariant, IdentityKeyVariantDefinition> = {
-  [IdentityKeyVariant.EncDashPay]: { variant: IdentityKeyVariant.EncDashPay, purpose: IdentityKeyPurpose.Encryption, securityLevel: IdentityKeySecurityLevel.Medium, dashPayBound: true, caption: DASHPAY_BOUND_CAPTION },
-  [IdentityKeyVariant.DecDashPay]: { variant: IdentityKeyVariant.DecDashPay, purpose: IdentityKeyPurpose.Decryption, securityLevel: IdentityKeySecurityLevel.Medium, dashPayBound: true, caption: DASHPAY_BOUND_CAPTION },
-  [IdentityKeyVariant.AuthCritical]: { variant: IdentityKeyVariant.AuthCritical, purpose: IdentityKeyPurpose.Authentication, securityLevel: IdentityKeySecurityLevel.Critical, dashPayBound: false, caption: null },
-  [IdentityKeyVariant.AuthHigh]: { variant: IdentityKeyVariant.AuthHigh, purpose: IdentityKeyPurpose.Authentication, securityLevel: IdentityKeySecurityLevel.High, dashPayBound: false, caption: null },
-  [IdentityKeyVariant.AuthMedium]: { variant: IdentityKeyVariant.AuthMedium, purpose: IdentityKeyPurpose.Authentication, securityLevel: IdentityKeySecurityLevel.Medium, dashPayBound: false, caption: null },
-  [IdentityKeyVariant.Enc]: { variant: IdentityKeyVariant.Enc, purpose: IdentityKeyPurpose.Encryption, securityLevel: IdentityKeySecurityLevel.Medium, dashPayBound: false, caption: UNBOUND_CAPTION },
-  [IdentityKeyVariant.Dec]: { variant: IdentityKeyVariant.Dec, purpose: IdentityKeyPurpose.Decryption, securityLevel: IdentityKeySecurityLevel.Medium, dashPayBound: false, caption: UNBOUND_CAPTION },
-  [IdentityKeyVariant.Transfer]: { variant: IdentityKeyVariant.Transfer, purpose: IdentityKeyPurpose.Transfer, securityLevel: IdentityKeySecurityLevel.Critical, dashPayBound: false, caption: 'Credit transfers and withdrawals' },
+  [IdentityKeyVariant.EncDashPay]: { variant: IdentityKeyVariant.EncDashPay, purpose: IdentityKeyPurpose.Encryption, securityLevel: IdentityKeySecurityLevel.Medium, dashPayBound: true, canBind: false, caption: DASHPAY_BOUND_CAPTION },
+  [IdentityKeyVariant.DecDashPay]: { variant: IdentityKeyVariant.DecDashPay, purpose: IdentityKeyPurpose.Decryption, securityLevel: IdentityKeySecurityLevel.Medium, dashPayBound: true, canBind: false, caption: DASHPAY_BOUND_CAPTION },
+  [IdentityKeyVariant.AuthCritical]: { variant: IdentityKeyVariant.AuthCritical, purpose: IdentityKeyPurpose.Authentication, securityLevel: IdentityKeySecurityLevel.Critical, dashPayBound: false, canBind: true, caption: UNBOUND_CAPTION },
+  [IdentityKeyVariant.AuthHigh]: { variant: IdentityKeyVariant.AuthHigh, purpose: IdentityKeyPurpose.Authentication, securityLevel: IdentityKeySecurityLevel.High, dashPayBound: false, canBind: true, caption: UNBOUND_CAPTION },
+  [IdentityKeyVariant.AuthMedium]: { variant: IdentityKeyVariant.AuthMedium, purpose: IdentityKeyPurpose.Authentication, securityLevel: IdentityKeySecurityLevel.Medium, dashPayBound: false, canBind: true, caption: UNBOUND_CAPTION },
+  [IdentityKeyVariant.Enc]: { variant: IdentityKeyVariant.Enc, purpose: IdentityKeyPurpose.Encryption, securityLevel: IdentityKeySecurityLevel.Medium, dashPayBound: false, canBind: true, caption: UNBOUND_CAPTION },
+  [IdentityKeyVariant.Dec]: { variant: IdentityKeyVariant.Dec, purpose: IdentityKeyPurpose.Decryption, securityLevel: IdentityKeySecurityLevel.Medium, dashPayBound: false, canBind: true, caption: UNBOUND_CAPTION },
+  [IdentityKeyVariant.Transfer]: { variant: IdentityKeyVariant.Transfer, purpose: IdentityKeyPurpose.Transfer, securityLevel: IdentityKeySecurityLevel.Critical, dashPayBound: false, canBind: false, caption: 'Credit transfers and withdrawals' },
 }
+
+export const CONTRACT_ID_BYTE_LENGTH = 32
+
+export const CONTRACT_ID_MAX_LENGTH = 44
+
+export const DOCUMENT_TYPE_MAX_LENGTH = 64
+
+export const DOCUMENT_TYPE_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
+
+export const EMPTY_KEY_BOUNDS_DRAFT = {
+  contractId: '',
+  documentType: '',
+} as const
+
+export const KEY_BOUNDS_COPY = {
+  boundPrefix: 'Bound to',
+  contractIdLabel: 'Contract ID (optional)',
+  contractIdPlaceholder: 'All contracts if empty',
+  documentTypeLabel: 'Document type (optional)',
+  documentTypePlaceholder: 'All document types',
+  clearContractId: 'Clear contract ID',
+  clearDocumentType: 'Clear document type',
+  contractIdRequired: 'Enter a contract ID to bind a document type',
+  invalidContractId: 'Enter a valid 32-byte Base58 contract ID',
+  invalidDocumentType: 'Use letters, numbers, hyphens, or underscores (max 64)',
+} as const
+
+export const KEY_BOUNDS_GRID_CLASS = 'ml-8 grid grid-cols-1 gap-2.5 sm:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]'
+
+export const KEY_BOUNDS_FIELD_SHELL_CLASS = 'relative flex h-9 min-w-0 items-center rounded-[.625rem] border bg-white dark:bg-white/6 transition-colors'
+
+export const KEY_BOUNDS_FIELD_VALID_CLASS = 'border-dash-primary-dark-blue/12 dark:border-white/14 focus-within:border-dash-brand dark:focus-within:border-dash-mint'
+
+export const KEY_BOUNDS_FIELD_INVALID_CLASS = 'border-dash-red'
+
+export const KEY_BOUNDS_INPUT_CLASS = 'h-full w-full min-w-0 bg-transparent pl-3 pr-8 text-xs dash-text-default outline-none placeholder:opacity-40'
+
+export const KEY_BOUNDS_CLEAR_BUTTON_CLASS = 'absolute right-1.5 top-1/2 flex size-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md dash-text-default opacity-50 transition-opacity hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-dash-brand dark:focus-visible:outline-dash-mint'
 
 export const IDENTITY_KEY_PURPOSE_LABELS: Record<string, string> = {
   AUTHENTICATION: 'Authentication',
