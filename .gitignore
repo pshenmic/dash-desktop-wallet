@@ -20,3 +20,4 @@ out
 *.snap
 .agents
 skills-lock.json
+pnpm-lock.json
