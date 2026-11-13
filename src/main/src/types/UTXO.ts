@@ -13,6 +13,7 @@ export interface UTXO {
   // whose utxo endpoint predates the block timestamp.
   timestamp: Date | null
   confirmations: number
+  isLocked: boolean
 }
 
 // What the local store answers a wallet's utxo read with. Separate from the

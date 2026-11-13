@@ -1,6 +1,7 @@
 .idea
 node_modules
 dist
+build
 out
 .DS_Store
 .eslintcache
@@ -14,6 +15,7 @@ out
 .cache
 *.tsbuildinfo
 .claude
+.qwen
 
 *.snap
 .agents

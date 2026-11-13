@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { API } from '@renderer/api'
-import type { GetAddressesResponse } from '@renderer/api/types'
 import { useAuth } from '@renderer/contexts/AuthContext'
 import { useConnectionModeContext } from '@renderer/contexts/ConnectionModeContext'
 import type { WalletUtxosRequest, WalletUtxosResult, WalletUtxosSnapshot } from '@renderer/types/CoinControl'
 import { getErrorMessage } from '@renderer/utils/error'
 import { isWalletSyncInactive } from '@renderer/utils/walletSync'
-import { localWalletUtxos } from '@renderer/utils/localWalletUtxos'
 
 export function useWalletUtxos(refreshKey = 0): WalletUtxosResult {
   const { status } = useAuth()
@@ -24,11 +22,7 @@ export function useWalletUtxos(refreshKey = 0): WalletUtxosResult {
     const requestWalletId = request.walletId
     if (!requestWalletId || (request.syncIncomplete && !request.localSnapshot)) return
     let cancelled = false
-    const load = request.localSnapshot
-      ? Promise.all([API.getTransactions(requestWalletId), API.getAddresses(requestWalletId)])
-        .then(([history, addresses]) => localWalletUtxos(requestWalletId, history.core, addresses as GetAddressesResponse))
-      : API.getUtxos(requestWalletId)
-    load
+    API.getUtxos(requestWalletId)
       .then(utxos => {
         if (!cancelled) setSnapshot({request, utxos, error: null})
       })

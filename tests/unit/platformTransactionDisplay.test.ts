@@ -169,6 +169,7 @@ describe('Platform internal transfers', () => {
   })
 
   it.each(['IDENTITY_TOP_UP_FROM_ADDRESSES', 'IDENTITY_CREATE_FROM_ADDRESSES'])
+    // eslint-disable-next-line no-unexpected-multiline
     ('recognizes %s only with owned sources, target and change and a reconciled actual fee', (type) => {
       const raw = transaction({
         type, gasCredits: 7n, netCredits: -7n,
@@ -184,6 +185,7 @@ describe('Platform internal transfers', () => {
     })
 
   it.each(['IDENTITY_CREDIT_TRANSFER_TO_ADDRESS', 'IDENTITY_CREDIT_TRANSFER_TO_ADDRESSES'])
+    // eslint-disable-next-line no-unexpected-multiline
     ('recognizes %s paying several owned Platform addresses without losing outputs', (type) => {
       const raw = transaction({
         type, gasCredits: 7n,
@@ -197,6 +199,7 @@ describe('Platform internal transfers', () => {
     })
 
   it.each(['IDENTITY_TOP_UP_FROM_ADDRESSES', 'IDENTITY_CREATE_FROM_ADDRESSES', 'IDENTITY_CREDIT_TRANSFER_TO_ADDRESS', 'IDENTITY_CREDIT_TRANSFER_TO_ADDRESSES'])
+    // eslint-disable-next-line no-unexpected-multiline
     ('rejects incomplete or unreconciled %s history even when the named participants are owned', (type) => {
       const fromIdentity = type.startsWith('IDENTITY_CREDIT_TRANSFER_TO_ADDRESS')
       const raw = transaction({
@@ -207,7 +210,6 @@ describe('Platform internal transfers', () => {
       expect(platformInternalTransferFee(raw, ownership())).toBe(7n)
       for (const overrides of [
         { sender: [] }, { recipient: [] }, { status: null }, { blockHeight: null },
-        { sender: [{ ...raw.sender[0], amount: 1_000n }] },
         { sender: [{ ...raw.sender[0], amount: 1_008n }] },
         { recipient: [{ ...raw.recipient[0], amount: 1_008n }] },
       ]) {
@@ -216,6 +218,18 @@ describe('Platform internal transfers', () => {
         expect(mapPlatformTransaction(incomplete).internalTransfer).toBeUndefined()
       }
     })
+
+  it.each(['IDENTITY_TOP_UP_FROM_ADDRESSES', 'IDENTITY_CREATE_FROM_ADDRESSES', 'IDENTITY_CREDIT_TRANSFER_TO_ADDRESS', 'IDENTITY_CREDIT_TRANSFER_TO_ADDRESSES'])
+  // eslint-disable-next-line no-unexpected-multiline
+  ('reports the fee for %s when both sides carry the same amount', (type) => {
+    const fromIdentity = type.startsWith('IDENTITY_CREDIT_TRANSFER_TO_ADDRESS')
+    const raw = transaction({
+      type, gasCredits: 7_927_360n,
+      sender: [{source: fromIdentity ? 'senderIdentity' : 'ownPlatform', amount: 100_000_000_000n}],
+      recipient: [{source: fromIdentity ? 'ownPlatform' : 'recipientIdentity', amount: 100_000_000_000n}],
+    })
+    expect(platformInternalTransferFee(raw, ownership())).toBe(7_927_360n)
+  })
 
   it.each(['CREDIT_TRANSFER', 'IDENTITY_CREDIT_TRANSFER'])('recognizes the complete one-to-one identity operation %s', (type) => {
     const raw = transaction({ type, status: null, blockHeight: null, netCredits: 0n, gasCredits: 7_927_360n })
@@ -259,11 +273,9 @@ describe('Transaction card amount formatting', () => {
       .toEqual({ value: '90071.99254740993', duffs: 9_007_199_254_740n })
   })
 
-  it('continues to treat Core and unlabelled card amounts as duffs', () => {
+  it('treats Core card amounts as duffs', () => {
     expect(formatTransactionCardAmount({ kind: 'core', amount: 1n }))
       .toEqual({ value: '0.00000001', duffs: 1n })
-    expect(formatTransactionCardAmount({ amount: 100_000_001n }))
-      .toEqual({ value: '1.00000001', duffs: 100_000_001n })
   })
 })
 

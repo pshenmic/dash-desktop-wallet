@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import type { PlatformAddressDto } from '../api/types'
 
 export interface AddressRowProps {
   address: string
@@ -10,9 +9,6 @@ export interface AddressRowProps {
   meta?: ReactNode
   explorerUrl?: string
   onQr?: () => void
+  onExportKey?: () => void
   hidden?: boolean
-}
-
-export interface PlatformAddressCardProps extends PlatformAddressDto {
-  label?: string | null
 }

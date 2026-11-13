@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Text } from '@renderer/components/dash-ui-kit-extended'
-import { WalletAddressDto } from '@renderer/api/types'
+import type { AddressCardProps } from '@renderer/types/ExportKey'
 import { davToDashCompact } from '@renderer/utils/balance'
 import { useAuth } from '@renderer/contexts/AuthContext'
 import { addressUrl } from '@renderer/utils/explorer'
@@ -19,7 +19,8 @@ export default function AddressCard({
   balance,
   txCount,
   isUsed,
-}: WalletAddressDto): React.JSX.Element {
+  onExportKey,
+}: AddressCardProps): React.JSX.Element {
   const [isQrOpen, setIsQrOpen] = useState(false)
   const { isBalanceVisible } = useBalanceVisibility()
   const { status: appStatus } = useAuth()
@@ -48,6 +49,7 @@ export default function AddressCard({
         }
         fiatDuffs={balance}
         onQr={() => setIsQrOpen(true)}
+        onExportKey={onExportKey}
         explorerUrl={network ? addressUrl(address, network) : undefined}
         hidden={!isBalanceVisible}
       />

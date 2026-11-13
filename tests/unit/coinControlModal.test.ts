@@ -49,7 +49,7 @@ function modalProps(): CoinControlModalProps {
     isOpen: true, operation: TransferOperation.CoreSend,
     selection: {kind: 'coreOutpoints', outpoints: ['coin:0']},
     coreAddresses: [], coreAddressesLoading: false, coreAddressesError: null,
-    utxos: [{txid: 'coin', vout: 0, address: 'address', satoshis: 100_000n, height: 10, timestamp: null, confirmations: 1}],
+    utxos: [{txid: 'coin', vout: 0, address: 'address', satoshis: 100_000n, height: 10, timestamp: null, confirmations: 1, isLocked: false}],
     utxosLoading: false, utxosLocalSnapshot: false, utxosError: null, coreSyncIncomplete: false,
     platformAddresses: [], platformAddressesLoading: false, platformAddressesError: null,
     shieldedNotes: [], identityLabel: null, identityId: null, platformAddress: undefined,

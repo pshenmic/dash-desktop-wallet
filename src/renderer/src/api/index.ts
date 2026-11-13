@@ -1,6 +1,6 @@
 import { WalletTxDto } from '@renderer/types/WalletTransaction'
 import { TransferOperation } from '../enums/TransferOperation'
-import { UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, SelectableUtxo} from './types'
+import { AddressKeyInfoDto, UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, SelectableUtxo} from './types'
 
 export class API {
   private static get api() {
@@ -143,12 +143,20 @@ export class API {
     return this.api.setWalletLabel(walletId, label)
   }
 
+  static async setAddressLabel(walletId: string, address: string, label: string): Promise<void> {
+    return this.api.setAddressLabel(walletId, address, label)
+  }
+
   static async getTransactions(walletId: string): Promise<WalletHistory> {
     return this.api.getTransactions(walletId) as Promise<WalletHistory>
   }
 
   static async getUtxos(walletId: string): Promise<SelectableUtxo[]> {
     return this.api.getUtxos(walletId)
+  }
+
+  static async setUtxoLocked(walletId: string, txid: string, vout: number, locked: boolean): Promise<void> {
+    return this.api.setUtxoLocked(walletId, txid, vout, locked)
   }
 
   static async getTransactionByHash(hash: string, network: Network): Promise<WalletTxDto> {
@@ -244,6 +252,10 @@ export class API {
 
   static async exportMnemonic(walletId: string, password: string): Promise<string> {
     return this.api.exportMnemonic(walletId, password)
+  }
+
+  static async exportKeyByAddress(walletId: string, address: string, password: string): Promise<AddressKeyInfoDto> {
+    return this.api.exportKeyByAddress(walletId, address, password) as Promise<AddressKeyInfoDto>
   }
 
   static async verifyWalletMnemonic(walletId: string, mnemonic: string): Promise<boolean> {

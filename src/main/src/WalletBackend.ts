@@ -12,6 +12,7 @@ import { IdentityDAO } from './database/IdentityDAO'
 import { DashPayCache } from './database/DashPayCache'
 import { TransactionDAO } from './database/TransactionDAO'
 import { ContactDAO } from './database/ContactDAO'
+import { PaymentRequestDAO } from './database/PaymentRequestDAO'
 import { WalletService } from './services/wallet/WalletService'
 import { IdentityRegistrationService } from './services/platform/IdentityRegistrationService'
 import { PlatformAddressService } from './services/platform/PlatformAddressService'
@@ -69,6 +70,7 @@ import {ShieldToPoolHandler} from "./api/wallet/shieldToPool";
 import {SelectWallet} from "./api/wallet/selectWallet";
 import {VerifyWalletPasswordHandler} from "./api/wallet/verifyWalletPassword";
 import {ExportMnemonicHandler} from "./api/wallet/exportMnemonic";
+import {ExportKeyByAddressHandler} from './api/wallet/exportKeyByAddress'
 import {VerifyWalletMnemonicHandler} from "./api/wallet/verifyWalletMnemonic";
 import {ResetWalletPasswordHandler} from "./api/wallet/resetWalletPassword";
 import {SetLanguageHandler} from "./api/setLanguage";
@@ -119,6 +121,10 @@ import {AddShieldedAddressHandler} from './api/shielded/addShieldedAddress'
 import {RatesService} from './services/app/RatesService'
 import {GetExchangeRatesHandler} from './api/getExchangeRates'
 import {ContactService} from './services/app/ContactService'
+import {PaymentRequestService} from './services/wallet/PaymentRequestService'
+import {CreatePaymentRequestHandler} from './api/paymentRequests/createPaymentRequest'
+import {GetPaymentRequestsHandler} from './api/paymentRequests/getPaymentRequests'
+import {DeletePaymentRequestHandler} from './api/paymentRequests/deletePaymentRequest'
 import {GetContactsHandler} from './api/contacts/getContacts'
 import {AddContactHandler} from './api/contacts/addContact'
 import {DeleteContactHandler} from './api/contacts/deleteContact'
@@ -126,6 +132,7 @@ import {StartWalletSyncHandler} from './api/walletSync/startWalletSync'
 import {StopWalletSyncHandler} from './api/walletSync/stopWalletSync'
 import {ResetWalletSyncHandler} from './api/walletSync/resetWalletSync'
 import {GetUtxosHandler} from './api/wallet/getUtxos'
+import {SetUtxoLockedHandler} from './api/wallet/setUtxoLocked'
 import {DISCOVERY_INTERVAL_MS} from './constants/addresses'
 import {CoreDiscoveryService} from './services/core/CoreDiscoveryService'
 import {CorePrevOutService} from './services/core/CorePrevOutService'
@@ -159,6 +166,7 @@ export class WalletBackend {
   private walletSyncService?: WalletSyncService
   private ratesService?: RatesService
   private contactService?: ContactService
+  private paymentRequestService?: PaymentRequestService
   private identityRegistrationService?: IdentityRegistrationService
   private shieldedService?: ShieldedService
   private platformWorkerService?: PlatformWorkerService
@@ -174,7 +182,7 @@ export class WalletBackend {
   private identityDAO?: IdentityDAO
 
   private initHandlers(): void {
-    if (!this.walletService || !this.platformAddressService || !this.platformHistoryService || !this.platformTransferService || !this.feeService || !this.applicationService || !this.walletSyncService || !this.ratesService || !this.contactService || !this.shieldedService || !this.assetLockService || !this.addressDAO || !this.walletDAO || !this.identityDAO || !this.identityRegistrationService || !this.coreDiscoveryService || !this.coreLockService || !this.walletCredentialsService || !this.identityService || !this.logService || !this.platformWorkerService) {
+    if (!this.walletService || !this.platformAddressService || !this.platformHistoryService || !this.platformTransferService || !this.feeService || !this.applicationService || !this.walletSyncService || !this.ratesService || !this.contactService || !this.paymentRequestService || !this.shieldedService || !this.assetLockService || !this.addressDAO || !this.walletDAO || !this.identityDAO || !this.identityRegistrationService || !this.coreDiscoveryService || !this.coreLockService || !this.walletCredentialsService || !this.identityService || !this.logService || !this.platformWorkerService) {
       throw new Error('Services not initialized. Call start() first.')
     }
 
@@ -225,6 +233,7 @@ export class WalletBackend {
     registerHandler('shieldToPool', new ShieldToPoolHandler(this.platformTransferService).handle)
     registerHandler('verifyWalletPassword', new VerifyWalletPasswordHandler(this.walletCredentialsService).handle)
     registerHandler('exportMnemonic', new ExportMnemonicHandler(this.walletCredentialsService).handle)
+    registerHandler('exportKeyByAddress', new ExportKeyByAddressHandler(this.walletCredentialsService).handle)
     registerHandler('verifyWalletMnemonic', new VerifyWalletMnemonicHandler(this.walletCredentialsService).handle)
     registerHandler('resetWalletPassword', new ResetWalletPasswordHandler(this.walletCredentialsService).handle)
     registerHandler('getPreferences', new GetPreferencesHandler(this.applicationService).handle)
@@ -256,12 +265,16 @@ export class WalletBackend {
     registerHandler('stopWalletSync', new StopWalletSyncHandler(this.walletSyncService).handle)
     registerHandler('resetWalletSync', new ResetWalletSyncHandler(this.walletSyncService).handle)
     registerHandler('getUtxos', new GetUtxosHandler(this.walletService).handle)
+    registerHandler('setUtxoLocked', new SetUtxoLockedHandler(this.walletService).handle)
     registerHandler('hasSyncProgress', new HasSyncProgressHandler(this.walletSyncService).handle)
     registerHandler('broadcastTransaction', new BroadcastTransactionHandler(this.walletSyncService).handle)
     registerHandler('getExchangeRates', new GetExchangeRatesHandler(this.ratesService).handle)
     registerHandler('getContacts', new GetContactsHandler(this.contactService).handle)
     registerHandler('addContact', new AddContactHandler(this.contactService).handle)
     registerHandler('deleteContact', new DeleteContactHandler(this.contactService).handle)
+    registerHandler('createPaymentRequest', new CreatePaymentRequestHandler(this.paymentRequestService).handle)
+    registerHandler('getPaymentRequests', new GetPaymentRequestsHandler(this.paymentRequestService).handle)
+    registerHandler('deletePaymentRequest', new DeletePaymentRequestHandler(this.paymentRequestService).handle)
     registerHandler('getShieldedStatus', new GetShieldedStatusHandler(this.shieldedService).handle)
     registerHandler('getShieldedPoolInfo', new GetShieldedPoolInfoHandler(this.shieldedService).handle)
     registerHandler('getShieldedNotesInfo', new GetShieldedNotesInfoHandler(this.shieldedService).handle)
@@ -303,11 +316,13 @@ export class WalletBackend {
     const identityDAO = new IdentityDAO(knex)
     const transactionDAO = new TransactionDAO(knex)
     const contactDAO = new ContactDAO(knex)
+    const paymentRequestDAO = new PaymentRequestDAO(knex)
 
     this.applicationService = new ApplicationService(preferences)
     this.walletSyncService = new WalletSyncService(walletDAO, addressDAO, transactionDAO, preferences)
     this.ratesService = new RatesService()
     this.contactService = new ContactService(contactDAO)
+    this.paymentRequestService = new PaymentRequestService(paymentRequestDAO)
     this.logService = new LogService(dataPath(LogsFolderName))
     const shieldedAddressDAO = new ShieldedAddressDAO(knex)
     this.platformWorkerService = new PlatformWorkerService(preferences)
@@ -325,14 +340,14 @@ export class WalletBackend {
     const coreTransactionService = new CoreTransactionService()
     this.coreDiscoveryService = new CoreDiscoveryService(walletDAO, addressDAO, identityDAO, dashPayCache, transactionDAO, this.walletSyncService, providers)
     this.coreLockService = new CoreLockService(walletDAO, addressDAO, this.walletSyncService, coreTransactionService, providers, preferences)
-    this.walletCredentialsService = new WalletCredentialsService(walletDAO, addressDAO, calibratedIterations)
-    this.identityService = new IdentityService(walletDAO, identityDAO, dashPayCache, this.platformWorkerService)
     const platformAddressDAO = new PlatformAddressDAO(knex)
+    this.walletCredentialsService = new WalletCredentialsService(walletDAO, addressDAO, platformAddressDAO, calibratedIterations)
+    this.identityService = new IdentityService(walletDAO, identityDAO, dashPayCache, this.platformWorkerService)
     const shieldedNoteDAO = new ShieldedNoteDAO(knex)
     const platformTransactionDAO = new PlatformTransactionDAO(knex)
     const shieldedPoolDAO = new ShieldedPoolDAO(knex)
     this.platformHistoryService = new PlatformHistoryService(walletDAO, identityDAO, platformAddressDAO, platformTransactionDAO, shieldedNoteDAO, shieldedPoolDAO)
-    this.walletService = new WalletService(walletDAO, addressDAO, identityDAO, platformTransactionDAO, this.identityService, this.platformHistoryService, this.walletSyncService, this.platformWorkerService, providers, this.coreDiscoveryService, coreTransactionService, preferences, calibratedIterations)
+    this.walletService = new WalletService(walletDAO, addressDAO, transactionDAO, paymentRequestDAO, identityDAO, platformTransactionDAO, this.identityService, this.platformHistoryService, this.walletSyncService, this.platformWorkerService, providers, this.coreDiscoveryService, coreTransactionService, preferences, calibratedIterations)
     this.assetLockService = new AssetLockService(walletDAO, new AssetLockDAO(knex), this.coreLockService, this.platformWorkerService)
     this.shieldedService = new ShieldedService(walletDAO, identityDAO, shieldedNoteDAO, shieldedPoolDAO, shieldedAddressDAO, this.platformWorkerService, this.assetLockService, this.platformHistoryService, preferences)
     this.platformAddressService = new PlatformAddressService(walletDAO, platformAddressDAO, this.platformWorkerService)
