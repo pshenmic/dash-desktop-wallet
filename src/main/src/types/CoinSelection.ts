@@ -8,6 +8,7 @@ export interface SelectableUtxo {
   height: number
   timestamp: Date | null
   confirmations: number
+  isLocked: boolean
 }
 
 // What getUtxos lists. A masternode collateral is listed like any coin but

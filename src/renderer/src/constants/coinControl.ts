@@ -14,6 +14,8 @@ export const COIN_CONTROL_LABELS = {
   paysFee: 'Pays fee',
   feePayerGroup: 'Fee-paying input',
   sort: 'Sort inputs',
+  lockUtxo: 'Lock UTXO',
+  unlockUtxo: 'Unlock UTXO',
 }
 
 export const COIN_CONTROL_DEFAULT_SORT = CoinControlSort.LargestFirst

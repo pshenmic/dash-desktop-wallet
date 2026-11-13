@@ -93,7 +93,7 @@ describe('MasternodeService.discover', () => {
     const legacy = `0${key('operator', 0).slice(1)}`
     const collateral: UTXO = {
       address: 'Xours', satoshis: 400_000_000_000n, script: new Script(), txId: 'e'.repeat(64), vOut: 0,
-      height: 1, timestamp: null, confirmations: 1,
+      height: 1, timestamp: null, confirmations: 1, isLocked: false,
     }
     await discover(source([
       node('a', {operatorPublicKey: legacy}),

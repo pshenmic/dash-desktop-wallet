@@ -1,5 +1,7 @@
 export const RECEIVE_QR_SIZE = 225
 
+export const RECEIVE_WIDE_PANEL_CLASS = 'max-w-280'
+
 export const RECEIVE_QR_COPY = {
   copyImage: 'Copy image',
   saveImage: 'Save image',
@@ -13,7 +15,9 @@ export const RECEIVE_INVOICE_COPY = {
   pay: 'Pay',
   testnet: 'Testnet',
   brand: 'Dash',
-  paymentLink: 'Payment link',
+  purpose: 'Purpose',
+  copyPaymentLink: 'Copy payment link',
+  copyAddress: 'Copy address',
 } as const
 
 export const RECEIVE_INVOICE_ADDRESS_LABELS = {
@@ -54,8 +58,6 @@ export const RECEIVE_INVOICE_LAYOUT = {
   addressSize: 15,
   addressLine: 22,
   linkGap: 20,
-  linkSize: 12,
-  linkLine: 18,
   badgeHeight: 24,
   badgePaddingX: 10,
   badgeRadius: 8,

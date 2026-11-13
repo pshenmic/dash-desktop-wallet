@@ -1,3 +1,4 @@
+import { useMemo, useRef } from "react";
 import { refreshIdentities, useIdentities } from "@renderer/hooks/useIdentities";
 import { useAuth } from "@renderer/contexts/AuthContext";
 import IdentityRow from "./IdentityRow";
@@ -7,18 +8,35 @@ import { NoResultsTone } from "@renderer/enums/NoResultsTone";
 import ListSkeleton from "@renderer/components/ui/Skeleton";
 import PageHeader from "@renderer/components/ui/PageHeader";
 import PageTabs from "@renderer/components/ui/PageTabs";
+import SearchField from "@renderer/components/ui/SearchField";
 import { PAGE_HEADERS } from "@renderer/constants/pageHeaders";
-import { SURFACE_PANEL } from "@renderer/constants/surfaces";
-import { IDENTITIES_ROUTES } from "@renderer/constants/identities";
+import { CHIP_ACTION, SURFACE_PANEL } from "@renderer/constants/surfaces";
+import { IDENTITIES_ROUTES, IDENTITIES_SEARCH_COPY } from "@renderer/constants/identities";
+import { SEARCH_CLEAR_LABEL, TOOLBAR_SEARCH_CLASS } from "@renderer/constants/listToolbar";
 import { Button } from "@renderer/components/dash-ui-kit-extended";
-import { useNavigate } from "react-router-dom";
-import { identityHref } from "@renderer/utils/identities";
+import { useNavigate, useOutletContext } from "react-router-dom";
+import type { IdentitiesSearchState } from "@renderer/types/Identities";
+import { useDashPayUsernames } from "@renderer/hooks/useDashPayUsernames";
+import { usePeriodicDashPayRefresh } from "@renderer/hooks/useDashPayRefresh";
+import { identityHref, identityVotingNames } from "@renderer/utils/identities";
+import { matchesIdentityQuery } from "@renderer/utils/dpnsLabel";
 
 export default function Identities(): React.JSX.Element {
   const navigate = useNavigate()
   const { status } = useAuth()
   const walletId = status?.selectedWalletId ?? undefined
   const { identities, loading, err } = useIdentities(walletId)
+  const usernamesWalletId = identities.length > 0 ? walletId : undefined
+  const { usernames } = useDashPayUsernames(usernamesWalletId)
+  usePeriodicDashPayRefresh(usernamesWalletId)
+  const { query, setQuery } = useOutletContext<IdentitiesSearchState>()
+  const searchRef = useRef<HTMLInputElement>(null)
+  const rows = useMemo(() => identities.map(identity => ({
+    identity,
+    votingNames: identityVotingNames(identity, usernames),
+  })), [identities, usernames])
+  const visible = rows.filter(({ identity, votingNames }) =>
+    matchesIdentityQuery(identity.identifier, [...identity.usernames, ...votingNames], query))
 
   const assetsList = [
     {
@@ -26,6 +44,16 @@ export default function Identities(): React.JSX.Element {
       label: 'Your Identities',
       content: (
         <div className={"flex flex-col gap-5"}>
+          {(identities.length > 0 || query !== '') && (
+            <SearchField
+              ref={searchRef}
+              value={query}
+              onChange={setQuery}
+              placeholder={IDENTITIES_SEARCH_COPY.placeholder}
+              ariaLabel={IDENTITIES_SEARCH_COPY.label}
+              className={TOOLBAR_SEARCH_CLASS}
+            />
+          )}
           <div className={"flex flex-col gap-[.625rem] w-full"}>
             {loading && <ListSkeleton rows={5} />}
             {!loading && err && (
@@ -41,10 +69,23 @@ export default function Identities(): React.JSX.Element {
                 action={<Button type={"button"} size={"compact"} colorScheme={"primary"} onClick={() => navigate(IDENTITIES_ROUTES.register)}>Register identity</Button>}
               />
             )}
-            {!loading && !err && identities.length > 0 && (
+            {!loading && !err && identities.length > 0 && visible.length === 0 && (
+              <NoResults
+                title={IDENTITIES_SEARCH_COPY.noMatch}
+                action={
+                  <button type={"button"} className={CHIP_ACTION} onClick={() => {
+                    searchRef.current?.focus()
+                    setQuery('')
+                  }}>
+                    {SEARCH_CLEAR_LABEL}
+                  </button>
+                }
+              />
+            )}
+            {!loading && !err && visible.length > 0 && (
               <ul className={"contents"}>
-                {identities.map((identity) => (
-                  <IdentityRow key={identity.identifier} identity={identity} onOpen={identifier => navigate(identityHref(identifier))} />
+                {visible.map(({ identity, votingNames }) => (
+                  <IdentityRow key={identity.identifier} identity={identity} votingNames={votingNames} onOpen={identifier => navigate(identityHref(identifier))} />
                 ))}
               </ul>
             )}

@@ -23,6 +23,7 @@ const provider = (list: NetworkMasternode[] | null): P2PWalletProvider => {
   const addressDAO = {getAddressesByWalletId: async () => ({receiving: [{address: OURS}], change: []})} as unknown as AddressDAO
   const transactionDAO = {
     getUtxosByAddresses: async () => [{txid: 'c'.repeat(64), vout: 0, satoshis: '100000000000', address: OURS, height: 5, blockTime: 0}],
+    getLockedOutpoints: async () => [],
   } as unknown as TransactionDAO
   return new P2PWalletProvider(transactionDAO, 'w1', walletSyncService, addressDAO, {} as CorePrevOutService, 'testnet')
 }

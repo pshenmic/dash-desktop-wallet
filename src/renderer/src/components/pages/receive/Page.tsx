@@ -46,9 +46,7 @@ export default function Receive({pageData}: {pageData: ReceivePageType}): React.
       label: pageData.tabs.core,
       content: syncIncomplete
         ? <SyncGateNotice />
-        : address
-          ? <ReceiveAddressCard addresses={receiving} defaultAddress={address} data={pageData.receiveAddressCard} />
-          : <></>,
+        : <ReceiveAddressCard walletId={walletId} addresses={receiving} defaultAddress={address} />,
     },
     {
       value: 'platform',
@@ -63,14 +61,15 @@ export default function Receive({pageData}: {pageData: ReceivePageType}): React.
   ]
 
   return (
-    <div className={`relative flex flex-col pb-12`}>
-        <div className={"px-12"}>
+    <div className={`relative flex min-w-0 flex-col pb-12`}>
+        <div className={"min-w-0 px-12"}>
           <PageHeader title={PAGE_HEADERS.receive.title} subtitle={PAGE_HEADERS.receive.subtitle} />
-          <div className={`relative flex ${SURFACE_PANEL}`}>
+          <div className={`relative flex min-w-0 ${SURFACE_PANEL}`}>
             <PageTabs
               items={tabItems}
               value={activeTab}
               onValueChange={setActiveTab}
+              className={"w-full min-w-0"}
             />
           </div>
         </div>

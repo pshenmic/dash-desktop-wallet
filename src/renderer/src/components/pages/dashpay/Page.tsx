@@ -13,7 +13,6 @@ import {
   DASHPAY_CONTACTS_PAGE_SIZE,
   DASHPAY_PARAMS,
   DASHPAY_PAYMENTS_PAGE_SIZE,
-  DASHPAY_REFRESH_MS,
   DASHPAY_TAB_LABELS,
 } from '@renderer/constants/dashPay'
 import { OVERVIEW_COPY } from '@renderer/constants/dashPayOverview'
@@ -24,7 +23,7 @@ import { ActiveIdentitySource, ContactSegment, ContactSort, DashPayTab } from '@
 import { NoResultsTone } from '@renderer/enums/NoResultsTone'
 import { useActiveIdentity } from '@renderer/hooks/useActiveIdentity'
 import { useDashPayContacts } from '@renderer/hooks/useDashPayContacts'
-import { refreshDashPay } from '@renderer/hooks/useDashPayRefresh'
+import { usePeriodicDashPayRefresh } from '@renderer/hooks/useDashPayRefresh'
 import { useDetailScrollRestore } from '@renderer/hooks/useDetailScrollRestore'
 import { useNow } from '@renderer/hooks/useNow'
 import type { DashPayPageProps } from '@renderer/types/DashPayScreens'
@@ -54,10 +53,7 @@ export default function DashPayPage({ walletId }: DashPayPageProps): React.JSX.E
   const contactId = searchParams.get(DASHPAY_PARAMS.contact)
   const saveListScroll = useDetailScrollRestore(contactId != null && identity != null ? contactId : null)
 
-  useEffect(() => {
-    const timer = setInterval(() => { refreshDashPay(walletId).catch(() => {}) }, DASHPAY_REFRESH_MS)
-    return () => clearInterval(timer)
-  }, [walletId])
+  usePeriodicDashPayRefresh(walletId)
 
   useEffect(() => {
     if (loading || err != null || identity == null) return

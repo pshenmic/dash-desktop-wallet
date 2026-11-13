@@ -22,6 +22,7 @@ const SPLIT: Array<[DashPayContactRelationship, number]> = [
 ]
 
 const contacts = vi.hoisted(() => ({ list: [] as DashPayContactDto[] }))
+const usernameLookup = vi.hoisted(() => vi.fn(() => ({ votingIds: new Set<string>(), usernamesKnown: true, err: null as string | null })))
 
 vi.mock('@renderer/hooks/useDashPayContacts', () => ({
   useDashPayContacts: () => ({ contacts: contacts.list, loading: false, err: null }),
@@ -29,6 +30,8 @@ vi.mock('@renderer/hooks/useDashPayContacts', () => ({
   setDashPayContactsCache: () => {},
 }))
 vi.mock('@renderer/components/pages/dashpay/keys/EnableDashPayModal', () => ({ default: () => null }))
+vi.mock('@renderer/contexts/AuthContext', () => ({ useAuth: () => ({ status: { selectedWalletId: '338e9f47' } }) }))
+vi.mock('@renderer/hooks/useDashPayUsernames', () => ({ useDashPayUsernames: usernameLookup }))
 vi.mock('@renderer/hooks/useBalanceVisibility', () => ({ useBalanceVisibility: () => ({ isBalanceVisible: true }) }))
 vi.mock('@renderer/hooks/useFiat', () => ({ useFiat: () => ({ rateReady: false, format: () => '' }) }))
 vi.stubGlobal('React', React)
@@ -159,5 +162,35 @@ describe('contacts list windowing at scale', () => {
     const markup = render({ query: 'xyxy' })
     expect(markup).toContain('No contacts match &quot;xyxy&quot; for owl11.dash')
     expect(count(markup, /<li /g)).toBe(0)
+  })
+})
+
+describe('contacts readiness alert', () => {
+  const props = {
+    readiness: { ...readiness, readiness: DashPayReadiness.NoUsername },
+    identity: { ...identity, usernames: [] },
+    visibleCount: 1,
+  }
+
+  it('shows the acting identity’s vote and offers registration for an identity without a claim', () => {
+    usernameLookup.mockReturnValueOnce({ votingIds: new Set([ACTING]), usernamesKnown: true, err: null })
+    const voting = render(props)
+    expect(voting).toContain('Username in vote')
+    expect(voting).toContain('People can add you only by identity ID.')
+    expect(voting).not.toContain('>Register</button>')
+
+    const noClaim = render(props)
+    expect(noClaim).toContain('No username yet')
+    expect(noClaim).toContain('>Register</button>')
+  })
+
+  it.each([
+    [null, 'Checking username status…'],
+    ['Request failed', 'Username status unavailable'],
+  ])('withholds registration when username status is unknown (%s)', (err, message) => {
+    usernameLookup.mockReturnValueOnce({ votingIds: new Set(), usernamesKnown: false, err })
+    const markup = render(props)
+    expect(markup).toContain(message)
+    expect(markup).not.toContain('>Register</button>')
   })
 })

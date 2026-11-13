@@ -182,6 +182,7 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
    * Defaults to true.
    */
   showPasswordToggle?: boolean
+  passwordToggleLabel?: string
   iconColor?: string
 }
 
@@ -213,6 +214,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
   prefix,
   prefixClassName = '',
   showPasswordToggle = true,
+  passwordToggleLabel,
   iconColor,
   inputSize,
   ...props
@@ -275,9 +277,12 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
         {isPassword && showPasswordToggle && (
           <button
             type='button'
-            className='absolute right-4 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-70 transition-opacity cursor-pointer focus:outline-none'
+            className='absolute right-4 top-1/2 -translate-y-1/2 rounded-sm opacity-50 hover:opacity-70 transition-opacity cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-dash-brand dark:focus-visible:ring-dash-mint'
             onClick={togglePasswordVisibility}
-            tabIndex={-1}
+            tabIndex={passwordToggleLabel ? 0 : -1}
+            aria-label={passwordToggleLabel}
+            aria-pressed={passwordToggleLabel ? showPassword : undefined}
+            disabled={disabled}
           >
             {showPassword
               ? <EyeClosedIcon size={16} color={resolvedIconColor} />
@@ -303,9 +308,12 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
         {showPasswordToggle && (
           <button
             type='button'
-            className='absolute right-4 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-70 transition-opacity cursor-pointer focus:outline-none'
+            className='absolute right-4 top-1/2 -translate-y-1/2 rounded-sm opacity-50 hover:opacity-70 transition-opacity cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-dash-brand dark:focus-visible:ring-dash-mint'
             onClick={togglePasswordVisibility}
-            tabIndex={-1}
+            tabIndex={passwordToggleLabel ? 0 : -1}
+            aria-label={passwordToggleLabel}
+            aria-pressed={passwordToggleLabel ? showPassword : undefined}
+            disabled={disabled}
           >
             {showPassword
               ? <EyeClosedIcon color={resolvedIconColor} size={16} />

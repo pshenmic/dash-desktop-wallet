@@ -1,5 +1,5 @@
-import { ExternalLinkIcon, HighlightedIdentifier, Text } from '@renderer/components/dash-ui-kit-extended'
-import { IdenticonIcon } from '@renderer/components/dash-ui-kit-extended/icons'
+import { Button, ExternalLinkIcon, HighlightedIdentifier, Text } from '@renderer/components/dash-ui-kit-extended'
+import { CopyIcon2, IdenticonIcon } from '@renderer/components/dash-ui-kit-extended/icons'
 import CopyButton from '@renderer/components/ui/CopyButton'
 import CreditsAmount from '@renderer/components/ui/CreditsAmount'
 import CustomBadge from '@renderer/components/ui/CustomBadge'
@@ -22,6 +22,7 @@ import type {
 } from '@renderer/types/DashPayOverview'
 import { formatApproxFiat } from '@renderer/utils/approxFiat'
 import { creditsToDuffs } from '@renderer/utils/balance'
+import { copyWithToast } from '@renderer/utils/clipboard'
 import { identityUrl, openExternal } from '@renderer/utils/explorer'
 import { identityName } from '@renderer/utils/identifierFormat'
 
@@ -75,7 +76,7 @@ function IdentityContent({ identity }: IdentityHeroContentProps): React.JSX.Elem
       </div>
       <div className={'flex min-w-0 items-center gap-[.3125rem]'}>
         <HighlightedIdentifier className={ADDRESS_ROW_IDENTIFIER_CLASS}>{identity.identifier}</HighlightedIdentifier>
-        <CopyButton text={identity.identifier} className={'shrink-0'} />
+        <CopyButton key={identity.identifier} text={identity.identifier} label={OVERVIEW_COPY.copyIdentityId} className={'shrink-0'} />
         {network != null && (
           <button
             type={'button'}
@@ -142,7 +143,21 @@ export default function OverviewHero({ identity, ready, orbit, body, actions }: 
           </>
         ) : <OnboardingContent body={body} />}
       </div>
-      <div className={'relative mt-auto flex flex-wrap gap-2'}>{actions}</div>
+      <div className={'relative mt-auto flex flex-wrap items-center gap-2'}>
+        {actions}
+        {!ready && identity != null && (
+          <Button
+            type={'button'}
+            size={'compact'}
+            colorScheme={'primary-light'}
+            className={'gap-1.5 whitespace-nowrap normal-case!'}
+            onClick={() => copyWithToast(identity.identifier)}
+          >
+            <CopyIcon2 size={12} color={'currentColor'} />
+            {OVERVIEW_COPY.copyIdentityId}
+          </Button>
+        )}
+      </div>
     </section>
   )
 }

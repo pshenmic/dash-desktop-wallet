@@ -11,6 +11,7 @@ export default function PlatformAddressCard({
   platformAddress,
   balanceCredits,
   nonce,
+  label = null,
   onExportKey,
 }: PlatformAddressCardProps): React.JSX.Element {
   const { status: appStatus } = useAuth()
@@ -20,6 +21,7 @@ export default function PlatformAddressCard({
   return (
     <AddressRow
       address={platformAddress}
+      label={label}
       meta={
         <Text size={10} weight={"medium"} color={"brand"} opacity={50}>
           Tx count: <span className={"font-bold"}>{nonce}</span>

@@ -32,7 +32,7 @@ function node(proTxHash: string, fields: Partial<NetworkMasternode> = {}): Netwo
 }
 
 function utxo(txId: string, vOut: number, satoshis: bigint): UTXO {
-  return {address: 'Xcollateral', satoshis, script: new Script(), txId, vOut, height: 1, timestamp: null, confirmations: 1}
+  return {address: 'Xcollateral', satoshis, script: new Script(), txId, vOut, height: 1, timestamp: null, confirmations: 1, isLocked: false}
 }
 
 describe('networkMasternode', () => {
@@ -87,7 +87,7 @@ describe('ownedMasternodes', () => {
 
   it('flags a collateral by its outpoint, not by its amount or address', () => {
     const coin = (txid: string, vout: number) =>
-      ({txid, vout, satoshis: 100_000_000_000n, address: 'Xcollateral', height: 1, timestamp: null, confirmations: 1})
+      ({txid, vout, satoshis: 100_000_000_000n, address: 'Xcollateral', height: 1, timestamp: null, confirmations: 1, isLocked: false})
     expect(withCollateralFlag([coin('aa', 0), coin('aa', 1)], [{proTxHash: 'p', txid: 'aa', vout: 0, followed: false}]).map(({collateral}) => collateral))
       .toEqual([true, false])
   })

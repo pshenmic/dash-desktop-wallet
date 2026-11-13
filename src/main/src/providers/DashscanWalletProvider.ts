@@ -207,8 +207,12 @@ export class DashscanWalletProvider implements WalletProvider {
     // Dashscan keeps listing an outpoint as unspent until it indexes the
     // transaction that spent it, so a second send within that window would
     // reselect the same coins and every peer would drop it as a conflict.
-    const spends = await this.transactionDAO.getPendingSpends(this.walletId, Date.now() - PENDING_SPEND_TTL_MS)
+    const [spends, lockedOutpoints] = await Promise.all([
+      this.transactionDAO.getPendingSpends(this.walletId, Date.now() - PENDING_SPEND_TTL_MS),
+      this.transactionDAO.getLockedOutpoints(this.walletId),
+    ])
     const spent = new Set(spends.map(({txid, vout}) => `${txid}:${vout}`))
+    const locked = new Set(lockedOutpoints.map(({txid, vout}) => `${txid}:${vout}`))
 
     return collected
       .filter(utxo => utxo.prevTxHash != null && utxo.vOutIndex != null && utxo.scriptPubKeyHex != null)
@@ -222,6 +226,7 @@ export class DashscanWalletProvider implements WalletProvider {
         height: utxo.blockHeight ?? 0,
         timestamp: utxo.timestamp != null ? new Date(utxo.timestamp) : null,
         confirmations: utxo.confirmations ?? 0,
+        isLocked: locked.has(`${utxo.prevTxHash}:${utxo.vOutIndex}`),
       }))
   }
 
@@ -230,6 +235,10 @@ export class DashscanWalletProvider implements WalletProvider {
       signal: AbortSignal.timeout(DASHSCAN_REQUEST_TIMEOUT_MS),
     })
     if (!response.ok) throw new Error(`Dashscan status request failed (${response.status})`)
+  }
+
+  async ensureReadyToList(): Promise<void> {
+    return this.ensureReady()
   }
 
   // The renderer polls this every second, so it answers from cache and leaves
@@ -281,10 +290,10 @@ export class DashscanWalletProvider implements WalletProvider {
     }
   }
 
-  async nextUnusedAddress(): Promise<string> {
+  async nextUnusedAddress(exclude: Set<string> = new Set()): Promise<string> {
     const { receiving } = await this.addressDAO.getAddressesByWalletId(this.walletId)
     if (receiving.length === 0) throw new Error('Wallet has no receiving addresses')
-    const unused = receiving.find(a => !a.isUsed)
+    const unused = receiving.find(a => !a.isUsed && !exclude.has(a.address))
     return (unused ?? receiving[receiving.length - 1]).address
   }
 

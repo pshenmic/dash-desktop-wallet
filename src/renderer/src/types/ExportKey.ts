@@ -20,6 +20,7 @@ export interface AddressCardProps extends WalletAddressDto {
 }
 
 export interface PlatformAddressCardProps extends PlatformAddressDto {
+  label?: string | null
   onExportKey?: () => void
 }
 

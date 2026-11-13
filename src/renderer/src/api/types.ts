@@ -207,6 +207,7 @@ export interface SelectableUtxo {
   // Null when the source cannot date the coin.
   timestamp: Date | null
   confirmations: number
+  isLocked: boolean
 }
 
 // getUtxos — a masternode collateral is listed like any coin, flagged: spending
@@ -490,6 +491,16 @@ export interface Contact {
   label: string
   address: string
   network: Network
+  createdAt: number
+}
+
+export interface PaymentRequestDto {
+  id: number
+  walletId: string
+  address: string
+  amountDuffs: bigint | null
+  label: string | null
+  message: string | null
   createdAt: number
 }
 

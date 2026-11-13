@@ -25,25 +25,27 @@ export function selectCoins(
     throw new Error('Send amount must be greater than zero')
   }
 
+  const unlocked = utxos.filter(utxo => !utxo.isLocked)
+
   // A picked set is spent whole rather than walked: stopping early would drop
   // coins the user asked to spend, which is the one thing picking them means.
   if (source?.kind === 'outpoints') {
-    if (utxos.length === 0) {
+    if (unlocked.length === 0 || unlocked.length !== utxos.length) {
       throw new Error('Insufficient funds to cover amount and network fee')
     }
 
-    const inputTotal = totalOf(utxos)
-    const fee = feeForInputs(utxos.length)
+    const inputTotal = totalOf(unlocked)
+    const fee = feeForInputs(unlocked.length)
     const change = inputTotal - target - fee
 
     if (change < 0n) {
       throw new Error('Insufficient funds to cover amount and network fee')
     }
 
-    return {inputs: [...utxos], inputTotal, fee, change}
+    return {inputs: [...unlocked], inputTotal, fee, change}
   }
 
-  const sorted = [...utxos].sort(bySatoshisDesc)
+  const sorted = [...unlocked].sort(bySatoshisDesc)
 
   const selected: SelectableUtxo[] = []
   let inputTotal = 0n
@@ -69,15 +71,17 @@ export function maxSelectableAmount(
   feeForInputs: CoreFeeForInputs,
   source?: CoreSpendSource,
 ): bigint {
+  const unlocked = utxos.filter(utxo => !utxo.isLocked)
+
   // No prefix to choose from when every coin is spent: the price is the one the
   // picked count carries, whether or not a smaller set would have been cheaper.
   if (source?.kind === 'outpoints') {
-    if (utxos.length === 0) return 0n
-    const spendable = totalOf(utxos) - feeForInputs(utxos.length)
+    if (unlocked.length === 0 || unlocked.length !== utxos.length) return 0n
+    const spendable = totalOf(unlocked) - feeForInputs(unlocked.length)
     return spendable > 0n ? spendable : 0n
   }
 
-  const sorted = [...utxos].sort(bySatoshisDesc)
+  const sorted = [...unlocked].sort(bySatoshisDesc)
 
   let inputTotal = 0n
   let max = 0n

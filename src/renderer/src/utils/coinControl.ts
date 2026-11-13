@@ -22,7 +22,7 @@ export function expandAddressCoinControlSelection(
 ): CoinControlSelection {
   switch (selection.kind) {
     case 'coreAddress':
-      return {kind: 'coreOutpoints', outpoints: funds.utxos.filter(utxo => utxo.address === selection.address).map(outpointKey)}
+      return {kind: 'coreOutpoints', outpoints: funds.utxos.filter(utxo => !utxo.isLocked && utxo.address === selection.address).map(outpointKey)}
     case 'platformAddress': {
       const entry = funds.platformAddresses.find(entry => entry.platformAddress === selection.address)
       const inputs = entry == null ? [] : [{address: entry.platformAddress, credits: entry.balanceCredits}]
@@ -53,7 +53,7 @@ export function buildCoinControlInventory(funds: CoinControlFunds): CoinControlI
   const notes = funds.shieldedNotes.filter(note => !note.spent)
   return {
     coreAddresses: funds.coreAddresses.map(address => address.address),
-    coreOutpoints: funds.utxos.map(outpointKey),
+    coreOutpoints: funds.utxos.filter(utxo => !utxo.isLocked).map(outpointKey),
     platformBalances: Object.fromEntries(funds.platformAddresses.map(address => [address.platformAddress, address.balanceCredits])),
     shieldedAddresses: [...new Set(notes.map(note => note.address))],
     shieldedNoteIndexes: notes.map(note => note.index),
@@ -72,7 +72,7 @@ export function coinControlSelectionTotals(selection: CoinControlSelection, fund
     case 'coreOutpoints': {
       count = selection.outpoints.length
       const selected = new Set(selection.outpoints)
-      duffs = funds.utxos.filter(utxo => selected.has(outpointKey(utxo))).reduce((sum, utxo) => sum + utxo.satoshis, 0n)
+      duffs = funds.utxos.filter(utxo => !utxo.isLocked && selected.has(outpointKey(utxo))).reduce((sum, utxo) => sum + utxo.satoshis, 0n)
       return {count, duffs, credits: duffsToCredits(duffs)}
     }
     case 'platformAddress':
@@ -239,7 +239,7 @@ export function toCoreSpendSource(
   return {
     kind: 'outpoints',
     outpoints: utxos
-      .filter(utxo => selected.has(outpointKey(utxo)))
+      .filter(utxo => !utxo.isLocked && selected.has(outpointKey(utxo)))
       .map(utxo => ({txid: utxo.txid, vout: utxo.vout})),
   }
 }
