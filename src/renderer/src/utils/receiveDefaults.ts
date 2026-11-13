@@ -1,5 +1,25 @@
-import type { PlatformAddressDto, WalletAddressDto } from '../api/types'
-import type { ReceiveRequestDto } from '../types/ReceiveRequest'
+import type { PaymentRequestDto, PlatformAddressDto, WalletAddressDto } from '../api/types'
+import type { ReceiveRequestDto, ReceiveRequestKind } from '../types/ReceiveRequest'
+import { isValidPlatformAddress } from './platformAddress'
+import { isLikelyShieldedAddress } from './shieldedAddress'
+
+export function receiveRequestKind(address: string): ReceiveRequestKind {
+  if (isLikelyShieldedAddress(address)) return 'shielded'
+  if (isValidPlatformAddress(address)) return 'platform'
+  return 'core'
+}
+
+export function toReceiveRequest(request: PaymentRequestDto): ReceiveRequestDto {
+  return {
+    id: request.id,
+    walletId: request.walletId,
+    kind: receiveRequestKind(request.address),
+    address: request.address,
+    label: request.label,
+    amountDuffs: request.amountDuffs,
+    createdAt: request.createdAt,
+  }
+}
 
 export function isUnusedPlatformAddress(address: PlatformAddressDto): boolean {
   return address.nonce === 0 && address.balanceCredits === 0n

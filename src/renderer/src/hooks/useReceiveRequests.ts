@@ -1,115 +1,40 @@
-import { useMemo, useSyncExternalStore } from 'react'
-import { RECEIVE_LABEL_MAX_LENGTH, RECEIVE_REQUESTS_STORAGE_PREFIX } from '@renderer/constants/receivePage'
-import type { ReceiveRequestDto, ReceiveRequestKind, StoredReceiveRequest } from '@renderer/types/ReceiveRequest'
-import { addressLabelsByAddress } from '@renderer/utils/receiveDefaults'
+import { useMemo } from 'react'
+import { API } from '@renderer/api'
+import { RECEIVE_HISTORY_COPY, RECEIVE_LABEL_MAX_LENGTH } from '@renderer/constants/receivePage'
+import type { ReceiveRequestDto, ReceiveRequestKind } from '@renderer/types/ReceiveRequest'
+import { addressLabelsByAddress, toReceiveRequest } from '@renderer/utils/receiveDefaults'
+import { invalidateAsyncCache, prefetchAsyncCache, useAsyncWithCache } from './useAsyncWithCache'
 
 const EMPTY_REQUESTS: ReceiveRequestDto[] = []
-const cacheByWallet = new Map<string, ReceiveRequestDto[]>()
-let listeners: Array<() => void> = []
 
-function emit(): void {
-  for (const listener of listeners) {
-    listener()
-  }
-}
+const fetchReceiveRequests = (walletId: string): Promise<ReceiveRequestDto[]> =>
+  API.getPaymentRequests(walletId).then((rows) => (rows ?? []).map(toReceiveRequest))
 
-function subscribe(listener: () => void): () => void {
-  listeners.push(listener)
-  return () => {
-    listeners = listeners.filter((item) => item !== listener)
-  }
-}
-
-function storageKey(walletId: string): string {
-  return `${RECEIVE_REQUESTS_STORAGE_PREFIX}${walletId}`
-}
-
-function readWalletRequests(walletId: string): ReceiveRequestDto[] {
-  const cached = cacheByWallet.get(walletId)
-  if (cached) return cached
-
-  try {
-    const raw = localStorage.getItem(storageKey(walletId))
-    if (!raw) {
-      cacheByWallet.set(walletId, EMPTY_REQUESTS)
-      return EMPTY_REQUESTS
-    }
-    const parsed = JSON.parse(raw) as StoredReceiveRequest[]
-    if (!Array.isArray(parsed)) {
-      cacheByWallet.set(walletId, EMPTY_REQUESTS)
-      return EMPTY_REQUESTS
-    }
-    const hydrated: ReceiveRequestDto[] = parsed.map((item) => ({
-      id: item.id,
-      walletId: item.walletId,
-      kind: item.kind,
-      address: item.address,
-      label: item.label,
-      amountDuffs: item.amountDuffs !== null ? BigInt(item.amountDuffs) : null,
-      createdAt: item.createdAt,
-    }))
-    cacheByWallet.set(walletId, hydrated)
-    return hydrated
-  } catch {
-    cacheByWallet.set(walletId, EMPTY_REQUESTS)
-    return EMPTY_REQUESTS
-  }
-}
-
-function writeWalletRequests(walletId: string, requests: ReceiveRequestDto[]): void {
-  cacheByWallet.set(walletId, requests)
-  try {
-    const serialized: StoredReceiveRequest[] = requests.map((item) => ({
-      id: item.id,
-      walletId: item.walletId,
-      kind: item.kind,
-      address: item.address,
-      label: item.label,
-      amountDuffs: item.amountDuffs !== null ? item.amountDuffs.toString() : null,
-      createdAt: item.createdAt,
-    }))
-    localStorage.setItem(storageKey(walletId), JSON.stringify(serialized))
-  } catch {
-    // Ignore storage write errors
-  }
-  emit()
-}
-
-export function addReceiveRequest(
+export async function addReceiveRequest(
   walletId: string,
-  kind: ReceiveRequestKind,
   address: string,
   label: string | null,
   amountDuffs: bigint | null,
-): ReceiveRequestDto {
-  const current = readWalletRequests(walletId)
+  message: string | null = null,
+): Promise<void> {
   const trimmedLabel = label?.trim() ?? ''
   const normalizedLabel = trimmedLabel !== '' ? trimmedLabel.slice(0, RECEIVE_LABEL_MAX_LENGTH) : null
-  const created: ReceiveRequestDto = {
-    id: Date.now() * 1000 + Math.floor(Math.random() * 1000),
-    walletId,
-    kind,
-    address,
-    label: normalizedLabel,
-    amountDuffs,
-    createdAt: Date.now(),
-  }
-  writeWalletRequests(walletId, [created, ...current])
-  return created
+  await API.createPaymentRequest(walletId, address, amountDuffs, normalizedLabel, message)
+  await refreshReceiveRequests(walletId)
 }
 
-export function deleteReceiveRequest(walletId: string, id: number): void {
-  const current = readWalletRequests(walletId)
-  writeWalletRequests(
-    walletId,
-    current.filter((item) => item.id !== id),
-  )
+export async function deleteReceiveRequest(walletId: string, id: number): Promise<void> {
+  await API.deletePaymentRequest(walletId, id)
+  await refreshReceiveRequests(walletId)
 }
 
 export function useReceiveRequests(walletId: string | undefined, kind?: ReceiveRequestKind) {
-  const data = useSyncExternalStore(
-    subscribe,
-    () => (walletId ? readWalletRequests(walletId) : EMPTY_REQUESTS),
+  const { data, loading, err } = useAsyncWithCache<ReceiveRequestDto[]>(
+    'paymentRequests',
+    walletId,
+    () => fetchReceiveRequests(walletId!),
+    EMPTY_REQUESTS,
+    { errorMessage: RECEIVE_HISTORY_COPY.loadFailed },
   )
 
   const requests = useMemo(
@@ -122,17 +47,14 @@ export function useReceiveRequests(walletId: string | undefined, kind?: ReceiveR
     [requests],
   )
 
-  return { requests, allRequests: data, labelsByAddress, loading: false, err: null }
+  return { requests, allRequests: data, labelsByAddress, loading, err }
 }
 
 export function prefetchReceiveRequests(walletId: string): Promise<void> {
-  readWalletRequests(walletId)
-  return Promise.resolve()
+  return prefetchAsyncCache('paymentRequests', walletId, () => fetchReceiveRequests(walletId))
 }
 
 export function refreshReceiveRequests(walletId: string): Promise<void> {
-  cacheByWallet.delete(walletId)
-  readWalletRequests(walletId)
-  emit()
-  return Promise.resolve()
+  invalidateAsyncCache('paymentRequests', walletId)
+  return prefetchReceiveRequests(walletId)
 }

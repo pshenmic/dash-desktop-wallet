@@ -42,8 +42,6 @@ export const receiveCardCopy = {
   generating: 'Generating…',
 }
 
-export const RECEIVE_REQUESTS_STORAGE_PREFIX = 'wallet.receiveRequests.'
-
 export const RECEIVE_FORM_COPY = {
   title: 'Request a payment',
   labelField: 'Label',

@@ -36,6 +36,7 @@ export default function ShieldedReceiveCard({ walletId }: ShieldedReceiveCardPro
 
   const [label, setLabel] = useState('')
   const [amount, setAmount] = useState('')
+  const [saving, setSaving] = useState(false)
   const [selectedRequest, setSelectedRequest] = useState<ReceiveRequestDto | null>(null)
 
   const sync = useShieldedSyncState(walletId)
@@ -118,12 +119,13 @@ export default function ShieldedReceiveCard({ walletId }: ShieldedReceiveCardPro
       setError(null)
     }
 
-    const handleSave = (): void => {
-      if (!walletId || !currentAddress) return
+    const handleSave = async (): Promise<void> => {
+      if (!walletId || !currentAddress || saving) return
+      setSaving(true)
+      setError(null)
       try {
-        addReceiveRequest(
+        await addReceiveRequest(
           walletId,
-          'shielded',
           currentAddress,
           label,
           receiveAmountDuffs(amount),
@@ -134,14 +136,20 @@ export default function ShieldedReceiveCard({ walletId }: ShieldedReceiveCardPro
         const message = err instanceof Error ? err.message : RECEIVE_HISTORY_COPY.requestFailed
         setError(message)
         toast.error(RECEIVE_HISTORY_COPY.requestFailed)
+      } finally {
+        setSaving(false)
       }
     }
 
-    const handleDelete = (request: ReceiveRequestDto): void => {
+    const handleDelete = async (request: ReceiveRequestDto): Promise<void> => {
       if (!walletId) return
-      deleteReceiveRequest(walletId, request.id)
-      if (selectedRequest?.id === request.id) setSelectedRequest(null)
-      toast.success(RECEIVE_HISTORY_COPY.deleteSuccess)
+      try {
+        await deleteReceiveRequest(walletId, request.id)
+        if (selectedRequest?.id === request.id) setSelectedRequest(null)
+        toast.success(RECEIVE_HISTORY_COPY.deleteSuccess)
+      } catch {
+        toast.error(RECEIVE_HISTORY_COPY.deleteFailed)
+      }
     }
 
     return (
@@ -155,7 +163,7 @@ export default function ShieldedReceiveCard({ walletId }: ShieldedReceiveCardPro
               kind={"shielded"}
               label={label}
               amount={amount}
-              busy={revealing}
+              busy={revealing || saving}
               error={error}
               submitDisabled={!walletId}
               headerExtra={

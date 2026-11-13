@@ -5,6 +5,7 @@ import { toast } from '@renderer/components/ui/Toast'
 import { RECEIVE_EMPTY_TEXTS } from '@renderer/constants/receiveCard'
 import { RECEIVE_HISTORY_COPY } from '@renderer/constants/receivePage'
 import { refreshAddresses } from '@renderer/hooks/useAdresses'
+import { invalidateAsyncCache } from '@renderer/hooks/useAsyncWithCache'
 import {
   addReceiveRequest,
   deleteReceiveRequest,
@@ -61,21 +62,21 @@ export default function ReceiveAddressCard({
     setBusy(true)
     setFormError(null)
     try {
+      await addReceiveRequest(
+        walletId,
+        currentAddress,
+        label,
+        receiveAmountDuffs(amount),
+      )
       const nextClaimed = new Set(claimed)
       nextClaimed.add(currentAddress)
       const nextUnused = nextReceiveCoreAddress(addresses, nextClaimed, defaultAddress)
       if (!nextUnused) {
         const fresh = await API.addWalletAddress(walletId, false)
         setDerivedAddress(fresh)
-        await refreshAddresses(walletId)
       }
-      addReceiveRequest(
-        walletId,
-        'core',
-        currentAddress,
-        label,
-        receiveAmountDuffs(amount),
-      )
+      invalidateAsyncCache('receiveAddress', walletId)
+      await refreshAddresses(walletId)
       setLabel('')
       setAmount('')
     } catch (error) {
@@ -87,11 +88,17 @@ export default function ReceiveAddressCard({
     }
   }
 
-  const handleDelete = (request: ReceiveRequestDto): void => {
+  const handleDelete = async (request: ReceiveRequestDto): Promise<void> => {
     if (!walletId) return
-    deleteReceiveRequest(walletId, request.id)
-    if (selectedRequest?.id === request.id) setSelectedRequest(null)
-    toast.success(RECEIVE_HISTORY_COPY.deleteSuccess)
+    try {
+      await deleteReceiveRequest(walletId, request.id)
+      invalidateAsyncCache('receiveAddress', walletId)
+      void refreshAddresses(walletId)
+      if (selectedRequest?.id === request.id) setSelectedRequest(null)
+      toast.success(RECEIVE_HISTORY_COPY.deleteSuccess)
+    } catch {
+      toast.error(RECEIVE_HISTORY_COPY.deleteFailed)
+    }
   }
 
   return (

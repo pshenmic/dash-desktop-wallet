@@ -13,16 +13,6 @@ export interface ReceiveRequestDto {
   createdAt: number
 }
 
-export interface StoredReceiveRequest {
-  id: number
-  walletId: string
-  kind: ReceiveRequestKind
-  address: string
-  label: string | null
-  amountDuffs: string | null
-  createdAt: number
-}
-
 export interface ReceiveRequestFormProps {
   address: string
   kind: ReceiveRequestKind

@@ -448,6 +448,16 @@ export interface Contact {
   createdAt: number
 }
 
+export interface PaymentRequestDto {
+  id: number
+  walletId: string
+  address: string
+  amountDuffs: bigint | null
+  label: string | null
+  message: string | null
+  createdAt: number
+}
+
 // sendTransaction
 export interface SendResult {
   txid: string

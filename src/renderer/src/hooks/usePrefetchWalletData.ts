@@ -3,6 +3,7 @@ import { useAuth } from '@renderer/contexts/AuthContext'
 import { prefetchIdentities } from './useIdentities'
 import { prefetchAddresses, refreshAddresses } from './useAdresses'
 import { prefetchPlatformAddresses } from './usePlatformAddresses'
+import { prefetchReceiveRequests, refreshReceiveRequests } from './useReceiveRequests'
 import { prefetchTransactions, refreshTransactions } from './useWalletTransactions'
 import { prefetchBalance, refreshBalance } from './useWalletBalance'
 
@@ -25,6 +26,7 @@ export function usePrefetchWalletData(enabled = true): void {
       prefetchBalance(walletId)
       prefetchAddresses(walletId)
       prefetchPlatformAddresses(walletId)
+      prefetchReceiveRequests(walletId)
       prefetchIdentities(walletId)
       return
     }
@@ -34,6 +36,7 @@ export function usePrefetchWalletData(enabled = true): void {
       refreshTransactions(walletId),
       refreshBalance(walletId),
       refreshAddresses(walletId),
+      refreshReceiveRequests(walletId),
     ])
   }, [enabled, isAuthenticated, walletId, walletDataRevision])
 }

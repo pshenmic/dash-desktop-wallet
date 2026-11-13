@@ -84,6 +84,12 @@ export default function PlatformReceiveCard({ walletId }: PlatformReceiveCardPro
     setBusy(true)
     setFormError(null)
     try {
+      await addReceiveRequest(
+        walletId,
+        currentAddress,
+        label,
+        receiveAmountDuffs(amount),
+      )
       const nextClaimed = new Set(claimed)
       nextClaimed.add(currentAddress)
       let nextUnused = nextReceivePlatformAddress(platformAddresses, nextClaimed)?.platformAddress
@@ -92,15 +98,8 @@ export default function PlatformReceiveCard({ walletId }: PlatformReceiveCardPro
         nextUnused = nextReceivePlatformAddress(nextList, nextClaimed)?.platformAddress
           ?? nextList[nextList.length - 1]?.platformAddress
         if (nextUnused) setDerivedAddress(nextUnused)
-        await refreshPlatformAddresses(walletId)
       }
-      addReceiveRequest(
-        walletId,
-        'platform',
-        currentAddress,
-        label,
-        receiveAmountDuffs(amount),
-      )
+      await refreshPlatformAddresses(walletId)
       setLabel('')
       setAmount('')
     } catch (error) {
@@ -112,11 +111,16 @@ export default function PlatformReceiveCard({ walletId }: PlatformReceiveCardPro
     }
   }
 
-  const handleDelete = (request: ReceiveRequestDto): void => {
+  const handleDelete = async (request: ReceiveRequestDto): Promise<void> => {
     if (!walletId) return
-    deleteReceiveRequest(walletId, request.id)
-    if (selectedRequest?.id === request.id) setSelectedRequest(null)
-    toast.success(RECEIVE_HISTORY_COPY.deleteSuccess)
+    try {
+      await deleteReceiveRequest(walletId, request.id)
+      void refreshPlatformAddresses(walletId)
+      if (selectedRequest?.id === request.id) setSelectedRequest(null)
+      toast.success(RECEIVE_HISTORY_COPY.deleteSuccess)
+    } catch {
+      toast.error(RECEIVE_HISTORY_COPY.deleteFailed)
+    }
   }
 
   return (

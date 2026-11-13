@@ -11,7 +11,9 @@ import {
   nextReceiveShieldedAddress,
   receiveCoreAddresses,
   receivePlatformAddresses,
+  receiveRequestKind,
   receiveShieldedAddresses,
+  toReceiveRequest,
 } from '../../src/renderer/src/utils/receiveDefaults'
 import type { WalletAddressDto } from '../../src/renderer/src/api/types'
 
@@ -217,5 +219,39 @@ describe('claimedReceiveAddresses and addressLabelsByAddress', () => {
     expect(labels.has('addr-2')).toBe(false)
     expect(labels.has('addr-3')).toBe(false)
     expect(labels.get('addr-4')).toBe('Payroll')
+  })
+})
+
+describe('receiveRequestKind and toReceiveRequest', () => {
+  it('classifies core, platform, and shielded addresses', () => {
+    const core = 'yXGeNP53A9s3db26aAtsS764uP8E1B4sD1'
+    const platform = 'tdash1kpkn7auxuku5z5y3k4tx9ydn6elwmuja0cga5vr4'
+    const shielded = 'tdash1zqyvt595745255yj6pf2x9nz7y0qhqujdr0dw2qm6ncqtwqexrxg5p2s9abcdef123456'
+    expect(receiveRequestKind(core)).toBe('core')
+    expect(receiveRequestKind(platform)).toBe('platform')
+    expect(receiveRequestKind(shielded)).toBe('shielded')
+  })
+
+  it('converts a backend PaymentRequestDto into a ReceiveRequestDto with derived kind', () => {
+    const platform = 'tdash1kpkn7auxuku5z5y3k4tx9ydn6elwmuja0cga5vr4'
+    expect(
+      toReceiveRequest({
+        id: 7,
+        walletId: 'wallet-1',
+        address: platform,
+        amountDuffs: 250_000_000n,
+        label: 'Invoice #7',
+        message: null,
+        createdAt: 1_700_000_000_000,
+      }),
+    ).toEqual({
+      id: 7,
+      walletId: 'wallet-1',
+      kind: 'platform',
+      address: platform,
+      amountDuffs: 250_000_000n,
+      label: 'Invoice #7',
+      createdAt: 1_700_000_000_000,
+    })
   })
 })
