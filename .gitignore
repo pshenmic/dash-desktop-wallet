@@ -15,6 +15,7 @@ out
 .cache
 *.tsbuildinfo
 .claude
+.qwen
 
 *.snap
 .agents

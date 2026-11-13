@@ -75,6 +75,7 @@ export function selectableTransferUtxos(
       height: utxo.height,
       timestamp: utxo.timestamp,
       confirmations: utxo.confirmations,
+      isLocked: utxo.isLocked,
     }))
 }
 

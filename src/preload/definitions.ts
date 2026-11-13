@@ -120,6 +120,7 @@ export const apiDefinitions = (ipcRenderer) => ({
   stopWalletSync: () => ipcRenderer.invoke('stopWalletSync'),
   resetWalletSync: (network: Network) => ipcRenderer.invoke('resetWalletSync', network),
   getUtxos: (walletId: string) => ipcRenderer.invoke('getUtxos', walletId),
+  setUtxoLocked: (walletId: string, txid: string, vout: number, locked: boolean) => ipcRenderer.invoke('setUtxoLocked', walletId, txid, vout, locked),
   hasSyncProgress: (walletId: string) => ipcRenderer.invoke('hasSyncProgress', walletId),
   broadcastTransaction: (txHex: string) => ipcRenderer.invoke('broadcastTransaction', txHex),
 
@@ -133,6 +134,10 @@ export const apiDefinitions = (ipcRenderer) => ({
   getContacts: (network?: Network) => ipcRenderer.invoke('getContacts', network),
   addContact: (label: string, address: string, network: Network) => ipcRenderer.invoke('addContact', label, address, network),
   deleteContact: (id: number) => ipcRenderer.invoke('deleteContact', id),
+
+  createPaymentRequest: (walletId: string, address: string, amountDuffs: bigint | null, label: string | null, message: string | null) => ipcRenderer.invoke('createPaymentRequest', walletId, address, amountDuffs, label, message),
+  getPaymentRequests: (walletId: string) => ipcRenderer.invoke('getPaymentRequests', walletId),
+  deletePaymentRequest: (walletId: string, id: number) => ipcRenderer.invoke('deletePaymentRequest', walletId, id),
 
   getShieldedStatus: () => ipcRenderer.invoke('getShieldedStatus'),
   getShieldedPoolInfo: (network: Network) => ipcRenderer.invoke('getShieldedPoolInfo', network),

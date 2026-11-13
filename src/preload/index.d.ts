@@ -60,6 +60,17 @@ interface SelectableUtxoDTO {
   height: number
   timestamp: Date | null
   confirmations: number
+  isLocked: boolean
+}
+
+interface PaymentRequestDTO {
+  id: number
+  walletId: string
+  address: string
+  amountDuffs: bigint | null
+  label: string | null
+  message: string | null
+  createdAt: number
 }
 
 // Hand-maintained alongside definitions.ts, and deliberately a second
@@ -220,6 +231,7 @@ declare global {
       stopWalletSync: () => Promise<void>
       resetWalletSync: (network: Network) => Promise<void>
       getUtxos: (walletId: string) => Promise<SelectableUtxoDTO[]>
+      setUtxoLocked: (walletId: string, txid: string, vout: number, locked: boolean) => Promise<void>
       hasSyncProgress: (walletId: string) => Promise<boolean>
       getExchangeRates: () => Promise<unknown>
       saveTextFile: (defaultFileName: string, content: string) => Promise<boolean>
@@ -229,6 +241,9 @@ declare global {
       getContacts: (network?: Network) => Promise<unknown>
       addContact: (label: string, address: string, network: Network) => Promise<void>
       deleteContact: (id: number) => Promise<void>
+      createPaymentRequest: (walletId: string, address: string, amountDuffs: bigint | null, label: string | null, message: string | null) => Promise<void>
+      getPaymentRequests: (walletId: string) => Promise<PaymentRequestDTO[]>
+      deletePaymentRequest: (walletId: string, id: number) => Promise<void>
       getShieldedStatus: () => Promise<{ prover: 'idle' | 'preparing' | 'ready' | 'error'; ready: boolean; error: string | null }>
       getShieldedPoolInfo: (network: Network) => Promise<{ poolState: bigint | null; notesCount: bigint | null }>
       getShieldedNotesInfo: (walletId: string) => Promise<{ undecodedCount: number }>

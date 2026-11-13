@@ -143,12 +143,20 @@ export class API {
     return this.api.setWalletLabel(walletId, label)
   }
 
+  static async setAddressLabel(walletId: string, address: string, label: string): Promise<void> {
+    return this.api.setAddressLabel(walletId, address, label)
+  }
+
   static async getTransactions(walletId: string): Promise<WalletHistory> {
     return this.api.getTransactions(walletId) as Promise<WalletHistory>
   }
 
   static async getUtxos(walletId: string): Promise<SelectableUtxo[]> {
     return this.api.getUtxos(walletId)
+  }
+
+  static async setUtxoLocked(walletId: string, txid: string, vout: number, locked: boolean): Promise<void> {
+    return this.api.setUtxoLocked(walletId, txid, vout, locked)
   }
 
   static async getTransactionByHash(hash: string, network: Network): Promise<WalletTxDto> {
