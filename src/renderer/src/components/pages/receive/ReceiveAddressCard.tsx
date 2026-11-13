@@ -79,6 +79,7 @@ export default function ReceiveAddressCard({
       await refreshAddresses(walletId)
       setLabel('')
       setAmount('')
+      toast.success(RECEIVE_HISTORY_COPY.requestCreated)
     } catch (error) {
       const message = error instanceof Error ? error.message : RECEIVE_HISTORY_COPY.requestFailed
       setFormError(message)
@@ -102,7 +103,7 @@ export default function ReceiveAddressCard({
   }
 
   return (
-    <div className={"flex flex-col gap-6 w-full"}>
+    <div className={"flex min-w-0 flex-col gap-6 w-full"}>
       <ReceiveRequestForm
         address={currentAddress}
         kind={"core"}

@@ -132,6 +132,7 @@ export default function ShieldedReceiveCard({ walletId }: ShieldedReceiveCardPro
         )
         setLabel('')
         setAmount('')
+        toast.success(RECEIVE_HISTORY_COPY.requestCreated)
       } catch (err) {
         const message = err instanceof Error ? err.message : RECEIVE_HISTORY_COPY.requestFailed
         setError(message)
@@ -154,7 +155,7 @@ export default function ShieldedReceiveCard({ walletId }: ShieldedReceiveCardPro
 
     return (
       <>
-        <div className={"flex flex-col gap-6 w-full"}>
+        <div className={"flex min-w-0 flex-col gap-6 w-full"}>
           <ShieldedNotesAlert walletId={walletId} onSync={() => setSyncOpen(true)} syncing={syncRunning} />
 
           {currentAddress ? (

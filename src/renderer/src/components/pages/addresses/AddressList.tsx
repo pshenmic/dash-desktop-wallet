@@ -90,7 +90,7 @@ export default function AddressList({ coreGated = false, onExportKey }: AddressL
     <AddressCard
       key={item.address}
       {...item}
-      label={item.label ?? labelsByAddress.get(item.address) ?? null}
+      label={labelsByAddress.get(item.address) ?? null}
       onExportKey={onExportKey ? () => onExportKey({ address: item.address, path: item.derivationPath }) : undefined}
     />
   )

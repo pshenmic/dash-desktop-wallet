@@ -27,7 +27,7 @@ export default function ReceiveAddressPanel({
   const { status } = useAuth()
 
   return (
-    <div className={`flex w-full min-w-0 items-start gap-8 ${wideAddress ? RECEIVE_WIDE_PANEL_CLASS : 'max-w-190'} ${SURFACE_SECTION}`}>
+    <div className={`flex flex-wrap w-full min-w-0 items-start gap-8 ${wideAddress ? RECEIVE_WIDE_PANEL_CLASS : 'max-w-190'} ${SURFACE_SECTION}`}>
       <div className={'flex shrink-0 flex-col gap-3'} style={{width: RECEIVE_QR_SIZE}}>
         <ReceiveQr
           value={paymentLink ?? address}
@@ -57,7 +57,7 @@ export default function ReceiveAddressPanel({
           </div>
         )}
       </div>
-      <div className={'flex min-w-0 flex-1 flex-col gap-3'}>
+      <div className={'flex min-w-60 flex-1 flex-col gap-3'}>
         {title && (
           <Text size={14} weight={'extrabold'} color={'brand'}>
             {title}

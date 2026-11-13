@@ -48,8 +48,8 @@ export const RECEIVE_FORM_COPY = {
   labelPlaceholder: 'e.g. Invoice #42',
   amountField: 'Amount',
   amountPlaceholder: '0.00000000',
-  generateButton: 'Copy payment link',
-  generatingButton: 'Copying…',
+  generateButton: 'Save address',
+  generatingButton: 'Saving…',
   clearButton: 'Clear',
   clickToCopyTooltip: 'Click to copy',
   copiedTooltip: 'Copied!',
@@ -57,7 +57,7 @@ export const RECEIVE_FORM_COPY = {
 
 export const RECEIVE_HISTORY_COPY = {
   title: 'Requested payments history',
-  empty: 'No payment requests yet. Copy a payment link above to add one.',
+  empty: 'No payment requests yet. Save a payment address above to add one.',
   loadFailed: 'Failed to load payment requests',
   dateHeader: 'Date',
   labelHeader: 'Label',
@@ -71,7 +71,7 @@ export const RECEIVE_HISTORY_COPY = {
   copyLinkAction: 'Copy payment link',
   copyAmountAction: 'Copy requested amount',
   deleteAction: 'Remove payment request',
-  requestCreated: 'Payment link copied',
+  requestCreated: 'Payment address saved',
   requestFailed: 'Could not save payment address',
   deleteSuccess: 'Payment request removed',
   deleteFailed: 'Could not remove payment request',

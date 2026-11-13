@@ -1,12 +1,11 @@
 import { useId } from 'react'
-import { Text } from '@renderer/components/dash-ui-kit-extended'
+import { Button, Text } from '@renderer/components/dash-ui-kit-extended'
 import { DASH_UNIT } from '@renderer/constants/balance'
 import { RECEIVE_INVOICE_ADDRESS_LABELS } from '@renderer/constants/receiveInvoice'
 import { RECEIVE_FORM_COPY, RECEIVE_LABEL_MAX_LENGTH } from '@renderer/constants/receivePage'
 import { SEND_AMOUNT_PATTERN } from '@renderer/constants/sendRecipients'
 import { FIELD_CONTROL_HEIGHT } from '@renderer/constants/surfaces'
 import type { ReceiveRequestFormProps } from '@renderer/types/ReceiveRequest'
-import { copyWithToast } from '@renderer/utils/clipboard'
 import { corePaymentUri, receiveAmountParam } from '@renderer/utils/receiveInvoice'
 import ReceiveAddressPanel from './ReceiveAddressPanel'
 
@@ -21,12 +20,15 @@ export default function ReceiveRequestForm({
   extraFields,
   note,
   submitDisabled = false,
+  submitLabel,
   onLabelChange,
   onAmountChange,
+  onClear,
   onSubmit,
 }: ReceiveRequestFormProps): React.JSX.Element {
   const idPrefix = useId()
   const disabled = busy || submitDisabled
+  const hasValues = label.trim().length > 0 || amount.trim().length > 0
   const amountParam = receiveAmountParam(amount)
   const trimmedLabel = label.trim() || null
   const paymentUri = corePaymentUri(address, amountParam, trimmedLabel)
@@ -34,7 +36,6 @@ export default function ReceiveRequestForm({
   const handleSubmit = (e: React.FormEvent): void => {
     e.preventDefault()
     if (disabled) return
-    copyWithToast(paymentUri)
     onSubmit()
   }
 
@@ -50,8 +51,6 @@ export default function ReceiveRequestForm({
         amount={amountParam}
         paymentLink={paymentUri}
         disabled={disabled}
-        onCopyAddress={onSubmit}
-        onCopyPaymentLink={onSubmit}
       >
         <label htmlFor={`${idPrefix}-label`} className={"flex flex-col gap-2"}>
           <Text size={12} weight={"medium"} color={"brand"} opacity={50}>
@@ -101,7 +100,36 @@ export default function ReceiveRequestForm({
           </Text>
         )}
 
-        {note}
+        <div className={"mt-1 flex flex-wrap items-center justify-between gap-3"}>
+          <div className={"flex items-center gap-2.5"}>
+            <Button
+              type={"submit"}
+              disabled={disabled}
+              variant={"solid"}
+              colorScheme={"primary"}
+              size={"compact"}
+              className={"normal-case!"}
+            >
+              {busy ? RECEIVE_FORM_COPY.generatingButton : (submitLabel ?? RECEIVE_FORM_COPY.generateButton)}
+            </Button>
+
+            {hasValues && (
+              <Button
+                type={"button"}
+                onClick={onClear}
+                disabled={busy}
+                variant={"solid"}
+                colorScheme={"lightBlue-mint"}
+                size={"compact"}
+                className={"normal-case!"}
+              >
+                {RECEIVE_FORM_COPY.clearButton}
+              </Button>
+            )}
+          </div>
+
+          {note}
+        </div>
       </ReceiveAddressPanel>
     </form>
   )

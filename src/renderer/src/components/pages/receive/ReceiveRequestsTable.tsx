@@ -41,7 +41,7 @@ export default function ReceiveRequestsTable({
   }
 
   return (
-    <div className={"flex flex-col gap-3 w-full"}>
+    <div className={"flex min-w-0 flex-col gap-3 w-full"}>
       <div className={"flex items-center gap-2"}>
         <Text size={14} weight={"extrabold"} color={"brand"}>
           {RECEIVE_HISTORY_COPY.title}
@@ -62,21 +62,21 @@ export default function ReceiveRequestsTable({
       ) : requests.length === 0 ? (
         <NoResults noResults={RECEIVE_HISTORY_COPY.empty} />
       ) : (
-        <div className={"flex flex-col gap-[.5rem]"}>
-          <div className={"grid grid-cols-[9rem_minmax(7rem,1fr)_minmax(14rem,1.8fr)_minmax(8.5rem,1fr)_auto] items-center gap-3 px-4 py-1"}>
-            <Text size={10} weight={"bold"} color={"brand"} opacity={50}>
+        <div className={"flex min-w-0 flex-col gap-[.5rem]"}>
+          <div className={"grid min-w-0 grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.8fr)_minmax(0,1.1fr)_auto] items-center gap-3 px-4 py-1"}>
+            <Text size={10} weight={"bold"} color={"brand"} opacity={50} className={"truncate"}>
               {RECEIVE_HISTORY_COPY.dateHeader}
             </Text>
-            <Text size={10} weight={"bold"} color={"brand"} opacity={50}>
+            <Text size={10} weight={"bold"} color={"brand"} opacity={50} className={"truncate"}>
               {RECEIVE_HISTORY_COPY.labelHeader}
             </Text>
-            <Text size={10} weight={"bold"} color={"brand"} opacity={50}>
+            <Text size={10} weight={"bold"} color={"brand"} opacity={50} className={"truncate"}>
               {RECEIVE_HISTORY_COPY.addressHeader}
             </Text>
-            <Text size={10} weight={"bold"} color={"brand"} opacity={50}>
+            <Text size={10} weight={"bold"} color={"brand"} opacity={50} className={"truncate"}>
               {RECEIVE_HISTORY_COPY.amountHeader}
             </Text>
-            <Text size={10} weight={"bold"} color={"brand"} opacity={50} className={"text-right"}>
+            <Text size={10} weight={"bold"} color={"brand"} opacity={50} className={"shrink-0 text-right"}>
               {RECEIVE_HISTORY_COPY.actionsHeader}
             </Text>
           </div>
@@ -104,18 +104,18 @@ export default function ReceiveRequestsTable({
                     onSelect(request)
                   }
                 }}
-                className={`grid grid-cols-[9rem_minmax(7rem,1fr)_minmax(14rem,1.8fr)_minmax(8.5rem,1fr)_auto] items-center gap-3 cursor-pointer hover:dash-block-accent-10 transition-colors duration-150 ${SURFACE_ROW}`}
+                className={`grid min-w-0 grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.8fr)_minmax(0,1.1fr)_auto] items-center gap-3 cursor-pointer hover:dash-block-accent-10 transition-colors duration-150 ${SURFACE_ROW}`}
               >
-                <Text size={12} weight={"medium"} color={"brand"} opacity={60} className={"truncate font-mono text-[0.75rem]!"}>
+                <Text size={12} weight={"medium"} color={"brand"} opacity={60} className={"min-w-0 truncate font-mono text-[0.75rem]!"}>
                   {formattedDate}
                 </Text>
 
                 {request.label ? (
-                  <Text size={12} weight={"bold"} color={"brand"} className={"truncate"}>
+                  <Text size={12} weight={"bold"} color={"brand"} className={"min-w-0 truncate"}>
                     {request.label}
                   </Text>
                 ) : (
-                  <Text size={12} weight={"medium"} color={"brand"} opacity={40} className={"truncate"}>
+                  <Text size={12} weight={"medium"} color={"brand"} opacity={40} className={"min-w-0 truncate"}>
                     {RECEIVE_HISTORY_COPY.noLabel}
                   </Text>
                 )}
@@ -127,8 +127,8 @@ export default function ReceiveRequestsTable({
                 </div>
 
                 {amountDash !== null && request.amountDuffs !== null ? (
-                  <div className={"flex min-w-0 flex-wrap items-baseline gap-1.5"}>
-                    <Text size={12} weight={"bold"} color={"brand"}>
+                  <div className={"flex min-w-0 flex-wrap items-baseline gap-1.5 overflow-hidden"}>
+                    <Text size={12} weight={"bold"} color={"brand"} className={"min-w-0 truncate"}>
                       <DashBigNumber>{amountDash}</DashBigNumber>
                       <span className={"font-normal"}>{` ${DASH_UNIT}`}</span>
                     </Text>
@@ -139,13 +139,13 @@ export default function ReceiveRequestsTable({
                     )}
                   </div>
                 ) : (
-                  <Text size={12} weight={"medium"} color={"brand"} opacity={40} className={"truncate"}>
+                  <Text size={12} weight={"medium"} color={"brand"} opacity={40} className={"min-w-0 truncate"}>
                     {RECEIVE_HISTORY_COPY.noAmount}
                   </Text>
                 )}
 
                 <div
-                  className={"flex items-center justify-end gap-1.5"}
+                  className={"flex shrink-0 items-center justify-end gap-1.5"}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Tooltip label={RECEIVE_HISTORY_COPY.showAction}>
