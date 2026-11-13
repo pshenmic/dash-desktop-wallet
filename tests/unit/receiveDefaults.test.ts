@@ -1,12 +1,19 @@
 import { describe, it, expect } from 'vitest'
 import {
+  addressLabelsByAddress,
+  claimedReceiveAddresses,
   defaultReceiveCoreAddress,
   defaultReceiveShieldedAddress,
   defaultReceivePlatformAddress,
   isUnusedPlatformAddress,
+  nextReceiveCoreAddress,
+  nextReceivePlatformAddress,
+  nextReceiveShieldedAddress,
   receiveCoreAddresses,
   receivePlatformAddresses,
+  receiveRequestKind,
   receiveShieldedAddresses,
+  toReceiveRequest,
 } from '../../src/renderer/src/utils/receiveDefaults'
 import type { WalletAddressDto } from '../../src/renderer/src/api/types'
 
@@ -149,5 +156,102 @@ describe('receiveShieldedAddresses', () => {
   it('excludes addresses with a positive current balance', () => {
     const balances = new Map<string, bigint>([['a', 10n], ['b', 0n]])
     expect(receiveShieldedAddresses(['a', 'b', 'c'], balances)).toEqual(['b', 'c'])
+  })
+})
+
+describe('nextReceiveCoreAddress', () => {
+  it('picks the first unused core address that has not been claimed', () => {
+    const list = [addr('a', 0n), addr('b', 0n), addr('c', 0n)]
+    expect(nextReceiveCoreAddress(list, new Set(['a']))?.address).toBe('b')
+  })
+
+  it('honours the preferred address when it is unused and unclaimed', () => {
+    const list = [addr('a', 0n), addr('b', 0n)]
+    expect(nextReceiveCoreAddress(list, new Set(), 'b')?.address).toBe('b')
+  })
+
+  it('skips the preferred address when it is already claimed', () => {
+    const list = [addr('a', 0n), addr('b', 0n)]
+    expect(nextReceiveCoreAddress(list, new Set(['a']), 'a')?.address).toBe('b')
+  })
+
+  it('returns undefined when all unused core addresses are claimed', () => {
+    const list = [addr('a', 0n), addr('b', 100n)]
+    expect(nextReceiveCoreAddress(list, new Set(['a']))).toBeUndefined()
+  })
+})
+
+describe('nextReceivePlatformAddress', () => {
+  it('picks the first unused platform address that has not been claimed', () => {
+    const list = [platformAddr('p1', 0n, 0), platformAddr('p2', 0n, 0)]
+    expect(nextReceivePlatformAddress(list, new Set(['p1']))?.platformAddress).toBe('p2')
+  })
+
+  it('returns undefined when all unused platform addresses are claimed', () => {
+    const list = [platformAddr('p1', 0n, 0), platformAddr('p2', 50n, 1)]
+    expect(nextReceivePlatformAddress(list, new Set(['p1']))).toBeUndefined()
+  })
+})
+
+describe('nextReceiveShieldedAddress', () => {
+  it('picks the first unfunded shielded address that has not been claimed', () => {
+    const balances = new Map<string, bigint>([['s1', 10n]])
+    expect(nextReceiveShieldedAddress(['s1', 's2', 's3'], balances, new Set(['s2']))).toBe('s3')
+  })
+
+  it('returns undefined when all unfunded shielded addresses are claimed', () => {
+    expect(nextReceiveShieldedAddress(['s1'], new Map(), new Set(['s1']))).toBeUndefined()
+  })
+})
+
+describe('claimedReceiveAddresses and addressLabelsByAddress', () => {
+  it('collects claimed addresses and keeps the first non-empty label per address', () => {
+    const requests = [
+      { address: 'addr-1', label: 'Latest Label' },
+      { address: 'addr-1', label: 'Older Label' },
+      { address: 'addr-2', label: '   ' },
+      { address: 'addr-3', label: null },
+      { address: 'addr-4', label: ' Payroll ' },
+    ]
+    expect([...claimedReceiveAddresses(requests)]).toEqual(['addr-1', 'addr-2', 'addr-3', 'addr-4'])
+    const labels = addressLabelsByAddress(requests)
+    expect(labels.get('addr-1')).toBe('Latest Label')
+    expect(labels.has('addr-2')).toBe(false)
+    expect(labels.has('addr-3')).toBe(false)
+    expect(labels.get('addr-4')).toBe('Payroll')
+  })
+})
+
+describe('receiveRequestKind and toReceiveRequest', () => {
+  it('classifies core, platform, and shielded addresses', () => {
+    const core = 'yXGeNP53A9s3db26aAtsS764uP8E1B4sD1'
+    const platform = 'tdash1kpkn7auxuku5z5y3k4tx9ydn6elwmuja0cga5vr4'
+    const shielded = 'tdash1zqyvt595745255yj6pf2x9nz7y0qhqujdr0dw2qm6ncqtwqexrxg5p2s9abcdef123456'
+    expect(receiveRequestKind(core)).toBe('core')
+    expect(receiveRequestKind(platform)).toBe('platform')
+    expect(receiveRequestKind(shielded)).toBe('shielded')
+  })
+
+  it('converts a backend PaymentRequestDto into a ReceiveRequestDto with derived kind', () => {
+    const platform = 'tdash1kpkn7auxuku5z5y3k4tx9ydn6elwmuja0cga5vr4'
+    expect(
+      toReceiveRequest({
+        id: 7,
+        walletId: 'wallet-1',
+        address: platform,
+        amountDuffs: 250_000_000n,
+        label: 'Invoice #7',
+        message: null,
+        createdAt: 1_700_000_000_000,
+      }),
+    ).toEqual({
+      id: 7,
+      walletId: 'wallet-1',
+      kind: 'platform',
+      address: platform,
+      amountDuffs: 250_000_000n,
+      label: 'Invoice #7',
+      createdAt: 1_700_000_000_000,
+    })
   })
 })

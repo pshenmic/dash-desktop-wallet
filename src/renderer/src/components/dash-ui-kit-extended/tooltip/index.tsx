@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 export interface TooltipProps {
   label?: string
   side?: 'top' | 'bottom'
+  align?: 'center' | 'end'
   children: React.ReactElement
 }
 
@@ -16,24 +17,26 @@ export function TooltipBubble({
   rect,
   label,
   side = 'top',
+  align = 'center',
   animate = false,
 }: {
   rect: DOMRect
   label: string
   side?: 'top' | 'bottom'
+  align?: TooltipProps['align']
   animate?: boolean
 }): React.JSX.Element {
+  const alignEnd = align === 'end'
+  const horizontalOffset = alignEnd ? '-100%' : '-50%'
+  const verticalOffset = side === 'top' ? 'calc(-100% - .375rem)' : '.375rem'
   return createPortal(
     <div
       role={"tooltip"}
       style={{
         position: 'fixed',
-        left: rect.left + rect.width / 2,
+        left: alignEnd ? rect.right : rect.left + rect.width / 2,
         top: side === 'top' ? rect.top : rect.bottom,
-        transform:
-          side === 'top'
-            ? 'translate(-50%, calc(-100% - .375rem))'
-            : 'translate(-50%, .375rem)',
+        transform: `translate(${horizontalOffset}, ${verticalOffset})`,
       }}
       className={"z-[1000] pointer-events-none"}
     >
@@ -48,9 +51,10 @@ export function TooltipBubble({
       >
         {label}
         <span
+          style={alignEnd ? { right: rect.width / 2 } : undefined}
           className={`
-            absolute left-1/2 size-[.5rem] rotate-45
-            -translate-x-1/2
+            absolute size-[.5rem] rotate-45
+            ${alignEnd ? 'translate-x-1/2' : 'left-1/2 -translate-x-1/2'}
             bg-dash-brand
             ${side === 'top' ? 'bottom-0 translate-y-1/2' : 'top-0 -translate-y-1/2'}
           `}
@@ -61,7 +65,7 @@ export function TooltipBubble({
   )
 }
 
-export function Tooltip({ label, side = 'top', children }: TooltipProps): React.JSX.Element {
+export function Tooltip({ label, side = 'top', align = 'center', children }: TooltipProps): React.JSX.Element {
   const [rect, setRect] = useState<DOMRect | null>(null)
   const childProps = children.props as ChildMouseProps
 
@@ -89,7 +93,7 @@ export function Tooltip({ label, side = 'top', children }: TooltipProps): React.
   return (
     <>
       {child}
-      {label && rect && <TooltipBubble rect={rect} label={label} side={side} />}
+      {label && rect && <TooltipBubble rect={rect} label={label} side={side} align={align} />}
     </>
   )
 }

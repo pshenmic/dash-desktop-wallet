@@ -387,6 +387,27 @@ export class TransactionDAO {
     }))
   }
 
+  setUtxoLocked = async (walletId: string, txid: string, vout: number, locked: boolean): Promise<void> => {
+    if (locked) {
+      await this.knex('locked_utxos')
+        .insert({wallet_id: walletId, txid, vout})
+        .onConflict(['wallet_id', 'txid', 'vout'])
+        .ignore()
+    } else {
+      await this.knex('locked_utxos')
+        .where({wallet_id: walletId, txid, vout})
+        .delete()
+    }
+  }
+
+  getLockedOutpoints = async (walletId: string): Promise<Outpoint[]> => {
+    const rows = await this.knex('locked_utxos')
+      .select('txid', 'vout')
+      .where('wallet_id', walletId)
+
+    return rows.map(row => ({txid: row.txid as string, vout: row.vout as number}))
+  }
+
   resetSyncDataByNetwork = async (network: 'mainnet' | 'testnet'): Promise<void> => {
     await this.knex.transaction(async trx => {
       const walletIds = trx('wallet').select('wallet_id').where('network', network)

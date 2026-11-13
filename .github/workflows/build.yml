@@ -23,13 +23,13 @@ jobs:
       matrix:
         include:
           - name: linux
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             script: build:linux
             artifacts: |
               dist/*.AppImage
               dist/*.deb
           - name: linux-arm64
-            os: ubuntu-22.04-arm
+            os: ubuntu-24.04-arm
             script: build:linux
             artifacts: |
               dist/*.AppImage
@@ -50,12 +50,14 @@ jobs:
         cache: yarn
     - name: Install dependencies
       run: yarn --frozen-lockfile
+    - name: Test
+      run: yarn test
     - name: Build
       run: yarn ${{ matrix.script }}
     - name: Upload installers
       uses: actions/upload-artifact@v4
       with:
-        name: dash-desktop-prebuild-${{ matrix.name }}
+        name: dash-desktop-wallet-prebuild-${{ matrix.name }}
         path: ${{ matrix.artifacts }}
         if-no-files-found: error
         retention-days: 14

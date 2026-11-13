@@ -1,8 +1,15 @@
-import { HighlightedIdentifier, Text, ExternalLinkIcon } from '@renderer/components/dash-ui-kit-extended'
+import { HighlightedIdentifier, Text, ExternalLinkIcon, KeyIcon } from '@renderer/components/dash-ui-kit-extended'
 import CopyButton from '@renderer/components/ui/CopyButton'
+import CustomBadge from '@renderer/components/ui/CustomBadge'
 import QrButton from '@renderer/components/ui/QrButton'
 import SensitiveValue from '@renderer/components/ui/SensitiveValue'
-import { ADDRESS_ROW_EXPLORER_LABEL, ADDRESS_ROW_FIAT_CLASS, ADDRESS_ROW_IDENTIFIER_CLASS } from '@renderer/constants/addressRow'
+import {
+  ADDRESS_ROW_EXPLORER_LABEL,
+  ADDRESS_ROW_EXPORT_KEY_LABEL,
+  ADDRESS_ROW_FIAT_CLASS,
+  ADDRESS_ROW_ICON_BUTTON_CLASS,
+  ADDRESS_ROW_IDENTIFIER_CLASS,
+} from '@renderer/constants/addressRow'
 import { SURFACE_ROW } from '@renderer/constants/surfaces'
 import { useFiat } from '@renderer/hooks/useFiat'
 import type { AddressRowProps } from '@renderer/types/AddressRow'
@@ -11,15 +18,18 @@ import { openExternal } from '@renderer/utils/explorer'
 
 export default function AddressRow({
   address,
+  label = null,
   amount,
   fiatDuffs = null,
   leading,
   meta,
   explorerUrl,
   onQr,
+  onExportKey,
   hidden = false,
 }: AddressRowProps): React.JSX.Element {
   const { format: formatFiat, rateReady } = useFiat()
+  const trimmedLabel = label?.trim() ?? ''
 
   return (
     <div className={`flex items-center justify-between gap-4 ${SURFACE_ROW}`}>
@@ -28,15 +38,29 @@ export default function AddressRow({
         <div className={"flex min-w-0 flex-col gap-1"}>
           <div className={"flex min-w-0 items-center gap-[.3125rem]"}>
             <HighlightedIdentifier className={ADDRESS_ROW_IDENTIFIER_CLASS}>{address}</HighlightedIdentifier>
+            {trimmedLabel !== '' && (
+              <CustomBadge text={trimmedLabel} variant={"accent"} size={"xs"} className={"shrink-0"} />
+            )}
             <CopyButton text={address} className={"shrink-0"} />
             {onQr && <QrButton onClick={onQr} className={"shrink-0"} />}
+            {onExportKey && (
+              <button
+                type={"button"}
+                onClick={onExportKey}
+                title={ADDRESS_ROW_EXPORT_KEY_LABEL}
+                aria-label={ADDRESS_ROW_EXPORT_KEY_LABEL}
+                className={ADDRESS_ROW_ICON_BUTTON_CLASS}
+              >
+                <KeyIcon size={10} color={"currentColor"} className={"dash-text-default opacity-50"} />
+              </button>
+            )}
             {explorerUrl && (
               <button
                 type={"button"}
                 onClick={() => openExternal(explorerUrl)}
                 title={ADDRESS_ROW_EXPLORER_LABEL}
                 aria-label={ADDRESS_ROW_EXPLORER_LABEL}
-                className={"size-5 shrink-0 rounded-[.3125rem] flex items-center justify-center dash-block-5 hover:opacity-80 transition-opacity duration-200 cursor-pointer"}
+                className={ADDRESS_ROW_ICON_BUTTON_CLASS}
               >
                 <ExternalLinkIcon size={10} color={"currentColor"} className={"dash-text-default opacity-50"} />
               </button>

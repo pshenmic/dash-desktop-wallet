@@ -57,7 +57,12 @@ export function fullDpnsName(label: string): string {
 
 export function matchesIdentityQuery(identifier: string, names: Array<string | null>, query: string): boolean {
   const trimmed = query.trim()
-  if (trimmed === '' || identifier.includes(trimmed)) return true
-  const wanted = normalizeDpnsLabel(stripDpnsInput(trimmed))
+  const label = stripDpnsInput(trimmed)
+  return label === '' || identifier.includes(trimmed) || matchesDpnsLabel(names, label)
+}
+
+export function matchesDpnsLabel(names: Array<string | null>, label: string): boolean {
+  if (label === '' || names.length === 0) return false
+  const wanted = normalizeDpnsLabel(label)
   return names.some(name => name != null && normalizeDpnsLabel(stripDpnsInput(name)).includes(wanted))
 }

@@ -1,11 +1,16 @@
+import {PrivateKey} from 'dash-core-sdk'
 import {KeyPairController} from 'dash-platform-sdk/src/keyPair/index.js'
 import {AddressDAO} from '../../database/AddressDAO'
+import {PlatformAddressDAO} from '../../database/PlatformAddressDAO'
 import {WalletDAO} from '../../database/WalletDAO'
+import {AddressKeyInfo} from '../../types/Address'
 import {Network} from '../../types/Network'
 import {COIN_TYPE, PLATFORM_ACCOUNT} from '../../constants/addresses'
 import {decryptMnemonic, encryptMnemonic} from '../../utils'
 import {coreAccountPath} from '../../utils/addressDiscovery'
+import {derivePath256} from '../../utils/dashPayKeys'
 import {requireWallet} from '../../utils/requireWallet'
+import {withUnlockedWallet} from '../../utils/walletSeed'
 import {Logger} from '../../utils/logger'
 
 // The mnemonic and the password never leave this class. Nothing here reaches a
@@ -16,15 +21,42 @@ const log = new Logger('credentials')
 export class WalletCredentialsService {
   private walletDAO: WalletDAO
   private addressDAO: AddressDAO
+  private platformAddressDAO: PlatformAddressDAO
   private pbkdf2Iterations: number
   // Derivation only — a DashPlatformSDK would build a gRPC pool and fetch the
   // evonode list to do local maths.
   private keyPair = new KeyPairController()
 
-  constructor(walletDAO: WalletDAO, addressDAO: AddressDAO, pbkdf2Iterations: number) {
+  constructor(walletDAO: WalletDAO, addressDAO: AddressDAO, platformAddressDAO: PlatformAddressDAO, pbkdf2Iterations: number) {
     this.walletDAO = walletDAO
     this.addressDAO = addressDAO
+    this.platformAddressDAO = platformAddressDAO
     this.pbkdf2Iterations = pbkdf2Iterations
+  }
+
+  // Core, DashPay receiving and platform rows; shielded has no per-index path.
+  async exportKeyByAddress(walletId: string, address: string, password: string): Promise<AddressKeyInfo> {
+    const {receiving, change, dashPay = []} = await this.addressDAO.getAddressesByWalletId(walletId)
+    const platform = await this.platformAddressDAO.getAddresses(walletId)
+    const owned = [...receiving, ...change, ...dashPay, ...platform].find(row => row.address === address)
+    if (owned == null) {
+      throw new Error(`${address} is not an address of this wallet`)
+    }
+    const path = owned.derivationPath
+
+    return withUnlockedWallet(this.walletDAO, walletId, password, async ({wallet, seed}) => {
+      const derived = derivePath256(this.keyPair.seedToHdKey(seed, wallet.network), path)
+      if (derived.privateKey == null || derived.publicKey == null) {
+        throw new Error(`Failed to derive a key at ${path}`)
+      }
+      return {
+        address,
+        path,
+        publicKey: derived.publicKey,
+        privateKey: derived.privateKey,
+        wif: PrivateKey.fromBytes(derived.privateKey, wallet.network, true).toWIF(),
+      }
+    })
   }
 
   async exportMnemonic(walletId: string, password: string): Promise<string> {

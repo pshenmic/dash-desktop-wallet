@@ -2,22 +2,22 @@ import { useMemo, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button, KeyIcon, Text } from '@renderer/components/dash-ui-kit-extended'
 import SignedActionModal from '@renderer/components/modal/SignedActionModal'
+import IdentityReadinessBadge from '@renderer/components/pages/dashpay/IdentityReadinessBadge'
 import ShortfallNotice from '@renderer/components/pages/dashpay/ShortfallNotice'
 import TransferWizard from '@renderer/components/pages/transfer/TransferWizard'
 import Alert from '@renderer/components/ui/Alert'
 import CreditsAmount from '@renderer/components/ui/CreditsAmount'
-import CustomBadge from '@renderer/components/ui/CustomBadge'
 import IdentitySelect from '@renderer/components/ui/IdentitySelect'
 import NoResults from '@renderer/components/ui/NoResults'
 import PageHeader from '@renderer/components/ui/PageHeader'
 import RetryButton from '@renderer/components/ui/RetryButton'
 import SensitiveValue from '@renderer/components/ui/SensitiveValue'
 import Spinner from '@renderer/components/ui/Spinner'
-import StatusPill from '@renderer/components/ui/StatusPill'
+import UsernameStatusPill from '@renderer/components/pages/dashpay/usernames/UsernameStatusPill'
 import TxSummary from '@renderer/components/ui/TxSummary'
 import { API } from '@renderer/api'
 import type { UsernameDto } from '@renderer/api/types'
-import { DASHPAY_PARAMS, DASHPAY_READINESS_BADGES } from '@renderer/constants/dashPay'
+import { DASHPAY_PARAMS } from '@renderer/constants/dashPay'
 import {
   REGISTER_SIGN_COPY,
   REGISTER_USERNAME_COPY,
@@ -26,7 +26,6 @@ import {
   USERNAME_DIVIDER_CLASS,
   USERNAMES_TAB_HREF,
 } from '@renderer/constants/dashPayUsernames'
-import { USERNAME_PRESENTATION } from '@renderer/constants/dpns'
 import { PAGE_HEADERS } from '@renderer/constants/pageHeaders'
 import { SURFACE_SECTION } from '@renderer/constants/surfaces'
 import { TX_SUMMARY_PENDING_VALUE } from '@renderer/constants/txSummary'
@@ -48,7 +47,6 @@ import type { RegisterUsernameProps } from '@renderer/types/DashPayScreens'
 import type { RegisterFeeSummaryProps } from '@renderer/types/DashPayUsernames'
 import type { SignedActionDoneView } from '@renderer/types/SignedActionModal'
 import { identityAddKeysHref } from '@renderer/utils/identities'
-import { dashPayReadiness } from '@renderer/utils/dashPayReadiness'
 import { feeShortfall } from '@renderer/utils/dashPayShortfall'
 import {
   balanceAfterFee,
@@ -107,7 +105,7 @@ export default function RegisterUsername({ walletId }: RegisterUsernameProps): R
   const [raw, setRaw] = useState(() => searchParams.get(DASHPAY_PARAMS.label) ?? '')
   const [signOpen, setSignOpen] = useState(false)
   const { identities, identity, readiness, loading, err, retry, select } = useActiveIdentity()
-  const { usernames: walletUsernames } = useDashPayUsernames(walletId)
+  const { usernames: walletUsernames, identityStatus } = useDashPayUsernames(walletId)
 
   const identifier = identity?.identifier ?? null
   const check = useMemo(() => validateDpnsLabel(raw), [raw])
@@ -199,13 +197,12 @@ export default function RegisterUsername({ walletId }: RegisterUsernameProps): R
 
   const renderDone = (username: UsernameDto): SignedActionDoneView => {
     const presentation = usernamePresentation(username)
-    const spec = USERNAME_PRESENTATION[presentation]
     return {
       headline: fullDpnsName(username.label),
       note: registerDoneNote(username, network, Date.now()),
       details: [
         { label: REGISTER_SIGN_COPY.identity, value: identityLabel(identity) },
-        { label: REGISTER_SIGN_COPY.status, value: <StatusPill tone={spec.tone}>{spec.label}</StatusPill> },
+        { label: REGISTER_SIGN_COPY.status, value: <UsernameStatusPill presentation={presentation} /> },
       ],
       hash: username.documentId == null ? undefined : { value: username.documentId, label: REGISTER_SIGN_COPY.documentId, explorerUrl: null },
     }
@@ -223,10 +220,7 @@ export default function RegisterUsername({ walletId }: RegisterUsernameProps): R
           onSelect={select}
           onRetry={retry}
           searchable
-          renderBadge={(item) => {
-            const badge = DASHPAY_READINESS_BADGES[dashPayReadiness(item).readiness]
-            return <CustomBadge variant={badge.variant} text={badge.text} />
-          }}
+          renderBadge={entry => <IdentityReadinessBadge status={identityStatus(entry)} />}
         />
       </div>
       <div className={"flex flex-col gap-2.5"}>

@@ -156,7 +156,7 @@ function WalletTransferHub(): React.JSX.Element {
   const preview = useSendTransactionPreview(review)
   const [notesUnlockOpen, setNotesUnlockOpen] = useState(false)
   const [wizardKey, setWizardKey] = useState(0)
-  const { utxos, loading: utxosLoading, localSnapshot: utxosLocalSnapshot, error: utxosError, retry: retryUtxos } = useWalletUtxos(wizardKey)
+  const { utxos, loading: utxosLoading, localSnapshot: utxosLocalSnapshot, error: utxosError, retry: retryUtxos, toggleLock: toggleUtxoLock } = useWalletUtxos(wizardKey)
   const [fundingRefresh, setFundingRefresh] = useState(0)
   const [resumableFunding, setResumableFunding] = useState<AssetLockFundingState | null>(null)
   const [resumeOpen, setResumeOpen] = useState(false)
@@ -585,7 +585,6 @@ function WalletTransferHub(): React.JSX.Element {
 
   const closeConfirm = (): void => {
     setConfirmOpen(false)
-    clearPassword()
   }
 
   const resetForm = (): void => {
@@ -981,6 +980,7 @@ function WalletTransferHub(): React.JSX.Element {
   const confirmStep = (
     <div className={"flex flex-col gap-3"}>
       {summary && <TxSummary {...summary} />}
+      {feeErr && <RetryButton onRetry={retryFee} label={SIMPLE_SEND_LABELS.retryFee} className={"ml-1 self-start"} />}
       <button type="button" onClick={showPreview} disabled={!canSubmit} className="w-full rounded-xl px-4 py-3 dash-block text-sm font-medium dash-text-default opacity-70 cursor-pointer hover:opacity-100 transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-dash-brand/40 dark:focus-visible:ring-white/40 disabled:opacity-50 disabled:cursor-default">{PAGE_HEADERS.sendPreview.title}</button>
       <PasswordField
         id={SIMPLE_SEND_PASSWORD_ID}
@@ -1212,6 +1212,7 @@ function WalletTransferHub(): React.JSX.Element {
         identityId={selectedIdentity?.identifier ?? null}
         platformAddress={undefined}
         onRetryUtxos={retryUtxos}
+        onToggleUtxoLock={toggleUtxoLock}
         onClose={() => setCoinControlOpen(false)}
         onApply={setCoinControl}
       />

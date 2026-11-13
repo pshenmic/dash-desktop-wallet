@@ -23,13 +23,14 @@ const p2pkhScript = (address: string): Script => {
 }
 
 const utxo = (address: string, satoshis: bigint, txId: string): UTXO =>
-  ({address, satoshis, txId, vOut: 0, script: p2pkhScript(address), height: 2_300_000, timestamp: null, confirmations: 1})
+  ({address, satoshis, txId, vOut: 0, script: p2pkhScript(address), height: 2_300_000, timestamp: null, confirmations: 1, isLocked: false})
 
 const providerStub = (utxos: UTXO[]): WalletProvider => ({
   getWalletUtxos: async () => utxos,
   getWalletBalance: async () => 0n,
   getBalance: async () => 0n,
   ensureReady: async () => undefined,
+  ensureReadyToList: async () => undefined,
   getConnectionStatus: async () => 'online',
   scanAddressUsage: async () => null,
   getUsedAddresses: async () => [],

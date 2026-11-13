@@ -4,7 +4,6 @@ import { IDENTITY_KEY_TYPE_ECDSA } from '@renderer/constants/identityKeys'
 import { DashPayReadiness, DashPaySetupStep, SetupStepState } from '@renderer/enums/DashPay'
 import type { IdentityApiDto } from '@renderer/hooks/useIdentities'
 import type { DashPayReadinessInfo, SetupStepModel } from '@renderer/types/DashPay'
-import { identityLabel } from './identifierFormat'
 import { isIdentityKeyActive } from './identities'
 
 function keySatisfies(key: IdentityKeyDto, request: IdentityKeyRequestDto): boolean {
@@ -33,7 +32,11 @@ export function dashPayReadiness(identity: Pick<IdentityApiDto, 'usernames' | 'k
   }
 }
 
-export function setupSteps(identity: IdentityApiDto | null, readiness: DashPayReadinessInfo | null): SetupStepModel[] {
+export function setupSteps(
+  identity: IdentityApiDto | null,
+  readiness: DashPayReadinessInfo | null,
+  votingUsername?: string,
+): SetupStepModel[] {
   if (identity == null || readiness == null) {
     return [
       { step: DashPaySetupStep.Identity, state: SetupStepState.Todo, caption: DASHPAY_SETUP_COPY.noIdentity },
@@ -42,16 +45,18 @@ export function setupSteps(identity: IdentityApiDto | null, readiness: DashPayRe
     ]
   }
   const username = identity.usernames[0]
+  const usernameState = username != null ? SetupStepState.Done
+    : votingUsername != null ? SetupStepState.Voting : SetupStepState.Todo
   return [
     {
       step: DashPaySetupStep.Identity,
       state: identity.balance.amount === 0n ? SetupStepState.Warning : SetupStepState.Done,
-      caption: identityLabel(identity),
+      caption: identity.identifier,
     },
     {
       step: DashPaySetupStep.Username,
-      state: username == null ? SetupStepState.Todo : SetupStepState.Done,
-      caption: username ?? DASHPAY_SETUP_COPY.usernameTodo,
+      state: usernameState,
+      caption: username ?? votingUsername ?? DASHPAY_SETUP_COPY.usernameTodo,
     },
     {
       step: DashPaySetupStep.Keys,

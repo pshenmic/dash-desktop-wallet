@@ -111,6 +111,14 @@ export interface IdentityKeysUpdateDto {
   disable: number[]
 }
 
+export interface AddressKeyInfoDto {
+  address: string
+  path: string
+  publicKey: Uint8Array
+  privateKey: Uint8Array
+  wif: string
+}
+
 // getIdentityPrivateKeys: a key another wallet added is absent.
 export interface IdentityPrivateKeyDto {
   keyId: number
@@ -199,6 +207,7 @@ export interface SelectableUtxo {
   // Null when the source cannot date the coin.
   timestamp: Date | null
   confirmations: number
+  isLocked: boolean
 }
 
 // the backend's business; this carries only what the user chose.
@@ -436,6 +445,16 @@ export interface Contact {
   label: string
   address: string
   network: Network
+  createdAt: number
+}
+
+export interface PaymentRequestDto {
+  id: number
+  walletId: string
+  address: string
+  amountDuffs: bigint | null
+  label: string | null
+  message: string | null
   createdAt: number
 }
 

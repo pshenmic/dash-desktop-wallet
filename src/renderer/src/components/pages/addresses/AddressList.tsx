@@ -11,11 +11,13 @@ import AddAddressSection from './AddAddressSection'
 import SyncGateNotice from '@renderer/components/ui/SyncGateNotice'
 import { refreshAddresses, useAdresses } from '@renderer/hooks/useAdresses'
 import { refreshPlatformAddresses, usePlatformAddresses } from '@renderer/hooks/usePlatformAddresses'
+import { useReceiveRequests } from '@renderer/hooks/useReceiveRequests'
 import { useAuth } from '@renderer/contexts/AuthContext'
 import ListSkeleton from '@renderer/components/ui/Skeleton'
 import NoResults from '@renderer/components/ui/NoResults'
 import RetryButton from '@renderer/components/ui/RetryButton'
 import { NoResultsTone } from '@renderer/enums/NoResultsTone'
+import type { AddressListProps } from '@renderer/types/ExportKey'
 import type { RetryButtonProps } from '@renderer/types/RetryButton'
 import { WalletAddressDto } from '@renderer/api/types'
 
@@ -63,7 +65,7 @@ function TabContent<T>({
 
 const TAB_VALUES = ['receiving', 'change', 'platform', 'shielded']
 
-export default function AddressList({ coreGated = false }: { coreGated?: boolean }): React.JSX.Element {
+export default function AddressList({ coreGated = false, onExportKey }: AddressListProps): React.JSX.Element {
   const [searchParams] = useSearchParams()
   const requestedTab = searchParams.get('tab')
   const [activeTab, setActiveTab] = useState(
@@ -80,10 +82,18 @@ export default function AddressList({ coreGated = false }: { coreGated?: boolean
     loading: platformLoading,
     err: platformErr,
   } = usePlatformAddresses(walletId)
+  const { labelsByAddress } = useReceiveRequests(walletId)
   const retryAddresses = walletId === undefined ? undefined : () => refreshAddresses(walletId)
   const retryPlatformAddresses = walletId === undefined ? undefined : () => refreshPlatformAddresses(walletId)
 
-  const renderAddress = (item: WalletAddressDto): React.JSX.Element => <AddressCard key={item.address} {...item} />
+  const renderAddress = (item: WalletAddressDto): React.JSX.Element => (
+    <AddressCard
+      key={item.address}
+      {...item}
+      label={labelsByAddress.get(item.address) ?? null}
+      onExportKey={onExportKey ? () => onExportKey({ address: item.address, path: item.derivationPath }) : undefined}
+    />
+  )
 
   const tabItems = [
     {
@@ -135,7 +145,14 @@ export default function AddressList({ coreGated = false }: { coreGated?: boolean
             err={platformErr}
             errorMessage={"Failed to load platform addresses"}
             emptyMessage={"No platform addresses found"}
-            renderItem={(item) => <PlatformAddressCard key={item.platformAddress} {...item} />}
+            renderItem={(item) => (
+              <PlatformAddressCard
+                key={item.platformAddress}
+                {...item}
+                label={labelsByAddress.get(item.platformAddress) ?? null}
+                onExportKey={onExportKey ? () => onExportKey({ address: item.platformAddress }) : undefined}
+              />
+            )}
             onRetry={retryPlatformAddresses}
           />
           {!platformLoading && !platformErr && (
