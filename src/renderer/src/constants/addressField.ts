@@ -15,6 +15,11 @@ export const ADDRESS_HIGHLIGHT_CLASSES: Record<DropdownTextSize, string> = {
   14: `min-w-0 flex-1 ${HIGHLIGHTED_IDENTIFIER_CLASS}`,
 }
 
+export const ADDRESS_BADGED_HIGHLIGHT_CLASSES: Record<DropdownTextSize, string> = {
+  12: `min-w-0 text-xs! ${HIGHLIGHTED_IDENTIFIER_CLASS}`,
+  14: `min-w-0 ${HIGHLIGHTED_IDENTIFIER_CLASS}`,
+}
+
 export const ADDRESS_AVATAR_SIZES: Record<DropdownTextSize, string> = {
   12: 'size-3 shrink-0',
   14: 'size-3.5 shrink-0',

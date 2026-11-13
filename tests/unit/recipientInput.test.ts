@@ -26,13 +26,14 @@ vi.mock('react', async importOriginal => ({
 }))
 vi.mock('@renderer/components/dash-ui-kit-extended', () => ({Button: 'button', HighlightedIdentifier: 'identifier', Input: 'input', Text: 'span', ChevronIcon: 'chevron'}))
 vi.mock('@renderer/components/dash-ui-kit-extended/icons', () => ({SearchIcon: 'search', PlusIcon: 'plus', DeleteIcon: 'delete', CheckIcon: 'check', RefreshIcon: 'refresh'}))
-vi.mock('dash-ui-kit/react', () => ({Avatar: 'avatar'}))
+vi.mock('dash-ui-kit/react', () => ({Avatar: 'avatar', Badge: 'badge'}))
 vi.mock('@renderer/hooks/useClickOutside', () => ({useClickOutside: () => {}}))
 vi.mock('@renderer/hooks/useAddressBook', () => ({useAddressBook: () => ({contacts: harness.contacts, network: 'testnet', addContact: harness.addContact, deleteContact: harness.deleteContact})}))
 vi.mock('@renderer/components/ui/Toast', () => ({toast: {error: vi.fn()}}))
 
 import RecipientInput from '../../src/renderer/src/components/pages/transfer/RecipientInput'
 import DropdownField from '../../src/renderer/src/components/ui/DropdownField'
+import CustomBadge from '../../src/renderer/src/components/ui/CustomBadge'
 import { sendPageData } from '../../src/renderer/src/constants/sendPages'
 import type { DropdownFieldOption, DropdownFieldProps } from '../../src/renderer/src/types/DropdownField'
 
@@ -42,9 +43,14 @@ function elements(node: ReactNode): ReactElement<Record<string, unknown>>[] {
   return [node, ...elements(node.props.children as ReactNode)]
 }
 
-function renderRecipient(value: string, onChange = vi.fn(), ownOptions: DropdownFieldOption[] = [{value: 'own', label: 'own'}]) {
+function renderRecipient(
+  value: string,
+  onChange = vi.fn(),
+  ownOptions: DropdownFieldOption[] = [{value: 'own', label: 'own'}],
+  valueBadge?: string,
+) {
   harness.index = 0
-  return RecipientInput({value, onChange, ownOptions, data: sendPageData.recipient})
+  return RecipientInput({value, valueBadge, onChange, ownOptions, data: sendPageData.recipient})
 }
 
 beforeEach(() => {
@@ -83,7 +89,7 @@ describe('Simple recipient input', () => {
 
   it('shows a heading and balance with transaction count beside each wallet address', () => {
     const dropdown = elements(renderRecipient('', vi.fn(), [{
-      value: 'own', label: 'own', description: 'Your receiving address · Savings', metadata: ['1.25 Dash', 'Tx count: 4'],
+      value: 'own', label: 'own', badge: 'Savings', description: 'Your receiving address', metadata: ['1.25 Dash', 'Tx count: 4'],
     }])).find(node => node.type === DropdownField)!
     const props = dropdown.props as unknown as DropdownFieldProps
     expect(props.menuHeading).toBe('Your addresses')
@@ -94,8 +100,52 @@ describe('Simple recipient input', () => {
     expect(elements(heading).some(node => node.props.children === 'Your addresses')).toBe(true)
     const option = nodes.find(node => node.key === 'own')!
     const optionText = elements(option).map(node => node.props.children)
-    expect(optionText).toEqual(expect.arrayContaining(['own', 'Your receiving address · Savings', '1.25 Dash', 'Tx count: 4']))
+    expect(optionText).toEqual(expect.arrayContaining(['own', 'Your receiving address', '1.25 Dash', 'Tx count: 4']))
+    const badge = elements(option).find(node => node.type === CustomBadge)!
+    expect(badge.props.text).toBe('Savings')
     expect(elements(heading).some(node => node.type === 'button')).toBe(false)
+  })
+
+  it('opens matching Receive addresses when typing part of a label and renders the label badge when selected or entered', () => {
+    const savingsAddress = createBase58check(sha256).encode(Uint8Array.from([140, ...Array(20).fill(3)]))
+    const otherAddress = createBase58check(sha256).encode(Uint8Array.from([140, ...Array(20).fill(4)]))
+    const options: DropdownFieldOption[] = [
+      {value: savingsAddress, label: savingsAddress, badge: 'Savings Vault', description: 'Your receiving address'},
+      {value: otherAddress, label: otherAddress, description: 'Your receiving address'},
+    ]
+    const onChange = vi.fn()
+    let dropdown = elements(renderRecipient('', onChange, options)).find(node => node.type === DropdownField)!
+    let props = dropdown.props as unknown as DropdownFieldProps
+
+    harness.index = 0
+    harness.states = [false, true]
+    let tree = DropdownField(props)
+    const input = elements(tree).find(node => node.type === 'input')!
+    ;(input.props.onChange as (event: {target: {value: string}}) => void)({target: {value: 'vault'}})
+    expect(onChange).toHaveBeenLastCalledWith('vault')
+    expect(harness.states[0]).toBe(true)
+
+    harness.states = []
+    dropdown = elements(renderRecipient('vault', onChange, options)).find(node => node.type === DropdownField)!
+    props = dropdown.props as unknown as DropdownFieldProps
+    harness.index = 0
+    harness.states = [true, true]
+    const openNodes = elements(DropdownField(props))
+    expect(openNodes.some(node => node.key === savingsAddress)).toBe(true)
+    expect(openNodes.some(node => node.key === otherAddress)).toBe(false)
+
+    harness.states = []
+    dropdown = elements(renderRecipient(savingsAddress, onChange, options, 'Savings Vault')).find(node => node.type === DropdownField)!
+    props = dropdown.props as unknown as DropdownFieldProps
+    harness.index = 0
+    harness.states = [false, false]
+    const blurredNodes = elements(DropdownField(props))
+    expect(blurredNodes.find(node => node.type === CustomBadge)?.props.text).toBe('Savings Vault')
+
+    harness.index = 0
+    harness.states = [false, true]
+    const focusedNodes = elements(DropdownField(props))
+    expect(focusedNodes.find(node => node.type === CustomBadge)?.props.text).toBe('Savings Vault')
   })
 
   it('retains contact saving, selection and deletion alongside own address options', async () => {

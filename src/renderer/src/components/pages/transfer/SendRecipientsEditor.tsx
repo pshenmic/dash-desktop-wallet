@@ -8,11 +8,12 @@ import { CHIP_ACTION, SURFACE_PANEL } from '@renderer/constants/surfaces'
 import type { SendRecipientsEditorProps } from '@renderer/types/SendRecipients'
 import { creditsToDuffs, dashToDuffs, davToDash, duffsToCredits } from '@renderer/utils/balance'
 import { isValidDestinationAddress } from '@renderer/utils/destinationAddress'
-import { availableOwnRecipientOptions } from '@renderer/utils/ownRecipients'
+import { availableOwnRecipientOptions, matchingOptionsByLabel } from '@renderer/utils/ownRecipients'
 import { capSendAmount, recipientPercent, recipientRemainingDuffs, recipientSliderAmount, recipientTotalDuffs } from '@renderer/utils/sendRecipients'
 import AllocationAmountRow from '@renderer/components/ui/AllocationAmountRow'
 import CreditsAmount from '@renderer/components/ui/CreditsAmount'
 import DenominationChips from '@renderer/components/ui/DenominationChips'
+import FadingScrollArea from '@renderer/components/ui/FadingScrollArea'
 import RecipientInput from './RecipientInput'
 
 export default function SendRecipientsEditor({
@@ -29,6 +30,7 @@ export default function SendRecipientsEditor({
   ownOptionsLoading = false,
   ownOptionsError = null,
   onRetryOwnOptions,
+  addressLabels,
   headerAction,
   beforeRecipients,
   footer,
@@ -45,8 +47,8 @@ export default function SendRecipientsEditor({
   }
 
   return (
-    <div className={`flex min-w-0 flex-col gap-3 ${SURFACE_PANEL}`}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className={`flex h-[calc(100dvh-17rem)] min-h-96 min-w-0 flex-col ${SURFACE_PANEL}`}>
+      <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div className="text-sm font-medium dash-text-default">
           <span>Recipients ({recipients.length}/{limit})</span>
           <span className="opacity-50"> · {davToDash(recipientTotalDuffs(recipients))} Dash</span>
@@ -67,8 +69,8 @@ export default function SendRecipientsEditor({
           )}
         </div>
       </div>
-      {beforeRecipients && <div className="shrink-0">{beforeRecipients}</div>}
-      <div className="flex min-w-0 flex-col gap-3">
+      {beforeRecipients && <div className="mb-3 shrink-0">{beforeRecipients}</div>}
+      <FadingScrollArea className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto scrollbar-hide">
         {recipients.map((recipient, index) => {
           const amount = dashToDuffs(recipient.amount)
           const remaining = budgetDuffs == null ? null : recipientRemainingDuffs(recipients, recipient.id, budgetDuffs)
@@ -76,9 +78,11 @@ export default function SendRecipientsEditor({
           const isFeeRecipient = feeRecipientId === recipient.id && feeCredits != null
           const receivedCredits = duffsToCredits(amount) - (feeCredits ?? 0n)
           const creatingIdentity = destination === DestinationKind.NewIdentity
-          const addressError = !creatingIdentity && recipient.address.length > 0 && errors[index]?.address
-          const amountError = recipient.amount.length > 0 && errors[index]?.amount
           const recipientOwnOptions = availableOwnRecipientOptions(ownOptions, recipients, recipient.id)
+          const hasLabelMatch = recipientOwnOptions != null && matchingOptionsByLabel(recipientOwnOptions, recipient.address).length > 0
+          const addressError = !creatingIdentity && recipient.address.length > 0 && !hasLabelMatch && errors[index]?.address
+          const amountError = recipient.amount.length > 0 && errors[index]?.amount
+          const recipientBadge = addressLabels?.get(recipient.address.trim())
           let recipientLabel = `Recipient ${index + 1}`
           let inputLabel = `Recipient ${index + 1} address`
           if (destination === DestinationKind.Identity) {
@@ -116,6 +120,7 @@ export default function SendRecipientsEditor({
                 appearance="subtle"
                 ariaLabel={inputLabel}
                 value={recipient.address}
+                valueBadge={recipientBadge}
                 onChange={value => update(recipient.id, 'address', value)}
                 validate={address => isValidDestinationAddress(destination, address, network)}
                 invalid={!!addressError}
@@ -192,8 +197,8 @@ export default function SendRecipientsEditor({
             </section>
           )
         })}
-      </div>
-      {footer && <div className="mt-2 shrink-0">{footer}</div>}
+      </FadingScrollArea>
+      {footer && <div className="mt-5 shrink-0">{footer}</div>}
     </div>
   )
 }

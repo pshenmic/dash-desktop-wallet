@@ -1,8 +1,10 @@
 import { CoinControlSort } from '../enums/CoinControl'
 import { SourceKind } from '../enums/SourceKind'
 import { TransferOperation } from '../enums/TransferOperation'
-import type { CoinControlFixedSourceCopy, CoinControlInputLabel } from '../types/CoinControl'
+import type { CoinControlFixedSourceCopy, CoinControlInputLabel, CoinControlSelection } from '../types/CoinControl'
 import type { SegmentOption } from '../types/SegmentedControl'
+
+export const AUTOMATIC_COIN_CONTROL: CoinControlSelection = { kind: 'automatic' }
 
 export const COIN_CONTROL_INVALID_MESSAGE = 'Selected funds are no longer available. Review your coin control selection before continuing.'
 

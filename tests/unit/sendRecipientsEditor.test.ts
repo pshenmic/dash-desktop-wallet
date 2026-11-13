@@ -97,11 +97,14 @@ describe('SendRecipientsEditor', () => {
       ownOptionsLoading: true,
       ownOptionsError: 'Failed',
       onRetryOwnOptions,
+      addressLabels: new Map([['addr-1', 'Primary']]),
     }))).filter(node => node.type === 'recipient-input')
 
     expect(inputs).toHaveLength(2)
     expect(inputs[0].props.ownOptions).toEqual(ownOptions)
     expect(inputs[1].props.ownOptions).toEqual([{value: 'addr-2', label: 'addr-2'}])
+    expect(inputs[0].props.valueBadge).toBe('Primary')
+    expect(inputs[1].props.valueBadge).toBeUndefined()
     expect(inputs[0].props.ownOptionsHeading).toBe('Your identities')
     expect(inputs[0].props.ownOptionsLoading).toBe(true)
     expect(inputs[0].props.ownOptionsError).toBe('Failed')

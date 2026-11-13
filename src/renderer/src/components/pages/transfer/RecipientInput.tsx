@@ -5,6 +5,7 @@ import type { RecipientInputProps } from '@renderer/types/SendRecipients'
 import { useAddressBook } from '@renderer/hooks/useAddressBook'
 import { isValidDashAddress } from '@renderer/utils/address'
 import { matchingContacts } from '@renderer/utils/matchingContacts'
+import { matchingOptionsByLabel } from '@renderer/utils/ownRecipients'
 import { toast } from '@renderer/components/ui/Toast'
 import { getErrorMessage } from '@renderer/utils/error'
 import { CONTACT_IDENTIFIER_CLASS, FIELD_INVALID, RECIPIENT_FIELD_STYLES } from '@renderer/constants/addressField'
@@ -14,6 +15,7 @@ import Spinner from '@renderer/components/ui/Spinner'
 
 export default function RecipientInput({
   value,
+  valueBadge,
   onChange,
   data,
   compact = false,
@@ -40,10 +42,13 @@ export default function RecipientInput({
   const filteredContacts = matchingContacts(contacts, value, isValid)
 
   const isValidRecipient = isValid(trimmedValue)
-  const invalidRecipient = invalid || (trimmedValue.length > 0 && !isValidRecipient)
+  const hasOwnOptions = ownOptions != null && ownOptions.length > 0
+  const hasLabelMatches = ownOptions != null && matchingOptionsByLabel(ownOptions, value).length > 0
+  const hasQueryMatches = trimmedValue !== '' && !isValidRecipient && (hasLabelMatches || filteredContacts.length > 0)
+  const invalidRecipient = !hasQueryMatches && (invalid || (trimmedValue.length > 0 && !isValidRecipient))
   const alreadySaved = contacts.some((c) => c.address === trimmedValue)
   const canSaveCurrent = isValidRecipient && !alreadySaved
-  const hasOwnOptions = ownOptions != null && ownOptions.length > 0
+  const showAddressBookSection = !(trimmedValue !== '' && !isValidRecipient && !adding && filteredContacts.length === 0 && hasLabelMatches)
 
   const resetAdding = (): void => {
     setAdding(false)
@@ -97,6 +102,11 @@ export default function RecipientInput({
         editable
         highlightValue
         valueAvatar={valueAvatar}
+        valueBadge={valueBadge}
+        hasExtraMatches={query => {
+          const trimmedQuery = query.trim()
+          return trimmedQuery !== '' && !isValid(trimmedQuery) && matchingContacts(contacts, query, isValid).length > 0
+        }}
         ariaLabel={ariaLabel ?? data.label}
         value={value}
         onChange={onChange}
@@ -110,83 +120,85 @@ export default function RecipientInput({
         toggleIcon={open => <SearchIcon size={style.searchIconSize} className={`dash-text-default transition-opacity ${open ? 'opacity-100' : 'opacity-40'}`} />}
         onOpenChange={open => { if (!open) resetAdding() }}
       >
-        <div className={`flex flex-col ${hasOwnOptions ? 'mb-1.5 border-b border-dash-primary-dark-blue/8 pb-1.5 dark:border-white/8' : ''}`}>
-          <div className={"flex items-center justify-between gap-2 px-[.625rem] pt-1.5 pb-2"}>
-            <span className="flex items-center gap-2">
-              <Text size={12} weight={"medium"} color={"brand"} opacity={50}>
-                {data.addressBook}
-              </Text>
-              {contactsLoading && <span role="status" aria-label="Loading contacts"><Spinner size={12} className="dash-text-primary" /></span>}
-            </span>
-            {canSaveCurrent && !adding && (
-              <button
-                type={"button"}
-                onClick={() => setAdding(true)}
-                className={`flex items-center gap-1 ${CHIP_ACTION}`}
-              >
-                <PlusIcon size={10} color={"currentColor"} />
-                <span>Save current</span>
-              </button>
+        {showAddressBookSection && (
+          <div className={`flex flex-col ${hasOwnOptions ? 'mb-1.5 border-b border-dash-primary-dark-blue/8 pb-1.5 dark:border-white/8' : ''}`}>
+            <div className={"flex items-center justify-between gap-2 px-[.625rem] pt-1.5 pb-2"}>
+              <span className="flex items-center gap-2">
+                <Text size={12} weight={"medium"} color={"brand"} opacity={50}>
+                  {data.addressBook}
+                </Text>
+                {contactsLoading && <span role="status" aria-label="Loading contacts"><Spinner size={12} className="dash-text-primary" /></span>}
+              </span>
+              {canSaveCurrent && !adding && (
+                <button
+                  type={"button"}
+                  onClick={() => setAdding(true)}
+                  className={`flex items-center gap-1 ${CHIP_ACTION}`}
+                >
+                  <PlusIcon size={10} color={"currentColor"} />
+                  <span>Save current</span>
+                </button>
+              )}
+            </div>
+
+            {adding && (
+              <div className={"flex items-center gap-2 px-[.625rem] pb-2"}>
+                <input
+                  type={"text"}
+                  aria-label={"Contact name"}
+                  value={newLabel}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewLabel(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') void handleSaveContact() }}
+                  placeholder={"Contact name"}
+                  autoFocus
+                  className={"h-9 min-w-0 flex-1 rounded-[.75rem] border border-transparent dash-block-5 px-3 text-sm font-normal outline-none dash-text-default placeholder:text-current placeholder:opacity-40 focus:border-dash-brand dark:focus:border-dash-mint"}
+                />
+                <Button type={"button"} onClick={handleSaveContact} disabled={newLabel.trim().length === 0} colorScheme={"primary"} size={"compact"}>
+                  Save
+                </Button>
+                <Button type={"button"} onClick={resetAdding} colorScheme={"primary-light"} size={"compact"}>
+                  Cancel
+                </Button>
+              </div>
+            )}
+
+            {filteredContacts.length > 0 ? (
+              filteredContacts.map((entry) => (
+                <div
+                  key={entry.id}
+                  className={`flex items-center gap-2 ${POPOVER_OPTION}`}
+                >
+                  <button
+                    type={"button"}
+                    onClick={() => handleSelectAddress(entry.address)}
+                    className={"flex min-w-0 flex-1 flex-col gap-0.5 text-left cursor-pointer"}
+                  >
+                    <HighlightedIdentifier className={CONTACT_IDENTIFIER_CLASS}>
+                      {entry.address}
+                    </HighlightedIdentifier>
+                    <Text size={12} weight={"medium"} color={"brand"} opacity={50}>
+                      {entry.label}
+                    </Text>
+                  </button>
+                  <button
+                    type={"button"}
+                    onClick={() => void handleDeleteContact(entry.id)}
+                    className={"shrink-0 flex items-center justify-center size-6 rounded-md hover:bg-dash-primary-dark-blue/5 dark:hover:bg-white/5 cursor-pointer"}
+                    title={"Remove contact"}
+                  >
+                    <DeleteIcon size={12} color={"currentColor"} className={"dash-text-default opacity-50"} />
+                  </button>
+                </div>
+              ))
+            ) : !contactsLoading && !adding && (
+              <div className={"px-[.625rem] py-2"}>
+                <Text size={12} weight={"medium"} color={"brand"} opacity={50}>
+                  {contacts.length === 0 ? 'No saved contacts yet' : data.noResults}
+                </Text>
+              </div>
             )}
           </div>
-
-          {adding && (
-            <div className={"flex items-center gap-2 px-[.625rem] pb-2"}>
-              <input
-                type={"text"}
-                aria-label={"Contact name"}
-                value={newLabel}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewLabel(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') void handleSaveContact() }}
-                placeholder={"Contact name"}
-                autoFocus
-                className={"h-9 min-w-0 flex-1 rounded-[.75rem] border border-transparent dash-block-5 px-3 text-sm font-normal outline-none dash-text-default placeholder:text-current placeholder:opacity-40 focus:border-dash-brand dark:focus:border-dash-mint"}
-              />
-              <Button type={"button"} onClick={handleSaveContact} disabled={newLabel.trim().length === 0} colorScheme={"primary"} size={"compact"}>
-                Save
-              </Button>
-              <Button type={"button"} onClick={resetAdding} colorScheme={"primary-light"} size={"compact"}>
-                Cancel
-              </Button>
-            </div>
-          )}
-
-          {filteredContacts.length > 0 ? (
-            filteredContacts.map((entry) => (
-              <div
-                key={entry.id}
-                className={`flex items-center gap-2 ${POPOVER_OPTION}`}
-              >
-                <button
-                  type={"button"}
-                  onClick={() => handleSelectAddress(entry.address)}
-                  className={"flex min-w-0 flex-1 flex-col gap-0.5 text-left cursor-pointer"}
-                >
-                  <HighlightedIdentifier className={CONTACT_IDENTIFIER_CLASS}>
-                    {entry.address}
-                  </HighlightedIdentifier>
-                  <Text size={12} weight={"medium"} color={"brand"} opacity={50}>
-                    {entry.label}
-                  </Text>
-                </button>
-                <button
-                  type={"button"}
-                  onClick={() => void handleDeleteContact(entry.id)}
-                  className={"shrink-0 flex items-center justify-center size-6 rounded-md hover:bg-dash-primary-dark-blue/5 dark:hover:bg-white/5 cursor-pointer"}
-                  title={"Remove contact"}
-                >
-                  <DeleteIcon size={12} color={"currentColor"} className={"dash-text-default opacity-50"} />
-                </button>
-              </div>
-            ))
-          ) : !contactsLoading && !adding && (
-            <div className={"px-[.625rem] py-2"}>
-              <Text size={12} weight={"medium"} color={"brand"} opacity={50}>
-                {contacts.length === 0 ? 'No saved contacts yet' : data.noResults}
-              </Text>
-            </div>
-          )}
-        </div>
+        )}
       </DropdownField>
     </div>
   )

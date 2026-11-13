@@ -1,6 +1,4 @@
 import { Text } from "@renderer/components/dash-ui-kit-extended";
-import { PlatformAddressDto } from "@renderer/api/types";
-import { IdentityApiDto } from "@renderer/hooks/useIdentities";
 import { SOURCE_KINDS } from "@renderer/utils/transferMatrix";
 import { SourceKind } from "@renderer/enums/SourceKind";
 import { DestinationKind } from "@renderer/enums/DestinationKind";
@@ -10,15 +8,9 @@ import PlatformAddressSelect from "./PlatformAddressSelect";
 import EndpointKindIcon from "./EndpointKindIcon";
 import DropdownField from "@renderer/components/ui/DropdownField";
 import IdentitySelect from "@renderer/components/ui/IdentitySelect";
-import type { DestinationPickerProps, EndpointKindEntry } from "@renderer/types/EndpointPicker";
+import type { DestinationPickerProps, KindDropdownProps, SourcePickerProps } from "@renderer/types/EndpointPicker";
 import Spinner from "@renderer/components/ui/Spinner";
 import { RefreshIcon } from "@renderer/components/dash-ui-kit-extended/icons";
-
-interface KindDropdownProps {
-  kinds: EndpointKindEntry[]
-  selected: string
-  onSelect: (kind: string) => void
-}
 
 function KindDropdown({kinds, selected, onSelect}: KindDropdownProps): React.JSX.Element {
   return (
@@ -31,30 +23,6 @@ function KindDropdown({kinds, selected, onSelect}: KindDropdownProps): React.JSX
       renderIcon={(kind) => <EndpointKindIcon kind={kind} />}
     />
   )
-}
-
-interface SourcePickerProps {
-  kind: SourceKind
-  onKindChange: (kind: SourceKind) => void
-  kinds?: Array<{kind: SourceKind; label: string}>
-  label?: string
-  platformAddresses: PlatformAddressDto[]
-  selectedPlatformAddress: PlatformAddressDto | undefined
-  onPlatformAddressChange: (address: string) => void
-  platformAutomaticLabel?: string
-  platformAddressesLoading?: boolean
-  platformAddressesError?: string | null
-  onRetryPlatformAddresses?: () => void
-  // Off while the inputs are being picked, which lists the same addresses.
-  showPlatformAddress?: boolean
-  identities: IdentityApiDto[]
-  identitiesLoading: boolean
-  identitiesError: string | null
-  selectedIdentity: IdentityApiDto | undefined
-  onIdentityChange: (identifier: string) => void
-  onRetryIdentities: () => void
-  compact?: boolean
-  trailingControl?: React.ReactNode
 }
 
 export function SourcePicker({
@@ -117,6 +85,7 @@ export function DestinationPicker({
   kinds,
   onKindChange,
   value,
+  valueBadge,
   onValueChange,
   placeholder,
   error,
@@ -143,6 +112,7 @@ export function DestinationPicker({
       editable
       highlightValue
       valueAvatar={kind === DestinationKind.Identity}
+      valueBadge={valueBadge}
       ariaLabel={recipientLabel}
       value={value}
       onChange={onValueChange}
