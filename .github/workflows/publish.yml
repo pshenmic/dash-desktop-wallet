@@ -215,10 +215,9 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         files: dist/*.exe
+    # Upload to Github release
     - name: Upload AppX
       if: ${{ !github.event.release.prerelease }}
-      uses: actions/upload-artifact@v4
+      uses: softprops/action-gh-release@v2
       with:
-        name: dash-desktop-wallet-appx
-        path: dist/*.appx
-        if-no-files-found: error
+        files: dist/*.appx
