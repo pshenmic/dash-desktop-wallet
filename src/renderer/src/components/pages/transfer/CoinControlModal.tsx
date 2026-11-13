@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useConnectionModeContext } from '@renderer/contexts/ConnectionModeContext'
-import { Button, HighlightedIdentifier, Text } from '@renderer/components/dash-ui-kit-extended'
+import { Button, HighlightedIdentifier, Text, Tooltip } from '@renderer/components/dash-ui-kit-extended'
 import { FilterIcon, LockIcon, RefreshIcon } from '@renderer/components/dash-ui-kit-extended/icons'
 import AddressQrModal from '@renderer/components/modal/AddressQrModal'
 import { useFiat } from '@renderer/hooks/useFiat'
@@ -407,16 +407,17 @@ export default function CoinControlModal({
                           dimmed={utxo.isLocked}
                           actions={<QrButton iconSize={12} onClick={() => setQrAddress(utxo.address)} ariaLabel={`Show QR code for ${utxo.address}`} className={'pointer-events-auto shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-dash-brand dark:focus-visible:ring-dash-mint'} />}
                           lockAction={
-                            <button
-                              type={'button'}
-                              onClick={() => handleToggleUtxoLock(utxo)}
-                              aria-label={`${lockLabel} ${key}`}
-                              aria-pressed={utxo.isLocked}
-                              title={lockLabel}
-                              className={`pointer-events-auto shrink-0 size-5 rounded-[.3125rem] flex items-center justify-center ${utxo.isLocked ? 'dash-block-accent-25 dash-text-primary' : 'dash-block-5 dash-text-default'} hover:opacity-80 transition-opacity duration-200 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-dash-brand dark:focus-visible:ring-dash-mint`}
-                            >
-                              <LockIcon size={10} color={'currentColor'} className={utxo.isLocked ? '' : 'opacity-50'} />
-                            </button>
+                            <Tooltip label={lockLabel}>
+                              <button
+                                type={'button'}
+                                onClick={() => handleToggleUtxoLock(utxo)}
+                                aria-label={`${lockLabel} ${key}`}
+                                aria-pressed={utxo.isLocked}
+                                className={`pointer-events-auto shrink-0 size-5 rounded-[.3125rem] flex items-center justify-center ${utxo.isLocked ? 'dash-block-accent-25 dash-text-primary' : 'dash-block-5 dash-text-default'} hover:opacity-80 transition-opacity duration-200 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-dash-brand dark:focus-visible:ring-dash-mint`}
+                              >
+                                <LockIcon size={10} color={'currentColor'} className={utxo.isLocked ? '' : 'opacity-50'} />
+                              </button>
+                            </Tooltip>
                           }
                           amount={isCoreSend
                             ? <>{davToDash(utxo.satoshis)}<span className="font-normal"> Dash</span></>
