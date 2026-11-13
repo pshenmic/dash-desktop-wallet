@@ -31,8 +31,8 @@ import Spinner from '../../src/renderer/src/components/ui/Spinner'
 
 function elements(node: ReactNode): ReactElement<Record<string, unknown>>[] {
   if (Array.isArray(node)) return node.flatMap(elements)
-  if (!isValidElement<{children?: ReactNode, below?: ReactNode, actions?: ReactNode}>(node)) return []
-  return [node, ...elements(node.props.children), ...elements(node.props.below), ...elements(node.props.actions)]
+  if (!isValidElement<{children?: ReactNode, below?: ReactNode, actions?: ReactNode, lockAction?: ReactNode}>(node)) return []
+  return [node, ...elements(node.props.children), ...elements(node.props.below), ...elements(node.props.actions), ...elements(node.props.lockAction)]
 }
 
 function applyButton(nodes: ReactElement<Record<string, unknown>>[]): ReactElement<Record<string, unknown>> {

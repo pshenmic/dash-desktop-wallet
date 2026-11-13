@@ -103,6 +103,8 @@ export interface CoinControlInputDetailsProps {
   outpoint?: string
   fiat?: string
   actions?: ReactNode
+  lockAction?: ReactNode
+  dimmed?: boolean
 }
 
 export interface WalletUtxosRequest {

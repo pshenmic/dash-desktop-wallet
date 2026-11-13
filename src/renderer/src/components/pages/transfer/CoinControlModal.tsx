@@ -397,14 +397,16 @@ export default function CoinControlModal({
                         label={`Select ${utxo.address}, output ${key}`}
                         checked={!utxo.isLocked && selectedOutpoints.includes(key)}
                         disabled={utxo.isLocked}
+                        dimChildren={false}
                         onChange={next => { if (!utxo.isLocked) toggleCoreOutpoint(key, next) }}
                       >
                         <InputDetails
                           label={formatTimestamp(utxo.timestamp)}
                           address={utxo.address}
                           outpoint={key}
-                          actions={<>
-                            <QrButton iconSize={12} onClick={() => setQrAddress(utxo.address)} ariaLabel={`Show QR code for ${utxo.address}`} className={'pointer-events-auto shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-dash-brand dark:focus-visible:ring-dash-mint'} />
+                          dimmed={utxo.isLocked}
+                          actions={<QrButton iconSize={12} onClick={() => setQrAddress(utxo.address)} ariaLabel={`Show QR code for ${utxo.address}`} className={'pointer-events-auto shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-dash-brand dark:focus-visible:ring-dash-mint'} />}
+                          lockAction={
                             <button
                               type={'button'}
                               onClick={() => handleToggleUtxoLock(utxo)}
@@ -415,7 +417,7 @@ export default function CoinControlModal({
                             >
                               <LockIcon size={10} color={'currentColor'} className={utxo.isLocked ? '' : 'opacity-50'} />
                             </button>
-                          </>}
+                          }
                           amount={isCoreSend
                             ? <>{davToDash(utxo.satoshis)}<span className="font-normal"> Dash</span></>
                             : <CreditsAmount credits={duffsToCredits(utxo.satoshis)} exact showFiat={false} align={'end'} />}
@@ -541,22 +543,24 @@ function Empty({text}: CoinControlEmptyProps): React.JSX.Element {
   return <div className={SURFACE_SECTION}><Text size={12} weight={'medium'} color={'brand'} opacity={50}>{text}</Text></div>
 }
 
-function InputDetails({label, amount, address, outpoint, fiat, actions}: CoinControlInputDetailsProps): React.JSX.Element {
+function InputDetails({label, amount, address, outpoint, fiat, actions, lockAction, dimmed = false}: CoinControlInputDetailsProps): React.JSX.Element {
+  const dim = dimmed ? 'opacity-40' : ''
   return (
     <div className={'min-w-0 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 text-left'}>
       <div className={`flex min-w-0 flex-col gap-0.5 ${label ? 'row-span-2' : ''}`}>
         <div className={'flex min-w-0 items-center gap-[.3125rem]'}>
-          <HighlightedIdentifier className={ADDRESS_ROW_IDENTIFIER_CLASS}>{address}</HighlightedIdentifier>
-          <span title={'Copy address'} className={'pointer-events-auto shrink-0'}><CopyButton text={address} /></span>
-          {actions}
+          <HighlightedIdentifier className={`${ADDRESS_ROW_IDENTIFIER_CLASS} ${dim}`}>{address}</HighlightedIdentifier>
+          <span title={'Copy address'} className={`pointer-events-auto shrink-0 ${dim}`}><CopyButton text={address} /></span>
+          {actions && <span className={`pointer-events-auto shrink-0 flex items-center gap-[.3125rem] ${dim}`}>{actions}</span>}
+          {lockAction}
         </div>
-        {outpoint && <Text reset size={10} weight={'medium'} color={'brand'} opacity={50} className={'min-w-0 break-all font-mono'}>{outpoint}</Text>}
+        {outpoint && <Text reset size={10} weight={'medium'} color={'brand'} opacity={dimmed ? 20 : 50} className={'min-w-0 break-all font-mono'}>{outpoint}</Text>}
       </div>
-      <div className={'pointer-events-auto flex flex-wrap items-center justify-end gap-2'}>
+      <div className={`pointer-events-auto flex flex-wrap items-center justify-end gap-2 ${dim}`}>
         <Text reset size={14} weight={'bold'} color={'brand'} className={'whitespace-nowrap text-right tabular-nums'}>{amount}</Text>
         {fiat && <span className={'rounded-md dash-block-accent-12 px-2 py-[.3125rem] text-[.625rem] leading-none font-medium dash-text-primary whitespace-nowrap'}>{formatApproxFiat(fiat)}</span>}
       </div>
-      {label && <Text reset size={10} weight={'medium'} color={'brand'} opacity={50} className={'col-start-2 whitespace-nowrap text-right tabular-nums leading-[120%]'}>{label}</Text>}
+      {label && <Text reset size={10} weight={'medium'} color={'brand'} opacity={dimmed ? 20 : 50} className={'col-start-2 whitespace-nowrap text-right tabular-nums leading-[120%]'}>{label}</Text>}
     </div>
   )
 }
