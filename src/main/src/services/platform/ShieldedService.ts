@@ -16,7 +16,7 @@ import { UnlockedWallet } from '../../types/UnlockedWallet'
 import { Wallet } from '../../types/Wallet'
 import {SHIELDED_ADDRESS_WINDOW} from '../../constants/addresses'
 import {CREDITS_PER_DUFF, MAX_SPEND_NOTES, SHIELDED_NOTES_FETCH_BATCH} from '../../constants/credits'
-import { findNextIdentityIndex, identityPath } from '../../utils/identityKeys'
+import { findNextIdentityIndex, identityPath, nextLocalIdentityIndex } from '../../utils/identityKeys'
 import {coreFeePerByte} from '../../utils/coreFeeRate'
 import {platformAccountXpub, platformAddressDeriver} from '../../utils/platformAddress'
 import {shieldedAddressDeriver} from '../../utils/shieldedAddress'
@@ -95,7 +95,6 @@ export class ShieldedService {
   private assetLock: AssetLockService
   private preferences: Preferences
   private history: PlatformHistoryService
-  private notesSynced?: (walletId: string) => void
   private syncStates = new Map<string, ShieldedSyncState>()
   private spendStates = new Map<string, ShieldedSpendState>()
   private addresses = new Map<string, string[]>()
@@ -116,9 +115,7 @@ export class ShieldedService {
   }
 
   private async persistCreatedIdentity(context: {walletId: string; identityIndex: number; network: Network}, identifier: string): Promise<void> {
-    const existing = await this.identityDAO.getByIdentifier(context.walletId, identifier)
-    if (existing != null) return
-    await this.identityDAO.insertIdentity({
+    await this.identityDAO.insertIdentityIfAbsent({
       walletId: context.walletId,
       identityIndex: context.identityIndex,
       identifier,
@@ -378,9 +375,11 @@ export class ShieldedService {
     return ours.some(row => row.address === address)
   }
 
-  // Nothing outside a sync can read a note: the password lives no longer.
-  onNotesSynced(listener: (walletId: string) => void): void {
-    this.notesSynced = listener
+  // A shielded transition says nothing to the addresses it touched beyond the
+  // surplus it sent back. What it moved is in the notes a sync just decrypted.
+  private refreshShieldedHistory(walletId: string): void {
+    this.history.readShieldedSides(walletId).catch(err =>
+      log.error('reading the shielded side of the history failed:', err))
   }
 
   getSyncState(walletId: string): ShieldedSyncState {
@@ -471,7 +470,7 @@ export class ShieldedService {
       this.settleSync(state, priorNotes)
       // A sync that found nothing new still leaves notes to count into any
       // transition the history walked since the last one.
-      this.notesSynced?.(walletId)
+      this.refreshShieldedHistory(walletId)
       await this.revealWindow(walletId, seed, network)
       return
     }
@@ -492,7 +491,7 @@ export class ShieldedService {
     this.settleSync(state, all)
     await this.shieldedNoteDAO.upsertNotes(walletId, all)
     await this.walletDAO.setShieldedDecodedCount(walletId, decodedUpTo)
-    this.notesSynced?.(walletId)
+    this.refreshShieldedHistory(walletId)
 
     // Only now can the window be judged: it reads used flags off the notes this
     // sync just wrote. Runs on the seed the sync is already holding, and is done
@@ -627,7 +626,7 @@ export class ShieldedService {
       const notes = await this.loadSpendNotes(network, state)
 
       const localIdentities = await this.identityDAO.getIdentitiesByWalletId(walletId)
-      const startIndex = localIdentities.reduce((max, identity) => Math.max(max, identity.identityIndex + 1), 0)
+      const startIndex = nextLocalIdentityIndex(localIdentities)
       const identityIndex = await findNextIdentityIndex(this.platform, seed, startIndex, network)
 
       const xpub = await platformAccountXpub(this.walletDAO, wallet, seed)
@@ -670,7 +669,7 @@ export class ShieldedService {
       // settleShield subtracts the same fee again, so the amount asked for reaches the pool.
       const lockDuffs = lockedDuffsFor(amountDuffs, await this.shieldFundingFee(wallet.network, amountDuffs, destination))
       const state = await this.assetLock.begin(walletId, 'shielded', destination, lockDuffs)
-      return this.runFunding(state, unlocked, async () => {
+      return this.assetLock.runDetached(state, unlocked, async () => {
         const acquired = await this.assetLock.acquire(state, {
           walletId, kind: 'shielded', destination, amountDuffs: lockDuffs, seed, source,
         })
@@ -687,19 +686,10 @@ export class ShieldedService {
     const {wallet, seed} = unlocked
 
     const state = this.assetLock.resume(walletId, row)
-    return this.runFunding(state, unlocked, async () => {
+    return this.assetLock.runDetached(state, unlocked, async () => {
       const acquired = await this.assetLock.reacquire(state, row)
       await this.settleShield(wallet, seed, state, acquired)
     })
-  }
-
-  // The job runs on past the method that started it, so it holds the seed and
-  // zeroes it however it settles.
-  private runFunding(state: AssetLockFundingState, unlocked: {seed: Uint8Array}, work: () => Promise<void>): AssetLockFundingState {
-    void work()
-      .catch(error => this.assetLock.fail(state, error))
-      .finally(() => zeroSeed(unlocked))
-    return state
   }
 
   private async settleShield(
@@ -731,7 +721,7 @@ export class ShieldedService {
       sides: [{address: row.toPlatformAddress, credits: creditsAfterFee(row.amountDuffs, feeCredits)}],
       paid: null,
     }).catch(e => log.error('failed to record a sent shield', e))
-    // Awaited: runFunding zeroes the seed the moment this settles.
+    // Awaited: runDetached zeroes the seed the moment this settles.
     await this.refreshNotes(wallet.walletId, wallet.network, seed)
   }
 

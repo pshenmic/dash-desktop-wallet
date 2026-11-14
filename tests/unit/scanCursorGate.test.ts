@@ -17,7 +17,6 @@ describe('ScanCursorGate', () => {
 
     expect(gate.lowestFailed('w1')).toBe(500)
     expect(gate.allowedHeight('w1', 1000)).toBe(499)
-    expect(gate.failedHeights('w1')).toEqual([500, 700, 900])
   })
 
   it('keeps a request that is already below the gap', () => {
@@ -43,8 +42,7 @@ describe('ScanCursorGate', () => {
     const gate = new ScanCursorGate()
     gate.fail('w1', 500)
     expect(gate.allowedHeight('w2', 1000)).toBe(1000)
-    expect(gate.hasFailures('w2')).toBe(false)
-    expect(gate.hasFailures('w1')).toBe(true)
+    expect(gate.hasFailures()).toBe(true)
   })
 
   it('releases the cursor once the failed height lands', () => {

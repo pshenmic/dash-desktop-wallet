@@ -8,7 +8,7 @@ import {Network} from '../../types/Network'
 import {AssetLockService} from './AssetLockService'
 import {PlatformWorkerService} from './PlatformWorkerService'
 import {unlockWallet, zeroSeed} from '../../utils/walletSeed'
-import {findNextIdentityIndex, identityPath} from '../../utils/identityKeys'
+import {findNextIdentityIndex, identityPath, nextLocalIdentityIndex} from '../../utils/identityKeys'
 import {COIN_TYPE, TOPUP_KEY_GAP_LIMIT, TOPUP_KEY_SCAN_LIMIT} from '../../constants/addresses'
 import {CREDITS_PER_DUFF} from '../../constants/credits'
 import {AssetLockFundingRow, AcquiredAssetLock, AssetLockFunder} from '../../types/AssetLock'
@@ -80,7 +80,7 @@ export class IdentityRegistrationService {
       await this.requireFundable(unlocked.wallet, 'identityRegister', '', amountDuffs)
 
       const state = await this.assetLock.begin(walletId, 'identity', '', amountDuffs)
-      return this.run(state, unlocked, async () => {
+      return this.assetLock.runDetached(state, unlocked, async () => {
         const acquired = await this.assetLock.acquire(state, {
           walletId, kind: 'identity', destination: '', amountDuffs, seed: unlocked.seed, credit, source, identityIndex,
         })
@@ -102,7 +102,7 @@ export class IdentityRegistrationService {
       await this.requireFundable(unlocked.wallet, 'identityTopUpL1', identityId, amountDuffs)
 
       const state = await this.assetLock.begin(walletId, 'identityTopUp', identityId, amountDuffs)
-      return this.run(state, unlocked, async () => {
+      return this.assetLock.runDetached(state, unlocked, async () => {
         const acquired = await this.assetLock.acquire(state, {
           walletId, kind: 'identityTopUp', destination: identityId, amountDuffs, seed: unlocked.seed,
           credit, source, identityIndex: topUpIndex,
@@ -140,7 +140,7 @@ export class IdentityRegistrationService {
       const identityIndex = row.identityIndex
 
       const state = this.assetLock.resume(walletId, row)
-      return this.run(state, unlocked, async () => {
+      return this.assetLock.runDetached(state, unlocked, async () => {
         const acquired = await this.assetLock.reacquire(state, row)
         if (row.kind === 'identityTopUp') {
           await this.settleTopUp(unlocked, state, acquired)
@@ -152,15 +152,6 @@ export class IdentityRegistrationService {
       zeroSeed(unlocked)
       throw error
     }
-  }
-
-  // The job runs on past the method that started it, so it holds the seed and
-  // zeroes it however it settles.
-  private run(state: AssetLockFundingState, unlocked: UnlockedWallet, work: () => Promise<void>): AssetLockFundingState {
-    void work()
-      .catch(error => this.assetLock.fail(state, error))
-      .finally(() => zeroSeed(unlocked))
-    return state
   }
 
   private async settleCreate(
@@ -182,15 +173,12 @@ export class IdentityRegistrationService {
         identityIndex,
       }))
 
-    const existing = await this.identityDAO.getByIdentifier(walletId, identifier)
-    if (existing == null) {
-      await this.identityDAO.insertIdentity({
-        walletId,
-        identityIndex,
-        identifier,
-        derivationPath: identityPath(unlocked.wallet.network, identityIndex),
-      }, row.txid)
-    }
+    await this.identityDAO.insertIdentityIfAbsent({
+      walletId,
+      identityIndex,
+      identifier,
+      derivationPath: identityPath(unlocked.wallet.network, identityIndex),
+    }, row.txid)
 
     state.identityIdentifier = identifier
     await this.assetLock.done(state, row, stHash)
@@ -216,7 +204,7 @@ export class IdentityRegistrationService {
   private async prepareRegistration(walletId: string, unlocked: UnlockedWallet): Promise<{identityIndex: number; credit: {address: string; derivationPath: string}}> {
     const {wallet: {network}, seed} = unlocked
     const localIdentities = await this.identityDAO.getIdentitiesByWalletId(walletId)
-    const startIndex = localIdentities.reduce((max, identity) => Math.max(max, identity.identityIndex + 1), 0)
+    const startIndex = nextLocalIdentityIndex(localIdentities)
     const identityIndex = await findNextIdentityIndex(this.platform, seed, startIndex, network)
 
     const registrationKey = await this.deriveRegistrationKey(seed, identityIndex, network)

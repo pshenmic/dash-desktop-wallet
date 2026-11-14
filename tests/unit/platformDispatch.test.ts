@@ -182,7 +182,7 @@ describe('PlatformWorkerService correlation', () => {
     const requestId = sentRequestId()
 
     listeners.get('message')?.({type: 'progress', requestId, phase: 'fetching', fetched: 5, total: 10} as never)
-    expect(onProgress).toHaveBeenCalledWith('fetching', 5, 10)
+    expect(onProgress).toHaveBeenCalledWith('fetching')
 
     listeners.get('message')?.({type: 'response', requestId, ok: true, result: {notes: []}} as never)
     await expect(pending).resolves.toEqual({notes: []})

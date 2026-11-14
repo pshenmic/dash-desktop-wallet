@@ -4,7 +4,7 @@ import type { OwnRecipientInventory } from '../../src/renderer/src/types/SendRec
 import { ownRecipientOptions } from '../../src/renderer/src/utils/ownRecipients'
 
 function inventory(): OwnRecipientInventory {
-  const address = {walletId: 'wallet', accountId: 0, derivationPath: '', index: 0, isUsed: false, balance: 0n, txCount: 0, label: null, usdBalance: null}
+  const address = {walletId: 'wallet', accountId: 0, derivationPath: '', index: 0, isUsed: false, balance: 0n, txCount: 0, label: null}
   return {
     receiving: [
       {...address, address: 'receive-empty', isChange: 0, label: 'Savings'},
@@ -22,7 +22,7 @@ function inventory(): OwnRecipientInventory {
     ],
     shieldedAddresses: ['shielded-saved'],
     shieldedNotes: [],
-    identities: [{identityIndex: 0, identifier: 'identity-empty', usernames: ['Personal'], keys: [], balance: {amount: 0n, usdAmount: '0'}, derivationPath: '', assetLockTxid: null}],
+    identities: [{identityIndex: 0, identifier: 'identity-empty', usernames: ['Personal'], keys: [], balance: {amount: 0n}, derivationPath: '', assetLockTxid: null}],
   }
 }
 

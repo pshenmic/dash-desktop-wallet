@@ -11,12 +11,6 @@ export class SetLanguageHandler {
   handle = async (_event: IpcMainInvokeEvent, language: string): Promise<void> => {
     const preferences = this.applicationService.preferences
 
-    await preferences.apply({
-      ...preferences,
-      general: {
-        ...preferences.general,
-        language,
-      }
-    })
+    await preferences.applyGeneral({language})
   }
 }

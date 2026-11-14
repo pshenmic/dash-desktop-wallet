@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import { HDKey } from '@scure/bip32'
 import { mnemonicToSeedSync } from '@scure/bip39'
-import { coreAccountPath, coreAddressDeriver, deriveCorePublicKey } from '../../src/main/src/utils/addressDiscovery'
+import { coreAccountPath, coreAddressDeriver, coreAddressPath, deriveCorePublicKey } from '../../src/main/src/utils/addressDiscovery'
+
+describe('coreAddressPath', () => {
+  it('builds the BIP-44 account/chain/index path', () => {
+    expect(coreAddressPath(5, false, 3)).toBe("m/44'/5'/0'/0/3")
+    expect(coreAddressPath(1, true, 0)).toBe("m/44'/1'/0'/1/0")
+  })
+})
 
 describe('deriveCorePublicKey', () => {
   const versions = {

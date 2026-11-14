@@ -84,7 +84,6 @@ export const dashscanToWalletTransactions = (
       outAmount,
       transferAmount,
       walletId,
-      usdAmount: '0.0',
       status: tx.instantLock != null ? 'Locked' as const : 'Pending' as const,
       size: tx.size ?? 0,
       blockHeight: tx.blockHeight ?? 0,

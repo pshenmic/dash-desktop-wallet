@@ -17,13 +17,14 @@ import {PERSIST_ATTEMPTS, PERSIST_RETRY_MS} from '../../constants/database'
 import {AddressDAO} from '../../database/AddressDAO'
 import {TransactionDAO} from '../../database/TransactionDAO'
 import {P2PCommand, P2PEvent} from '../../../p2p/types/messages'
-import {BroadcastPolicyOverrides, BroadcastResult} from '../../../p2p/types/broadcast'
+import {BroadcastResult} from '../../../p2p/types/broadcast'
 import {AppliedBlock, AppliedTx, GapExhausted, WalletSyncStatus, WatchAddress} from '../../../p2p/types/walletSync'
 import {PeerInfo, PeerProbeResult} from '../../../p2p/types/pool'
 import {randomUUID} from 'crypto'
 import {GENESIS} from '../../../p2p/constants'
 import {peerOverridesKey} from '../../../p2p/net/peerOverrides'
 import {ScanCursorGate} from '../../utils/scanCursorGate'
+import {stoppedSyncStatus} from '../../utils/syncStatus'
 import {Preferences} from '../../preferences'
 import {Network} from '../../types/Network'
 import {GovernanceVote, Proposal, VoteRelay} from '../../types/Governance'
@@ -50,24 +51,7 @@ export class WalletSyncService {
   private child: UtilityProcess | null = null
   // Holds a 'stopped' snapshot before the fork and after exit, so the renderer
   // never sees null.
-  private status: WalletSyncStatus = {
-    phase: 'stopped',
-    network: null,
-    walletId: null,
-    tipHeight: 0,
-    tipHash: null,
-    estimatedChainHeight: 0,
-    cfheadersHeight: 0,
-    cfilterScanHeight: 0,
-    matchedBlocksPending: 0,
-    peerCount: 0,
-    filterCapablePeerCount: 0,
-    lockPeerCount: 0,
-    peerMode: null,
-    phaseEtaMs: null,
-    lastError: null,
-    updatedAt: Date.now(),
-  }
+  private status: WalletSyncStatus = stoppedSyncStatus()
   private walletDataRevisions = new Map<string, number>()
   private activeWalletId: string | null = null
   private activeNetwork: 'mainnet' | 'testnet' | null = null
@@ -200,24 +184,7 @@ export class WalletSyncService {
       }
       this.pendingVoteRelays.clear()
       this.notifyPhase('stopped')
-      this.status = {
-        phase: 'stopped',
-        network: null,
-        walletId: null,
-        tipHeight: 0,
-        tipHash: null,
-        estimatedChainHeight: 0,
-        cfheadersHeight: 0,
-        cfilterScanHeight: 0,
-        matchedBlocksPending: 0,
-        peerCount: 0,
-        filterCapablePeerCount: 0,
-        lockPeerCount: 0,
-        peerMode: null,
-        phaseEtaMs: null,
-        lastError: null,
-        updatedAt: Date.now(),
-      }
+      this.status = stoppedSyncStatus()
       this.stopRebroadcastLoop()
       this.activeNetwork = null
       this.activeWalletId = null
@@ -230,110 +197,126 @@ export class WalletSyncService {
   }
 
   private handleP2PEvent(data: P2PEvent): void {
-    const walletId = 'walletId' in data ? data.walletId
-      : data.type === 'blockApplied' ? data.block.walletId
-      : data.type === 'gapExhausted' ? data.gap.walletId
-      : null
+    const walletId = eventWalletId(data)
     if (walletId != null && this.deletedWalletIds.has(walletId)) return
 
-    if (data.type === 'status') {
-      const previous = this.status
-      const syncedWalletId = data.status.phase === 'synced' && previous.phase !== 'synced'
-        ? data.status.walletId
-        : null
-      this.status = data.status
-      if (data.status.phase !== previous.phase) {
-        log.info(
-          `phase ${previous.phase} -> ${data.status.phase} ` +
-          `(peers=${data.status.peerCount} lockPeers=${data.status.lockPeerCount} tip=${data.status.tipHeight})` +
-          (data.status.lastError != null ? ` lastError: ${data.status.lastError}` : ''),
+    switch (data.type) {
+      case 'status':
+        this.applyStatus(data.status)
+        return
+      case 'blockApplied':
+        this.enqueuePersist(() => this.writeAppliedBlock(data.block))
+        return
+      case 'cursorAdvanced':
+        this.enqueuePersist(() => this.advanceCursorGated(data.walletId, data.height))
+        return
+      case 'cursorReset':
+        this.enqueuePersist(() => this.transactionDAO.resetCursor(data.walletId, data.height))
+        return
+      case 'incomingTx':
+        this.enqueuePersist(() => this.recordIncomingTx(data.walletId, data.tx))
+        return
+      case 'chainRewound':
+        this.reseedAfterRewind(data.walletId, data.height)
+        return
+      case 'gapExhausted':
+        this.holdGap(data.gap)
+        return
+      case 'broadcastResult':
+        takePending(this.pendingBroadcasts, data.requestId)?.({ok: data.ok, result: data.result, errorMessage: data.errorMessage})
+        return
+      case 'peers':
+        takePending(this.pendingPeerRequests, data.requestId)?.(data.peers)
+        return
+      case 'peerProbe':
+        takePending(this.pendingProbes, data.requestId)?.resolve(data.result)
+        return
+      case 'txInstantLocked':
+        this.recordInstantLock(data.txid, data.islockHex)
+        return
+      case 'chainLocked':
+        this.transactionDAO.markChainlockedUpTo(data.network, data.height).catch(err =>
+          log.error('markChainlockedUpTo failed:', err)
         )
+        this.recordChainLock(data.network, data.height)
+        return
+      case 'evonodeDapiUrls':
+        this.onEvonodeDapiUrls?.(data.network, data.dapiUrls)
+        return
+      case 'platformQuorums':
+        this.onPlatformQuorums?.(data.network, data.keys)
+        return
+      case 'masternodeList':
+        this.masternodeLists.set(data.network, data.masternodes)
+        this.onMasternodeList?.(data.network)
+        return
+      case 'listedMasternodes':
+        this.listedMasternodes.set(data.network, {proTxHashes: new Set(data.proTxHashes), askedAt: data.askedAt, v24Active: data.v24Active})
+        this.onListedMasternodes?.(data.network)
+        return
+      case 'proposals':
+        this.proposals.set(data.network, data.proposals)
+        return
+      case 'proposalVotes':
+        this.proposalVotes.set(`${data.network}:${data.proposalHash}`, data.votes)
+        return
+      case 'voteRelayed': {
+        const relay = takePending(this.pendingVoteRelays, data.requestId)
+        if (data.errorMessage == null) relay?.resolve({peers: data.peers, accepted: data.accepted})
+        else relay?.reject(new Error(data.errorMessage))
+        return
       }
-      if (data.status.peerMode !== previous.peerMode) {
-        log.info(`peer mode ${previous.peerMode ?? 'none'} -> ${data.status.peerMode ?? 'none'}`)
-      }
-      this.notifyPhase(data.status.phase)
-      if (syncedWalletId != null) {
-        this.enqueuePersist(async () => this.markWalletDataChanged(syncedWalletId))
-      }
-    } else if (data.type === 'blockApplied') {
-      this.persistAppliedBlock(data.block)
-    } else if (data.type === 'cursorAdvanced') {
-      this.enqueuePersist(() => this.advanceCursorGated(data.walletId, data.height))
-    } else if (data.type === 'cursorReset') {
-      this.enqueuePersist(() => this.transactionDAO.resetCursor(data.walletId, data.height))
-    } else if (data.type === 'incomingTx') {
-      this.enqueuePersist(() => this.recordIncomingTx(data.walletId, data.tx))
-    } else if (data.type === 'chainRewound') {
-      // On the persist queue so the orphaned blocks' own writes land before they
-      // are undone. The reseed is also what resumes the worker's held scan.
-      this.enqueuePersist(async () => {
-        await this.transactionDAO.rewindToHeight(data.walletId, data.height)
-        this.markWalletDataChanged(data.walletId)
-        const [utxos, unconfirmedInputOutpoints] = await Promise.all([
-          this.transactionDAO.getUtxos(data.walletId),
-          this.transactionDAO.getUnconfirmedInputOutpoints(data.walletId),
-        ])
-        log.warn(`reorg: un-confirmed everything above h=${data.height}; reseeding ${utxos.length} utxo(s)`)
-        this.send({type: 'reseedUtxos', walletId: data.walletId, utxos, unconfirmedInputOutpoints})
-      })
-    } else if (data.type === 'gapExhausted') {
-      this.gapHeld.add(data.gap.walletId)
-      discovery.info(
-        `scan held at h=${data.gap.height}: ${data.gap.isChange ? 'change' : 'receiving'} ` +
-        `lastUsed=${data.gap.lastUsedIndex} maxIndex=${data.gap.maxIndex} — deriving more addresses`,
-      )
-      // After the queued writes for the blocks that caused this, or discovery
-      // reads a SQL state that does not yet show the usage. Not *on* the queue:
-      // the discovery it triggers enqueues its own cursor write.
-      this.persistQueue.catch(() => undefined).then(() => this.onGapExhausted?.(data.gap))
-    } else if (data.type === 'broadcastResult') {
-      const resolve = this.pendingBroadcasts.get(data.requestId)
-      if (resolve) {
-        this.pendingBroadcasts.delete(data.requestId)
-        resolve({ok: data.ok, result: data.result, errorMessage: data.errorMessage})
-      }
-    } else if (data.type === 'peers') {
-      const resolve = this.pendingPeerRequests.get(data.requestId)
-      if (resolve) {
-        this.pendingPeerRequests.delete(data.requestId)
-        resolve(data.peers)
-      }
-    } else if (data.type === 'peerProbe') {
-      const probe = this.pendingProbes.get(data.requestId)
-      if (probe) {
-        this.pendingProbes.delete(data.requestId)
-        probe.resolve(data.result)
-      }
-    } else if (data.type === 'txInstantLocked') {
-      this.recordInstantLock(data.txid, data.islockHex)
-    } else if (data.type === 'chainLocked') {
-      this.transactionDAO.markChainlockedUpTo(data.network, data.height).catch(err =>
-        log.error('markChainlockedUpTo failed:', err)
-      )
-      this.recordChainLock(data.network, data.height)
-    } else if (data.type === 'evonodeDapiUrls') {
-      this.onEvonodeDapiUrls?.(data.network, data.dapiUrls)
-    } else if (data.type === 'platformQuorums') {
-      this.onPlatformQuorums?.(data.network, data.keys)
-    } else if (data.type === 'masternodeList') {
-      this.masternodeLists.set(data.network, data.masternodes)
-      this.onMasternodeList?.(data.network)
-    } else if (data.type === 'listedMasternodes') {
-      this.listedMasternodes.set(data.network, {proTxHashes: new Set(data.proTxHashes), askedAt: data.askedAt, v24Active: data.v24Active})
-      this.onListedMasternodes?.(data.network)
-    } else if (data.type === 'proposals') {
-      this.proposals.set(data.network, data.proposals)
-    } else if (data.type === 'proposalVotes') {
-      this.proposalVotes.set(`${data.network}:${data.proposalHash}`, data.votes)
-    } else if (data.type === 'voteRelayed') {
-      const relay = this.pendingVoteRelays.get(data.requestId)
-      this.pendingVoteRelays.delete(data.requestId)
-      if (data.errorMessage == null) relay?.resolve({peers: data.peers, accepted: data.accepted})
-      else relay?.reject(new Error(data.errorMessage))
-    } else if (data.type === 'error') {
-      log.error('utility process error:', data.message)
+      case 'error':
+        log.error('utility process error:', data.message)
+        return
     }
+  }
+
+  private applyStatus(status: WalletSyncStatus): void {
+    const previous = this.status
+    const syncedWalletId = status.phase === 'synced' && previous.phase !== 'synced' ? status.walletId : null
+    this.status = status
+    if (status.phase !== previous.phase) {
+      log.info(
+        `phase ${previous.phase} -> ${status.phase} ` +
+        `(peers=${status.peerCount} lockPeers=${status.lockPeerCount} tip=${status.tipHeight})` +
+        (status.lastError != null ? ` lastError: ${status.lastError}` : ''),
+      )
+    }
+    if (status.peerMode !== previous.peerMode) {
+      log.info(`peer mode ${previous.peerMode ?? 'none'} -> ${status.peerMode ?? 'none'}`)
+    }
+    this.notifyPhase(status.phase)
+    if (syncedWalletId != null) {
+      this.enqueuePersist(async () => this.markWalletDataChanged(syncedWalletId))
+    }
+  }
+
+  private reseedAfterRewind(walletId: string, height: number): void {
+    // On the persist queue so the orphaned blocks' own writes land before they
+    // are undone. The reseed is also what resumes the worker's held scan.
+    this.enqueuePersist(async () => {
+      await this.transactionDAO.rewindToHeight(walletId, height)
+      this.markWalletDataChanged(walletId)
+      const [utxos, unconfirmedInputOutpoints] = await Promise.all([
+        this.transactionDAO.getUtxos(walletId),
+        this.transactionDAO.getUnconfirmedInputOutpoints(walletId),
+      ])
+      log.warn(`reorg: un-confirmed everything above h=${height}; reseeding ${utxos.length} utxo(s)`)
+      this.send({type: 'reseedUtxos', walletId, utxos, unconfirmedInputOutpoints})
+    })
+  }
+
+  private holdGap(gap: GapExhausted): void {
+    this.gapHeld.add(gap.walletId)
+    discovery.info(
+      `scan held at h=${gap.height}: ${gap.isChange ? 'change' : 'receiving'} ` +
+      `lastUsed=${gap.lastUsedIndex} maxIndex=${gap.maxIndex} — deriving more addresses`,
+    )
+    // After the queued writes for the blocks that caused this, or discovery
+    // reads a SQL state that does not yet show the usage. Not *on* the queue:
+    // the discovery it triggers enqueues its own cursor write.
+    this.persistQueue.catch(() => undefined).then(() => this.onGapExhausted?.(gap))
   }
 
   // Never starts a child: a level change is not a reason to bring the pools up,
@@ -498,10 +481,8 @@ export class WalletSyncService {
       // swallow the reset.
       await this.enqueuePersist(async () => {
         // A floor above the cursor would skip blocks: a scan still below it reaches these addresses anyway.
-        if (opts.fromHeight != null) {
-          const cursor = await this.transactionDAO.getCursor(walletId)
-          if (cursor != null && cursor <= rewindToHeight) return
-        }
+        const cursor = opts.fromHeight != null ? await this.transactionDAO.getCursor(walletId) : null
+        if (cursor != null && cursor <= rewindToHeight) return
         await this.transactionDAO.resetCursor(walletId, rewindToHeight)
       })
     }
@@ -747,12 +728,7 @@ export class WalletSyncService {
         if (done) return
         done = true
         clearTimeout(timer)
-        const arr = this.instantLockWaiters.get(txid)
-        if (arr) {
-          const i = arr.indexOf(onLock)
-          if (i >= 0) arr.splice(i, 1)
-          if (arr.length === 0) this.instantLockWaiters.delete(txid)
-        }
+        this.removeInstantLockWaiter(txid, onLock)
         resolve(hex)
       }
       const onLock = (hex: string): void => finish(hex)
@@ -766,6 +742,14 @@ export class WalletSyncService {
       arr.push(onLock)
       this.instantLockWaiters.set(txid, arr)
     })
+  }
+
+  private removeInstantLockWaiter(txid: string, onLock: (hex: string) => void): void {
+    const waiters = this.instantLockWaiters.get(txid)
+    if (waiters == null) return
+    const i = waiters.indexOf(onLock)
+    if (i >= 0) waiters.splice(i, 1)
+    if (waiters.length === 0) this.instantLockWaiters.delete(txid)
   }
 
   hasInstantLock = (txid: string): boolean => this.instantLocks.has(txid)
@@ -831,10 +815,6 @@ export class WalletSyncService {
     return run
   }
 
-  private persistAppliedBlock = (block: AppliedBlock): void => {
-    this.enqueuePersist(() => this.writeAppliedBlock(block))
-  }
-
   private async writeAppliedBlock(block: AppliedBlock): Promise<void> {
     for (let attempt = 0; attempt < PERSIST_ATTEMPTS; attempt++) {
       if (attempt > 0) await new Promise(resolve => setTimeout(resolve, PERSIST_RETRY_MS))
@@ -886,10 +866,10 @@ export class WalletSyncService {
   // The only way a locally-signed transaction reaches the network, in both
   // connection modes: it goes over the lock pool, which is also the only pool
   // that can hear the resulting isdlock. Defaults come from
-  // p2p/constants.BROADCAST_POLICY; `policy` overrides the lock knobs.
+  // p2p/constants.BROADCAST_POLICY.
   // `resend` is a tx already broadcast once: peers announce a tx a single time, so
   // one they hold can show no witness, and that timeout is not a rejection.
-  broadcastTransaction = async (txHex: string, policy?: BroadcastPolicyOverrides, resend = false): Promise<BroadcastResult> => {
+  broadcastTransaction = async (txHex: string, resend = false): Promise<BroadcastResult> => {
     // Re-forks the utility process if it died since the last send.
     if (this.lockListenNetwork) {
       await this.startLockListen(this.lockListenNetwork, this.lockListenWalletId)
@@ -912,7 +892,7 @@ export class WalletSyncService {
           reject(err)
         }
       })
-      this.send({type: 'broadcast', requestId, txHex, policy})
+      this.send({type: 'broadcast', requestId, txHex})
     })
 
     // A lock observed inside the session reaches the cache here; the watcher's
@@ -954,7 +934,7 @@ export class WalletSyncService {
     for (const p of pending) {
       if (p.instantLocked || !p.isLocal) continue
       const hex = Buffer.from(p.raw).toString('hex')
-      this.broadcastTransaction(hex, undefined, true).catch(() => { /* best-effort re-push */ })
+      this.broadcastTransaction(hex, true).catch(() => { /* best-effort re-push */ })
     }
     await this.refreshWatchedTxids()
   }
@@ -1070,25 +1050,21 @@ export class WalletSyncService {
     await exited
     this.child = null
     this.activeWalletId = null
-    this.status = {
-      phase: 'stopped',
-      network: null,
-      walletId: null,
-      tipHeight: 0,
-      tipHash: null,
-      estimatedChainHeight: 0,
-      cfheadersHeight: 0,
-      cfilterScanHeight: 0,
-      matchedBlocksPending: 0,
-      peerCount: 0,
-      filterCapablePeerCount: 0,
-      lockPeerCount: 0,
-      peerMode: null,
-      phaseEtaMs: null,
-      lastError: null,
-      updatedAt: Date.now(),
-    }
+    this.status = stoppedSyncStatus()
   }
+}
+
+function takePending<T>(pending: Map<string, T>, requestId: string): T | undefined {
+  const resolve = pending.get(requestId)
+  if (resolve !== undefined) pending.delete(requestId)
+  return resolve
+}
+
+function eventWalletId(data: P2PEvent): string | null {
+  if ('walletId' in data) return data.walletId
+  if (data.type === 'blockApplied') return data.block.walletId
+  if (data.type === 'gapExhausted') return data.gap.walletId
+  return null
 }
 
 function toWatchAddress(a: Address): WatchAddress {
@@ -1110,7 +1086,9 @@ function txidFromHex(txHex: string): string | undefined {
   }
 }
 
-async function rmWithRetry(target: string, attempts = 6, delayMs = 250): Promise<void> {
+async function rmWithRetry(target: string): Promise<void> {
+  const attempts = 6
+  const delayMs = 250
   let lastError: unknown
   for (let i = 0; i < attempts; i++) {
     try {

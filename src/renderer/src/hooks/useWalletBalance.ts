@@ -4,22 +4,22 @@ import { BALANCE_REFRESH_MS } from '@renderer/constants'
 import { invalidateAsyncCache, prefetchAsyncCache, useAsyncWithCache } from './useAsyncWithCache'
 
 export type WalletBalanceData = {
-  dash: { amount: bigint; usdAmount: string }
-  credits: { amount: bigint; usdAmount: string }
+  dash: { amount: bigint }
+  credits: { amount: bigint }
 }
 
 const fetchBalance = (walletId: string): Promise<WalletBalanceData> =>
   API.getWalletBalance(walletId).then((d) => {
     const raw = d as WalletBalanceData
     return {
-      dash: { amount: BigInt(raw?.dash?.amount ?? 0n), usdAmount: raw?.dash?.usdAmount ?? '0' },
-      credits: { amount: BigInt(raw?.credits?.amount ?? 0n), usdAmount: raw?.credits?.usdAmount ?? '0' }
+      dash: { amount: BigInt(raw?.dash?.amount ?? 0n) },
+      credits: { amount: BigInt(raw?.credits?.amount ?? 0n) }
     }
   })
 
 export function useWalletBalance(walletId: string | undefined) {
   const initial = useMemo<WalletBalanceData>(
-    () => ({ dash: { amount: 0n, usdAmount: '0' }, credits: { amount: 0n, usdAmount: '0' } }),
+    () => ({ dash: { amount: 0n }, credits: { amount: 0n } }),
     []
   )
   const { data, loading, err } = useAsyncWithCache<WalletBalanceData>(

@@ -27,6 +27,7 @@ import {WalletSyncService} from '../core/WalletSyncService'
 import {encryptMnemonic} from "../../utils";
 import {withUnlockedWallet} from "../../utils/walletSeed";
 import {requireSelectedWallet, requireWallet} from '../../utils/requireWallet'
+import {parseNetwork} from '../../utils/parseNetwork'
 import {mergePlatformTransactions} from '../../utils/platformExplorerTransactions'
 import {dashPayAccountPath} from '../../utils/dashPayKeys'
 import {masternodeKeys} from '../../utils/masternodeKeys'
@@ -121,9 +122,7 @@ export class WalletService {
       throw new Error('Seedphrase must be 12, 15, 18, 21, or 24 words')
     }
 
-    if (network !== 'mainnet' && network !== 'testnet') {
-      throw new Error('Invalid network ("mainnet", "testnet")')
-    }
+    parseNetwork('createWallet', network)
 
     const walletId = randomBytes(4).toString('hex')
     const encryptedMnemonic = encryptMnemonic(seedphrase, password, this.pbkdf2Iterations)
@@ -303,12 +302,10 @@ export class WalletService {
     const infos = await provider.getAddressInfos(all.map(a => a.address))
     const byAddress = new Map(infos.map(info => [info.address, info]))
 
-    // TODO: add real usd balance
     const withBalance = (address: Address): Address => ({
       ...address,
       balance: byAddress.get(address.address)?.balance ?? 0n,
       txCount: byAddress.get(address.address)?.txCount ?? 0,
-      usdBalance: '0.0'
     })
 
     return {
@@ -415,9 +412,7 @@ export class WalletService {
   }
 
   async getTransactionByHash(hash: string, network: Network): Promise<Transaction> {
-    if (network !== 'mainnet' && network !== 'testnet') {
-      throw new Error('Invalid network ("mainnet", "testnet")')
-    }
+    parseNetwork('getTransactionByHash', network)
 
     const wallet = await requireSelectedWallet(this.walletDAO)
 
@@ -437,24 +432,20 @@ export class WalletService {
     return {
       dash: {
         amount: addressesBalance,
-        usdAmount: '0.0'
       },
       credits: {
         amount: identitiesBalance,
-        usdAmount: '0.0'
       }
     }
   }
 
   async getBalance(address: string | string[], network: Network): Promise<bigint> {
-    if (network !== 'mainnet' && network !== 'testnet') {
-      throw new Error('Invalid network ("mainnet", "testnet")')
-    }
+    parseNetwork('getBalance', network)
 
     const wallet = await requireSelectedWallet(this.walletDAO)
     const provider = this.providers.forWallet(wallet.walletId, network)
 
-    return await provider.getBalance(address)
+    return provider.getBalance(address)
   }
 
   // One transaction pays many addresses: each recipient is another output, which

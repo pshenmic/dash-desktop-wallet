@@ -31,7 +31,7 @@ const inventory: CoinControlInventory = {
 const funds: CoinControlFunds = {
   coreAddresses: [{
     walletId: 'wallet-a', accountId: 0, address: 'core-a', derivationPath: '', index: 0,
-    isChange: 0, isUsed: true, balance: 100_000_000n, txCount: 1, label: null, usdBalance: null,
+    isChange: 0, isUsed: true, balance: 100_000_000n, txCount: 1, label: null,
   }],
   utxos: [
     {txid: 'tx-a', vout: 0, satoshis: 1n, address: 'core-a', height: 1, timestamp: null, confirmations: 1, isLocked: false},

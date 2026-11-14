@@ -1,6 +1,7 @@
 import {DashCoreSDK} from 'dash-core-sdk'
 import {emptyDapi, DapiJSON} from '../preferences/network'
 import {Network} from '../types/Network'
+import {resolveDapiUrls} from './dapiUrls'
 
 const instances = new Map<Network, DashCoreSDK>()
 // null: the SDK discovers evonodes from its own seed nodes.
@@ -24,7 +25,7 @@ export function coreSDK(network: Network): DashCoreSDK {
   if (sdk == null) {
     const own = dapi[network]
     const pinned = evonodeDapiUrls.get(network)
-    const dapiUrls = dapi.mode === 'static' && own.length > 0 ? own : pinned === null ? null : pinned ?? []
+    const dapiUrls = resolveDapiUrls(dapi.mode, own, pinned)
     // Typed as a string, but handed as is to a pool that takes and pins a list.
     sdk = new DashCoreSDK({network, dapiUrl: dapiUrls == null ? undefined : [...dapiUrls] as unknown as string})
     instances.set(network, sdk)

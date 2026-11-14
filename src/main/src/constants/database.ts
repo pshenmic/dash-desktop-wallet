@@ -41,3 +41,6 @@ export const PERSIST_RETRY_MS = 1_000
 // the note behind it cannot be read until the next sync. The address it
 // prefixes is the one whose authoritative row replaces it.
 export const LOCAL_SOURCE_PREFIX = 'local:'
+
+// Every column wallet.fromRow reads; the four wallet selects share it.
+export const WALLET_COLUMNS = ['encrypted_mnemonic', 'network', 'wallet_id', 'label', 'selected', 'platform_xpub', 'core_xpub', 'dashpay_xpub'] as const

@@ -167,12 +167,18 @@ import {ShowLogFileInFolderHandler} from './api/logs/showLogFileInFolder'
 import {registerHandler} from './utils/ipcHandler'
 import {Logger} from './utils/logger'
 import {Network} from './types/Network'
+import {Wallet} from './types/Wallet'
 
 const prevout = new Logger('prevout')
 const locks = new Logger('locks')
 const discoveryLog = new Logger('discovery')
 const shielded = new Logger('shielded')
 const platformLog = new Logger('platform')
+
+async function withSelectedWallet(walletDAO: WalletDAO, fn: (wallet: Wallet) => Promise<void> | void): Promise<void> {
+  const selected = await walletDAO.getSelectedWallet()
+  if (selected != null) await fn(selected)
+}
 
 export class WalletBackend {
   private walletService?: WalletService
@@ -200,6 +206,7 @@ export class WalletBackend {
   private walletDAO?: WalletDAO
   private addressDAO?: AddressDAO
   private identityDAO?: IdentityDAO
+  private prevOuts?: CorePrevOutService
 
   private initHandlers(): void {
     if (!this.walletService || !this.platformAddressService || !this.platformHistoryService || !this.platformTransferService || !this.feeService || !this.applicationService || !this.walletSyncService || !this.ratesService || !this.contactService || !this.shieldedService || !this.assetLockService || !this.addressDAO || !this.walletDAO || !this.identityDAO || !this.identityRegistrationService || !this.coreDiscoveryService || !this.coreLockService || !this.walletCredentialsService || !this.identityService || !this.logService || !this.platformWorkerService || !this.masternodeService || !this.paymentRequestService || !this.governanceService) {
@@ -343,6 +350,14 @@ export class WalletBackend {
 
     await migrateKnex(knex)
 
+    this.buildServices(preferences, knex, calibratedIterations)
+    this.initHandlers()
+    this.wireDiscovery()
+    this.startPeriodicTasks()
+    this.applicationService!.markReady()
+  }
+
+  private buildServices(preferences: Preferences, knex: ReturnType<typeof getKnex>, calibratedIterations: number): void {
     const walletDAO = new WalletDAO(knex)
     const dashPayCache = new DashPayCache()
     const addressDAO = new AddressDAO(knex, dashPayCache)
@@ -369,6 +384,7 @@ export class WalletBackend {
     // CoreLockService funds the L1 lock, AssetLockService turns it into a proof,
     // and each consumer settles that proof into its own transition.
     const prevOuts = new CorePrevOutService(walletDAO, transactionDAO)
+    this.prevOuts = prevOuts
     const masternodeDAO = new MasternodeDAO(knex)
     const providers = new WalletProviderFactory(walletDAO, addressDAO, transactionDAO, this.applicationService, this.walletSyncService, prevOuts, masternodeDAO)
     const coreTransactionService = new CoreTransactionService()
@@ -395,15 +411,21 @@ export class WalletBackend {
     this.walletDAO = walletDAO
     this.addressDAO = addressDAO
     this.identityDAO = identityDAO
+  }
 
-    this.initHandlers()
-
+  private wireDiscovery(): void {
+    if (!this.walletSyncService || !this.applicationService || !this.coreDiscoveryService || !this.masternodeService || !this.governanceService || !this.walletService || !this.walletDAO || !this.prevOuts) {
+      throw new Error('Services not initialized. Call start() first.')
+    }
     const discovery = this.coreDiscoveryService
     const masternodeService = this.masternodeService
     const governanceService = this.governanceService
     const walletService = this.walletService
     const walletSyncService = this.walletSyncService
     const applicationService = this.applicationService
+    const walletDAO = this.walletDAO
+    const prevOuts = this.prevOuts
+
     // A drain outlives the 3s activity debounce that triggers it, and every
     // overlapping one would re-read the same parents from DAPI.
     let resolvingPrevOuts = false
@@ -436,7 +458,7 @@ export class WalletBackend {
       governanceService.refresh(selected.walletId).catch(err =>
         discoveryLog.error('governance refresh failed:', err))
     }
-    this.walletSyncService.onWalletActivity = (walletId) => {
+    walletSyncService.onWalletActivity = (walletId) => {
       discovery.discoverCoreAddresses(walletId).catch(err =>
         discoveryLog.error('post-sync address discovery failed:', err))
       resolvePrevOuts(walletId)
@@ -447,11 +469,11 @@ export class WalletBackend {
         .then(selected => selected?.network === network ? masternodeService.discover(selected.walletId) : undefined)
         .catch(err => discoveryLog.error('masternode discovery failed:', err))
     }
-    this.walletSyncService.onMasternodeList = rediscoverMasternodes
-    this.walletSyncService.onListedMasternodes = rediscoverMasternodes
+    walletSyncService.onMasternodeList = rediscoverMasternodes
+    walletSyncService.onListedMasternodes = rediscoverMasternodes
     // The scan is stopped until this answers, so it must not join a discovery
     // run that started before the block that exhausted the gap was persisted.
-    this.walletSyncService.onGapExhausted = (gap) => {
+    walletSyncService.onGapExhausted = (gap) => {
       discovery.rediscoverCoreAddresses(gap.walletId).catch(err =>
         discoveryLog.error('gap-exhausted address discovery failed:', err))
     }
@@ -459,27 +481,27 @@ export class WalletBackend {
     setInterval(() => {
       discoverSelected().catch(err => discoveryLog.error('periodic address discovery failed:', err))
     }, DISCOVERY_INTERVAL_MS).unref()
+  }
 
-    const shieldedService = this.shieldedService
-    const fetchShieldedNotes = async (): Promise<void> => {
-      const selected = await walletDAO.getSelectedWallet()
-      if (selected != null) {
-        await shieldedService.prefetchNotes(selected.walletId, selected.network)
-      }
+  private startPeriodicTasks(): void {
+    if (!this.walletDAO || !this.shieldedService || !this.platformHistoryService || !this.platformWorkerService) {
+      throw new Error('Services not initialized. Call start() first.')
     }
+    const walletDAO = this.walletDAO
+    const shieldedService = this.shieldedService
+    const platformHistoryService = this.platformHistoryService
+    const platformWorkerService = this.platformWorkerService
+
+    const fetchShieldedNotes = (): Promise<void> =>
+      withSelectedWallet(walletDAO, w => shieldedService.prefetchNotes(w.walletId, w.network))
     fetchShieldedNotes().catch(err => shielded.error('startup note fetch failed:', err))
     setInterval(() => {
       fetchShieldedNotes().catch(err => shielded.error('periodic note fetch failed:', err))
     }, SHIELDED_NOTES_CHECK_INTERVAL_MS).unref()
 
     // Refreshed here so a stalled explorer cannot hold up a read that shows L1.
-    const platformHistoryService = this.platformHistoryService
-    const refreshPlatformHistory = async (): Promise<void> => {
-      const selected = await walletDAO.getSelectedWallet()
-      if (selected != null) {
-        await platformHistoryService.refresh(selected.walletId)
-      }
-    }
+    const refreshPlatformHistory = (): Promise<void> =>
+      withSelectedWallet(walletDAO, w => platformHistoryService.refresh(w.walletId))
     refreshPlatformHistory().catch(err => platformLog.error('startup platform history refresh failed:', err))
     setInterval(() => {
       refreshPlatformHistory().catch(err => platformLog.error('periodic platform history refresh failed:', err))
@@ -487,25 +509,11 @@ export class WalletBackend {
 
     // The worker reports the broadcast, not which wallet sent: the selected one
     // is the only wallet the periodic refresh covers either.
-    const refreshAfterBroadcast = async (): Promise<void> => {
-      const selected = await walletDAO.getSelectedWallet()
-      if (selected != null) {
-        platformHistoryService.refreshAfterSend(selected.walletId)
-      }
-    }
-    // A shielded transition says nothing to the addresses it touched beyond the
-    // surplus it sent back. What it moved is in the notes a sync just decrypted.
-    const shieldedHistoryService = this.platformHistoryService
-    this.shieldedService.onNotesSynced(walletId => {
-      shieldedHistoryService.readShieldedSides(walletId).catch(err =>
-        platformLog.error('reading the shielded side of the history failed:', err))
-    })
-
-    this.platformWorkerService.onTransitionBroadcast(() => {
+    const refreshAfterBroadcast = (): Promise<void> =>
+      withSelectedWallet(walletDAO, w => { platformHistoryService.refreshAfterSend(w.walletId) })
+    platformWorkerService.onTransitionBroadcast(() => {
       refreshAfterBroadcast().catch(err => platformLog.error('platform history refresh after a broadcast failed:', err))
     })
-
-    this.applicationService.markReady()
   }
 
   async shutdown(): Promise<void> {

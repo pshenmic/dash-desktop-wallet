@@ -22,13 +22,7 @@ export class SetConnectionTypeHandler {
     const preferences = this.applicationService.preferences
     const previous = preferences.general.connectionType
 
-    await preferences.apply({
-      ...preferences,
-      general: {
-        ...preferences.general,
-        connectionType,
-      }
-    })
+    await preferences.applyGeneral({connectionType})
 
     if (previous !== connectionType) {
       const selected = await this.walletService.getSelectedWallet()

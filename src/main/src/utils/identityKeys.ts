@@ -1,7 +1,12 @@
 import {COIN_TYPE, IDENTITY_SCAN_LIMIT} from '../constants/addresses'
 import {Network} from '../types/Network'
+import {Identity} from '../types/Identity'
 import {DerivedKeyHash, IdentityKeyDescriptor, IdentityKeysUpdate} from '../types/IdentityKeys'
 import {PlatformWorkerService} from '../services/platform/PlatformWorkerService'
+
+export function nextLocalIdentityIndex(identities: Identity[]): number {
+  return identities.reduce((max, identity) => Math.max(max, identity.identityIndex + 1), 0)
+}
 
 // The first index Platform does not already know an identity at. Registration
 // and the pool spend both need it, and neither may own the other.

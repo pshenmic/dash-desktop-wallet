@@ -1,5 +1,5 @@
 import {Wallet} from '../types/Wallet'
-import {WALLET_SCOPED_TABLES} from '../constants/database'
+import {WALLET_COLUMNS, WALLET_SCOPED_TABLES} from '../constants/database'
 
 function fromRow({wallet_id, label, network, encrypted_mnemonic, selected, platform_xpub, core_xpub, dashpay_xpub}): Wallet {
   return {walletId: wallet_id, network, label, encryptedMnemonic: encrypted_mnemonic, selected: Boolean(selected), platformXpub: platform_xpub ?? null, coreXpub: core_xpub ?? null, dashPayXpub: dashpay_xpub ?? null}
@@ -24,7 +24,7 @@ export class WalletDAO {
 
   getWalletById = async (walletId): Promise<Wallet | null> => {
     const rows = await this.knex('wallet')
-      .select('encrypted_mnemonic', 'network', 'wallet_id', 'label', 'selected', 'platform_xpub', 'core_xpub', 'dashpay_xpub')
+      .select(...WALLET_COLUMNS)
       .where('wallet_id', walletId)
       .limit(1)
 
@@ -39,14 +39,14 @@ export class WalletDAO {
 
   getAllWallets = async (): Promise<Wallet[]> => {
     const rows = await this.knex('wallet')
-      .select('encrypted_mnemonic', 'network', 'wallet_id', 'label', 'selected', 'platform_xpub', 'core_xpub', 'dashpay_xpub')
+      .select(...WALLET_COLUMNS)
 
     return rows.map(fromRow)
   }
 
   getSelectedWallet = async (): Promise<Wallet | null> => {
     const rows = await this.knex('wallet')
-      .select('encrypted_mnemonic', 'network', 'wallet_id', 'label', 'selected', 'platform_xpub', 'core_xpub', 'dashpay_xpub')
+      .select(...WALLET_COLUMNS)
       .where('selected', true)
       .limit(1)
 
@@ -143,7 +143,7 @@ export class WalletDAO {
 
   getWalletsByNetwork = async (network): Promise<Wallet[]> => {
     const rows = await this.knex('wallet')
-      .select('encrypted_mnemonic', 'network', 'wallet_id', 'label', 'selected', 'platform_xpub', 'core_xpub', 'dashpay_xpub')
+      .select(...WALLET_COLUMNS)
       .where('network', network)
 
     return rows.map(fromRow)
@@ -165,17 +165,14 @@ export class WalletDAO {
         .delete()
         .where('wallet_id', walletId)
 
-      if (wasSelected) {
-        const survivor = await trx('wallet')
-          .select('wallet_id')
-          .first()
-
-        if (survivor != null) {
-          await trx('wallet')
-            .where('wallet_id', survivor.wallet_id)
-            .update({selected: true})
-        }
-      }
+      if (!wasSelected) return
+      const survivor = await trx('wallet')
+        .select('wallet_id')
+        .first()
+      if (survivor == null) return
+      await trx('wallet')
+        .where('wallet_id', survivor.wallet_id)
+        .update({selected: true})
     })
   }
 }

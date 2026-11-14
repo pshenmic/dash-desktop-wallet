@@ -1,5 +1,6 @@
 import {IpcMainInvokeEvent} from 'electron/utility'
 import {z} from 'zod'
+import {zodErrorMessage} from '../utils/zodErrorMessage'
 import {DAPI_URL_HOSTNAME_PATTERN, DAPI_URL_PROTOCOL_PATTERN} from '../constants/dapi'
 import {NetworkNameSchema} from '../preferences/network'
 import {ApplicationService} from '../services/app/ApplicationService'
@@ -18,9 +19,8 @@ export class SetDapiUrlsHandler {
 
   handle = async (_event: IpcMainInvokeEvent, network: unknown, dapiUrls: unknown): Promise<void> => {
     const args = ArgsSchema.safeParse({network, dapiUrls})
-    // A ZodError crossing IPC arrives as its class name only.
     if (!args.success) {
-      throw new Error(`setDapiUrls: ${args.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join(', ')}`)
+      throw new Error(zodErrorMessage('setDapiUrls', args.error))
     }
 
     const preferences = this.applicationService.preferences

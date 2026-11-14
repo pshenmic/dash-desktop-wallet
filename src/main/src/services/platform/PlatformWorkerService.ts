@@ -97,11 +97,11 @@ export class PlatformWorkerService {
         settle: outcome => {
           this.pending.delete(requestId)
           this.progressHandlers.delete(requestId)
-          if (outcome.ok) {
-            resolve(outcome.result as PlatformOperationResult<K>)
-          } else {
+          if (!outcome.ok) {
             reject(new PlatformWorkerError(outcome.error))
+            return
           }
+          resolve(outcome.result as PlatformOperationResult<K>)
         },
       })
     })
@@ -111,11 +111,6 @@ export class PlatformWorkerService {
     const request = {type: 'request', requestId, kind, network, payload} as PlatformRequestMessage
     this.send(request)
     return settled
-  }
-
-  cancel = (requestId: string): void => {
-    if (!this.pending.has(requestId)) return
-    this.send({type: 'cancel', requestId})
   }
 
   shutdown = async (): Promise<void> => {
@@ -246,26 +241,34 @@ export class PlatformWorkerService {
   }
 
   private handleEvent(event: PlatformEvent): void {
-    if (event.type === 'status') {
-      this.status = event.status
-    } else if (event.type === 'response') {
-      const record = this.pending.get(event.requestId)
-      // A response for a request main already settled — a cancel, or a restart.
-      if (record == null) {
-        log.warn(`response for unknown request ${event.requestId}`)
+    switch (event.type) {
+      case 'status':
+        this.status = event.status
+        return
+      case 'response': {
+        const record = this.pending.get(event.requestId)
+        // A response for a request main already settled — a cancel, or a restart.
+        if (record == null) {
+          log.warn(`response for unknown request ${event.requestId}`)
+          return
+        }
+        record.settle(event.ok ? {ok: true, result: event.result} : {ok: false, error: event.error})
         return
       }
-      record.settle(event.ok ? {ok: true, result: event.result} : {ok: false, error: event.error})
-    } else if (event.type === 'progress') {
-      if (event.phase === 'broadcasting') this.transitionBroadcast?.()
-      this.progressHandlers.get(event.requestId)?.onProgress?.(event.phase, event.fetched, event.total)
-    } else if (event.type === 'notesSpent') {
-      this.progressHandlers.get(event.requestId)?.onNotesSpent?.(event.indexes)
-    } else if (event.type === 'pinnedDapiUrls') {
-      setCoreDapiUrls(event.network, event.dapiUrls)
-      this.wakePinWaiters(event.network)
-    } else if (event.type === 'error') {
-      log.error('utility process error:', event.message)
+      case 'progress':
+        if (event.phase === 'broadcasting') this.transitionBroadcast?.()
+        this.progressHandlers.get(event.requestId)?.onProgress?.(event.phase)
+        return
+      case 'notesSpent':
+        this.progressHandlers.get(event.requestId)?.onNotesSpent?.(event.indexes)
+        return
+      case 'pinnedDapiUrls':
+        setCoreDapiUrls(event.network, event.dapiUrls)
+        this.wakePinWaiters(event.network)
+        return
+      case 'error':
+        log.error('utility process error:', event.message)
+        return
     }
   }
 }

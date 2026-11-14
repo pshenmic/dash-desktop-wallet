@@ -44,27 +44,25 @@ const registry = new SdkRegistry(emit)
 const service = new PlatformService(registry, emit)
 
 process.parentPort.on('message', ({data}) => {
-  if (data.type === 'setLogLevel') {
-    configureLogger({level: data.level})
-    return
+  switch (data.type) {
+    case 'setLogLevel':
+      configureLogger({level: data.level})
+      return
+    case 'setDapi':
+      registry.setDapi(data.dapi)
+      return
+    case 'setEvonodeDapiUrls':
+      registry.setEvonodeDapiUrls(data.network, data.dapiUrls)
+      return
+    case 'useSeedNodes':
+      registry.useSeedNodes(data.network)
+      return
+    case 'setQuorumKeys':
+      registry.setQuorumKeys(data.network, data.keys)
+      return
+    default:
+      service.handle(data)
   }
-  if (data.type === 'setDapi') {
-    registry.setDapi(data.dapi)
-    return
-  }
-  if (data.type === 'setEvonodeDapiUrls') {
-    registry.setEvonodeDapiUrls(data.network, data.dapiUrls)
-    return
-  }
-  if (data.type === 'useSeedNodes') {
-    registry.useSeedNodes(data.network)
-    return
-  }
-  if (data.type === 'setQuorumKeys') {
-    registry.setQuorumKeys(data.network, data.keys)
-    return
-  }
-  service.handle(data)
 })
 
 // Push the initial 'idle' state to the parent, then start the Halo2 key build

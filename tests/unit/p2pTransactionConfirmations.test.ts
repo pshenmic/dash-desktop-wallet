@@ -15,7 +15,6 @@ const stored = (txid: string, blockHeight: number): Transaction => ({
   inAmount: 0n,
   outAmount: 1_000n,
   transferAmount: 1_000n,
-  usdAmount: '0.0',
   date: new Date(1_700_000_000_000),
   size: 200,
   blockHeight,

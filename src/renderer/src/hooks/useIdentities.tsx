@@ -10,7 +10,6 @@ export type IdentityApiDto = {
   keys: IdentityKeyDto[]
   balance: {
     amount: bigint
-    usdAmount: string
   }
   derivationPath: string
   assetLockTxid: string | null

@@ -58,9 +58,18 @@ export class Logger {
     const head = levelPrefix ? `[${level}] ` : ''
     const line = `${head}[${this.scope}] ${replaceSecrets(args.map(describe).join(' '))}`
 
-    if (level === 'error') console.error(line)
-    else if (level === 'warn') console.warn(line)
-    else if (level === 'debug') console.debug(line)
-    else console.info(line)
+    switch (level) {
+      case 'error':
+        console.error(line)
+        break
+      case 'warn':
+        console.warn(line)
+        break
+      case 'debug':
+        console.debug(line)
+        break
+      default:
+        console.info(line)
+    }
   }
 }

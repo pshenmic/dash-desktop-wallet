@@ -17,7 +17,7 @@ function identity(identifier: string, identityIndex: number, usernames: string[]
     identifier,
     usernames,
     keys,
-    balance: { amount: 1n, usdAmount: '0.0' },
+    balance: { amount: 1n },
     derivationPath: '',
     assetLockTxid: null,
   }

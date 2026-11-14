@@ -1,6 +1,6 @@
 import {IpcMainInvokeEvent} from 'electron/utility'
 import type {DapiUrlStatus} from '../../platform/types/messages'
-import {NetworkNameSchema} from '../preferences/network'
+import {parseNetwork} from '../utils/parseNetwork'
 import {PlatformWorkerService} from '../services/platform/PlatformWorkerService'
 
 export class GetActiveDapiUrlsHandler {
@@ -11,11 +11,8 @@ export class GetActiveDapiUrlsHandler {
   }
 
   handle = async (_event: IpcMainInvokeEvent, network: unknown): Promise<DapiUrlStatus[]> => {
-    const parsed = NetworkNameSchema.safeParse(network)
-    if (!parsed.success) {
-      throw new Error(`getActiveDapiUrls: expected 'mainnet' or 'testnet', got ${JSON.stringify(network)}`)
-    }
+    const networkName = parseNetwork('getActiveDapiUrls', network)
 
-    return this.platformWorkerService.request('activeDapiUrls', parsed.data, {})
+    return this.platformWorkerService.request('activeDapiUrls', networkName, {})
   }
 }
