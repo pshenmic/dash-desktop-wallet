@@ -60,7 +60,7 @@ export class CoreLockService implements AssetLockFunder {
     const {transferInputs, inputTotal, changeAddress, feeDuffs} =
       selectTransferInputs(
         grouped,
-        await provider.getWalletUtxos(),
+        await this.providers.spendableUtxos(walletId, network, source),
         amountDuffs,
         inputsCount => coreFeeDuffsFor(coreFeeMultiplier, inputsCount, 1, true, ASSET_LOCK_PAYLOAD_BYTES),
         source,

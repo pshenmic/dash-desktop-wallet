@@ -60,6 +60,25 @@ Things the code cannot tell you, and that a plausible-looking change breaks:
   against its merkle root (`utils/merkle.ts`) before it is applied, and refused
   where a duplicated odd tail lets a second transaction list reach that root.
 
+## Masternode list (`sync/providerRegistry.ts`)
+
+- **The wallet's masternodes come from a full list proven against our own
+  header chain**, never from the DAPI-url refresh's check alone: the header at
+  the coinbase height must hash to the diff's block, carry the coinbase's merkle
+  root, and that coinbase's `merkleRootMNList` must cover every entry.
+- **A list entry has no owner key, collateral or payout.** Those live only in the
+  ProRegTx, read once from the block at `height(confirmedHash) − N` (Core's
+  `nMasternodeMinimumConfirmations`: 15 mainnet, 1 testnet) and kept in chain.db
+  under `r:`. The tx is accepted only if its hash is the proTxHash; a node whose
+  ProRegTx is not there is skipped, never guessed.
+- **The type comes from the ProRegTx when it is known.** Core resets a banned
+  evonode's operator state and its entry drops to version 1, which reads as
+  Regular.
+- **A payout changed after registration is only known for the wallet's own
+  nodes**: their proTxHashes are in the filter watch set, since Core puts a
+  ProUpRegTx's proTxHash in the block filter. A node the wallet starts following
+  rewinds the scan to its registration once.
+
 ## Difficulty (`utils/difficulty.ts`)
 
 - **Every header's `nBits` is checked against the retarget rule for its era**:

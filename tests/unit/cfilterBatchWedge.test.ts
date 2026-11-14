@@ -101,6 +101,8 @@ describe('cfilter batch wedge', () => {
       unconfirmedInputOutpoints: [],
       // Resume above the tip, so nothing is scanned until headers extend it.
       cfilterCursor: TIP,
+      watchedProviders: [],
+      foreignBlock: () => false,
     })
 
     await worker.start()

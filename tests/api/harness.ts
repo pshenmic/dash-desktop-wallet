@@ -12,6 +12,8 @@ import {IdentityDAO} from '../../src/main/src/database/IdentityDAO'
 import {DashPayCache} from '../../src/main/src/database/DashPayCache'
 import {PlatformAddressDAO} from '../../src/main/src/database/PlatformAddressDAO'
 import {PlatformTransactionDAO} from '../../src/main/src/database/PlatformTransactionDAO'
+import {MasternodeKeyDAO} from '../../src/main/src/database/MasternodeKeyDAO'
+import {MasternodeDAO} from '../../src/main/src/database/MasternodeDAO'
 import {TransactionDAO} from '../../src/main/src/database/TransactionDAO'
 import {PaymentRequestDAO} from '../../src/main/src/database/PaymentRequestDAO'
 import {CoreDiscoveryService} from '../../src/main/src/services/core/CoreDiscoveryService'
@@ -34,6 +36,7 @@ const TEST_PBKDF2_ITERATIONS = 1_000
 export interface Harness {
   knex: Knex
   walletDAO: WalletDAO
+  masternodeKeyDAO: MasternodeKeyDAO
   addressDAO: AddressDAO
   identityDAO: IdentityDAO
   transactionDAO: TransactionDAO
@@ -77,12 +80,14 @@ export async function harness(): Promise<Harness> {
   const shieldedService = {getAddresses: vi.fn().mockResolvedValue([])} as unknown as ShieldedService
 
   const prevOutService = new CorePrevOutService(walletDAO, transactionDAO)
-  const providers = new WalletProviderFactory(walletDAO, addressDAO, transactionDAO, applicationService, walletSyncService, prevOutService)
+  const masternodeDAO = new MasternodeDAO(knex)
+  const providers = new WalletProviderFactory(walletDAO, addressDAO, transactionDAO, applicationService, walletSyncService, prevOutService, masternodeDAO)
   const coreTransactionService = new CoreTransactionService()
   const coreDiscoveryService = new CoreDiscoveryService(walletDAO, addressDAO, identityDAO, dashPayCache, transactionDAO, walletSyncService, providers)
   const coreLockService = new CoreLockService(walletDAO, addressDAO, walletSyncService, coreTransactionService, providers, preferences)
 
-  const walletCredentialsService = new WalletCredentialsService(walletDAO, addressDAO, new PlatformAddressDAO(knex), TEST_PBKDF2_ITERATIONS)
+  const masternodeKeyDAO = new MasternodeKeyDAO(knex)
+  const walletCredentialsService = new WalletCredentialsService(walletDAO, addressDAO, masternodeKeyDAO, new PlatformAddressDAO(knex), TEST_PBKDF2_ITERATIONS)
   const identityService = new IdentityService(walletDAO, identityDAO, dashPayCache, platform)
 
   // Stubbed rather than built: the real one reads the platform explorer, and
@@ -93,13 +98,14 @@ export async function harness(): Promise<Harness> {
   } as unknown as PlatformHistoryService
 
   const walletService = new WalletService(
-    walletDAO, addressDAO, transactionDAO, paymentRequestDAO, identityDAO, new PlatformTransactionDAO(knex), identityService, platformHistoryService, walletSyncService, platform,
+    walletDAO, addressDAO, transactionDAO, paymentRequestDAO, identityDAO, new PlatformTransactionDAO(knex), masternodeKeyDAO, masternodeDAO, identityService, platformHistoryService, walletSyncService, platform,
     providers, coreDiscoveryService, coreTransactionService, preferences, TEST_PBKDF2_ITERATIONS,
   )
 
   return {
     knex,
     walletDAO,
+    masternodeKeyDAO,
     addressDAO,
     identityDAO,
     transactionDAO,

@@ -110,6 +110,7 @@ const noopEvents = {
   chainLocked: () => undefined,
   evonodeDapiUrls: () => undefined,
   platformQuorums: () => undefined,
+  masternodeList: () => undefined,
 }
 
 const start = (service: SyncService, peerOverrides: PeerOverrides): Promise<void> => service.start({
@@ -122,6 +123,7 @@ const start = (service: SyncService, peerOverrides: PeerOverrides): Promise<void
   seedUtxos: [],
   unconfirmedInputOutpoints: [],
   cfilterCursor: null,
+  watchedProviders: [],
   peerOverrides,
 })
 

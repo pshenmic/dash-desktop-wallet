@@ -16,6 +16,7 @@ import {AddressDAO} from '../../src/main/src/database/AddressDAO'
 import {WalletDAO} from '../../src/main/src/database/WalletDAO'
 import {TransactionDAO} from '../../src/main/src/database/TransactionDAO'
 import {DashscanTransaction} from '../../src/main/src/types/Dashscan'
+import {DASHSCAN_BASE_URLS} from '../../src/main/src/constants/dashscan'
 
 const OURS = 'yRd4FhXfVGHXpsuZXPNkMrfD9GVj46pnjt'
 const XPUB = 'tpubDC5FSnBiZDMmhiuCmWAYsLwgLYrrT9rAqvTySfuCCrgsWz8wxMXUS9Tb9iVMvcRbvFcAHGkMD5Kx8koh4GquNGNTfohfk7pgjhaPCdXpoba'
@@ -275,7 +276,7 @@ describe('wallet balance', () => {
 
     expect(balance).toBe(4820046182581n)
     expect(fetches.calls).toHaveLength(1)
-    expect(fetches.calls[0]!.url).toBe('https://testnet.dashscan.pshenmic.dev/xpub')
+    expect(fetches.calls[0]!.url).toBe(`${DASHSCAN_BASE_URLS.testnet}/xpub`)
     expect(bodyOf(fetches.calls[0]!).gap_limit).toBe(50)
   })
 

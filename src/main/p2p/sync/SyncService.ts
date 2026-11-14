@@ -27,7 +27,8 @@ import {CFilterSyncWorker} from './workers/CFilterSyncWorker'
 import {MasternodeList} from './masternodeList'
 import type {ChainLock, HeaderSyncWorkerStatus} from '../types/headerSync'
 import type {CFilterSyncWorkerStatus} from '../types/cfilterSync'
-import {P2PAddWatchAddressesMessage, P2PBroadcastMessage, P2PListenMessage, P2PReseedUtxosMessage, P2PStartMessage, P2PWatchTxsMessage} from '../types/messages'
+import {P2PAddWatchAddressesMessage, P2PBroadcastMessage, P2PListenMessage, P2PReseedUtxosMessage, P2PStartMessage, P2PWatchProvidersMessage, P2PWatchTxsMessage} from '../types/messages'
+import type {PayoutUpdate} from '../types/masternodeList'
 import {Network} from '../../src/types/Network'
 import {BroadcastResult} from '../types/broadcast'
 import {AppliedBlock, AppliedTx, GapExhausted, WalletSyncStatus, WatchAddress} from '../types/walletSync'
@@ -73,6 +74,8 @@ export class SyncService {
   private activeSeedUtxos: P2PStartMessage['seedUtxos'] = []
   private activeUnconfirmedInputOutpoints: P2PStartMessage['unconfirmedInputOutpoints'] = []
   private activeCFilterCursor: number | null = null
+  // Display-order proTxHashes whose ProUpRegTx the scan matches, for payouts.
+  private activeWatchedProviders: string[] = []
   private cfilterStarted = false
   // Display order, not wire order. While non-empty the watcher fetches isdlock
   // objects to match against it.
@@ -262,6 +265,7 @@ export class SyncService {
     this.lockPool.on('peerclsig', this.onClsig)
     this.lockPool.on('peergetheaders', this.masternodeList.onPeerTip)
     this.lockPool.on('peermnlistdiff', this.masternodeList.onDiff)
+    this.lockPool.on('peerblock', this.masternodeList.registry.onBlock)
     this.lockPool.on('peeraddr', this.feedBulkPool)
     // Nothing else emits status while the bulk layer is down, so lock-pool
     // churn is a lazy-mode wallet's only signal.
@@ -318,6 +322,7 @@ export class SyncService {
     this.activeSeedUtxos = cmd.seedUtxos
     this.activeUnconfirmedInputOutpoints = cmd.unconfirmedInputOutpoints
     this.activeCFilterCursor = cmd.cfilterCursor
+    this.activeWatchedProviders = cmd.watchedProviders
     this.cfilterStarted = false
     this.setLockAddresses(cmd.walletId, this.activeWatchAddresses)
 
@@ -434,6 +439,7 @@ export class SyncService {
     this.activeSeedUtxos = []
     this.activeUnconfirmedInputOutpoints = []
     this.activeCFilterCursor = null
+    this.activeWatchedProviders = []
     this.emit({
       phase: 'stopped',
       network: null,
@@ -509,6 +515,16 @@ export class SyncService {
       this.setLockAddresses(cmd.walletId, this.activeWatchAddresses)
     }
     this.cfilterSyncWorker?.addWatchAddresses(cmd.addresses, cmd.rewindToHeight)
+  }
+
+  watchProviders = (cmd: P2PWatchProvidersMessage): void => {
+    if (!this.activeWalletId || cmd.walletId !== this.activeWalletId) return
+    this.activeWatchedProviders = [...new Set([...this.activeWatchedProviders, ...cmd.proTxHashes])]
+    // A worker not started yet resumes from the start command's cursor instead.
+    if (this.cfilterSyncWorker == null && cmd.rewindToHeight != null && this.activeCFilterCursor != null) {
+      this.activeCFilterCursor = Math.min(this.activeCFilterCursor, cmd.rewindToHeight - 1)
+    }
+    this.cfilterSyncWorker?.watchProviders(cmd.proTxHashes, cmd.rewindToHeight)
   }
 
   reseedUtxos = (cmd: P2PReseedUtxosMessage): void => {
@@ -804,9 +820,13 @@ export class SyncService {
       seedUtxos: this.activeSeedUtxos,
       unconfirmedInputOutpoints: this.activeUnconfirmedInputOutpoints,
       cfilterCursor: this.activeCFilterCursor,
+      watchedProviders: this.activeWatchedProviders,
+      foreignBlock: hashWire => this.masternodeList.registry.owns(hashWire),
     })
     this.cfilterSyncWorker.on('status', (s: CFilterSyncWorkerStatus) => this.onCFilterStatus(s))
     this.cfilterSyncWorker.on('blockApplied', (block: AppliedBlock) => this.events.blockApplied(block))
+    this.cfilterSyncWorker.on('payoutUpdates', (updates: PayoutUpdate[]) =>
+      this.masternodeList.registry.applyPayouts(updates).catch(err => log.warn('payout update failed:', err)))
     this.cfilterSyncWorker.on('cursorAdvanced', (msg: {walletId: string; height: number}) =>
       this.events.cursorAdvanced(msg.walletId, msg.height)
     )

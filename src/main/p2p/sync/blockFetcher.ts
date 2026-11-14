@@ -84,6 +84,12 @@ export class BlockFetcher {
     return this.retired.has(keyOf(hashWire))
   }
 
+  // Outstanding or settled: a block on a pool another fetcher shares is this one's.
+  owns(hashWire: Uint8Array): boolean {
+    const key = keyOf(hashWire)
+    return this.inflight.has(key) || this.retired.has(key)
+  }
+
   // The peer answered, but with a block the caller could not verify. The
   // request stays outstanding and moves to someone else now rather than waiting
   // out the retry timer. Null when nobody asked for this hash.

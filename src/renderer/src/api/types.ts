@@ -210,6 +210,52 @@ export interface SelectableUtxo {
   isLocked: boolean
 }
 
+// getUtxos — a masternode collateral is listed like any coin, flagged: spending
+// it drops the node.
+export interface ListedUtxo extends SelectableUtxo {
+  collateral: boolean
+}
+
+export type MasternodeKeyRole = 'owner' | 'voting' | 'operator'
+
+// publicKey is what the list carries for the role: the address for owner and
+// voting, the hex public key for operator.
+export interface ImportedMasternodeKeyDto {
+  role: MasternodeKeyRole
+  publicKey: string
+}
+
+// getMasternodes — a masternode this wallet holds a key or the collateral of, as
+// last listed; null until the first discovery run after startup. A null key
+// index is a key the seed does not derive; importedRoles are held by an imported
+// key. Times are unix seconds, 0 = never. A null field is one the connection
+// mode cannot give: p2p has no PoSe score (an evonode reports its own) and no
+// payments, and the ProRegTx fields fill in once the registration is indexed.
+export interface MasternodeDto {
+  proTxHash: string
+  type: string
+  status: string
+  posePenaltyScore: number | null
+  collateralTxid: string | null
+  collateralVout: number | null
+  collateralAddress: string | null
+  serviceAddress: string | null
+  payeeAddress: string | null
+  ownerAddress: string | null
+  votingAddress: string
+  operatorPublicKey: string
+  ownerKeyIndex: number | null
+  votingKeyIndex: number | null
+  operatorKeyIndex: number | null
+  importedRoles: MasternodeKeyRole[]
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+  lastPaidBlock: number | null
+  lastPaidTime: number | null
+  registeredHeight: number | null
+}
+
 // the backend's business; this carries only what the user chose.
 export interface FeeParams {
   amountCredits: bigint

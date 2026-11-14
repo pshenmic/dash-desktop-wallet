@@ -20,7 +20,7 @@ function provider(used: string[]): {
   const addressDAO = {getAddressesByWalletId: async () => ({receiving, change: []})} as unknown as AddressDAO
 
   return {
-    provider: new P2PWalletProvider(transactionDAO, 'w1', {} as WalletSyncService, addressDAO, {} as CorePrevOutService),
+    provider: new P2PWalletProvider(transactionDAO, 'w1', {} as WalletSyncService, addressDAO, {} as CorePrevOutService, 'testnet'),
     getUsedAddresses,
     getTransactionsByAddress,
   }
@@ -58,7 +58,7 @@ describe('nextUnusedAddress on the local store', () => {
   it('refuses a wallet with no receiving addresses', async () => {
     const transactionDAO = {getUsedAddresses: vi.fn(async () => [])} as unknown as TransactionDAO
     const addressDAO = {getAddressesByWalletId: async () => ({receiving: [], change: []})} as unknown as AddressDAO
-    const p = new P2PWalletProvider(transactionDAO, 'w1', {} as WalletSyncService, addressDAO, {} as CorePrevOutService)
+    const p = new P2PWalletProvider(transactionDAO, 'w1', {} as WalletSyncService, addressDAO, {} as CorePrevOutService, 'testnet')
 
     await expect(p.nextUnusedAddress()).rejects.toThrow('no receiving addresses')
   })

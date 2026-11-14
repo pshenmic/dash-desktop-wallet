@@ -61,6 +61,49 @@ interface SelectableUtxoDTO {
   timestamp: Date | null
   confirmations: number
   isLocked: boolean
+  // A masternode collateral: spending it drops the node.
+  collateral: boolean
+}
+
+// Mirrors MasternodeKeyChain, ImportedMasternodeKey, Masternode and
+// OwnedCollateral in src/main/src/types/Masternode.
+type MasternodeKeyRole = 'owner' | 'voting' | 'operator'
+
+interface MasternodeCollateralDTO {
+  proTxHash: string
+  txid: string
+  vout: number
+  address: string | null
+}
+
+interface ImportedMasternodeKeyDTO {
+  role: MasternodeKeyRole
+  publicKey: string
+}
+
+interface MasternodeDTO {
+  proTxHash: string
+  type: string
+  status: string
+  posePenaltyScore: number | null
+  collateralTxid: string | null
+  collateralVout: number | null
+  collateralAddress: string | null
+  serviceAddress: string | null
+  payeeAddress: string | null
+  ownerAddress: string | null
+  votingAddress: string
+  operatorPublicKey: string
+  ownerKeyIndex: number | null
+  votingKeyIndex: number | null
+  operatorKeyIndex: number | null
+  importedRoles: MasternodeKeyRole[]
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+  lastPaidBlock: number | null
+  lastPaidTime: number | null
+  registeredHeight: number | null
 }
 
 interface PaymentRequestDTO {
@@ -166,6 +209,11 @@ declare global {
       getTransactionByHash: (hash: string, network: Network) => Promise<TransactionDTO>
       getBalance: (address: string | string[], network: Network) => Promise<unknown>
       getIdentities: (walletId: string) => Promise<unknown>
+      getMasternodes: (walletId: string) => Promise<MasternodeDTO[] | null>
+      getMasternodeCollaterals: (walletId: string) => Promise<MasternodeCollateralDTO[]>
+      getImportedMasternodeKeys: (walletId: string) => Promise<ImportedMasternodeKeyDTO[]>
+      importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => Promise<MasternodeDTO[] | null>
+      removeMasternodeKey: (walletId: string, key: ImportedMasternodeKeyDTO) => Promise<void>
       getUsernames: (walletId: string) => Promise<unknown>
       refreshDashPay: (walletId: string) => Promise<void>
       registerUsername: (walletId: string, identifier: string, label: string, password: string) => Promise<unknown>
