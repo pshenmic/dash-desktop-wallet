@@ -51,6 +51,18 @@ const statusProbes = new Set<Network>()
 
 const log = new Logger('dashscan')
 
+// A partial coin set under-reports balance and corrupts coin selection, so a
+// capped walk fails closed rather than truncating like the display-history walk.
+export async function paginate<T>(fetchPage: (page: number) => Promise<DashscanPage<T>>): Promise<T[]> {
+  const collected: T[] = []
+  for (let page = 1; page <= XPUB_MAX_PAGES; page++) {
+    const {resultSet, pagination} = await fetchPage(page)
+    collected.push(...resultSet)
+    if (resultSet.length < XPUB_PAGE_LIMIT || collected.length >= pagination.total) return collected
+  }
+  throw new Error('Dashscan pagination exceeded the page cap — refusing a partial result')
+}
+
 export class DashscanWalletProvider implements WalletProvider {
   private request: JsonRequest
 
@@ -184,19 +196,13 @@ export class DashscanWalletProvider implements WalletProvider {
   // index our local window has not derived yet.
   async getWalletUtxos(): Promise<UTXO[]> {
     const xpub = await this.requireXpub()
-    const collected: DashscanUTXO[] = []
-
-    for (let page = 1; ; page++) {
-      const {resultSet, pagination} = await requestJson<DashscanPage<DashscanUTXO>>(this.request, '/xpub/utxo', {
+    const collected = await paginate<DashscanUTXO>(page =>
+      requestJson<DashscanPage<DashscanUTXO>>(this.request, '/xpub/utxo', {
         xpub,
         gap_limit: CORE_ADDRESS_WINDOW.gapLimit,
         page,
         limit: XPUB_PAGE_LIMIT,
-      })
-
-      collected.push(...resultSet)
-      if (resultSet.length < XPUB_PAGE_LIMIT || collected.length >= pagination.total) break
-    }
+      }))
     const dashPayUtxos = await Promise.all(chunk(await this.dashPayAddresses(), DASHSCAN_ADDRESS_CHUNK).map(group =>
       requestJson<DashscanUTXO[]>(this.request, `/addresses/utxo?addresses=${group.join(',')}`)))
     collected.push(...dashPayUtxos.flat())
@@ -298,24 +304,17 @@ export class DashscanWalletProvider implements WalletProvider {
   // would let a compromised indexer seed the wallet with one we cannot spend.
   async scanAddressUsage(gapLimit: number): Promise<AddressUsage[] | null> {
     const xpub = await this.requireXpub()
-    const usage: AddressUsage[] = []
-
-    for (let page = 1; ; page++) {
-      const {resultSet, pagination} = await requestJson<DashscanPage<DashscanXpubAddress>>(this.request,
+    const entries = await paginate<DashscanXpubAddress>(page =>
+      requestJson<DashscanPage<DashscanXpubAddress>>(this.request,
         '/xpub/addresses',
         {xpub, gap_limit: gapLimit, page, limit: XPUB_PAGE_LIMIT},
-      )
+      ))
 
-      usage.push(...resultSet.map(entry => ({
-        isChange: entry.branch === 1,
-        index: entry.index,
-        isUsed: entry.used,
-      })))
-
-      if (resultSet.length < XPUB_PAGE_LIMIT || usage.length >= pagination.total) break
-    }
-
-    return usage
+    return entries.map(entry => ({
+      isChange: entry.branch === 1,
+      index: entry.index,
+      isUsed: entry.used,
+    }))
   }
 
   async getUsedAddresses(addresses: string[]): Promise<string[]> {

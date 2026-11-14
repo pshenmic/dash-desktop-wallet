@@ -16,6 +16,7 @@ import { GPUInfo } from './src/types/Log'
 import packageJSON from '../../package.json'
 import {registerHandler} from './src/utils/ipcHandler'
 import {Logger} from './src/utils/logger'
+import {isSafeExternalUrl} from './src/utils/safeExternalUrl'
 
 const log = new Logger('startup')
 const shutdown = new Logger('shutdown')
@@ -127,7 +128,9 @@ const createWindow = (): void => {
   mainWindow.on('session-end', persistWindowState)
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    if (isSafeExternalUrl(details.url)) {
+      shell.openExternal(details.url)
+    }
     return { action: 'deny' }
   })
 

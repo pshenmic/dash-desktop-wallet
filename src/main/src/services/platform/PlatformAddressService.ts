@@ -22,6 +22,7 @@ export class PlatformAddressService {
   private platformAddressDAO: PlatformAddressDAO
   private platform: PlatformWorkerService
   private windowInflight = new Map<string, Promise<void>>()
+  private addQueue = new Map<string, Promise<unknown>>()
 
   constructor(walletDAO: WalletDAO, platformAddressDAO: PlatformAddressDAO, platform: PlatformWorkerService) {
     this.walletDAO = walletDAO
@@ -65,6 +66,19 @@ export class PlatformAddressService {
   // Reveals one more address than the window found on its own. Public
   // derivation, so no password: the account xpub is all it takes.
   async addPlatformAddress(walletId: string): Promise<PlatformAddressEntry[]> {
+    // Serialized per wallet: two concurrent reveals would otherwise read the
+    // same frontier and derive the same index, losing one reveal.
+    const prior = this.addQueue.get(walletId) ?? Promise.resolve()
+    const run = prior.catch(() => {}).then(() => this.revealNextPlatformAddress(walletId))
+    this.addQueue.set(walletId, run)
+    try {
+      return await run
+    } finally {
+      if (this.addQueue.get(walletId) === run) this.addQueue.delete(walletId)
+    }
+  }
+
+  private async revealNextPlatformAddress(walletId: string): Promise<PlatformAddressEntry[]> {
     const wallet = await requireWallet(this.walletDAO, walletId)
     if (wallet.platformXpub == null) {
       throw new Error('Platform addresses are not derived yet')

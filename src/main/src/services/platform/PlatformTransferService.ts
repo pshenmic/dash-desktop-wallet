@@ -75,30 +75,31 @@ export class PlatformTransferService {
   ): Promise<PlatformSendResult> {
     const amountCredits = requireRecipients(recipients)
 
-    const {wallet, seed} = await this.unlock(walletId, password)
-    const network = wallet.network
+    return this.withSeed(walletId, password, async ({wallet, seed}) => {
+      const network = wallet.network
 
-    const {plan, error} = await this.fee.planInputs(wallet, 'addressFundsTransfer', {
-      amountCredits,
-      recipient: recipients.map(recipient => recipient.address),
-      platformSource: source,
+      const {plan, error} = await this.fee.planInputs(wallet, 'addressFundsTransfer', {
+        amountCredits,
+        recipient: recipients.map(recipient => recipient.address),
+        platformSource: source,
+      })
+      if (plan === null) throw new Error(error)
+
+      const {stHash} = await this.platform.request('addressTransfer', network, {
+        seed,
+        inputs: plan.inputs.map(({candidate, credits}) => toAddressInput(candidate, credits)),
+        feeStrategy: plan.feeStrategy,
+        recipients,
+      })
+
+      return {
+        stHash,
+        amountCredits,
+        feeCredits: plan.feeCredits,
+        fromAddress: plan.inputs[0].candidate.platformAddress,
+        toAddress: recipients[0].address,
+      }
     })
-    if (plan === null) throw new Error(error)
-
-    const {stHash} = await this.platform.request('addressTransfer', network, {
-      seed,
-      inputs: plan.inputs.map(({candidate, credits}) => toAddressInput(candidate, credits)),
-      feeStrategy: plan.feeStrategy,
-      recipients,
-    })
-
-    return {
-      stHash,
-      amountCredits,
-      feeCredits: plan.feeCredits,
-      fromAddress: plan.inputs[0].candidate.platformAddress,
-      toAddress: recipients[0].address,
-    }
   }
 
   async sendIdentityCreditsToAddresses(
@@ -109,30 +110,31 @@ export class PlatformTransferService {
   ): Promise<PlatformSendResult> {
     const totalCredits = requireRecipients(recipients)
 
-    const {wallet, seed} = await this.unlock(walletId, password)
-    const network = wallet.network
-    const identity = await requireIdentity(this.identityDAO,walletId, identityIdentifier)
-    const feeCredits = await this.fee.requireFee(walletId, 'identityToAddress', {
-      amountCredits: totalCredits,
-      recipient: recipients.map(entry => entry.address),
-      identityId: identityIdentifier,
-    })
-    await this.requireIdentityBalance(network, identityIdentifier, totalCredits + feeCredits, 'transfer')
+    return this.withSeed(walletId, password, async ({wallet, seed}) => {
+      const network = wallet.network
+      const identity = await requireIdentity(this.identityDAO, walletId, identityIdentifier)
+      const feeCredits = await this.fee.requireFee(walletId, 'identityToAddress', {
+        amountCredits: totalCredits,
+        recipient: recipients.map(entry => entry.address),
+        identityId: identityIdentifier,
+      })
+      await this.requireIdentityBalance(network, identityIdentifier, totalCredits + feeCredits, 'transfer')
 
-    const {stHash} = await this.platform.request('identityCreditsToAddresses', network, {
-      seed,
-      identifier: identityIdentifier,
-      identityIndex: identity.identityIndex,
-      recipients,
-    })
+      const {stHash} = await this.platform.request('identityCreditsToAddresses', network, {
+        seed,
+        identifier: identityIdentifier,
+        identityIndex: identity.identityIndex,
+        recipients,
+      })
 
-    return {
-      stHash,
-      amountCredits: totalCredits,
-      feeCredits,
-      fromAddress: identityIdentifier,
-      toAddress: recipients[0].address,
-    }
+      return {
+        stHash,
+        amountCredits: totalCredits,
+        feeCredits,
+        fromAddress: identityIdentifier,
+        toAddress: recipients[0].address,
+      }
+    })
   }
 
   async transferIdentityCredits(
@@ -149,30 +151,31 @@ export class PlatformTransferService {
       throw new Error('Recipient identity must be different from the source identity')
     }
 
-    const {wallet, seed} = await this.unlock(walletId, password)
-    const network = wallet.network
-    const identity = await requireIdentity(this.identityDAO,walletId, fromIdentityIdentifier)
+    return this.withSeed(walletId, password, async ({wallet, seed}) => {
+      const network = wallet.network
+      const identity = await requireIdentity(this.identityDAO, walletId, fromIdentityIdentifier)
 
-    const feeCredits = await this.fee.requireFee(walletId, 'identityToIdentity', {
-      amountCredits, recipient: toIdentityIdentifier, identityId: fromIdentityIdentifier,
+      const feeCredits = await this.fee.requireFee(walletId, 'identityToIdentity', {
+        amountCredits, recipient: toIdentityIdentifier, identityId: fromIdentityIdentifier,
+      })
+      await this.requireIdentityBalance(network, fromIdentityIdentifier, amountCredits + feeCredits, 'transfer')
+
+      const {stHash} = await this.platform.request('identityCreditTransfer', network, {
+        seed,
+        identifier: fromIdentityIdentifier,
+        identityIndex: identity.identityIndex,
+        recipientIdentifier: toIdentityIdentifier,
+        amountCredits,
+      })
+
+      return {
+        stHash,
+        amountCredits,
+        feeCredits,
+        fromAddress: fromIdentityIdentifier,
+        toAddress: toIdentityIdentifier,
+      }
     })
-    await this.requireIdentityBalance(network, fromIdentityIdentifier, amountCredits + feeCredits, 'transfer')
-
-    const {stHash} = await this.platform.request('identityCreditTransfer', network, {
-      seed,
-      identifier: fromIdentityIdentifier,
-      identityIndex: identity.identityIndex,
-      recipientIdentifier: toIdentityIdentifier,
-      amountCredits,
-    })
-
-    return {
-      stHash,
-      amountCredits,
-      feeCredits,
-      fromAddress: fromIdentityIdentifier,
-      toAddress: toIdentityIdentifier,
-    }
   }
 
   async createIdentityFromAddresses(
@@ -185,39 +188,40 @@ export class PlatformTransferService {
       throw new Error(`Minimum identity funding is ${MIN_IDENTITY_FUNDING_CREDITS.toString()} credits`)
     }
 
-    const {wallet, seed} = await this.unlock(walletId, password)
-    const network = wallet.network
+    return this.withSeed(walletId, password, async ({wallet, seed}) => {
+      const network = wallet.network
 
-    const existing = await this.identityDAO.getIdentitiesByWalletId(walletId)
-    const identityIndex = nextLocalIdentityIndex(existing)
+      const existing = await this.identityDAO.getIdentitiesByWalletId(walletId)
+      const identityIndex = nextLocalIdentityIndex(existing)
 
-    const {plan, error} = await this.fee.planInputs(wallet, 'identityCreate', {
-      amountCredits, recipient: '', platformSource: source,
+      const {plan, error} = await this.fee.planInputs(wallet, 'identityCreate', {
+        amountCredits, recipient: '', platformSource: source,
+      })
+      if (plan === null) throw new Error(error)
+
+      const {stHash, identifier} = await this.platform.request('identityCreateFromAddresses', network, {
+        seed,
+        identityIndex,
+        inputs: plan.inputs.map(({candidate, credits}) => toAddressInput(candidate, credits)),
+        feeStrategy: plan.feeStrategy,
+      })
+
+      await this.identityDAO.insertIdentities([{
+        walletId,
+        identityIndex,
+        derivationPath: identityPath(network, identityIndex),
+        identifier,
+      }])
+
+      return {
+        identifier,
+        identityIndex,
+        stHash,
+        amountCredits: amountCredits,
+        feeCredits: plan.feeCredits,
+        fromAddress: plan.inputs[0].candidate.platformAddress,
+      }
     })
-    if (plan === null) throw new Error(error)
-
-    const {stHash, identifier} = await this.platform.request('identityCreateFromAddresses', network, {
-      seed,
-      identityIndex,
-      inputs: plan.inputs.map(({candidate, credits}) => toAddressInput(candidate, credits)),
-      feeStrategy: plan.feeStrategy,
-    })
-
-    await this.identityDAO.insertIdentities([{
-      walletId,
-      identityIndex,
-      derivationPath: identityPath(network, identityIndex),
-      identifier,
-    }])
-
-    return {
-      identifier,
-      identityIndex,
-      stHash,
-      amountCredits: amountCredits,
-      feeCredits: plan.feeCredits,
-      fromAddress: plan.inputs[0].candidate.platformAddress,
-    }
   }
 
   async topUpIdentityFromAddresses(
@@ -231,31 +235,32 @@ export class PlatformTransferService {
       throw new Error('Top-up amount must be greater than zero')
     }
 
-    const {wallet, seed} = await this.unlock(walletId, password)
-    const network = wallet.network
+    return this.withSeed(walletId, password, async ({wallet, seed}) => {
+      const network = wallet.network
 
-    const {exists} = await this.platform.request('identityExists', network, {identifier: identityId})
-    if (!exists) throw new Error('Identity not found on Platform')
+      const {exists} = await this.platform.request('identityExists', network, {identifier: identityId})
+      if (!exists) throw new Error('Identity not found on Platform')
 
-    const {plan, error} = await this.fee.planInputs(wallet, 'identityTopUp', {
-      amountCredits, recipient: identityId, platformSource: source,
+      const {plan, error} = await this.fee.planInputs(wallet, 'identityTopUp', {
+        amountCredits, recipient: identityId, platformSource: source,
+      })
+      if (plan === null) throw new Error(error)
+
+      const {stHash} = await this.platform.request('identityTopUpFromAddresses', network, {
+        seed,
+        identifier: identityId,
+        inputs: plan.inputs.map(({candidate, credits}) => toAddressInput(candidate, credits)),
+        feeStrategy: plan.feeStrategy,
+      })
+
+      return {
+        stHash,
+        amountCredits: amountCredits,
+        feeCredits: plan.feeCredits,
+        fromAddress: plan.inputs[0].candidate.platformAddress,
+        toAddress: identityId,
+      }
     })
-    if (plan === null) throw new Error(error)
-
-    const {stHash} = await this.platform.request('identityTopUpFromAddresses', network, {
-      seed,
-      identifier: identityId,
-      inputs: plan.inputs.map(({candidate, credits}) => toAddressInput(candidate, credits)),
-      feeStrategy: plan.feeStrategy,
-    })
-
-    return {
-      stHash,
-      amountCredits: amountCredits,
-      feeCredits: plan.feeCredits,
-      fromAddress: plan.inputs[0].candidate.platformAddress,
-      toAddress: identityId,
-    }
   }
 
   async withdrawPlatformToCore(
@@ -269,29 +274,30 @@ export class PlatformTransferService {
       throw new Error('Withdrawal amount must be greater than zero')
     }
 
-    const {wallet, seed} = await this.unlock(walletId, password)
-    const network = wallet.network
+    return this.withSeed(walletId, password, async ({wallet, seed}) => {
+      const network = wallet.network
 
-    const {plan, error} = await this.fee.planInputs(wallet, 'addressWithdrawal', {
-      amountCredits, recipient: toCoreAddress, platformSource: source,
+      const {plan, error} = await this.fee.planInputs(wallet, 'addressWithdrawal', {
+        amountCredits, recipient: toCoreAddress, platformSource: source,
+      })
+      if (plan === null) throw new Error(error)
+
+      const {stHash} = await this.platform.request('addressWithdrawal', network, {
+        seed,
+        inputs: plan.inputs.map(({candidate, credits}) => toAddressInput(candidate, credits)),
+        feeStrategy: plan.feeStrategy,
+        coreAddress: toCoreAddress,
+        coreFeePerByte: coreFeePerByte(this.preferences.general.coreFeeMultiplier),
+      })
+
+      return {
+        stHash,
+        amountCredits: amountCredits,
+        feeCredits: plan.feeCredits,
+        fromAddress: plan.inputs[0].candidate.platformAddress,
+        toAddress: toCoreAddress,
+      }
     })
-    if (plan === null) throw new Error(error)
-
-    const {stHash} = await this.platform.request('addressWithdrawal', network, {
-      seed,
-      inputs: plan.inputs.map(({candidate, credits}) => toAddressInput(candidate, credits)),
-      feeStrategy: plan.feeStrategy,
-      coreAddress: toCoreAddress,
-      coreFeePerByte: coreFeePerByte(this.preferences.general.coreFeeMultiplier),
-    })
-
-    return {
-      stHash,
-      amountCredits: amountCredits,
-      feeCredits: plan.feeCredits,
-      fromAddress: plan.inputs[0].candidate.platformAddress,
-      toAddress: toCoreAddress,
-    }
   }
 
   async withdrawIdentityToCore(
@@ -305,31 +311,32 @@ export class PlatformTransferService {
       throw new Error('Withdrawal amount must be greater than zero')
     }
 
-    const {wallet, seed} = await this.unlock(walletId, password)
-    const network = wallet.network
-    const identity = await requireIdentity(this.identityDAO,walletId, identityIdentifier)
+    return this.withSeed(walletId, password, async ({wallet, seed}) => {
+      const network = wallet.network
+      const identity = await requireIdentity(this.identityDAO, walletId, identityIdentifier)
 
-    const feeCredits = await this.fee.requireFee(walletId, 'identityWithdrawal', {
-      amountCredits, recipient: toCoreAddress, identityId: identityIdentifier,
+      const feeCredits = await this.fee.requireFee(walletId, 'identityWithdrawal', {
+        amountCredits, recipient: toCoreAddress, identityId: identityIdentifier,
+      })
+      await this.requireIdentityBalance(network, identityIdentifier, amountCredits + feeCredits, 'withdrawal')
+
+      const {stHash} = await this.platform.request('identityWithdrawal', network, {
+        seed,
+        identifier: identityIdentifier,
+        identityIndex: identity.identityIndex,
+        amountCredits,
+        coreAddress: toCoreAddress,
+        coreFeePerByte: coreFeePerByte(this.preferences.general.coreFeeMultiplier),
+      })
+
+      return {
+        stHash,
+        amountCredits,
+        feeCredits,
+        fromAddress: identityIdentifier,
+        toAddress: toCoreAddress,
+      }
     })
-    await this.requireIdentityBalance(network, identityIdentifier, amountCredits + feeCredits, 'withdrawal')
-
-    const {stHash} = await this.platform.request('identityWithdrawal', network, {
-      seed,
-      identifier: identityIdentifier,
-      identityIndex: identity.identityIndex,
-      amountCredits,
-      coreAddress: toCoreAddress,
-      coreFeePerByte: coreFeePerByte(this.preferences.general.coreFeeMultiplier),
-    })
-
-    return {
-      stHash,
-      amountCredits,
-      feeCredits,
-      fromAddress: identityIdentifier,
-      toAddress: toCoreAddress,
-    }
   }
 
   async shieldToPool(
@@ -347,31 +354,38 @@ export class PlatformTransferService {
     }
 
     const {wallet, seed} = await this.unlock(walletId, password)
-    const network = wallet.network
+    let detached = false
+    try {
+      const network = wallet.network
 
-    const {plan} = await this.fee.shieldPlan(wallet, {amountCredits, recipient: toShieldedAddress, platformSource: source})
-    const inputs = selectShieldInputs(plan, amountCredits)
+      const {plan} = await this.fee.shieldPlan(wallet, {amountCredits, recipient: toShieldedAddress, platformSource: source})
+      const inputs = selectShieldInputs(plan, amountCredits)
 
-    const {stHash} = await this.platform.request('shield', network, {
-      seed,
-      inputs: inputs.map(({candidate, credits}) => toAddressInput(candidate, credits)),
-      recipient: toShieldedAddress,
-      amountCredits,
-    })
+      const {stHash} = await this.platform.request('shield', network, {
+        seed,
+        inputs: inputs.map(({candidate, credits}) => toAddressInput(candidate, credits)),
+        recipient: toShieldedAddress,
+        amountCredits,
+      })
 
-    // The list carries the shield from the moment it is sent, not from the
-    // block the explorer lists it in.
-    await this.shielded.recordShield(walletId, stHash, {
-      from: inputs[0].candidate.platformAddress,
-      to: toShieldedAddress,
-      credits: amountCredits,
-    })
-    void this.shielded.refreshNotes(walletId, network, seed)
+      // The list carries the shield from the moment it is sent, not from the
+      // block the explorer lists it in.
+      await this.shielded.recordShield(walletId, stHash, {
+        from: inputs[0].candidate.platformAddress,
+        to: toShieldedAddress,
+        credits: amountCredits,
+      })
+      // The refresh outlives this call, so it owns the seed from here.
+      void this.shielded.refreshNotes(walletId, network, seed).finally(() => zeroSeed({seed}))
+      detached = true
 
-    return {
-      stHash,
-      amountCredits: amountCredits,
-      fromAddress: inputs[0].candidate.platformAddress,
+      return {
+        stHash,
+        amountCredits: amountCredits,
+        fromAddress: inputs[0].candidate.platformAddress,
+      }
+    } finally {
+      if (!detached) zeroSeed({seed})
     }
   }
 
@@ -454,6 +468,16 @@ export class PlatformTransferService {
 
   // Decrypts the mnemonic, derives the seed, and backfills the persisted DIP-17
   // account xpub for wallets created before the column existed.
+  // Unlock with the xpub backfill, then zero the seed however the work settles.
+  private async withSeed<T>(walletId: string, password: string, work: (unlocked: {wallet: Wallet; seed: Uint8Array}) => Promise<T>): Promise<T> {
+    const unlocked = await this.unlock(walletId, password)
+    try {
+      return await work(unlocked)
+    } finally {
+      zeroSeed(unlocked)
+    }
+  }
+
   private async unlock(walletId: string, password: string): Promise<{wallet: Wallet; seed: Uint8Array}> {
     const {wallet, seed} = await unlockWallet(this.walletDAO, walletId, password)
     const platformXpub = await platformAccountXpub(this.walletDAO, wallet, seed)

@@ -102,11 +102,11 @@ export class AssetLockService {
   // Installs the job state for a new funding. Throws when one is already
   // running or a previous one is still resumable.
   async begin(walletId: string, kind: AssetLockFundingKind, destination: string, amountDuffs: bigint): Promise<AssetLockFundingState> {
-    const pending = await this.assetLockDAO.getActiveFunding(walletId)
-    if (pending != null) {
-      throw new Error('A previous funding is still in progress — resume it first')
+    // Check and reserve synchronously: an await before states.set would let two
+    // concurrent fundings both pass and double-lock the wallet's coins.
+    if (this.getActive(walletId) != null) {
+      throw new Error('A funding is already in progress')
     }
-
     const state: AssetLockFundingState = {
       ...this.idleState(),
       phase: 'building',
@@ -115,6 +115,16 @@ export class AssetLockService {
       amountDuffs,
     }
     this.states.set(walletId, state)
+
+    try {
+      const pending = await this.assetLockDAO.getActiveFunding(walletId)
+      if (pending != null) {
+        throw new Error('A previous funding is still in progress — resume it first')
+      }
+    } catch (error) {
+      this.states.delete(walletId)
+      throw error
+    }
     log.info(`${walletId}: begin ${kind} ${amountDuffs} duffs -> ${destination}`)
     return state
   }
