@@ -88,16 +88,8 @@ export class RatesService {
   private cache: ProviderRates | null = null
   private fetchedAt: number | null = null
   private inflight: Promise<ProviderRates> | null = null
-  private readonly providers: RateProvider[]
-  private readonly ttlMs: number
-
-  constructor(providers?: RateProvider[], ttlMs: number = RATES_TTL_MS) {
-    this.providers =
-      providers != null && providers.length > 0
-        ? providers
-        : [new CoinGeckoRateProvider(), new CryptoCompareRateProvider()]
-    this.ttlMs = ttlMs
-  }
+  private readonly providers: RateProvider[] = [new CoinGeckoRateProvider(), new CryptoCompareRateProvider()]
+  private readonly ttlMs: number = RATES_TTL_MS
 
   async getRates(): Promise<ExchangeRatesResult> {
     const fresh =

@@ -230,22 +230,19 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  backend.start()
-    .then(createWindow)
-    .catch((err) => {
-      log.error(err)
-      dialog.showErrorBox('Startup failed', String(err))
-    })
+  const startBackend = (): void => {
+    backend.start()
+      .then(createWindow)
+      .catch((err) => {
+        log.error(err)
+        dialog.showErrorBox('Startup failed', String(err))
+      })
+  }
+
+  startBackend()
 
   app.on('activate', () => {
-    if (mainWindow === null) {
-      backend.start()
-        .then(createWindow)
-        .catch((err) => {
-          log.error(err)
-          dialog.showErrorBox('Startup failed', String(err))
-        })
-    }
+    if (mainWindow === null) startBackend()
   })
 })
 

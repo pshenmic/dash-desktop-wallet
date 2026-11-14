@@ -17,7 +17,7 @@ import {PERSIST_ATTEMPTS, PERSIST_RETRY_MS} from '../../constants/database'
 import {AddressDAO} from '../../database/AddressDAO'
 import {TransactionDAO} from '../../database/TransactionDAO'
 import {P2PCommand, P2PEvent} from '../../../p2p/types/messages'
-import {BroadcastPolicyOverrides, BroadcastResult} from '../../../p2p/types/broadcast'
+import {BroadcastResult} from '../../../p2p/types/broadcast'
 import {AppliedBlock, AppliedTx, GapExhausted, WalletSyncStatus, WatchAddress} from '../../../p2p/types/walletSync'
 import {PeerInfo, PeerProbeResult} from '../../../p2p/types/pool'
 import {randomUUID} from 'crypto'
@@ -224,7 +224,7 @@ export class WalletSyncService {
         this.enqueuePersist(async () => this.markWalletDataChanged(syncedWalletId))
       }
     } else if (data.type === 'blockApplied') {
-      this.persistAppliedBlock(data.block)
+      this.enqueuePersist(() => this.writeAppliedBlock(data.block))
     } else if (data.type === 'cursorAdvanced') {
       this.enqueuePersist(() => this.advanceCursorGated(data.walletId, data.height))
     } else if (data.type === 'cursorReset') {
@@ -465,10 +465,8 @@ export class WalletSyncService {
       // swallow the reset.
       await this.enqueuePersist(async () => {
         // A floor above the cursor would skip blocks: a scan still below it reaches these addresses anyway.
-        if (opts.fromHeight != null) {
-          const cursor = await this.transactionDAO.getCursor(walletId)
-          if (cursor != null && cursor <= rewindToHeight) return
-        }
+        const cursor = opts.fromHeight != null ? await this.transactionDAO.getCursor(walletId) : null
+        if (cursor != null && cursor <= rewindToHeight) return
         await this.transactionDAO.resetCursor(walletId, rewindToHeight)
       })
     }
@@ -798,10 +796,6 @@ export class WalletSyncService {
     return run
   }
 
-  private persistAppliedBlock = (block: AppliedBlock): void => {
-    this.enqueuePersist(() => this.writeAppliedBlock(block))
-  }
-
   private async writeAppliedBlock(block: AppliedBlock): Promise<void> {
     for (let attempt = 0; attempt < PERSIST_ATTEMPTS; attempt++) {
       if (attempt > 0) await new Promise(resolve => setTimeout(resolve, PERSIST_RETRY_MS))
@@ -853,10 +847,10 @@ export class WalletSyncService {
   // The only way a locally-signed transaction reaches the network, in both
   // connection modes: it goes over the lock pool, which is also the only pool
   // that can hear the resulting isdlock. Defaults come from
-  // p2p/constants.BROADCAST_POLICY; `policy` overrides the lock knobs.
+  // p2p/constants.BROADCAST_POLICY.
   // `resend` is a tx already broadcast once: peers announce a tx a single time, so
   // one they hold can show no witness, and that timeout is not a rejection.
-  broadcastTransaction = async (txHex: string, policy?: BroadcastPolicyOverrides, resend = false): Promise<BroadcastResult> => {
+  broadcastTransaction = async (txHex: string, resend = false): Promise<BroadcastResult> => {
     // Re-forks the utility process if it died since the last send.
     if (this.lockListenNetwork) {
       await this.startLockListen(this.lockListenNetwork, this.lockListenWalletId)
@@ -879,7 +873,7 @@ export class WalletSyncService {
           reject(err)
         }
       })
-      this.send({type: 'broadcast', requestId, txHex, policy})
+      this.send({type: 'broadcast', requestId, txHex})
     })
 
     // A lock observed inside the session reaches the cache here; the watcher's
@@ -921,7 +915,7 @@ export class WalletSyncService {
     for (const p of pending) {
       if (p.instantLocked || !p.isLocal) continue
       const hex = Buffer.from(p.raw).toString('hex')
-      this.broadcastTransaction(hex, undefined, true).catch(() => { /* best-effort re-push */ })
+      this.broadcastTransaction(hex, true).catch(() => { /* best-effort re-push */ })
     }
     await this.refreshWatchedTxids()
   }
@@ -1060,7 +1054,9 @@ function txidFromHex(txHex: string): string | undefined {
   }
 }
 
-async function rmWithRetry(target: string, attempts = 6, delayMs = 250): Promise<void> {
+async function rmWithRetry(target: string): Promise<void> {
+  const attempts = 6
+  const delayMs = 250
   let lastError: unknown
   for (let i = 0; i < attempts; i++) {
     try {

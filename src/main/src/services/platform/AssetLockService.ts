@@ -294,6 +294,17 @@ export class AssetLockService {
   // Races the instant lock against the chain lock, first to resolve wins. Both
   // are driven by our own lock pool; DAPI is still asked which block holds the
   // transaction, because a clsig carries a height and no outpoint.
+  // Platform validates the proof against its own core node, so its view of the
+  // chainlocked tip is the one that has to have reached the tx.
+  private async platformChainLockedHeight(network: Network, txid: string): Promise<number> {
+    return this.platform.request('nodeStatus', network, {})
+      .then(({chain}) => chain?.coreChainLockedHeight ?? 0)
+      .catch(err => {
+        log.warn(`${txid}: platform node status unavailable:`, err)
+        return 0
+      })
+  }
+
   private async waitForAssetLockProof(
     assetLockTx: SDKTransaction,
     txid: string,
@@ -330,24 +341,16 @@ export class AssetLockService {
         // outlive the transaction being reorged out of the block it names.
         const dapiTx = await coreSDK(network).getTransaction(txid).catch(() => null)
 
-        if (dapiTx?.isChainLocked === true) {
-          // Platform validates the proof against its own core node, so its view
-          // of the chainlocked tip is the one that has to have reached the tx.
-          const platformHeight = await this.platform.request('nodeStatus', network, {})
-            .then(({chain}) => chain?.coreChainLockedHeight ?? 0)
-            .catch(err => {
-              log.warn(`${txid}: platform node status unavailable:`, err)
-              return 0
-            })
-
-          if (platformHeight >= dapiTx.height) {
-            log.info(`${txid}: chainlocked at h=${dapiTx.height}, platform at h=${platformHeight} — building proof`)
-            return coreUtils.createAssetLockProof({
-              transaction: assetLockTx,
-              coreChainLockedHeight: dapiTx.height,
-              outputIndex: ASSET_LOCK_CREDIT_OUTPUT_INDEX,
-            }) as ChainAssetLockProofParams
-          }
+        const platformHeight = dapiTx?.isChainLocked === true
+          ? await this.platformChainLockedHeight(network, txid)
+          : 0
+        if (dapiTx?.isChainLocked === true && platformHeight >= dapiTx.height) {
+          log.info(`${txid}: chainlocked at h=${dapiTx.height}, platform at h=${platformHeight} — building proof`)
+          return coreUtils.createAssetLockProof({
+            transaction: assetLockTx,
+            coreChainLockedHeight: dapiTx.height,
+            outputIndex: ASSET_LOCK_CREDIT_OUTPUT_INDEX,
+          }) as ChainAssetLockProofParams
         }
 
         const seen = this.funder.chainlockedHeight(network)

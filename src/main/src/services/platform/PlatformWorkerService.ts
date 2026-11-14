@@ -97,11 +97,11 @@ export class PlatformWorkerService {
         settle: outcome => {
           this.pending.delete(requestId)
           this.progressHandlers.delete(requestId)
-          if (outcome.ok) {
-            resolve(outcome.result as PlatformOperationResult<K>)
-          } else {
+          if (!outcome.ok) {
             reject(new PlatformWorkerError(outcome.error))
+            return
           }
+          resolve(outcome.result as PlatformOperationResult<K>)
         },
       })
     })
@@ -111,11 +111,6 @@ export class PlatformWorkerService {
     const request = {type: 'request', requestId, kind, network, payload} as PlatformRequestMessage
     this.send(request)
     return settled
-  }
-
-  cancel = (requestId: string): void => {
-    if (!this.pending.has(requestId)) return
-    this.send({type: 'cancel', requestId})
   }
 
   shutdown = async (): Promise<void> => {
@@ -258,7 +253,7 @@ export class PlatformWorkerService {
       record.settle(event.ok ? {ok: true, result: event.result} : {ok: false, error: event.error})
     } else if (event.type === 'progress') {
       if (event.phase === 'broadcasting') this.transitionBroadcast?.()
-      this.progressHandlers.get(event.requestId)?.onProgress?.(event.phase, event.fetched, event.total)
+      this.progressHandlers.get(event.requestId)?.onProgress?.(event.phase)
     } else if (event.type === 'notesSpent') {
       this.progressHandlers.get(event.requestId)?.onNotesSpent?.(event.indexes)
     } else if (event.type === 'pinnedDapiUrls') {

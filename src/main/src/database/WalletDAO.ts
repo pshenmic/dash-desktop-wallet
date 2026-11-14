@@ -165,17 +165,14 @@ export class WalletDAO {
         .delete()
         .where('wallet_id', walletId)
 
-      if (wasSelected) {
-        const survivor = await trx('wallet')
-          .select('wallet_id')
-          .first()
-
-        if (survivor != null) {
-          await trx('wallet')
-            .where('wallet_id', survivor.wallet_id)
-            .update({selected: true})
-        }
-      }
+      if (!wasSelected) return
+      const survivor = await trx('wallet')
+        .select('wallet_id')
+        .first()
+      if (survivor == null) return
+      await trx('wallet')
+        .where('wallet_id', survivor.wallet_id)
+        .update({selected: true})
     })
   }
 }

@@ -87,10 +87,8 @@ export class TransactionDAO {
       // The send-side address is read right before flipping spent_in_txid, to
       // avoid re-issuing the lookup afterwards.
       const usedAddresses = new Set<string>()
-      for (const tx of block.txs) {
-        for (const o of tx.outputs) {
-          if (o.isMine && o.address) usedAddresses.add(o.address)
-        }
+      for (const o of block.txs.flatMap(tx => tx.outputs)) {
+        if (o.isMine && o.address) usedAddresses.add(o.address)
       }
       // Outpoints whose optimistic (pre-confirmation) spender lost to a
       // different on-chain spender — those local txs can never confirm.

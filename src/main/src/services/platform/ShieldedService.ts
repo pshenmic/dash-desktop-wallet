@@ -95,7 +95,6 @@ export class ShieldedService {
   private assetLock: AssetLockService
   private preferences: Preferences
   private history: PlatformHistoryService
-  private notesSynced?: (walletId: string) => void
   private syncStates = new Map<string, ShieldedSyncState>()
   private spendStates = new Map<string, ShieldedSpendState>()
   private addresses = new Map<string, string[]>()
@@ -376,9 +375,11 @@ export class ShieldedService {
     return ours.some(row => row.address === address)
   }
 
-  // Nothing outside a sync can read a note: the password lives no longer.
-  onNotesSynced(listener: (walletId: string) => void): void {
-    this.notesSynced = listener
+  // A shielded transition says nothing to the addresses it touched beyond the
+  // surplus it sent back. What it moved is in the notes a sync just decrypted.
+  private refreshShieldedHistory(walletId: string): void {
+    this.history.readShieldedSides(walletId).catch(err =>
+      log.error('reading the shielded side of the history failed:', err))
   }
 
   getSyncState(walletId: string): ShieldedSyncState {
@@ -469,7 +470,7 @@ export class ShieldedService {
       this.settleSync(state, priorNotes)
       // A sync that found nothing new still leaves notes to count into any
       // transition the history walked since the last one.
-      this.notesSynced?.(walletId)
+      this.refreshShieldedHistory(walletId)
       await this.revealWindow(walletId, seed, network)
       return
     }
@@ -490,7 +491,7 @@ export class ShieldedService {
     this.settleSync(state, all)
     await this.shieldedNoteDAO.upsertNotes(walletId, all)
     await this.walletDAO.setShieldedDecodedCount(walletId, decodedUpTo)
-    this.notesSynced?.(walletId)
+    this.refreshShieldedHistory(walletId)
 
     // Only now can the window be judged: it reads used flags off the notes this
     // sync just wrote. Runs on the seed the sync is already holding, and is done

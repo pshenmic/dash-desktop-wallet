@@ -493,14 +493,6 @@ export class WalletBackend {
         platformHistoryService.refreshAfterSend(selected.walletId)
       }
     }
-    // A shielded transition says nothing to the addresses it touched beyond the
-    // surplus it sent back. What it moved is in the notes a sync just decrypted.
-    const shieldedHistoryService = this.platformHistoryService
-    this.shieldedService.onNotesSynced(walletId => {
-      shieldedHistoryService.readShieldedSides(walletId).catch(err =>
-        platformLog.error('reading the shielded side of the history failed:', err))
-    })
-
     this.platformWorkerService.onTransitionBroadcast(() => {
       refreshAfterBroadcast().catch(err => platformLog.error('platform history refresh after a broadcast failed:', err))
     })
