@@ -2,7 +2,7 @@ import {ClassicLevel} from 'classic-level'
 import {Network} from '../../src/types/Network'
 
 import {displayHexToWire} from '../utils/byteOrder'
-import {ChainTipState, PersistedHeader, StoredState} from '../types/chainStore'
+import {ChainTipState, GovernanceSyncState, PersistedHeader, StoredState} from '../types/chainStore'
 import type {ProviderRegistration} from '../types/masternodeList'
 import {HEIGHT_KEY_WIDTH} from '../constants'
 
@@ -29,10 +29,23 @@ function stateKey(network: Network): string {
   return `s:${network}`
 }
 
+// Network-wide too: proposals as their govobj bytes, and the votes on each.
+function proposalKey(hash: string): string {
+  return `g:${hash}`
+}
+
+function voteKey(proposalHash: string, voteHash: string): string {
+  return `v:${proposalHash}:${voteHash}`
+}
+
+function governanceStateKey(): string {
+  return 's:governance'
+}
+
 // Single-owner facade over chain storage — workers never open LevelDB directly.
 //
 // Holds network-scoped data only (headers, hash cache, filter headers, provider
-// registrations); wallet state lives in SQL. The split keeps chain storage free
+// registrations, governance); wallet state lives in SQL. The split keeps chain storage free
 // of anything that will need encrypting under the user's key when SQLCipher lands.
 export class ChainStore {
   private db: ClassicLevel<string, Uint8Array>
@@ -282,6 +295,58 @@ export class ChainStore {
     for (const [proTxHash, registration] of put) batch.put(registrationKey(proTxHash), encodeJson(registration))
     for (const proTxHash of del) batch.del(registrationKey(proTxHash))
     await batch.write()
+  }
+
+  getProposalObjects = async (): Promise<Uint8Array[]> => this.values(proposalKey(''), 'g;')
+
+  getVotes = async (proposalHash: string): Promise<Uint8Array[]> => this.values(voteKey(proposalHash, ''), `v:${proposalHash};`)
+
+  // A dropped proposal takes its votes with it.
+  writeProposals = async (put: Map<string, Uint8Array>, del: string[] = []): Promise<void> => {
+    if (put.size === 0 && del.length === 0) return
+    const batch = this.db.batch()
+    for (const [hash, object] of put) batch.put(proposalKey(hash), object)
+    for (const hash of del) {
+      batch.del(proposalKey(hash))
+      const iter = this.db.iterator({gte: voteKey(hash, ''), lt: `v:${hash};`})
+      try {
+        for await (const [key] of iter) batch.del(key)
+      } finally {
+        await iter.close()
+      }
+    }
+    await batch.write()
+  }
+
+  writeVotes = async (proposalHash: string, votes: Map<string, Uint8Array>): Promise<void> => {
+    if (votes.size === 0) return
+    const batch = this.db.batch()
+    for (const [hash, vote] of votes) batch.put(voteKey(proposalHash, hash), vote)
+    await batch.write()
+  }
+
+  getGovernanceState = async (): Promise<GovernanceSyncState> => {
+    const stored = await this.db.get(governanceStateKey()).catch(err => {
+      if ((err as {code?: string}).code === 'LEVEL_NOT_FOUND') return undefined
+      throw err
+    })
+    const state: Partial<GovernanceSyncState> = stored == null ? {} : JSON.parse(Buffer.from(stored).toString('utf8'))
+    return {syncedAt: 0, votesSyncedAt: {}, asked: {}, ...state}
+  }
+
+  writeGovernanceState = async (state: GovernanceSyncState): Promise<void> => {
+    await this.db.put(governanceStateKey(), encodeJson(state))
+  }
+
+  private async values(gte: string, lt: string): Promise<Uint8Array[]> {
+    const values: Uint8Array[] = []
+    const iter = this.db.iterator({gte, lt})
+    try {
+      for await (const [, value] of iter) values.push(value)
+    } finally {
+      await iter.close()
+    }
+    return values
   }
 }
 

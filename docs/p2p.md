@@ -36,6 +36,11 @@ Things the code cannot tell you, and that a plausible-looking change breaks:
   proceeds with a warning, while contradicting answers keep asking rather than
   picking a side. A pinned pool takes that answer at once — waiting out the race
   would wait on a peer that cannot join.
+- **The filter-header walk starts at the checkpoint below the scan cursor, not
+  at genesis**, and the scan holds at any height with no filter header. A
+  cursor rewound below that checkpoint (new addresses, a followed masternode)
+  therefore has to restart the walk from its own checkpoint, or the scan waits
+  forever without a log line. A full filter-header cache hides this.
 - **A ChainLock is a statement about a block, not about a height.** `clsig`
   carries the locked hash. Flooring the reorg depth on the height alone pins us
   to whatever branch we happen to hold there, and since the floor then sits at or
@@ -62,10 +67,32 @@ Things the code cannot tell you, and that a plausible-looking change breaks:
 
 ## Masternode list (`sync/providerRegistry.ts`)
 
-- **The wallet's masternodes come from a full list proven against our own
-  header chain**, never from the DAPI-url refresh's check alone: the header at
-  the coinbase height must hash to the diff's block, carry the coinbase's merkle
+- **The wallet's masternodes come from a list proven against our own header
+  chain**, never from the DAPI-url refresh's check alone: the header at the
+  coinbase height must hash to the diff's block, carry the coinbase's merkle
   root, and that coinbase's `merkleRootMNList` must cover every entry.
+- **The list follows the tip block by block, as a diff.** The full list
+  (~500 KB mainnet) is asked once, of one peer at a time with another after
+  `MNLIST_REPLY_TIMEOUT_MS`; then each new tip asks several peers for the diff
+  from the block the list is proven at (a few KB), applies it, and proves the
+  result the same way; the quorums ride the same diff. Only a rewind below that
+  block asks for the full list again. A diff based on a list already replaced
+  is dropped, since several peers answer each ask.
+- **Which nodes still exist comes from the lock pool, in both modes.** Every
+  list proven at the tip, and every full list the hourly DAPI-url refresh
+  verifies (rpc mode has no chain to follow), goes to main as its set of
+  proTxHashes (`listedMasternodes`), once, with when that list was asked for
+  (kept per block hash; 0 for one nobody asked for, which can drop no node). A
+  block that changed no node sends nothing, since main rediscovers on every list.
+  The same message says whether v24 is active — Core requires coinbase payload
+  version 4 exactly then — which decides an Evo service update's version: v24
+  refuses one below v3 and nothing before it accepts v3. Dashscan keeps
+  the row of a node whose collateral was spent, frozen in its last state, so
+  discovery drops an owned node once a list asked for after the node was first
+  seen does not carry it; one missing from an older list makes main send
+  `refreshMasternodes`, which asks at the newest announced block. A ProUpRegTx,
+  ProUpServTx or ProUpRevTx is refused for a node that list does not carry —
+  Core drops it as `bad-protx-hash`, and peers send no reason.
 - **A list entry has no owner key, collateral or payout.** Those live only in the
   ProRegTx, read once from the block at `height(confirmedHash) − N` (Core's
   `nMasternodeMinimumConfirmations`: 15 mainnet, 1 testnet) and kept in chain.db
@@ -78,6 +105,41 @@ Things the code cannot tell you, and that a plausible-looking change breaks:
   nodes**: their proTxHashes are in the filter watch set, since Core puts a
   ProUpRegTx's proTxHash in the block filter. A node the wallet starts following
   rewinds the scan to its registration once.
+
+## Governance (`sync/governance.ts`, `sync/voteRelay.ts`)
+
+- **Proposals and votes come from peers with `govsync`, in p2p mode only**, and
+  live in chain.db (`g:` objects, `v:<proposal>:` votes). Main's reads answer
+  what the child last sent and never fetch; `refreshGovernance`, from the
+  discovery tick and the renderer, is what asks (a proposal's votes only when
+  it names one). rpc mode reads Dashscan
+  and never asks a peer. dash-core-p2p parses `govsync`, `govobj` and
+  `govobjvote` natively into the SDK's governance types, and the pool forwards
+  them like any other command; a payload it cannot parse never reaches sync.
+- **Core scores a peer that asks twice within an hour**, for the list or for one
+  proposal's votes, so who was asked when is persisted and no peer is asked
+  twice in that hour. A sync counts as done only once it is answered: until
+  then other peers are asked, a reply window apart. `GovSyncMessage` defaults
+  the bloom filter per request: an empty one for the object list, a one-byte
+  filter beside a proposal hash, which Core reads as a fetch of the object
+  alone.
+- **Nothing checks a proposal's collateral**, so one peer could invent one: an
+  object is fetched once `PROPOSAL_ANNOUNCERS` hosts announced it (fewer only
+  when the pool holds fewer; counted by host, so a reconnect is not a second
+  one). A vote whose signature recovers to no key is not
+  kept, and a proposal holds at most `PROPOSAL_VOTES_MAX`.
+- **A vote counts only where its signature recovers to the node's current voting
+  key**, the node found by collateral outpoint in the proven list. Mainnet signs
+  a message (`txid-vout|parent|signal|outcome|time`), testnet the hash.
+- **A vote goes out as an `inv`, and only a peer's `getdata` gets the vote**:
+  Core drops one it neither requested nor saw announced. It also drops a node's
+  new vote within an hour of its last on the same proposal, and says nothing —
+  so main refuses that case first, as Core's own wallet does, and the relay then
+  sends each peer that took the vote a `getdata` for it. Core serves a vote only
+  from the ones it kept, so a peer serving it back is the proof, and only then
+  is our vote counted locally.
+- **A proposal is dropped once its end is a superblock cycle behind**, on open
+  and in what the providers answer: no superblock left can pay it.
 
 ## Difficulty (`utils/difficulty.ts`)
 

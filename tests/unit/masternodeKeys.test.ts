@@ -1,14 +1,13 @@
 import {describe, expect, it} from 'vitest'
 import {bytesToHex, hexToBytes} from '@noble/hashes/utils.js'
 import {HDKey} from '@scure/bip32'
-import {PrivateKey} from 'dash-core-sdk'
+import {bls, PrivateKey} from 'dash-core-sdk'
 import {HD_VERSIONS} from '../../src/main/src/constants/addresses'
 import {
   masternodeAccountPath,
   masternodeKeyDeriver,
   masternodeKeys,
   masternodePublicKey,
-  operatorPublicKey,
   platformNodeId,
 } from '../../src/main/src/utils/masternodeKeys'
 
@@ -25,17 +24,25 @@ describe('masternodeKeys', () => {
   })
 
   it('derives operator keys from the stored account node', () => {
-    const keys = [0, 1, 2].map(index => bytesToHex(operatorPublicKey(mainnet.operatorPublicKey, mainnet.operatorChainCode, index)))
-    expect(keys).toEqual([
+    const deriver = masternodeKeyDeriver(mainnet, 'mainnet', 'operator')
+    expect([0, 1, 2].map(index => deriver.derive(index).address)).toEqual([
       '878cad04aae29eb76171937eb7101452b401b026efbc27db840f130374e6a9ec8443d917277f8921e0ba6678a7709875',
       '8c04974d14df3b5eb23787e21642d25c47609d966bb80f504854e4675657c63f4c4c7056f3f007671b911eb390dec4f7',
       '8d14cad34409c74f9dd587fc00be01ca0c527e3793f016eb2a612d78ec45c650e8942fbff3e1ab44a21a6e575ebe80a1',
     ])
   })
 
+  it('derives the operator secret behind each pinned public key', () => {
+    const deriver = masternodeKeyDeriver(mainnet, 'mainnet', 'operator')
+    for (const index of [0, 1, 2]) {
+      expect(bytesToHex(bls.blsPublicKey(bls.deriveOperatorSecretKey(SEED, 'mainnet', index))))
+        .toBe(deriver.derive(index).address)
+    }
+  })
+
   it('derives the testnet operator key on coin type 1', () => {
     const testnet = masternodeKeys(SEED, 'testnet')
-    expect(bytesToHex(operatorPublicKey(testnet.operatorPublicKey, testnet.operatorChainCode, 0)))
+    expect(masternodeKeyDeriver(testnet, 'testnet', 'operator').derive(0).address)
       .toBe('89d8beabae708de1638487f1aff44b38e8c07d9b09f22d76329d6c8ec01e2ad4d030b660bca40ddbd222373a72c5bcef')
   })
 
@@ -86,8 +93,9 @@ describe('masternodePublicKey', () => {
   })
 
   it('refuses an operator secret outside the scalar field', () => {
-    for (const secret of ['00'.repeat(32), 'ff'.repeat(32), '01'.repeat(31)]) {
-      expect(() => masternodePublicKey('operator', secret, 'mainnet')).toThrow('Not a BLS secret key')
+    for (const secret of ['00'.repeat(32), 'ff'.repeat(32)]) {
+      expect(() => masternodePublicKey('operator', secret, 'mainnet')).toThrow('outside the scalar field')
     }
+    expect(() => masternodePublicKey('operator', '01'.repeat(31), 'mainnet')).toThrow('must be 32 bytes')
   })
 })

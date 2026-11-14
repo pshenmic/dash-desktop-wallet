@@ -116,6 +116,80 @@ interface PaymentRequestDTO {
   createdAt: number
 }
 
+// Mirrors MasternodeRegistration and MasternodeRegistrationResult in
+// src/main/src/types/Masternode.
+interface MasternodeRegistrationDTO {
+  type: 'Regular' | 'Evo'
+  collateral: { txid: string; vout: number }
+  serviceAddress: string | null
+  payoutAddress: string
+  operatorReward: number
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+}
+
+interface MasternodeRegistrationResultDTO {
+  proTxHash: string
+  fee: bigint
+  peersAcked: number
+}
+
+// Mirrors MasternodeRegistrarUpdate and MasternodeUpdateResult in
+// src/main/src/types/Masternode, which says what each choice does.
+interface MasternodeRegistrarUpdateDTO {
+  operator: { kind: 'keep' } | { kind: 'wallet' } | { kind: 'external'; publicKey: string }
+  voting: { kind: 'keep' } | { kind: 'wallet' } | { kind: 'external'; address: string }
+  payoutAddress: string | null
+}
+
+// Mirrors MasternodeServiceUpdate and RevocationReason in
+// src/main/src/types/Masternode. Both are signed by the operator key.
+interface MasternodeServiceUpdateDTO {
+  serviceAddress: string
+  operatorPayoutAddress: string | null
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+}
+
+type RevocationReasonDTO = 'notSpecified' | 'termination' | 'compromisedKeys' | 'changeOfKeys'
+
+interface MasternodeUpdateResultDTO {
+  txid: string
+  fee: bigint
+  peersAcked: number
+}
+
+// Mirrors Proposal, ProposalTally, VoteOutcome and VoteResult (with VoteRelay) in
+// src/main/src/types/Governance.
+interface ProposalDTO {
+  hash: string
+  name: string
+  url: string
+  paymentAddress: string
+  paymentDuffs: bigint
+  startEpoch: number
+  endEpoch: number
+  createdAt: number
+  collateralHash: string
+}
+
+interface ProposalTallyDTO {
+  yes: number
+  no: number
+  abstain: number
+}
+
+type VoteOutcomeDTO = 'yes' | 'no' | 'abstain'
+
+interface VoteResultDTO {
+  proTxHash: string
+  peers: number
+  // How many of those peers served the vote back; 0 is a vote Core dropped.
+  accepted: number
+}
+
 // Hand-maintained alongside definitions.ts, and deliberately a second
 // declaration of src/main/src/types/Transaction: the three bundles do not share
 // types. Amounts stay bigint — structured clone carries them as themselves.
@@ -214,6 +288,14 @@ declare global {
       getImportedMasternodeKeys: (walletId: string) => Promise<ImportedMasternodeKeyDTO[]>
       importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => Promise<MasternodeDTO[] | null>
       removeMasternodeKey: (walletId: string, key: ImportedMasternodeKeyDTO) => Promise<void>
+      registerMasternode: (walletId: string, registration: MasternodeRegistrationDTO, password: string) => Promise<MasternodeRegistrationResultDTO>
+      updateMasternodeRegistrar: (walletId: string, proTxHash: string, update: MasternodeRegistrarUpdateDTO, password: string) => Promise<MasternodeUpdateResultDTO>
+      updateMasternodeService: (walletId: string, proTxHash: string, update: MasternodeServiceUpdateDTO, password: string) => Promise<MasternodeUpdateResultDTO>
+      revokeMasternode: (walletId: string, proTxHash: string, reason: RevocationReasonDTO, password: string) => Promise<MasternodeUpdateResultDTO>
+      getGovernanceProposals: (walletId: string) => Promise<ProposalDTO[] | null>
+      refreshGovernance: (walletId: string, proposalHash?: string) => Promise<void>
+      getProposalTally: (walletId: string, proposalHash: string) => Promise<ProposalTallyDTO | null>
+      voteProposal: (walletId: string, proposalHash: string, outcome: VoteOutcomeDTO, proTxHashes: string[], password: string) => Promise<VoteResultDTO[]>
       getUsernames: (walletId: string) => Promise<unknown>
       refreshDashPay: (walletId: string) => Promise<void>
       registerUsername: (walletId: string, identifier: string, label: string, password: string) => Promise<unknown>

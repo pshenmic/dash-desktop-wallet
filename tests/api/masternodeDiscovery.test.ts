@@ -1,9 +1,12 @@
-import {beforeEach, describe, expect, it} from 'vitest'
+import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {PrivateKey, Script} from 'dash-core-sdk'
 import {MasternodeDAO} from '../../src/main/src/database/MasternodeDAO'
+import {Preferences} from '../../src/main/src/preferences'
 import {WalletProviderFactory} from '../../src/main/src/providers/WalletProviderFactory'
+import {CoreTransactionService} from '../../src/main/src/services/core/CoreTransactionService'
 import {MasternodeService} from '../../src/main/src/services/core/MasternodeService'
-import {Masternode, MasternodeKeyFilter, MasternodeKeys, NetworkMasternode} from '../../src/main/src/types/Masternode'
+import {WalletSyncService} from '../../src/main/src/services/core/WalletSyncService'
+import {ListedMasternodes, Masternode, MasternodeKeyFilter, MasternodeKeys, NetworkMasternode} from '../../src/main/src/types/Masternode'
 import {UTXO} from '../../src/main/src/types/UTXO'
 import {masternodeKeyDeriver} from '../../src/main/src/utils/masternodeKeys'
 import {nodeKey} from '../../src/main/src/utils/masternodes'
@@ -46,13 +49,22 @@ describe('MasternodeService.discover', () => {
   let keys: MasternodeKeys
   let current: WalletProviderFactory
   let masternodes: MasternodeService
+  // The lock pool's list; null until one arrives.
+  let network: ListedMasternodes | null
+  let refreshes: ReturnType<typeof vi.fn>
 
   beforeEach(async () => {
     wired = await harness()
     walletId = await wired.createWalletHandler.handle(null as never, VALID_SEEDPHRASE, 'mainnet', PASSWORD)
     keys = (await wired.masternodeKeyDAO.getKeys(walletId))!
     const providers = {forWallet: (...args) => current.forWallet(...args)} as WalletProviderFactory
-    masternodes = new MasternodeService(wired.walletDAO, wired.masternodeKeyDAO, new MasternodeDAO(wired.knex), providers)
+    network = null
+    refreshes = vi.fn()
+    const walletSync = {getListedMasternodes: () => network, refreshListedMasternodes: refreshes} as unknown as WalletSyncService
+    masternodes = new MasternodeService(
+      wired.walletDAO, wired.masternodeKeyDAO, new MasternodeDAO(wired.knex), providers,
+      wired.addressDAO, new CoreTransactionService(), walletSync, Preferences.default(),
+    )
     watched = []
   })
 
@@ -132,6 +144,26 @@ describe('MasternodeService.discover', () => {
 
     expect(await listed()).toEqual(['b'])
     expect(await storedCollaterals()).toEqual(['b:bb:0'])
+  })
+
+  // Dashscan keeps the row of a node whose collateral was spent, frozen in its last state.
+  it('drops a node the network list no longer carries, once that list postdates it', async () => {
+    const gone = node('a', {ownerAddress: key('owner', 0), status: 'POSE_BANNED'})
+    await discover(source([gone, node('b', {ownerAddress: key('owner', 1)})]))
+    expect(await listed()).toEqual(['a', 'b'])
+    expect(refreshes).toHaveBeenCalled()
+
+    network = {proTxHashes: new Set(['b']), askedAt: Date.now() + 1, v24Active: false}
+    await discover(source([gone, node('b', {ownerAddress: key('owner', 1)})]))
+    expect(await listed()).toEqual(['b'])
+    expect(await storedCollaterals()).toEqual(['b:bb:0'])
+  })
+
+  it('keeps a node an older list could not know of, and asks for a newer one', async () => {
+    network = {proTxHashes: new Set(), askedAt: 0, v24Active: false}
+    await discover(source([node('a', {ownerAddress: key('owner', 0)})]))
+    expect(await listed()).toEqual(['a'])
+    expect(refreshes).toHaveBeenCalled()
   })
 
   it('keeps what it knew when the source has no list or fails', async () => {

@@ -2,16 +2,21 @@ import {describe, expect, it} from 'vitest'
 import {hexToBytes} from '@noble/hashes/utils.js'
 import {Script} from 'dash-core-sdk'
 import {DashscanMasternode} from '../../src/main/src/types/Dashscan'
-import {NetworkMasternode} from '../../src/main/src/types/Masternode'
+import {Masternode, NetworkMasternode} from '../../src/main/src/types/Masternode'
 import {UTXO} from '../../src/main/src/types/UTXO'
 import {masternodeKeyDeriver, masternodeKeys} from '../../src/main/src/utils/masternodeKeys'
 import {
   collateralUtxos,
+  existingMasternodes,
+  unusedKeyIndex,
   masternodeFilterValues,
   matchMasternodeKeys,
   networkMasternode,
   ownedCollaterals,
   ownedMasternodes,
+  ownerNode,
+  requireCollateral,
+  requirePayout,
   collateralsToStore,
   withCollateralFlag,
   withoutCollaterals,
@@ -166,5 +171,90 @@ describe('ownedMasternodes', () => {
       {proTxHash: 'a', txid: 'c'.repeat(64), vout: 0, address: 'Xheld'},
       {proTxHash: 'b', txid: 'c'.repeat(64), vout: 1, address: null},
     ])
+  })
+})
+
+describe('unusedKeyIndex', () => {
+  const owned = (ownerKeyIndex: number | null, votingKeyIndex: number | null): Masternode =>
+    ({...node('aa'), ownerKeyIndex, votingKeyIndex, operatorKeyIndex: null, importedRoles: []})
+
+  it('is the lowest index of the chain no node carries', () => {
+    expect(unusedKeyIndex([owned(0, null), owned(2, 0)], 'owner')).toBe(1)
+    expect(unusedKeyIndex([], 'voting')).toBe(0)
+  })
+
+  it('skips an index any of several chains carries', () => {
+    expect(unusedKeyIndex([owned(null, 0), owned(1, null)], 'owner', 'voting', 'operator')).toBe(2)
+  })
+})
+
+describe('requireCollateral', () => {
+  const DASH = 100_000_000n
+  const coin = (satoshis: bigint, height = 10): UTXO => ({txId: 'aa'.repeat(32), vOut: 1, satoshis, height, address: 'Xcoin'}) as UTXO
+  const wanted = {type: 'Regular' as const, collateral: {txid: 'aa'.repeat(32), vout: 1}}
+
+  it('answers the confirmed coin of the type\'s exact amount', () => {
+    const utxo = coin(1_000n * DASH)
+    expect(requireCollateral([utxo], [], wanted)).toBe(utxo)
+  })
+
+  it('refuses a coin that is missing, unconfirmed, of another amount or already a collateral', () => {
+    expect(() => requireCollateral([], [], wanted)).toThrow('not an unspent coin')
+    expect(() => requireCollateral([coin(1_000n * DASH, 0)], [], wanted)).toThrow('needs a confirmation')
+    expect(() => requireCollateral([coin(4_000n * DASH)], [], wanted)).toThrow('exactly 1000 DASH')
+    const taken = [{proTxHash: 'bb', txid: 'aa'.repeat(32), vout: 1, followed: false}]
+    expect(() => requireCollateral([coin(1_000n * DASH)], taken, wanted)).toThrow('already a masternode collateral')
+  })
+})
+
+describe('requirePayout', () => {
+  it('answers a payout that pays neither the owner nor the voting key', () => {
+    expect(requirePayout('Xpayout', 'Xowner', 'Xvoting')).toBe('Xpayout')
+  })
+
+  it('refuses an unknown payout, and one paying the owner or voting key', () => {
+    expect(() => requirePayout(null, 'Xowner', 'Xvoting')).toThrow('not known yet')
+    expect(() => requirePayout('Xowner', 'Xowner', 'Xvoting')).toThrow('may not pay')
+    expect(() => requirePayout('Xvoting', 'Xowner', 'Xvoting')).toThrow('may not pay')
+  })
+})
+
+describe('ownerNode', () => {
+  const owned = (proTxHash: string, ownerKeyIndex: number | null): Masternode =>
+    ({...node(proTxHash), ownerKeyIndex, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: []})
+
+  it('answers a node whose owner key the wallet derives, and refuses any other', () => {
+    expect(ownerNode([owned('aa', 3)], 'aa').ownerKeyIndex).toBe(3)
+    expect(() => ownerNode([owned('aa', null)], 'aa')).toThrow('does not derive')
+    expect(() => ownerNode([], 'aa')).toThrow('Not a masternode')
+  })
+})
+
+describe('existingMasternodes', () => {
+  const owned = (proTxHash: string): Masternode =>
+    ({...node(proTxHash), ownerKeyIndex: 0, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: []})
+  const firstSeen = new Map([['aa', 100], ['bb', 100]])
+  const listed = (askedAt: number, ...proTxHashes: string[]) => ({proTxHashes: new Set(proTxHashes), askedAt, v24Active: false})
+
+  it('drops a node a list asked for after it was first seen does not carry', () => {
+    const {existing, unsettled} = existingMasternodes([owned('aa'), owned('bb')], listed(200, 'aa'), firstSeen)
+    expect(existing.map(({proTxHash}) => proTxHash)).toEqual(['aa'])
+    expect(unsettled).toBe(false)
+  })
+
+  it('keeps a node missing from an older list, and asks for a newer one', () => {
+    const {existing, unsettled} = existingMasternodes([owned('aa'), owned('bb')], listed(50, 'aa'), firstSeen)
+    expect(existing.map(({proTxHash}) => proTxHash)).toEqual(['aa', 'bb'])
+    expect(unsettled).toBe(true)
+  })
+
+  it('keeps every node until any list has arrived', () => {
+    const {existing, unsettled} = existingMasternodes([owned('aa')], null, firstSeen)
+    expect(existing).toHaveLength(1)
+    expect(unsettled).toBe(true)
+  })
+
+  it('is settled when every node is listed', () => {
+    expect(existingMasternodes([owned('aa')], listed(50, 'aa'), firstSeen).unsettled).toBe(false)
   })
 })

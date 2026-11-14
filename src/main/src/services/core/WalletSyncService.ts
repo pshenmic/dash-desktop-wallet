@@ -26,7 +26,8 @@ import {peerOverridesKey} from '../../../p2p/net/peerOverrides'
 import {ScanCursorGate} from '../../utils/scanCursorGate'
 import {Preferences} from '../../preferences'
 import {Network} from '../../types/Network'
-import {NetworkMasternode} from '../../types/Masternode'
+import {GovernanceVote, Proposal, VoteRelay} from '../../types/Governance'
+import {ListedMasternodes, NetworkMasternode} from '../../types/Masternode'
 import {Transaction as SDKTransaction} from 'dash-core-sdk'
 import {Logger} from '../../utils/logger'
 
@@ -85,16 +86,24 @@ export class WalletSyncService {
   // Answered per request like the peer list, but a failure has to reach the
   // caller: an unanswered probe is not evidence that a peer is unreachable.
   private pendingProbes = new Map<string, {resolve: (result: PeerProbeResult) => void; reject: (err: Error) => void}>()
+  private pendingVoteRelays = new Map<string, {resolve: (relay: VoteRelay) => void; reject: (err: Error) => void}>()
   onWalletActivity: ((walletId: string) => void) | null = null
   private activityDebounce: ReturnType<typeof setTimeout> | null = null
   onGapExhausted: ((gap: GapExhausted) => void) | null = null
   onEvonodeDapiUrls: ((network: Network, dapiUrls: string[]) => void) | null = null
   onPlatformQuorums: ((network: Network, keys: Map<string, Uint8Array>) => void) | null = null
   onMasternodeList: ((network: Network) => void) | null = null
+  onListedMasternodes: ((network: Network) => void) | null = null
   // The masternodes a wallet already follows, read when its scan starts.
   watchedProvidersOf: (walletId: string) => Promise<string[]> = async () => []
   // The last proven list per network; absent until the p2p index first answers.
   private masternodeLists = new Map<Network, NetworkMasternode[]>()
+  // The lock pool's last full list per network, in both modes.
+  private listedMasternodes = new Map<Network, ListedMasternodes>()
+  // What the p2p index last sent from chain.db: proposals per network, votes
+  // per `network:proposalHash`. Absent until it answers.
+  private proposals = new Map<Network, Proposal[]>()
+  private proposalVotes = new Map<string, GovernanceVote[]>()
   // Wallets whose scan is held waiting for addresses. The worker resumes at the
   // held height, so the addresses answering it must not also rewind the cursor.
   private gapHeld = new Set<string>()
@@ -186,6 +195,10 @@ export class WalletSyncService {
         probe.reject(new Error(`p2p utility process exited (code=${code}) before peer probe ${requestId} answered${crashDetail}`))
       }
       this.pendingProbes.clear()
+      for (const [requestId, relay] of this.pendingVoteRelays) {
+        relay.reject(new Error(`p2p utility process exited (code=${code}) before vote ${requestId} was relayed${crashDetail}`))
+      }
+      this.pendingVoteRelays.clear()
       this.notifyPhase('stopped')
       this.status = {
         phase: 'stopped',
@@ -293,9 +306,6 @@ export class WalletSyncService {
         probe.resolve(data.result)
       }
     } else if (data.type === 'txInstantLocked') {
-      this.transactionDAO.markInstantLocked(data.txid).catch(err =>
-        log.error('markInstantLocked failed:', err)
-      )
       this.recordInstantLock(data.txid, data.islockHex)
     } else if (data.type === 'chainLocked') {
       this.transactionDAO.markChainlockedUpTo(data.network, data.height).catch(err =>
@@ -309,6 +319,18 @@ export class WalletSyncService {
     } else if (data.type === 'masternodeList') {
       this.masternodeLists.set(data.network, data.masternodes)
       this.onMasternodeList?.(data.network)
+    } else if (data.type === 'listedMasternodes') {
+      this.listedMasternodes.set(data.network, {proTxHashes: new Set(data.proTxHashes), askedAt: data.askedAt, v24Active: data.v24Active})
+      this.onListedMasternodes?.(data.network)
+    } else if (data.type === 'proposals') {
+      this.proposals.set(data.network, data.proposals)
+    } else if (data.type === 'proposalVotes') {
+      this.proposalVotes.set(`${data.network}:${data.proposalHash}`, data.votes)
+    } else if (data.type === 'voteRelayed') {
+      const relay = this.pendingVoteRelays.get(data.requestId)
+      this.pendingVoteRelays.delete(data.requestId)
+      if (data.errorMessage == null) relay?.resolve({peers: data.peers, accepted: data.accepted})
+      else relay?.reject(new Error(data.errorMessage))
     } else if (data.type === 'error') {
       log.error('utility process error:', data.message)
     }
@@ -503,6 +525,38 @@ export class WalletSyncService {
 
   getMasternodeList = (network: Network): NetworkMasternode[] | null => this.masternodeLists.get(network) ?? null
 
+  getListedMasternodes = (network: Network): ListedMasternodes | null => this.listedMasternodes.get(network) ?? null
+
+  refreshListedMasternodes(): void {
+    if (this.child) this.send({type: 'refreshMasternodes'})
+  }
+
+  // Null until the p2p index has opened chain.db and sent its proposals.
+  getProposals = (network: Network): Proposal[] | null => this.proposals.get(network) ?? null
+
+  // Null until the proposal's votes were asked for and the index answered.
+  getProposalVotes = (network: Network, proposalHash: string): GovernanceVote[] | null =>
+    this.proposalVotes.get(`${network}:${proposalHash}`) ?? null
+
+  // The proposal list, and one proposal's votes when named. The child asks peers
+  // at most hourly for each, so calling this often costs nothing.
+  refreshGovernance(proposalHash?: string): void {
+    if (!this.child) return
+    this.send({type: 'syncProposals'})
+    if (proposalHash != null) this.send({type: 'syncProposalVotes', proposalHash})
+  }
+
+  // Over the lock pool, in both modes.
+  relayVote = async (vote: Uint8Array): Promise<VoteRelay> => {
+    if (this.lockListenNetwork) await this.startLockListen(this.lockListenNetwork, this.lockListenWalletId)
+    if (!this.child) throw new Error('relayVote: p2p transport not started — no wallet selected')
+    const requestId = randomUUID()
+    return new Promise<VoteRelay>((resolve, reject) => {
+      this.pendingVoteRelays.set(requestId, {resolve, reject})
+      this.send({type: 'relayVote', requestId, vote})
+    })
+  }
+
   getStatus = (): WalletSyncStatus => {
     if (this.persistenceError == null) return this.status
     return {...this.status, lastError: this.persistenceError}
@@ -559,8 +613,12 @@ export class WalletSyncService {
     })
   }
 
+  // Both ways a lock arrives, a broadcast session and the watcher, end here. A
+  // row written before it is marked now; one written after reads the cache.
   private recordInstantLock(txid: string, islockHex: string): void {
     this.instantLocks.set(txid, islockHex)
+    this.transactionDAO.markInstantLocked(txid).catch(err =>
+      log.error('markInstantLocked failed:', err))
     this.disarmLockWatch(txid)
     const waiters = this.instantLockWaiters.get(txid)
     if (waiters) {
@@ -829,7 +887,9 @@ export class WalletSyncService {
   // connection modes: it goes over the lock pool, which is also the only pool
   // that can hear the resulting isdlock. Defaults come from
   // p2p/constants.BROADCAST_POLICY; `policy` overrides the lock knobs.
-  broadcastTransaction = async (txHex: string, policy?: BroadcastPolicyOverrides): Promise<BroadcastResult> => {
+  // `resend` is a tx already broadcast once: peers announce a tx a single time, so
+  // one they hold can show no witness, and that timeout is not a rejection.
+  broadcastTransaction = async (txHex: string, policy?: BroadcastPolicyOverrides, resend = false): Promise<BroadcastResult> => {
     // Re-forks the utility process if it died since the last send.
     if (this.lockListenNetwork) {
       await this.startLockListen(this.lockListenNetwork, this.lockListenWalletId)
@@ -845,7 +905,8 @@ export class WalletSyncService {
         if (ok) {
           resolve(result)
         } else {
-          log.error(`broadcast rejected ${txid ?? '(unparsed)'}: ${errorMessage}`)
+          if (resend) log.debug(`re-sent ${txid ?? '(unparsed)'} while it waits for a block: ${errorMessage}`)
+          else log.error(`broadcast rejected ${txid ?? '(unparsed)'}: ${errorMessage}`)
           const err = new Error(errorMessage ?? 'broadcastTransaction failed') as Error & {result: BroadcastResult}
           err.result = result
           reject(err)
@@ -893,7 +954,7 @@ export class WalletSyncService {
     for (const p of pending) {
       if (p.instantLocked || !p.isLocal) continue
       const hex = Buffer.from(p.raw).toString('hex')
-      this.broadcastTransaction(hex).catch(() => { /* best-effort re-push */ })
+      this.broadcastTransaction(hex, undefined, true).catch(() => { /* best-effort re-push */ })
     }
     await this.refreshWatchedTxids()
   }
@@ -959,14 +1020,21 @@ export class WalletSyncService {
         }
       }),
     }
-    await this.transactionDAO.recordPendingTx(walletId, applied, true)
+    await this.recordPendingTx(walletId, applied, true)
     this.markWalletDataChanged(walletId)
+  }
+
+  // A broadcast session hands over its lock before the spend is recorded, and a
+  // peer announces an islock once, so a lock already cached is written with the row.
+  private async recordPendingTx(walletId: string, tx: AppliedTx, isLocal: boolean): Promise<void> {
+    await this.transactionDAO.recordPendingTx(walletId, tx, isLocal)
+    if (this.instantLocks.has(tx.txid)) await this.transactionDAO.markInstantLocked(tx.txid)
   }
 
   // A payment the lock pool saw in the mempool. Recorded unconfirmed so the
   // balance moves immediately, then armed so its isdlock marks it final.
   private async recordIncomingTx(walletId: string, tx: AppliedTx): Promise<void> {
-    await this.transactionDAO.recordPendingTx(walletId, tx, false)
+    await this.recordPendingTx(walletId, tx, false)
     this.markWalletDataChanged(walletId)
     const received = tx.outputs.filter(o => o.isMine).reduce((sum, o) => sum + BigInt(o.satoshis), 0n)
     log.info(`incoming tx ${tx.txid} recorded unconfirmed (+${received} duffs)`)

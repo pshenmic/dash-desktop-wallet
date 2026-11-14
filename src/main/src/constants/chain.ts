@@ -1,11 +1,45 @@
+import {VoteOutcome as VoteOutcomeCode} from 'dash-core-sdk'
+import {VoteOutcome} from '../types/Governance'
+import {MasternodeType, RevocationReason} from '../types/Masternode'
+import {Network} from '../types/Network'
+
 export const SEQUENCE_FINAL = 0xffffffff
 
 export const DUFFS_PER_DASH = 100_000_000n
 
 export const DUST_THRESHOLD_DUFFS = 546n
 
-// Regular and Evo masternode collateral.
-export const MASTERNODE_COLLATERAL_DUFFS = [1_000n * DUFFS_PER_DASH, 4_000n * DUFFS_PER_DASH]
+export const MASTERNODE_COLLATERAL_DUFFS: Record<MasternodeType, bigint> = {Regular: 1_000n * DUFFS_PER_DASH, Evo: 4_000n * DUFFS_PER_DASH}
+// nType of a ProTx.
+export const MASTERNODE_TYPE_CODE: Record<MasternodeType, number> = {Regular: 0, Evo: 1}
+// Basic-scheme BLS. Valid before and after v24; v3 (ExtNetInfo) only after it.
+export const PROTX_VERSION = 2
+// 100%, in the hundredths of a percent ProRegTx carries.
+export const MAX_OPERATOR_REWARD = 10_000
+// Core's mainnet ports. A mainnet masternode serves on exactly these; on any
+// other network none of its ports may be the mainnet Core port.
+export const MAINNET_CORE_PORT = 9999
+export const MAINNET_PLATFORM_P2P_PORT = 26656
+export const MAINNET_PLATFORM_HTTP_PORT = 443
+// What CNetAddr::IsRoutable refuses (RFC 1918, 2544, 3927, 5737, 6598, local),
+// as [network, prefix bits], plus the broadcast address IsValid refuses.
+export const NON_ROUTABLE_IPV4: Array<[string, number]> = [
+  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16],
+  ['172.16.0.0', 12], ['192.0.2.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15],
+  ['198.51.100.0', 24], ['203.0.113.0', 24], ['255.255.255.255', 32],
+]
+export const REVOCATION_REASON_CODE: Record<RevocationReason, number> = {notSpecified: 0, termination: 1, compromisedKeys: 2, changeOfKeys: 3}
+
+// The renderer's vote outcomes as Core's codes.
+export const VOTE_OUTCOME_CODE: Record<VoteOutcome, VoteOutcomeCode> = {yes: VoteOutcomeCode.YES, no: VoteOutcomeCode.NO, abstain: VoteOutcomeCode.ABSTAIN}
+export const MASTERNODE_VOTE_WEIGHT: Record<MasternodeType, number> = {Regular: 1, Evo: 4}
+// Core's GOVERNANCE_UPDATE_MIN: a node's next vote on an object within it is dropped.
+export const GOVERNANCE_UPDATE_MIN_SECONDS = 60 * 60
+// Both lists' status for a PoSe-banned node, which Core's wallet refuses to vote with.
+export const POSE_BANNED_STATUS = 'POSE_BANNED'
+// One superblock cycle (nSuperblockCycle × the 2.5-minute target). A proposal
+// that ended before the current cycle began can be paid by no superblock left.
+export const SUPERBLOCK_CYCLE_SECONDS: Record<Network, number> = {mainnet: 16_616 * 150, testnet: 24 * 150}
 
 // Not consensus: a standard transaction may not exceed 100 kB, and at 34 bytes
 // per output this keeps a send well inside what peers relay.

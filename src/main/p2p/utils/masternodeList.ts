@@ -1,4 +1,4 @@
-import {FinalCommitment, MnListDiff, MnType, NetInfoPurpose, NetInfoType} from 'dash-core-p2p'
+import {MnListDiff, MnType, NetInfoPurpose, NetInfoType} from 'dash-core-p2p'
 import type {NetAddress, SimplifiedMNListEntry} from 'dash-core-p2p'
 import {TransactionType, utils as sdkUtils} from 'dash-core-sdk'
 import type {Transaction} from 'dash-core-sdk'
@@ -8,8 +8,7 @@ import {hexToBytes} from '@noble/hashes/utils.js'
 import type {NetworkMasternode} from '../../src/types/Masternode'
 import type {Network} from '../../src/types/Network'
 import type {PayoutUpdate, ProviderRegistration} from '../types/masternodeList'
-import {wireToDisplayHex} from './byteOrder'
-import {hashHeaderRaw} from './pow'
+import {isZeroHash} from './byteOrder'
 
 // Null when the entries do not hash to the merkleRootMNList the coinbase commits to.
 export function evonodeDapiUrls(diff: MnListDiff): string[] | null {
@@ -30,32 +29,13 @@ export function quorumKey({llmqType, quorumHash}: {llmqType: number; quorumHash:
   return `${llmqType}:${quorumHash}`
 }
 
-// The quorum set after applying `diff` to `previous`, or null unless `header`
-// proves the diff's coinbase and that coinbase's merkleRootQuorums covers the set.
-export function committedQuorums(diff: MnListDiff, header: Uint8Array, previous: FinalCommitment[]): FinalCommitment[] | null {
-  const deleted = new Set(diff.deletedQuorums.map(quorumKey))
-  const quorums = [...previous.filter(quorum => !deleted.has(quorumKey(quorum))), ...diff.newQuorums]
-  return MnListDiff.calcMerkleRootQuorums(quorums) === diff.merkleRootQuorums &&
-    diff.calcBlockMerkleRoot() === wireToDisplayHex(header.subarray(36, 68)) ? quorums : null
-}
-
-// A full list (zero base) is trusted only when `header`, the block at its
-// coinbase height on our own chain, proves the coinbase and that coinbase's
-// merkleRootMNList covers every entry.
-export function listCommitted(diff: MnListDiff, header: Uint8Array): boolean {
-  return !/[^0]/.test(diff.baseBlockHash) &&
-    hashHeaderRaw(header) === diff.blockHash &&
-    diff.calcBlockMerkleRoot() === wireToDisplayHex(header.subarray(36, 68)) &&
-    diff.merkleRootMNList === MnListDiff.calcMerkleRootMNList(diff.mnList)
-}
-
 // Null unless `tx` is the ProRegTx of `proTxHash`. A null collateral outpoint
 // names an output of the ProRegTx itself, the only case its address is known.
 export function providerRegistration(tx: Transaction, proTxHash: string, height: number, network: Network): ProviderRegistration | null {
   if (tx.type !== TransactionType.TRANSACTION_PROVIDER_REGISTER || tx.hash() !== proTxHash) return null
   const payload = tx.extraPayload as ProRegTX
   const {txId, vOut} = payload.collateralOutpoint
-  const internal = !/[^0]/.test(txId)
+  const internal = isZeroHash(txId)
   return {
     height,
     isEvo: payload.type === MnType.Evo,
