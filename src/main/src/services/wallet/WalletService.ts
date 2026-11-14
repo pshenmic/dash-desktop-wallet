@@ -445,7 +445,7 @@ export class WalletService {
     const wallet = await requireSelectedWallet(this.walletDAO)
     const provider = this.providers.forWallet(wallet.walletId, network)
 
-    return await provider.getBalance(address)
+    return provider.getBalance(address)
   }
 
   // One transaction pays many addresses: each recipient is another output, which

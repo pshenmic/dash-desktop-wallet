@@ -2,6 +2,7 @@ import {DashPlatformSDK, GRPCConnectionPool} from 'dash-platform-sdk'
 import {ShieldedBuilderWASM} from 'pshenmic-dpp'
 import {Network} from '../src/types/Network'
 import {Logger} from '../src/utils/logger'
+import {resolveDapiUrls} from '../src/utils/dapiUrls'
 
 import {DAPI_POOL_READY, DAPI_REPROBE_MS, NETWORKS} from './constants'
 import {reachableDapiUrls} from './operations/dapi'
@@ -46,7 +47,7 @@ export class SdkRegistry implements SdkSource {
     if (existing != null) return existing
     const own = this.dapi[network]
     const pinned = this.pinnedDapiUrls.get(network)
-    const dapiUrls = this.dapi.mode === 'static' && own.length > 0 ? own : pinned === null ? null : pinned ?? []
+    const dapiUrls = resolveDapiUrls(this.dapi.mode, own, pinned)
     const sdk = new DashPlatformSDK({
       network,
       grpc: {dapiUrl: dapiUrls == null ? undefined : [...dapiUrls]},

@@ -527,7 +527,7 @@ export class HeaderSyncWorker extends Worker {
       const validated = validateHeaders(
         rawHeaders, this.chainTipHeight, this.chainTipHash, this.network, this.difficulty.at,
       )
-      return validated == null ? false : await this.commitHeaders(validated.accepted, from)
+      return validated == null ? false : this.commitHeaders(validated.accepted, from)
     }
 
     // Usually not a competing branch: a second peer announcing the block we just
@@ -549,9 +549,9 @@ export class HeaderSyncWorker extends Worker {
       const validated = validateHeaders(
         rest, this.chainTipHeight, this.chainTipHash, this.network, this.difficulty.at,
       )
-      return validated == null ? false : await this.commitHeaders(validated.accepted, from)
+      return validated == null ? false : this.commitHeaders(validated.accepted, from)
     }
-    return await this.considerFork(rest, height, hash, from)
+    return this.considerFork(rest, height, hash, from)
   }
 
   private async considerFork(rawHeaders: Uint8Array[], forkHeight: number, forkHash: string, from: string): Promise<boolean> {
@@ -574,7 +574,7 @@ export class HeaderSyncWorker extends Worker {
     }
 
     await this.rewindTo(forkHeight, forkHash)
-    return await this.commitHeaders(validated.accepted, from)
+    return this.commitHeaders(validated.accepted, from)
   }
 
   private async rewindTo(forkHeight: number, forkHash: string): Promise<void> {

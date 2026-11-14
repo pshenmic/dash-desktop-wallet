@@ -197,110 +197,142 @@ export class WalletSyncService {
   }
 
   private handleP2PEvent(data: P2PEvent): void {
-    const walletId = 'walletId' in data ? data.walletId
-      : data.type === 'blockApplied' ? data.block.walletId
-      : data.type === 'gapExhausted' ? data.gap.walletId
-      : null
+    const walletId = eventWalletId(data)
     if (walletId != null && this.deletedWalletIds.has(walletId)) return
 
-    if (data.type === 'status') {
-      const previous = this.status
-      const syncedWalletId = data.status.phase === 'synced' && previous.phase !== 'synced'
-        ? data.status.walletId
-        : null
-      this.status = data.status
-      if (data.status.phase !== previous.phase) {
-        log.info(
-          `phase ${previous.phase} -> ${data.status.phase} ` +
-          `(peers=${data.status.peerCount} lockPeers=${data.status.lockPeerCount} tip=${data.status.tipHeight})` +
-          (data.status.lastError != null ? ` lastError: ${data.status.lastError}` : ''),
+    switch (data.type) {
+      case 'status':
+        this.applyStatus(data.status)
+        return
+      case 'blockApplied':
+        this.enqueuePersist(() => this.writeAppliedBlock(data.block))
+        return
+      case 'cursorAdvanced':
+        this.enqueuePersist(() => this.advanceCursorGated(data.walletId, data.height))
+        return
+      case 'cursorReset':
+        this.enqueuePersist(() => this.transactionDAO.resetCursor(data.walletId, data.height))
+        return
+      case 'incomingTx':
+        this.enqueuePersist(() => this.recordIncomingTx(data.walletId, data.tx))
+        return
+      case 'chainRewound':
+        this.reseedAfterRewind(data.walletId, data.height)
+        return
+      case 'gapExhausted':
+        this.holdGap(data.gap)
+        return
+      case 'broadcastResult': {
+        const resolve = this.pendingBroadcasts.get(data.requestId)
+        if (resolve) {
+          this.pendingBroadcasts.delete(data.requestId)
+          resolve({ok: data.ok, result: data.result, errorMessage: data.errorMessage})
+        }
+        return
+      }
+      case 'peers': {
+        const resolve = this.pendingPeerRequests.get(data.requestId)
+        if (resolve) {
+          this.pendingPeerRequests.delete(data.requestId)
+          resolve(data.peers)
+        }
+        return
+      }
+      case 'peerProbe': {
+        const probe = this.pendingProbes.get(data.requestId)
+        if (probe) {
+          this.pendingProbes.delete(data.requestId)
+          probe.resolve(data.result)
+        }
+        return
+      }
+      case 'txInstantLocked':
+        this.recordInstantLock(data.txid, data.islockHex)
+        return
+      case 'chainLocked':
+        this.transactionDAO.markChainlockedUpTo(data.network, data.height).catch(err =>
+          log.error('markChainlockedUpTo failed:', err)
         )
+        this.recordChainLock(data.network, data.height)
+        return
+      case 'evonodeDapiUrls':
+        this.onEvonodeDapiUrls?.(data.network, data.dapiUrls)
+        return
+      case 'platformQuorums':
+        this.onPlatformQuorums?.(data.network, data.keys)
+        return
+      case 'masternodeList':
+        this.masternodeLists.set(data.network, data.masternodes)
+        this.onMasternodeList?.(data.network)
+        return
+      case 'listedMasternodes':
+        this.listedMasternodes.set(data.network, {proTxHashes: new Set(data.proTxHashes), askedAt: data.askedAt, v24Active: data.v24Active})
+        this.onListedMasternodes?.(data.network)
+        return
+      case 'proposals':
+        this.proposals.set(data.network, data.proposals)
+        return
+      case 'proposalVotes':
+        this.proposalVotes.set(`${data.network}:${data.proposalHash}`, data.votes)
+        return
+      case 'voteRelayed': {
+        const relay = this.pendingVoteRelays.get(data.requestId)
+        this.pendingVoteRelays.delete(data.requestId)
+        if (data.errorMessage == null) relay?.resolve({peers: data.peers, accepted: data.accepted})
+        else relay?.reject(new Error(data.errorMessage))
+        return
       }
-      if (data.status.peerMode !== previous.peerMode) {
-        log.info(`peer mode ${previous.peerMode ?? 'none'} -> ${data.status.peerMode ?? 'none'}`)
-      }
-      this.notifyPhase(data.status.phase)
-      if (syncedWalletId != null) {
-        this.enqueuePersist(async () => this.markWalletDataChanged(syncedWalletId))
-      }
-    } else if (data.type === 'blockApplied') {
-      this.enqueuePersist(() => this.writeAppliedBlock(data.block))
-    } else if (data.type === 'cursorAdvanced') {
-      this.enqueuePersist(() => this.advanceCursorGated(data.walletId, data.height))
-    } else if (data.type === 'cursorReset') {
-      this.enqueuePersist(() => this.transactionDAO.resetCursor(data.walletId, data.height))
-    } else if (data.type === 'incomingTx') {
-      this.enqueuePersist(() => this.recordIncomingTx(data.walletId, data.tx))
-    } else if (data.type === 'chainRewound') {
-      // On the persist queue so the orphaned blocks' own writes land before they
-      // are undone. The reseed is also what resumes the worker's held scan.
-      this.enqueuePersist(async () => {
-        await this.transactionDAO.rewindToHeight(data.walletId, data.height)
-        this.markWalletDataChanged(data.walletId)
-        const [utxos, unconfirmedInputOutpoints] = await Promise.all([
-          this.transactionDAO.getUtxos(data.walletId),
-          this.transactionDAO.getUnconfirmedInputOutpoints(data.walletId),
-        ])
-        log.warn(`reorg: un-confirmed everything above h=${data.height}; reseeding ${utxos.length} utxo(s)`)
-        this.send({type: 'reseedUtxos', walletId: data.walletId, utxos, unconfirmedInputOutpoints})
-      })
-    } else if (data.type === 'gapExhausted') {
-      this.gapHeld.add(data.gap.walletId)
-      discovery.info(
-        `scan held at h=${data.gap.height}: ${data.gap.isChange ? 'change' : 'receiving'} ` +
-        `lastUsed=${data.gap.lastUsedIndex} maxIndex=${data.gap.maxIndex} — deriving more addresses`,
-      )
-      // After the queued writes for the blocks that caused this, or discovery
-      // reads a SQL state that does not yet show the usage. Not *on* the queue:
-      // the discovery it triggers enqueues its own cursor write.
-      this.persistQueue.catch(() => undefined).then(() => this.onGapExhausted?.(data.gap))
-    } else if (data.type === 'broadcastResult') {
-      const resolve = this.pendingBroadcasts.get(data.requestId)
-      if (resolve) {
-        this.pendingBroadcasts.delete(data.requestId)
-        resolve({ok: data.ok, result: data.result, errorMessage: data.errorMessage})
-      }
-    } else if (data.type === 'peers') {
-      const resolve = this.pendingPeerRequests.get(data.requestId)
-      if (resolve) {
-        this.pendingPeerRequests.delete(data.requestId)
-        resolve(data.peers)
-      }
-    } else if (data.type === 'peerProbe') {
-      const probe = this.pendingProbes.get(data.requestId)
-      if (probe) {
-        this.pendingProbes.delete(data.requestId)
-        probe.resolve(data.result)
-      }
-    } else if (data.type === 'txInstantLocked') {
-      this.recordInstantLock(data.txid, data.islockHex)
-    } else if (data.type === 'chainLocked') {
-      this.transactionDAO.markChainlockedUpTo(data.network, data.height).catch(err =>
-        log.error('markChainlockedUpTo failed:', err)
-      )
-      this.recordChainLock(data.network, data.height)
-    } else if (data.type === 'evonodeDapiUrls') {
-      this.onEvonodeDapiUrls?.(data.network, data.dapiUrls)
-    } else if (data.type === 'platformQuorums') {
-      this.onPlatformQuorums?.(data.network, data.keys)
-    } else if (data.type === 'masternodeList') {
-      this.masternodeLists.set(data.network, data.masternodes)
-      this.onMasternodeList?.(data.network)
-    } else if (data.type === 'listedMasternodes') {
-      this.listedMasternodes.set(data.network, {proTxHashes: new Set(data.proTxHashes), askedAt: data.askedAt, v24Active: data.v24Active})
-      this.onListedMasternodes?.(data.network)
-    } else if (data.type === 'proposals') {
-      this.proposals.set(data.network, data.proposals)
-    } else if (data.type === 'proposalVotes') {
-      this.proposalVotes.set(`${data.network}:${data.proposalHash}`, data.votes)
-    } else if (data.type === 'voteRelayed') {
-      const relay = this.pendingVoteRelays.get(data.requestId)
-      this.pendingVoteRelays.delete(data.requestId)
-      if (data.errorMessage == null) relay?.resolve({peers: data.peers, accepted: data.accepted})
-      else relay?.reject(new Error(data.errorMessage))
-    } else if (data.type === 'error') {
-      log.error('utility process error:', data.message)
+      case 'error':
+        log.error('utility process error:', data.message)
+        return
     }
+  }
+
+  private applyStatus(status: WalletSyncStatus): void {
+    const previous = this.status
+    const syncedWalletId = status.phase === 'synced' && previous.phase !== 'synced' ? status.walletId : null
+    this.status = status
+    if (status.phase !== previous.phase) {
+      log.info(
+        `phase ${previous.phase} -> ${status.phase} ` +
+        `(peers=${status.peerCount} lockPeers=${status.lockPeerCount} tip=${status.tipHeight})` +
+        (status.lastError != null ? ` lastError: ${status.lastError}` : ''),
+      )
+    }
+    if (status.peerMode !== previous.peerMode) {
+      log.info(`peer mode ${previous.peerMode ?? 'none'} -> ${status.peerMode ?? 'none'}`)
+    }
+    this.notifyPhase(status.phase)
+    if (syncedWalletId != null) {
+      this.enqueuePersist(async () => this.markWalletDataChanged(syncedWalletId))
+    }
+  }
+
+  private reseedAfterRewind(walletId: string, height: number): void {
+    // On the persist queue so the orphaned blocks' own writes land before they
+    // are undone. The reseed is also what resumes the worker's held scan.
+    this.enqueuePersist(async () => {
+      await this.transactionDAO.rewindToHeight(walletId, height)
+      this.markWalletDataChanged(walletId)
+      const [utxos, unconfirmedInputOutpoints] = await Promise.all([
+        this.transactionDAO.getUtxos(walletId),
+        this.transactionDAO.getUnconfirmedInputOutpoints(walletId),
+      ])
+      log.warn(`reorg: un-confirmed everything above h=${height}; reseeding ${utxos.length} utxo(s)`)
+      this.send({type: 'reseedUtxos', walletId, utxos, unconfirmedInputOutpoints})
+    })
+  }
+
+  private holdGap(gap: GapExhausted): void {
+    this.gapHeld.add(gap.walletId)
+    discovery.info(
+      `scan held at h=${gap.height}: ${gap.isChange ? 'change' : 'receiving'} ` +
+      `lastUsed=${gap.lastUsedIndex} maxIndex=${gap.maxIndex} — deriving more addresses`,
+    )
+    // After the queued writes for the blocks that caused this, or discovery
+    // reads a SQL state that does not yet show the usage. Not *on* the queue:
+    // the discovery it triggers enqueues its own cursor write.
+    this.persistQueue.catch(() => undefined).then(() => this.onGapExhausted?.(gap))
   }
 
   // Never starts a child: a level change is not a reason to bring the pools up,
@@ -1033,6 +1065,13 @@ export class WalletSyncService {
     this.activeWalletId = null
     this.status = stoppedSyncStatus()
   }
+}
+
+function eventWalletId(data: P2PEvent): string | null {
+  if ('walletId' in data) return data.walletId
+  if (data.type === 'blockApplied') return data.block.walletId
+  if (data.type === 'gapExhausted') return data.gap.walletId
+  return null
 }
 
 function toWatchAddress(a: Address): WatchAddress {

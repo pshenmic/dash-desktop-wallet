@@ -664,9 +664,49 @@ async function abandonWithinTrx(trx: Knex.Transaction, walletId: string, txid: s
   await trx('transactions').where({wallet_id: walletId, txid}).delete()
 }
 
-// Collapses the cartesian-product join rows into one Transaction per txid.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function txInputRow(r: any): TransactionInput {
+  return {
+    value: ((Number(r.i_prev_satoshis ?? '0')) / 1e8).toFixed(8),
+    n: r.i_vin ?? 0,
+    addr: r.i_prev_address ?? '',
+    prevTxId: r.i_prev_txid ?? '',
+    prevVout: r.i_prev_vout ?? 0,
+    sequence: r.i_sequence ?? 0,
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function txOutputRow(r: any): TransactionOutput {
+  return {
+    value: ((Number(r.o_satoshis ?? '0')) / 1e8).toFixed(8),
+    n: r.o_vout ?? 0,
+    address: r.o_address ?? '',
+    spentTxId: r.o_spent_in_txid ?? '',
+    spentIndex: 0,
+    spentHeight: r.o_spent_at_height ?? 0,
+  }
+}
+
 // Direction, amounts and primary address come from the is_mine column on each
 // output, and on the prev output for inputs.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function txSummary(inputRows: any[], outputRows: any[]) {
+  const inAmount: bigint = inputRows
+    .filter(r => r.i_prev_is_mine === 1)
+    .reduce((sum: bigint, r) => sum + BigInt(r.i_prev_satoshis ?? '0'), 0n)
+  const outAmount: bigint = outputRows
+    .filter(r => r.o_is_mine === 1)
+    .reduce((sum: bigint, r) => sum + BigInt(r.o_satoshis ?? '0'), 0n)
+  const direction = inAmount > outAmount ? -1 : 1
+  const transferAmount = direction === -1 ? inAmount - outAmount : outAmount - inAmount
+  const primaryAddress = direction === -1
+    ? inputRows.find(r => r.i_prev_is_mine === 1)?.i_prev_address ?? ''
+    : outputRows.find(r => r.o_is_mine === 1)?.o_address ?? ''
+  return {inAmount, outAmount, direction, transferAmount, primaryAddress}
+}
+
+// Collapses the cartesian-product join rows into one Transaction per txid.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function shapeRowsToTransactions(rows: any[], walletId: string): Transaction[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -697,48 +737,13 @@ function shapeRowsToTransactions(rows: any[], walletId: string): Transaction[] {
     const inputRows = [...acc.inputs.values()].sort((a, b) => a.i_vin - b.i_vin)
     const outputRows = [...acc.outputs.values()].sort((a, b) => a.o_vout - b.o_vout)
 
-    const ourInputsTotal: bigint = inputRows
-      .filter(r => r.i_prev_is_mine === 1)
-      .reduce((sum: bigint, r) => sum + BigInt(r.i_prev_satoshis ?? '0'), 0n)
-    const ourOutputsTotal: bigint = outputRows
-      .filter(r => r.o_is_mine === 1)
-      .reduce((sum: bigint, r) => sum + BigInt(r.o_satoshis ?? '0'), 0n)
-
-    const direction = ourInputsTotal > ourOutputsTotal ? -1 : 1
-    const transferAmount = direction === -1
-      ? ourInputsTotal - ourOutputsTotal
-      : ourOutputsTotal - ourInputsTotal
-
-    let primaryAddress = ''
-    if (direction === -1) {
-      primaryAddress = inputRows.find(r => r.i_prev_is_mine === 1)?.i_prev_address ?? ''
-    } else {
-      primaryAddress = outputRows.find(r => r.o_is_mine === 1)?.o_address ?? ''
-    }
-
-    const vin: TransactionInput[] = inputRows.map(r => ({
-      value: ((Number(r.i_prev_satoshis ?? '0')) / 1e8).toFixed(8),
-      n: r.i_vin ?? 0,
-      addr: r.i_prev_address ?? '',
-      prevTxId: r.i_prev_txid ?? '',
-      prevVout: r.i_prev_vout ?? 0,
-      sequence: r.i_sequence ?? 0,
-    }))
-
-    const vout: TransactionOutput[] = outputRows.map(r => ({
-      value: ((Number(r.o_satoshis ?? '0')) / 1e8).toFixed(8),
-      n: r.o_vout ?? 0,
-      address: r.o_address ?? '',
-      spentTxId: r.o_spent_in_txid ?? '',
-      spentIndex: 0,
-      spentHeight: r.o_spent_at_height ?? 0,
-    }))
+    const {inAmount, outAmount, direction, transferAmount, primaryAddress} = txSummary(inputRows, outputRows)
 
     out.push({
       address: primaryAddress,
       direction,
-      inAmount: ourInputsTotal,
-      outAmount: ourOutputsTotal,
+      inAmount,
+      outAmount,
       transferAmount,
       // When this wallet saw the tx, for one it did: the block that later
       // carried it is dated by the miner's clock, and moves the row on the list
@@ -750,8 +755,8 @@ function shapeRowsToTransactions(rows: any[], walletId: string): Transaction[] {
       walletId,
       confirmations: 0,
       txid,
-      vin,
-      vout,
+      vin: inputRows.map(txInputRow),
+      vout: outputRows.map(txOutputRow),
       instantLocked: acc.instantLocked,
       chainlocked: acc.chainlocked,
       isLocal: acc.isLocal,
