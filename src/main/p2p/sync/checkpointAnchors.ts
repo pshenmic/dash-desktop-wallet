@@ -1,11 +1,13 @@
 import type {CFCheckptArgs, Peer} from 'dash-core-p2p'
 import {
+  CF_CHECKPOINT_INTERVAL,
   CFCHECKPT_AGREE_PEERS,
   CFCHECKPT_RACE_PEERS,
   CFCHECKPT_RACE_TIMEOUT_MS,
   FILTER_TYPE,
   HASH_LEN,
 } from '../constants'
+import {checkpointAtOrBelow} from '../utils/checkpoint'
 import {doubleSHA256} from '../utils/hash'
 import type {PeerRotation} from '../net/peerRotation'
 import type {CheckpointAnchorsOptions} from '../types/cfilterSync'
@@ -73,7 +75,7 @@ export class CheckpointAnchors {
 
     // Highest checkpoint (a real height that is a multiple of 1000) at or below
     // the scan tip, expressed in our internal numbering.
-    const stopHeight = Math.floor(scanTipHeight / 1000) * 1000
+    const stopHeight = checkpointAtOrBelow(scanTipHeight)
     const stopHashWire = this.stopHashAt(stopHeight)
     if (!stopHashWire) {
       log.warn(`cfcheckpt: no hash for stop h=${stopHeight}, chain too short`)
@@ -133,7 +135,7 @@ export class CheckpointAnchors {
 
     const headers = msg.filterHeaders ?? []
     // The stop hash names exactly one checkpoint per 1000 blocks below it.
-    const expected = this.stopHeight / 1000
+    const expected = this.stopHeight / CF_CHECKPOINT_INTERVAL
     if (headers.length !== expected || headers.some(h => h.length !== HASH_LEN)) {
       log.warn(`cfcheckpt from ${fromPeer.host}: ${headers.length} anchors for h=${this.stopHeight}, expected ${expected} — ignored`)
       return
@@ -172,7 +174,7 @@ export class CheckpointAnchors {
 
     // headers[i] is the filter header at real height (i+1)*1000; key it by the
     // matching internal height.
-    for (let i = 0; i < group.headers.length; i++) this.headers.set((i + 1) * 1000, group.headers[i]!)
+    for (let i = 0; i < group.headers.length; i++) this.headers.set((i + 1) * CF_CHECKPOINT_INTERVAL, group.headers[i]!)
 
     this.onReady(group.headers, [...group.peers][0]!)
   }

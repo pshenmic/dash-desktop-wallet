@@ -21,6 +21,11 @@ function reportFatal(label: string, value: unknown): void {
     // parentPort may already be torn down during shutdown — the log.error above still lands.
   }
 }
+function forwardError(err: unknown): void {
+  const message = err instanceof Error ? err.message : String(err)
+  process.parentPort.postMessage({type: 'error', message})
+}
+
 process.on('uncaughtException', (err) => {
   reportFatal('uncaughtException', err)
 })
@@ -76,22 +81,13 @@ const sync = new SyncService({
 process.parentPort.on('message', ({data}) => {
   switch (data.type) {
     case 'start':
-      sync.start(data).catch(err => {
-        const message = err instanceof Error ? err.message : String(err)
-        process.parentPort.postMessage({type: 'error', message})
-      })
+      sync.start(data).catch(forwardError)
       return
     case 'listen':
-      sync.listen(data).catch(err => {
-        const message = err instanceof Error ? err.message : String(err)
-        process.parentPort.postMessage({type: 'error', message})
-      })
+      sync.listen(data).catch(forwardError)
       return
     case 'stop':
-      sync.stop().catch(err => {
-        const message = err instanceof Error ? err.message : String(err)
-        process.parentPort.postMessage({type: 'error', message})
-      })
+      sync.stop().catch(forwardError)
       return
     case 'addWatchAddresses':
       sync.addWatchAddresses(data)

@@ -1,8 +1,20 @@
+import type {Peer} from 'dash-core-p2p'
 import type {Network} from '../../src/types/Network'
 import type {GovernanceVote, Proposal} from '../../src/types/Governance'
 import type {NetworkMasternode} from '../../src/types/Masternode'
+import type {PoolService} from '../net/PoolService'
 import type {AppliedBlock, AppliedTx, GapExhausted, WalletSyncStatus} from './walletSync'
 import type {BroadcastResult} from './broadcast'
+
+export interface LockWatcherOptions {
+  // Read on every call: the lock pool is rebuilt when network or settings change.
+  pool: () => PoolService | null
+  network: () => Network | null
+  events: Pick<SyncServiceEvents, 'incomingTx' | 'txInstantLocked'>
+  onBlockAnnounced: (peer: Peer, blockHash: string) => void
+  // A sync layer is up to mark txs final, so clsig objects are worth fetching.
+  syncActive: () => boolean
+}
 
 export interface SyncServiceEvents {
   status: (status: WalletSyncStatus) => void

@@ -2,7 +2,7 @@ import {Peer, RejectInfo, TxBroadcast} from 'dash-core-p2p'
 import {Transaction} from 'dash-core-sdk'
 import {BROADCAST_POLICY} from '../constants'
 import {PoolService} from './PoolService'
-import {BroadcastPolicyOverrides, BroadcastResult} from '../types/broadcast'
+import {BroadcastPolicy, BroadcastPolicyOverrides, BroadcastResult} from '../types/broadcast'
 
 // Policy layer over dash-core-p2p's TxBroadcast, which owns the wire protocol
 // (inv, getdata, push, reject/islock watching).
@@ -49,16 +49,7 @@ class BroadcastSession {
   // us stops being able to answer the only question we have.
   private readonly witnesses = new Set<Peer>()
   private readonly startedAt = Date.now()
-  private readonly minPeerAcks: number
-  private readonly peerWaitMs: number
-  private readonly rebroadcastMs: number
-  private readonly witnessPeers: number
-  private readonly maxRebroadcasts: number
-  private readonly unsolicitedAfterMs: number
-  private readonly failOnReject: boolean
-  private readonly waitForIs: boolean
-  private readonly requireIs: boolean
-  private readonly timeoutMs: number
+  private readonly policy: BroadcastPolicy
   private resolve!: (result: BroadcastResult) => void
   private reject!: (err: Error) => void
 
@@ -67,17 +58,8 @@ class BroadcastSession {
     private readonly session: TxBroadcast,
     overrides?: BroadcastPolicyOverrides,
   ) {
-    this.minPeerAcks = BROADCAST_POLICY.minPeerAcks
-    this.peerWaitMs = BROADCAST_POLICY.peerWaitMs
-    this.rebroadcastMs = BROADCAST_POLICY.rebroadcastIntervalMs
-    this.witnessPeers = BROADCAST_POLICY.witnessPeers
-    this.maxRebroadcasts = BROADCAST_POLICY.maxRebroadcasts
-    this.rebroadcastsLeft = BROADCAST_POLICY.maxRebroadcasts
-    this.unsolicitedAfterMs = BROADCAST_POLICY.unsolicitedPushAfterMs
-    this.failOnReject = BROADCAST_POLICY.failOnReject
-    this.waitForIs = overrides?.waitForInstantLock ?? BROADCAST_POLICY.waitForInstantLock
-    this.requireIs = overrides?.requireInstantLock ?? BROADCAST_POLICY.requireInstantLock
-    this.timeoutMs = overrides?.timeoutMs ?? BROADCAST_POLICY.timeoutMs
+    this.policy = {...BROADCAST_POLICY, ...overrides}
+    this.rebroadcastsLeft = this.policy.maxRebroadcasts
   }
 
   run(): Promise<BroadcastResult> {
@@ -93,7 +75,7 @@ class BroadcastSession {
       this.session.on('islock', this.onLock)
       this.session.on('isdlock', this.onLock)
       this.session.on('reject', (info: RejectInfo) => {
-        if (this.failOnReject) {
+        if (this.policy.failOnReject) {
           this.fail(`peer ${peerLabel(info.peer)} rejected tx (ccode=0x${info.ccode.toString(16)}: ${info.reason})`)
         }
       })
@@ -105,19 +87,19 @@ class BroadcastSession {
         this.timers.push(setTimeout(() => {
           if (this.settled) return
           if (this.session.invSentTo.size === 0) {
-            this.fail(`no ready peers within ${this.peerWaitMs}ms`)
+            this.fail(`no ready peers within ${this.policy.peerWaitMs}ms`)
           }
-        }, this.peerWaitMs))
+        }, this.policy.peerWaitMs))
       }
 
-      this.timers.push(setTimeout(() => this.onTimeout(), this.timeoutMs))
+      this.timers.push(setTimeout(() => this.onTimeout(), this.policy.timeoutMs))
 
-      if (this.rebroadcastMs > 0 && this.maxRebroadcasts > 0) {
+      if (this.policy.rebroadcastIntervalMs > 0 && this.policy.maxRebroadcasts > 0) {
         this.intervals.push(setInterval(() => {
           if (this.settled) return
           if (this.rebroadcastsLeft-- <= 0) return
           this.inviteNewPeers()
-        }, this.rebroadcastMs))
+        }, this.policy.rebroadcastIntervalMs))
       }
 
       this.checkDone()
@@ -141,7 +123,7 @@ class BroadcastSession {
       instantLocked: this.session.instantLocked,
       islockHex: this.islockHex,
       lockLatencyMs: this.lockedAt == null ? null : this.lockedAt - this.startedAt,
-      waitedForLock: this.waitForIs || this.requireIs,
+      waitedForLock: this.policy.waitForInstantLock || this.policy.requireInstantLock,
       rejections: this.session.rejections.map(r => ({
         peer: peerLabel(r.peer),
         ccode: r.ccode,
@@ -185,7 +167,7 @@ class BroadcastSession {
 
   private checkDone(): void {
     if (this.settled) return
-    if (this.requireIs) {
+    if (this.policy.requireInstantLock) {
       if (this.session.instantLocked && this.spread()) this.succeed()
       return
     }
@@ -203,7 +185,7 @@ class BroadcastSession {
   }
 
   private armUnsolicited(peer: Peer): void {
-    if (this.unsolicitedAfterMs <= 0) return
+    if (this.policy.unsolicitedPushAfterMs <= 0) return
     if (this.pushTimers.has(peer)) return
     const t = setTimeout(() => {
       this.pushTimers.delete(peer)
@@ -211,7 +193,7 @@ class BroadcastSession {
       if (!this.session.requestedBy.has(peer) && !this.session.txSentTo.has(peer)) {
         this.session.push(peer)
       }
-    }, this.unsolicitedAfterMs)
+    }, this.policy.unsolicitedPushAfterMs)
     this.pushTimers.set(peer, t)
   }
 
@@ -220,7 +202,7 @@ class BroadcastSession {
     const ready = this.session.readyPeers()
     // Never at the cost of carrying the tx — below this the pool is too
     // small to both broadcast and observe, and only a lock can confirm.
-    const spare = Math.min(this.witnessPeers, ready.length - this.minPeerAcks)
+    const spare = Math.min(this.policy.witnessPeers, ready.length - this.policy.minPeerAcks)
     if (spare <= 0) return
     for (const peer of ready.slice(-spare)) this.witnesses.add(peer)
   }
@@ -268,6 +250,6 @@ class BroadcastSession {
       this.fail(`no peer to spare as a propagation witness, and no instant lock arrived (${diagnostics})`)
       return
     }
-    this.fail(`no witness saw the tx enter a mempool within ${this.timeoutMs}ms (${diagnostics})`)
+    this.fail(`no witness saw the tx enter a mempool within ${this.policy.timeoutMs}ms (${diagnostics})`)
   }
 }

@@ -10,10 +10,12 @@ import {formatChainDbError} from '../../store/chainDbError'
 import {validateHeaders} from '../../utils/headerValidation'
 import {PeerRotation} from '../../net/peerRotation'
 import {hashHeaderRaw, headerWork, rawPrevHash} from '../../utils/pow'
+import {BoundedSet} from '../../utils/boundedSet'
 import {Worker} from './Worker'
 import {
   ANNOUNCE_DEDUPE_LIMIT,
   DIFFICULTY_SEED,
+  HEADER_SIZE,
   HEADER_RACE_PEERS,
   HEADER_STALL_CHECK_MS,
   HEADER_STALL_TIMEOUT_MS,
@@ -67,13 +69,13 @@ export class HeaderSyncWorker extends Worker {
   private stopped = false
 
   // Chased announcements, so one block costs one getheaders across all peers.
-  private announcedBlocks = new Set<string>()
+  private announcedBlocks = new BoundedSet<string>(ANNOUNCE_DEDUPE_LIMIT)
   // Tips we have asked from. A batch building on one of these is an answer to a
   // question already settled, not a branch we cannot place.
-  private askedFrom = new Set<string>()
+  private askedFrom = new BoundedSet<string>(LOCATOR_SEEN_LIMIT)
   // Non-tx inv hashes already logged. Every peer announces the same clsig —
   // measured at ~11 copies — and one line each buries the rest of the log.
-  private loggedInv = new Set<string>()
+  private loggedInv = new BoundedSet<string>(ANNOUNCE_DEDUPE_LIMIT)
   // Hosts whose answer anchored where we have never been. Cleared the moment
   // headers land, so these only ever accumulate while the tip cannot move.
   private divergentHosts = new Set<string>()
@@ -175,21 +177,22 @@ export class HeaderSyncWorker extends Worker {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     peer.sendMessage((this.peerPool.messages as any).SendHeaders())
 
-    if (this.phase === 'connecting' || this.phase === 'syncing-headers') {
-      if (this.phase === 'connecting') this.emitStatus('syncing-headers')
-      if (!this.currentRace) {
-        this.startHeaderRace()
-      } else if (this.currentRace.racers.size < HEADER_RACE_PEERS) {
-        this.currentRace.racers.add(peer)
-        peer.sendMessage(this.getHeadersMsg(this.currentRace.locator))
-      }
+    if (this.phase === 'synced') {
+      // A fresh peer arriving while the tip is stale is the pool having replaced
+      // peers that died with the link, and no stall check is due for minutes yet.
+      if (Date.now() - this.lastHeaderAt > HEADER_STALL_CHECK_MS) this.requestTipHeaders([peer])
       return
     }
+    if (this.phase !== 'connecting' && this.phase !== 'syncing-headers') return
 
-    // A fresh peer arriving while the tip is stale is the pool having replaced
-    // peers that died with the link, and no stall check is due for minutes yet.
-    if (this.phase === 'synced' && Date.now() - this.lastHeaderAt > HEADER_STALL_CHECK_MS) {
-      this.requestTipHeaders([peer])
+    if (this.phase === 'connecting') this.emitStatus('syncing-headers')
+    if (!this.currentRace) {
+      this.startHeaderRace()
+      return
+    }
+    if (this.currentRace.racers.size < HEADER_RACE_PEERS) {
+      this.currentRace.racers.add(peer)
+      peer.sendMessage(this.getHeadersMsg(this.currentRace.locator))
     }
   }
 
@@ -209,7 +212,6 @@ export class HeaderSyncWorker extends Worker {
       .map(i => `${typeName(i.type)}:${wireToDisplayHex(i.hash!)}`)
       .filter(entry => !this.loggedInv.has(entry))
     if (fresh.length === 0) return
-    if (this.loggedInv.size >= ANNOUNCE_DEDUPE_LIMIT) this.loggedInv.clear()
     for (const entry of fresh) this.loggedInv.add(entry)
     const summary = Object.entries(counts).map(([t, n]) => `${typeName(Number(t))}=${n}`).join(' ')
     log.debug(`peerinv from ${peer.host} ${summary || '(empty)'} [${fresh.join(' ')}]`)
@@ -226,7 +228,6 @@ export class HeaderSyncWorker extends Worker {
       const hash = wireToDisplayHex(item.hash)
       // Already ours, or already chased by another peer's announcement.
       if (this.window.has(hash) || this.announcedBlocks.has(hash)) continue
-      if (this.announcedBlocks.size >= ANNOUNCE_DEDUPE_LIMIT) this.announcedBlocks.clear()
       this.announcedBlocks.add(hash)
       chase = true
     }
@@ -238,14 +239,9 @@ export class HeaderSyncWorker extends Worker {
 
   private requestTipHeaders(peers: Peer[]): void {
     if (peers.length === 0) return
-    this.rememberAsked()
+    this.askedFrom.add(this.chainTipHash)
     const msg = this.getHeadersMsg(this.buildLocator())
     for (const peer of peers) peer.sendMessage(msg)
-  }
-
-  private rememberAsked(): void {
-    if (this.askedFrom.size >= LOCATOR_SEEN_LIMIT) this.askedFrom.clear()
-    this.askedFrom.add(this.chainTipHash)
   }
 
   // Backstop for the inv path: a peer set sending neither headers nor
@@ -272,7 +268,7 @@ export class HeaderSyncWorker extends Worker {
     if (this.phase !== 'syncing-headers') {
       // Tip-following: post-sync, accept unsolicited extensions and the
       // competing branches processHeaders resolves against our own.
-      if (rawHeaders.length === 0 || rawHeaders[0]!.length < 80) return
+      if (rawHeaders.length === 0 || rawHeaders[0]!.length < HEADER_SIZE) return
       this.processHeaders(rawHeaders, peer.host).catch(err => {
         log.error('processHeaders (tip-follow) failed:', err)
         this.reportError(formatChainDbError(err), false)
@@ -283,7 +279,7 @@ export class HeaderSyncWorker extends Worker {
     const race = this.currentRace
     if (!race || !race.racers.has(peer)) return
 
-    const prev = rawHeaders.length > 0 && rawHeaders[0]!.length >= 80
+    const prev = rawHeaders.length > 0 && rawHeaders[0]!.length >= HEADER_SIZE
       ? rawPrevHash(rawHeaders[0]!)
       : null
 
@@ -302,7 +298,7 @@ export class HeaderSyncWorker extends Worker {
     // the same question.
     race.racers.delete(peer)
 
-    if (rawHeaders.length > 0 && rawHeaders[0]!.length < 80) {
+    if (rawHeaders.length > 0 && rawHeaders[0]!.length < HEADER_SIZE) {
       this.restartIfExhausted(race)
       return
     }
@@ -373,7 +369,7 @@ export class HeaderSyncWorker extends Worker {
     const picks = this.rotation.pick(HEADER_RACE_PEERS)
     if (picks.length === 0) return
 
-    this.rememberAsked()
+    this.askedFrom.add(this.chainTipHash)
     const locator = this.buildLocator()
     const race: HeaderRace = {
       locator, expectedPrev: this.chainTipHash, racers: new Set(picks), zeroResponses: 0, timer: null,
