@@ -32,112 +32,14 @@ export class TransactionDAO {
     }
 
     await this.knex.transaction(async trx => {
-      const txRows = block.txs.map(t => ({
-        wallet_id: block.walletId,
-        txid: t.txid,
-        block_height: block.height,
-        block_hash: block.blockHash,
-        block_time: block.blockTime,
-        raw: Buffer.from(t.raw.buffer, t.raw.byteOffset, t.raw.byteLength),
-      }))
-      // merge (not ignore) so a tx we recorded optimistically at broadcast
-      // (block_height = 0) gets its real height/hash/time when its block is
-      // finally scanned.
-      for (const rows of chunk(txRows, INSERT_CHUNK_SIZE)) {
-        await trx('transactions')
-          .insert(rows)
-          .onConflict(['wallet_id', 'txid'])
-          .merge(['block_height', 'block_hash', 'block_time', 'raw'])
-      }
-
-      const outputRows = block.txs.flatMap(t =>
-        t.outputs.map(o => ({
-          wallet_id: block.walletId,
-          txid: t.txid,
-          vout: o.vout,
-          address: o.address,
-          satoshis: o.satoshis,
-          is_mine: o.isMine,
-        }))
-      )
-      for (const rows of chunk(outputRows, INSERT_CHUNK_SIZE)) {
-        await trx('transaction_outputs')
-          .insert(rows)
-          .onConflict(['wallet_id', 'txid', 'vout'])
-          .ignore()
-      }
-
-      const inputRows = block.txs.flatMap(t =>
-        t.inputs.map(i => ({
-          wallet_id: block.walletId,
-          txid: t.txid,
-          vin: i.vin,
-          prev_txid: i.prevTxid,
-          prev_vout: i.prevVout,
-          sequence: i.sequence,
-        }))
-      )
-      for (const rows of chunk(inputRows, INSERT_CHUNK_SIZE)) {
-        await trx('transaction_inputs')
-          .insert(rows)
-          .onConflict(['wallet_id', 'txid', 'vin'])
-          .ignore()
-      }
-
-      // The send-side address is read right before flipping spent_in_txid, to
-      // avoid re-issuing the lookup afterwards.
-      const usedAddresses = new Set<string>()
-      for (const o of block.txs.flatMap(tx => tx.outputs)) {
-        if (o.isMine && o.address) usedAddresses.add(o.address)
-      }
-      // Outpoints whose optimistic (pre-confirmation) spender lost to a
-      // different on-chain spender — those local txs can never confirm.
-      const conflicted = new Set<string>()
-      for (const s of block.spends) {
-        const row = await trx('transaction_outputs')
-          .select('address', 'spent_in_txid')
-          .where({wallet_id: block.walletId, txid: s.prevTxid, vout: s.prevVout})
-          .first()
-        if (row?.address) usedAddresses.add(row.address as string)
-        const prevSpender = row?.spent_in_txid as string | null | undefined
-        if (prevSpender && prevSpender !== s.spentInTxid) conflicted.add(prevSpender)
-        await trx('transaction_outputs')
-          .where({wallet_id: block.walletId, txid: s.prevTxid, vout: s.prevVout})
-          .update({spent_in_txid: s.spentInTxid, spent_at_height: block.height})
-      }
-
-      // Pinned here because after a restart the cfilter scan cannot re-detect
-      // these spends — their inputs were excluded from the seed.
-      for (const tx of block.txs) {
-        await trx('transaction_outputs')
-          .where({wallet_id: block.walletId, spent_in_txid: tx.txid})
-          .whereNull('spent_at_height')
-          .update({spent_at_height: block.height})
-      }
-
-      // Drop local txs displaced by a conflicting on-chain spend.
-      for (const txid of conflicted) {
-        await abandonWithinTrx(trx, block.walletId, txid)
-      }
-      if (usedAddresses.size > 0) {
-        const updated = await trx('addresses')
-          .where('wallet_id', block.walletId)
-          .whereIn('address', [...usedAddresses])
-          .andWhere('is_used', false)
-          .update({is_used: true})
-        log.info(`marked ${updated} address(es) used at h=${block.height} (${usedAddresses.size} candidate(s))`)
-      }
-
-      if (advanceCursor) {
-        await trx('wallet_sync_state')
-          .insert({wallet_id: block.walletId, cfilter_cursor_height: block.height})
-          .onConflict('wallet_id')
-          .merge({
-            cfilter_cursor_height: trx.raw(
-              'MAX(wallet_sync_state.cfilter_cursor_height, excluded.cfilter_cursor_height)'
-            ),
-          })
-      }
+      await insertBlockTxs(trx, block)
+      await insertBlockOutputs(trx, block)
+      await insertBlockInputs(trx, block)
+      const {usedAddresses, conflicted} = await markBlockSpends(trx, block)
+      await pinSpendHeights(trx, block)
+      await abandonConflicted(trx, block.walletId, conflicted)
+      await markAddressesUsed(trx, block, usedAddresses)
+      if (advanceCursor) await advanceBlockCursor(trx, block)
     })
   }
 
@@ -648,6 +550,132 @@ export class TransactionDAO {
 
     return shapeRowsToTransactions(rows, walletId)[0]
   }
+}
+
+// Chunked upsert for the three block row inserts: merge refreshes the named
+// columns on conflict, ignore leaves an existing row alone.
+async function insertChunked(
+  trx: Knex.Transaction,
+  table: string,
+  rows: object[],
+  conflict: string[],
+  merge?: string[],
+): Promise<void> {
+  for (const slice of chunk(rows, INSERT_CHUNK_SIZE)) {
+    const query = trx(table).insert(slice).onConflict(conflict)
+    await (merge ? query.merge(merge) : query.ignore())
+  }
+}
+
+// merge (not ignore) so a tx we recorded optimistically at broadcast
+// (block_height = 0) gets its real height/hash/time when its block is
+// finally scanned.
+async function insertBlockTxs(trx: Knex.Transaction, block: AppliedBlock): Promise<void> {
+  const txRows = block.txs.map(t => ({
+    wallet_id: block.walletId,
+    txid: t.txid,
+    block_height: block.height,
+    block_hash: block.blockHash,
+    block_time: block.blockTime,
+    raw: Buffer.from(t.raw.buffer, t.raw.byteOffset, t.raw.byteLength),
+  }))
+  await insertChunked(trx, 'transactions', txRows, ['wallet_id', 'txid'], ['block_height', 'block_hash', 'block_time', 'raw'])
+}
+
+async function insertBlockOutputs(trx: Knex.Transaction, block: AppliedBlock): Promise<void> {
+  const outputRows = block.txs.flatMap(t =>
+    t.outputs.map(o => ({
+      wallet_id: block.walletId,
+      txid: t.txid,
+      vout: o.vout,
+      address: o.address,
+      satoshis: o.satoshis,
+      is_mine: o.isMine,
+    }))
+  )
+  await insertChunked(trx, 'transaction_outputs', outputRows, ['wallet_id', 'txid', 'vout'])
+}
+
+async function insertBlockInputs(trx: Knex.Transaction, block: AppliedBlock): Promise<void> {
+  const inputRows = block.txs.flatMap(t =>
+    t.inputs.map(i => ({
+      wallet_id: block.walletId,
+      txid: t.txid,
+      vin: i.vin,
+      prev_txid: i.prevTxid,
+      prev_vout: i.prevVout,
+      sequence: i.sequence,
+    }))
+  )
+  await insertChunked(trx, 'transaction_inputs', inputRows, ['wallet_id', 'txid', 'vin'])
+}
+
+// The send-side address is read right before flipping spent_in_txid, to avoid
+// re-issuing the lookup afterwards. Returns the addresses to mark used and the
+// optimistic spenders a conflicting on-chain spend displaced.
+async function markBlockSpends(
+  trx: Knex.Transaction,
+  block: AppliedBlock,
+): Promise<{usedAddresses: Set<string>; conflicted: Set<string>}> {
+  const usedAddresses = new Set<string>()
+  for (const o of block.txs.flatMap(tx => tx.outputs)) {
+    if (o.isMine && o.address) usedAddresses.add(o.address)
+  }
+  // Outpoints whose optimistic (pre-confirmation) spender lost to a
+  // different on-chain spender — those local txs can never confirm.
+  const conflicted = new Set<string>()
+  for (const s of block.spends) {
+    const row = await trx('transaction_outputs')
+      .select('address', 'spent_in_txid')
+      .where({wallet_id: block.walletId, txid: s.prevTxid, vout: s.prevVout})
+      .first()
+    if (row?.address) usedAddresses.add(row.address as string)
+    const prevSpender = row?.spent_in_txid as string | null | undefined
+    if (prevSpender && prevSpender !== s.spentInTxid) conflicted.add(prevSpender)
+    await trx('transaction_outputs')
+      .where({wallet_id: block.walletId, txid: s.prevTxid, vout: s.prevVout})
+      .update({spent_in_txid: s.spentInTxid, spent_at_height: block.height})
+  }
+  return {usedAddresses, conflicted}
+}
+
+// Pinned here because after a restart the cfilter scan cannot re-detect these
+// spends — their inputs were excluded from the seed.
+async function pinSpendHeights(trx: Knex.Transaction, block: AppliedBlock): Promise<void> {
+  for (const tx of block.txs) {
+    await trx('transaction_outputs')
+      .where({wallet_id: block.walletId, spent_in_txid: tx.txid})
+      .whereNull('spent_at_height')
+      .update({spent_at_height: block.height})
+  }
+}
+
+// Drop local txs displaced by a conflicting on-chain spend.
+async function abandonConflicted(trx: Knex.Transaction, walletId: string, conflicted: Set<string>): Promise<void> {
+  for (const txid of conflicted) {
+    await abandonWithinTrx(trx, walletId, txid)
+  }
+}
+
+async function markAddressesUsed(trx: Knex.Transaction, block: AppliedBlock, usedAddresses: Set<string>): Promise<void> {
+  if (usedAddresses.size === 0) return
+  const updated = await trx('addresses')
+    .where('wallet_id', block.walletId)
+    .whereIn('address', [...usedAddresses])
+    .andWhere('is_used', false)
+    .update({is_used: true})
+  log.info(`marked ${updated} address(es) used at h=${block.height} (${usedAddresses.size} candidate(s))`)
+}
+
+async function advanceBlockCursor(trx: Knex.Transaction, block: AppliedBlock): Promise<void> {
+  await trx('wallet_sync_state')
+    .insert({wallet_id: block.walletId, cfilter_cursor_height: block.height})
+    .onConflict('wallet_id')
+    .merge({
+      cfilter_cursor_height: trx.raw(
+        'MAX(wallet_sync_state.cfilter_cursor_height, excluded.cfilter_cursor_height)'
+      ),
+    })
 }
 
 // Frees only inputs held pending, never a confirmed spend, then deletes the

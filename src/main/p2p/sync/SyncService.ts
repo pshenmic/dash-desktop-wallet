@@ -375,20 +375,8 @@ export class SyncService {
       lastError: null,
     })
 
-    // Single-owner LevelDB lock.
-    this.chainStore = new ChainStore(cmd.chainDbPath, cmd.network)
-    let persisted: ChainTipState
-    try {
-      persisted = await this.openWithRetry(this.chainStore)
-    } catch (err) {
-      const code = (err as { code?: string }).code ?? 'unknown'
-      const labelled = `chain.db unusable (${code}): ${describeChainDbError(err)}. Call resetWalletSync to recover.`
-      await this.chainStore.close().catch(() => { /* ignore */ })
-      this.chainStore = null
-      this.emit({phase: 'stopped', lastError: labelled})
-      this.events.error(labelled)
-      return
-    }
+    const persisted = await this.openChainStore(cmd)
+    if (persisted == null) return
 
     this.governance.open().catch(err => log.warn('governance load failed:', err))
 
@@ -403,6 +391,27 @@ export class SyncService {
     }
     log.info(`starting sync from height=${resumeHeight} hash=${resumeHash} watchAddresses=${this.activeWatchAddresses.length} birthday=${this.activeBirthdayHeight} seedUtxos=${this.activeSeedUtxos.length} unconfirmedInputs=${this.activeUnconfirmedInputOutpoints.length} cursor=${this.activeCFilterCursor ?? 'null'}`)
 
+    if (!this.selectSyncPool(cmd)) return
+    await this.wireHeaderWorker(this.chainStore!, this.syncPool!, resumeHeight, resumeHash)
+  }
+
+  // Single-owner LevelDB lock. Null when chain.db is unusable; the caller stops.
+  private async openChainStore(cmd: P2PStartMessage): Promise<ChainTipState | null> {
+    this.chainStore = new ChainStore(cmd.chainDbPath, cmd.network)
+    try {
+      return await this.openWithRetry(this.chainStore)
+    } catch (err) {
+      const code = (err as { code?: string }).code ?? 'unknown'
+      const labelled = `chain.db unusable (${code}): ${describeChainDbError(err)}. Call resetWalletSync to recover.`
+      await this.chainStore.close().catch(() => { /* ignore */ })
+      this.chainStore = null
+      this.emit({phase: 'stopped', lastError: labelled})
+      this.events.error(labelled)
+      return null
+    }
+  }
+
+  private selectSyncPool(cmd: P2PStartMessage): boolean {
     if (this.pinnedOnly) {
       // One pool, both jobs: a second pool dialling the same pinned hosts would
       // drop both connections to every one of them.
@@ -430,14 +439,17 @@ export class SyncService {
       const message = 'peer pool failed to start'
       this.emit({phase: 'stopped', lastError: message})
       this.events.error(message)
-      return
+      return false
     }
+    return true
+  }
 
-    // CFilterSyncWorker boots lazily once header sync reports 'synced', so the
-    // two never compete for chain.db state mid-sync.
+  // CFilterSyncWorker boots lazily once header sync reports 'synced', so the
+  // two never compete for chain.db state mid-sync.
+  private async wireHeaderWorker(chainStore: ChainStore, syncPool: PoolService, resumeHeight: number, resumeHash: string): Promise<void> {
     this.headerSyncWorker = new HeaderSyncWorker({
-      chainStore: this.chainStore,
-      peerPool: this.syncPool,
+      chainStore,
+      peerPool: syncPool,
       initialTipHeight: resumeHeight,
       initialTipHash: resumeHash,
       chainLock: this.chainLock,

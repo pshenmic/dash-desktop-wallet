@@ -222,30 +222,15 @@ export class WalletSyncService {
       case 'gapExhausted':
         this.holdGap(data.gap)
         return
-      case 'broadcastResult': {
-        const resolve = this.pendingBroadcasts.get(data.requestId)
-        if (resolve) {
-          this.pendingBroadcasts.delete(data.requestId)
-          resolve({ok: data.ok, result: data.result, errorMessage: data.errorMessage})
-        }
+      case 'broadcastResult':
+        takePending(this.pendingBroadcasts, data.requestId)?.({ok: data.ok, result: data.result, errorMessage: data.errorMessage})
         return
-      }
-      case 'peers': {
-        const resolve = this.pendingPeerRequests.get(data.requestId)
-        if (resolve) {
-          this.pendingPeerRequests.delete(data.requestId)
-          resolve(data.peers)
-        }
+      case 'peers':
+        takePending(this.pendingPeerRequests, data.requestId)?.(data.peers)
         return
-      }
-      case 'peerProbe': {
-        const probe = this.pendingProbes.get(data.requestId)
-        if (probe) {
-          this.pendingProbes.delete(data.requestId)
-          probe.resolve(data.result)
-        }
+      case 'peerProbe':
+        takePending(this.pendingProbes, data.requestId)?.resolve(data.result)
         return
-      }
       case 'txInstantLocked':
         this.recordInstantLock(data.txid, data.islockHex)
         return
@@ -276,8 +261,7 @@ export class WalletSyncService {
         this.proposalVotes.set(`${data.network}:${data.proposalHash}`, data.votes)
         return
       case 'voteRelayed': {
-        const relay = this.pendingVoteRelays.get(data.requestId)
-        this.pendingVoteRelays.delete(data.requestId)
+        const relay = takePending(this.pendingVoteRelays, data.requestId)
         if (data.errorMessage == null) relay?.resolve({peers: data.peers, accepted: data.accepted})
         else relay?.reject(new Error(data.errorMessage))
         return
@@ -744,12 +728,7 @@ export class WalletSyncService {
         if (done) return
         done = true
         clearTimeout(timer)
-        const arr = this.instantLockWaiters.get(txid)
-        if (arr) {
-          const i = arr.indexOf(onLock)
-          if (i >= 0) arr.splice(i, 1)
-          if (arr.length === 0) this.instantLockWaiters.delete(txid)
-        }
+        this.removeInstantLockWaiter(txid, onLock)
         resolve(hex)
       }
       const onLock = (hex: string): void => finish(hex)
@@ -763,6 +742,14 @@ export class WalletSyncService {
       arr.push(onLock)
       this.instantLockWaiters.set(txid, arr)
     })
+  }
+
+  private removeInstantLockWaiter(txid: string, onLock: (hex: string) => void): void {
+    const waiters = this.instantLockWaiters.get(txid)
+    if (waiters == null) return
+    const i = waiters.indexOf(onLock)
+    if (i >= 0) waiters.splice(i, 1)
+    if (waiters.length === 0) this.instantLockWaiters.delete(txid)
   }
 
   hasInstantLock = (txid: string): boolean => this.instantLocks.has(txid)
@@ -1065,6 +1052,12 @@ export class WalletSyncService {
     this.activeWalletId = null
     this.status = stoppedSyncStatus()
   }
+}
+
+function takePending<T>(pending: Map<string, T>, requestId: string): T | undefined {
+  const resolve = pending.get(requestId)
+  if (resolve !== undefined) pending.delete(requestId)
+  return resolve
 }
 
 function eventWalletId(data: P2PEvent): string | null {

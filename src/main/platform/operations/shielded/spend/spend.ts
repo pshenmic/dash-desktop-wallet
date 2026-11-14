@@ -19,6 +19,26 @@ import {waitForResult} from './waitForResult'
 type Payload = PlatformOperations['spend']['payload']
 type Result = PlatformOperations['spend']['result']
 
+function allowedRecipientCount(kind: Payload['kind']): number {
+  switch (kind) {
+    case 'shieldedTransfer':
+      return MAX_SPEND_RECIPIENTS
+    case 'identityCreateFromShielded':
+      return 0
+    case 'unshield':
+    case 'shieldedWithdrawal':
+      return 1
+  }
+}
+
+async function withNetworkError<T>(fn: () => Promise<T>, stHash: string): Promise<T> {
+  try {
+    return await fn()
+  } catch (e) {
+    throw new OperationError(consensusMessage(e), 'network', stHash)
+  }
+}
+
 export async function spend(payload: Payload, ctx: OperationContext): Promise<Result> {
   const {sdk, network, signal} = ctx
   const {seed, kind, notes: all, recipients} = payload
@@ -29,9 +49,7 @@ export async function spend(payload: Payload, ctx: OperationContext): Promise<Re
   // Only a transfer fans out; the two payouts name exactly one address and an
   // identity create names none, so the count is decided by the kind rather than
   // bounded from above. Every builder below indexes what this admits.
-  const allowedRecipients = kind === 'shieldedTransfer' ? MAX_SPEND_RECIPIENTS
-    : kind === 'identityCreateFromShielded' ? 0
-    : 1
+  const allowedRecipients = allowedRecipientCount(kind)
   if (recipients.length > allowedRecipients || recipients.length < Math.min(allowedRecipients, 1)) {
     throw new OperationError(
       `${kind} takes ${allowedRecipients} recipients at most, and was given ${recipients.length}`,
@@ -94,18 +112,10 @@ export async function spend(payload: Payload, ctx: OperationContext): Promise<Re
     : null
 
   ctx.progress('broadcasting', all.length, all.length)
-  try {
-    await sdk.stateTransitions.broadcast(stateTransition)
-  } catch (e) {
-    throw new OperationError(consensusMessage(e), 'network', stHash)
-  }
+  await withNetworkError(() => sdk.stateTransitions.broadcast(stateTransition), stHash)
 
   ctx.progress('awaitingResult', all.length, all.length)
-  try {
-    await waitForResult(sdk, stateTransition, kind)
-  } catch (e) {
-    throw new OperationError(consensusMessage(e), 'network', stHash)
-  }
+  await withNetworkError(() => waitForResult(sdk, stateTransition, kind), stHash)
 
   ctx.notesSpent(toSpend.map(poolIndex))
 

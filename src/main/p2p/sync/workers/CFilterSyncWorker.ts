@@ -406,33 +406,37 @@ export class CFilterSyncWorker extends Worker {
     } else {
       // One-time cost on chain.db predating the n: keyspace.
       log.info(`no hash cache (${cachedCount}/${expected}); hashing + backfilling`)
-      const headers = await this.chainStore.iterateHeadersInRange(from, to)
-      let processed = 0
-      let backfill: Array<{height: number; wire: Uint8Array}> = []
-      for (const {height, raw} of headers) {
-        if (!this.blockHashIndex.has(height)) {
-          const wire = x11Wire(raw)
-          this.setHashIndex(height, wire)
-          backfill.push({height, wire})
-        }
-        processed++
-        if (processed % 50_000 === 0) {
-          log.debug(`chain index ${processed}/${headers.length}`)
-          if (backfill.length > 0) {
-            await this.chainStore.writeBackfillHashes(backfill)
-            backfill = []
-          }
-          await new Promise(resolve => setImmediate(resolve))
-        }
-      }
-      if (backfill.length > 0) await this.chainStore.writeBackfillHashes(backfill)
-      log.info(`chain index built (${processed} entries, hashes cached)`)
+      await this.backfillHashIndex(from, to)
     }
 
     // Tip not in chain.db (HeaderSync starts WITH it, persists only after).
     if (!this.blockHashIndex.has(this.chainTipHeight)) {
       this.setHashIndex(this.chainTipHeight, this.chainTipWire)
     }
+  }
+
+  private async backfillHashIndex(from: number, to: number): Promise<void> {
+    const headers = await this.chainStore.iterateHeadersInRange(from, to)
+    let processed = 0
+    let backfill: Array<{height: number; wire: Uint8Array}> = []
+    for (const {height, raw} of headers) {
+      if (!this.blockHashIndex.has(height)) {
+        const wire = x11Wire(raw)
+        this.setHashIndex(height, wire)
+        backfill.push({height, wire})
+      }
+      processed++
+      if (processed % 50_000 === 0) {
+        log.debug(`chain index ${processed}/${headers.length}`)
+        if (backfill.length > 0) {
+          await this.chainStore.writeBackfillHashes(backfill)
+          backfill = []
+        }
+        await new Promise(resolve => setImmediate(resolve))
+      }
+    }
+    if (backfill.length > 0) await this.chainStore.writeBackfillHashes(backfill)
+    log.info(`chain index built (${processed} entries, hashes cached)`)
   }
 
   // ── peer event handlers ───────────────────────────────────────────────────

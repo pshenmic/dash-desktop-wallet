@@ -19,6 +19,8 @@ import {
   AssetLockFeeOperation,
   FeeOperation,
   FeeParams,
+  IdentityFeeOperation,
+  PoolSpendOperation,
   SelectionFeeOperation,
   TransitionFeeOperation,
   UnsignedTransition,
@@ -213,176 +215,188 @@ export class FeeService {
     const feeParams = previewFeeParams(params)
 
     switch (operation) {
-      case 'coreSend': {
-        requireAutomaticInputs(params.platformSource)
-        const recipients = coreRecipients(params.recipients)
-        const amountDuffs = requireCoreRecipients(recipients)
-        if (params.changeTo != null) this.core.requireChangeAddress(params.changeTo, wallet.network)
-        // Which script an output takes is decided by the network the send runs
-        // on, and deciding it is what refuses an address that is neither kind.
-        const outputs: TransferOutput[] = recipients.map(recipient => ({
-          ...recipient,
-          recipientType: this.core.classifyAddress(recipient.address, wallet.network),
-        }))
-
-        const {selection, utxos} = await this.corePlan(
-          wallet, params.coreSource ?? undefined, amountDuffs, outputs.length, 0, params.changeTo ?? undefined)
-        const {change, feeDuffs} = coreChangeAndFee(selection, amountDuffs)
-        const unsigned = this.core.buildTransfer({
-          inputs: selection.transferInputs,
-          outputs,
-          changeAddress: selection.changeAddress,
-          inputTotal: selection.inputTotal,
-          feeDuffs: selection.feeDuffs,
-        })
-
-        return {
-          inputs: coreInputEntries(selection.transferInputs, utxos),
-          outputs: [...recipientEntries(params.recipients, 'duffs'), ...change],
-          feeDuffs,
-          feeCredits: null,
-          unsignedHex: unsigned.hex(),
-        }
-      }
-
-      // Two transactions, and the credit output is the coin whose key signs the
-      // proof the L2 half spends.
+      case 'coreSend':
+        return this.previewCoreSend(wallet, params)
       case 'assetLockFunding':
       case 'assetLockShield':
       case 'identityRegister':
-      case 'identityTopUpL1': {
-        requireAutomaticInputs(params.platformSource)
-        const amountDuffs = recipientTotal(params.recipients)
-        // The credits the lock will create, which is what the funding prices
-        // itself against — an L1 form carries no amount in credits.
-        const arriving = {...feeParams, amountCredits: amountDuffs * CREDITS_PER_DUFF}
-        const feeCredits = await this.protocolFee(wallet, operation, arriving, 1)
-        const feeOnTop = locksFeeOnTop(operation)
-        if (!feeOnTop) requireAboveFee(amountDuffs, feeCredits)
-        const lockDuffs = feeOnTop ? lockedDuffsFor(amountDuffs, feeCredits) : amountDuffs
-        // No change address of its own: a lock is funded through AssetLockService,
-        // which never takes one.
-        const {selection, utxos, grouped} =
-          await this.corePlan(wallet, params.coreSource ?? undefined, lockDuffs, 1, ASSET_LOCK_PAYLOAD_BYTES)
-        const {change, feeDuffs} = coreChangeAndFee(selection, lockDuffs)
-        const creditAddress = pickCreditChangeAddress(grouped, selection.changeAddress).address
-        const unsigned = this.core.buildAssetLock({
-          inputs: selection.transferInputs,
-          amountDuffs: lockDuffs,
-          creditAddress,
-          changeAddress: selection.changeAddress,
-          inputTotal: selection.inputTotal,
-          feeDuffs: selection.feeDuffs,
-        })
-
-        return {
-          inputs: coreInputEntries(selection.transferInputs, utxos),
-          outputs: [
-            ...recipientEntries(params.recipients, 'duffs'),
-            previewEntry('credit', creditAddress, lockDuffs, 'duffs'),
-            ...change,
-          ],
-          feeDuffs,
-          feeCredits,
-          unsignedHex: unsigned.hex(),
-        }
-      }
-
+      case 'identityTopUpL1':
+        return this.previewAssetLock(wallet, operation, params, feeParams)
       case 'shieldedTransfer':
       case 'unshield':
       case 'shieldedWithdrawal':
-      case 'identityCreateFromShielded': {
-        requireAutomaticSelection(params.coreSource)
-        requireAutomaticInputs(params.platformSource)
-        const plan = await this.shielded.planSpend(
-          walletId, operation, params.amountCredits, params.shieldedSource ?? null, params.recipients.length)
-
-        // A create is funded by the denomination itself: the fee comes out of
-        // what the identity is left with, rather than out of the pool beside it.
-        const creates = operation === 'identityCreateFromShielded'
-        const payouts = creates
-          ? [previewEntry('recipient', '', params.amountCredits - plan.feeCredits, 'credits')]
-          : recipientEntries(params.recipients, 'credits')
-        const changeCredits = plan.totalCredits - params.amountCredits - (creates ? 0n : plan.feeCredits)
-
-        return {
-          inputs: shieldedInputEntries(plan),
-          outputs: [...payouts, ...shieldedChangeEntries(changeCredits)],
-          feeDuffs: null,
-          feeCredits: plan.feeCredits,
-          unsignedHex: null,
-        }
-      }
-
-      // Credits are divisible, so what an input does not draw stays on its
-      // address: these have no change output to come back to.
+      case 'identityCreateFromShielded':
+        return this.previewShieldedSpend(wallet, operation, params)
       case 'addressFundsTransfer':
       case 'addressWithdrawal':
       case 'identityCreate':
-      case 'identityTopUp': {
-        requireAutomaticSelection(params.coreSource)
-        // The one address-funded transition that fans out, and so the only one
-        // whose recipient list its send validates.
-        if (operation === 'addressFundsTransfer') requireRecipients(platformRecipients(params.recipients))
-        const {plan, error} = await this.planInputs(wallet, operation, feeParams)
-        if (plan === null) throw new Error(error)
-        const coreRate = coreFeePerByte(this.preferences.general.coreFeeMultiplier)
-        const transition = addressFundedTransition(operation, params, plan, coreRate)
-
-        return {
-          inputs: platformInputEntries(plan),
-          outputs: recipientEntries(reducedRecipients(params.recipients, plan), 'credits'),
-          feeDuffs: null,
-          feeCredits: plan.feeCredits,
-          unsignedHex: await this.unsignedHex(wallet.network, transition),
-        }
-      }
-
+      case 'identityTopUp':
+        return this.previewAddressFunded(wallet, operation, params, feeParams)
       case 'identityToAddress':
       case 'identityToIdentity':
-      case 'identityWithdrawal': {
-        requireAutomaticSelection(params.coreSource)
-        requireAutomaticInputs(params.platformSource)
-        const identifier = params.identityId
-        if (identifier == null || identifier.length === 0) {
-          throw new Error(`${operation} needs the identity that funds it`)
-        }
-        const feeCredits = await this.protocolFee(wallet, operation, feeParams, 1)
-        // A transition is ordered by the identity's next nonce, which is the one
-        // the send will submit it under.
-        const {nonce} = await this.platform.request('identityNonce', wallet.network, {identifier})
-        const coreRate = coreFeePerByte(this.preferences.general.coreFeeMultiplier)
-        const transition = identityFundedTransition(operation, params, identifier, nonce + 1n, coreRate)
-
-        return {
-          inputs: [previewEntry('input', identifier, recipientTotal(params.recipients) + feeCredits, 'credits')],
-          outputs: recipientEntries(params.recipients, 'credits'),
-          feeDuffs: null,
-          feeCredits,
-          unsignedHex: await this.unsignedHex(wallet.network, transition),
-        }
-      }
-
+      case 'identityWithdrawal':
+        return this.previewIdentityFunded(wallet, operation, params, feeParams)
       // Each is built and signed in one worker call, from keys only the seed derives.
       case 'usernameRegister':
       case 'dashPayContactRequest':
       case 'identityUpdateKeys':
         throw new Error(`${operation} has no transaction to preview before the wallet is unlocked`)
+      case 'shield':
+        return this.previewShield(wallet, params, feeParams)
+    }
+  }
 
-      case 'shield': {
-        requireAutomaticSelection(params.coreSource)
-        const {feeCredits, plan} = await this.shieldPlan(wallet, feeParams)
-        const inputs = selectShieldInputs(plan, params.amountCredits)
+  private async previewCoreSend(wallet: Wallet, params: PreviewParams): Promise<TransactionPreview> {
+    requireAutomaticInputs(params.platformSource)
+    const recipients = coreRecipients(params.recipients)
+    const amountDuffs = requireCoreRecipients(recipients)
+    if (params.changeTo != null) this.core.requireChangeAddress(params.changeTo, wallet.network)
+    // Which script an output takes is decided by the network the send runs
+    // on, and deciding it is what refuses an address that is neither kind.
+    const outputs: TransferOutput[] = recipients.map(recipient => ({
+      ...recipient,
+      recipientType: this.core.classifyAddress(recipient.address, wallet.network),
+    }))
 
-        return {
-          inputs: inputs.map(({candidate, credits}, index) =>
-            previewEntry('input', candidate.platformAddress, index === 0 ? credits + feeCredits : credits, 'credits')),
-          outputs: recipientEntries(params.recipients, 'credits'),
-          feeDuffs: null,
-          feeCredits,
-          unsignedHex: null,
-        }
-      }
+    const {selection, utxos} = await this.corePlan(
+      wallet, params.coreSource ?? undefined, amountDuffs, outputs.length, 0, params.changeTo ?? undefined)
+    const {change, feeDuffs} = coreChangeAndFee(selection, amountDuffs)
+    const unsigned = this.core.buildTransfer({
+      inputs: selection.transferInputs,
+      outputs,
+      changeAddress: selection.changeAddress,
+      inputTotal: selection.inputTotal,
+      feeDuffs: selection.feeDuffs,
+    })
+
+    return {
+      inputs: coreInputEntries(selection.transferInputs, utxos),
+      outputs: [...recipientEntries(params.recipients, 'duffs'), ...change],
+      feeDuffs,
+      feeCredits: null,
+      unsignedHex: unsigned.hex(),
+    }
+  }
+
+  // Two transactions, and the credit output is the coin whose key signs the
+  // proof the L2 half spends.
+  private async previewAssetLock(wallet: Wallet, operation: AssetLockFeeOperation, params: PreviewParams, feeParams: FeeParams): Promise<TransactionPreview> {
+    requireAutomaticInputs(params.platformSource)
+    const amountDuffs = recipientTotal(params.recipients)
+    // The credits the lock will create, which is what the funding prices
+    // itself against — an L1 form carries no amount in credits.
+    const arriving = {...feeParams, amountCredits: amountDuffs * CREDITS_PER_DUFF}
+    const feeCredits = await this.protocolFee(wallet, operation, arriving, 1)
+    const feeOnTop = locksFeeOnTop(operation)
+    if (!feeOnTop) requireAboveFee(amountDuffs, feeCredits)
+    const lockDuffs = feeOnTop ? lockedDuffsFor(amountDuffs, feeCredits) : amountDuffs
+    // No change address of its own: a lock is funded through AssetLockService,
+    // which never takes one.
+    const {selection, utxos, grouped} =
+      await this.corePlan(wallet, params.coreSource ?? undefined, lockDuffs, 1, ASSET_LOCK_PAYLOAD_BYTES)
+    const {change, feeDuffs} = coreChangeAndFee(selection, lockDuffs)
+    const creditAddress = pickCreditChangeAddress(grouped, selection.changeAddress).address
+    const unsigned = this.core.buildAssetLock({
+      inputs: selection.transferInputs,
+      amountDuffs: lockDuffs,
+      creditAddress,
+      changeAddress: selection.changeAddress,
+      inputTotal: selection.inputTotal,
+      feeDuffs: selection.feeDuffs,
+    })
+
+    return {
+      inputs: coreInputEntries(selection.transferInputs, utxos),
+      outputs: [
+        ...recipientEntries(params.recipients, 'duffs'),
+        previewEntry('credit', creditAddress, lockDuffs, 'duffs'),
+        ...change,
+      ],
+      feeDuffs,
+      feeCredits,
+      unsignedHex: unsigned.hex(),
+    }
+  }
+
+  private async previewShieldedSpend(wallet: Wallet, operation: PoolSpendOperation, params: PreviewParams): Promise<TransactionPreview> {
+    requireAutomaticSelection(params.coreSource)
+    requireAutomaticInputs(params.platformSource)
+    const plan = await this.shielded.planSpend(
+      wallet.walletId, operation, params.amountCredits, params.shieldedSource ?? null, params.recipients.length)
+
+    // A create is funded by the denomination itself: the fee comes out of
+    // what the identity is left with, rather than out of the pool beside it.
+    const creates = operation === 'identityCreateFromShielded'
+    const payouts = creates
+      ? [previewEntry('recipient', '', params.amountCredits - plan.feeCredits, 'credits')]
+      : recipientEntries(params.recipients, 'credits')
+    const changeCredits = plan.totalCredits - params.amountCredits - (creates ? 0n : plan.feeCredits)
+
+    return {
+      inputs: shieldedInputEntries(plan),
+      outputs: [...payouts, ...shieldedChangeEntries(changeCredits)],
+      feeDuffs: null,
+      feeCredits: plan.feeCredits,
+      unsignedHex: null,
+    }
+  }
+
+  // Credits are divisible, so what an input does not draw stays on its
+  // address: these have no change output to come back to.
+  private async previewAddressFunded(wallet: Wallet, operation: SelectionFeeOperation, params: PreviewParams, feeParams: FeeParams): Promise<TransactionPreview> {
+    requireAutomaticSelection(params.coreSource)
+    // The one address-funded transition that fans out, and so the only one
+    // whose recipient list its send validates.
+    if (operation === 'addressFundsTransfer') requireRecipients(platformRecipients(params.recipients))
+    const {plan, error} = await this.planInputs(wallet, operation, feeParams)
+    if (plan === null) throw new Error(error)
+    const coreRate = coreFeePerByte(this.preferences.general.coreFeeMultiplier)
+    const transition = addressFundedTransition(operation, params, plan, coreRate)
+
+    return {
+      inputs: platformInputEntries(plan),
+      outputs: recipientEntries(reducedRecipients(params.recipients, plan), 'credits'),
+      feeDuffs: null,
+      feeCredits: plan.feeCredits,
+      unsignedHex: await this.unsignedHex(wallet.network, transition),
+    }
+  }
+
+  private async previewIdentityFunded(wallet: Wallet, operation: IdentityFeeOperation, params: PreviewParams, feeParams: FeeParams): Promise<TransactionPreview> {
+    requireAutomaticSelection(params.coreSource)
+    requireAutomaticInputs(params.platformSource)
+    const identifier = params.identityId
+    if (identifier == null || identifier.length === 0) {
+      throw new Error(`${operation} needs the identity that funds it`)
+    }
+    const feeCredits = await this.protocolFee(wallet, operation, feeParams, 1)
+    // A transition is ordered by the identity's next nonce, which is the one
+    // the send will submit it under.
+    const {nonce} = await this.platform.request('identityNonce', wallet.network, {identifier})
+    const coreRate = coreFeePerByte(this.preferences.general.coreFeeMultiplier)
+    const transition = identityFundedTransition(operation, params, identifier, nonce + 1n, coreRate)
+
+    return {
+      inputs: [previewEntry('input', identifier, recipientTotal(params.recipients) + feeCredits, 'credits')],
+      outputs: recipientEntries(params.recipients, 'credits'),
+      feeDuffs: null,
+      feeCredits,
+      unsignedHex: await this.unsignedHex(wallet.network, transition),
+    }
+  }
+
+  private async previewShield(wallet: Wallet, params: PreviewParams, feeParams: FeeParams): Promise<TransactionPreview> {
+    requireAutomaticSelection(params.coreSource)
+    const {feeCredits, plan} = await this.shieldPlan(wallet, feeParams)
+    const inputs = selectShieldInputs(plan, params.amountCredits)
+
+    return {
+      inputs: inputs.map(({candidate, credits}, index) =>
+        previewEntry('input', candidate.platformAddress, index === 0 ? credits + feeCredits : credits, 'credits')),
+      outputs: recipientEntries(params.recipients, 'credits'),
+      feeDuffs: null,
+      feeCredits,
+      unsignedHex: null,
     }
   }
 
