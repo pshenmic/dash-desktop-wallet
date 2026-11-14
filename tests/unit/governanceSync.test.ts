@@ -191,6 +191,18 @@ describe('governance sync', () => {
     expect(store.votes.size).toBe(0)
   })
 
+  it('recovers no signer for a vote it did not ask for', async () => {
+    store.objects.set(PROPOSAL, hexToBytes(MAINNET_PROPOSAL_OBJECT))
+    store.state.syncedAt = Date.now()
+    await governance.open()
+    const recover = vi.spyOn(SDKGovernanceVote.prototype, 'recoverSigner')
+
+    governance.onVote(peers[0] as never, voteMsg(hexToBytes(MAINNET_VOTES[0])))
+
+    expect(recover).not.toHaveBeenCalled()
+    expect(store.votes.size).toBe(0)
+  })
+
   it('announces a vote, hands it to each peer that asks once, and asks them back', async () => {
     governance.voteRelay.relay('r1', hexToBytes(MAINNET_VOTES[0]))
     expect(sentBy('inv')).toHaveLength(3)

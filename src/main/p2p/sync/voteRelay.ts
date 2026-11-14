@@ -66,6 +66,11 @@ export class VoteRelay {
     }
   }
 
+  expects(peer: Peer, voteHash: string): boolean {
+    const relay = this.relays.get(voteHash)
+    return relay != null && relay.askedBack.has(peer)
+  }
+
   // Null unless `peer` was asked back for this vote of ours. Serving it is the
   // proof the peer kept it; `first` is the first peer to give that proof.
   confirmed(peer: Peer, voteHash: string): {payload: Uint8Array; first: boolean} | null {

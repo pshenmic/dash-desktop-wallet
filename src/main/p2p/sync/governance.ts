@@ -233,11 +233,15 @@ export class Governance {
   onVote = (peer: Peer, msg: GovObjVoteMessage): void => {
     const pool = this.opts.pool()
     if (pool == null) return
+    // Signer recovery is costly; a vote we never asked for and that is not one of
+    // ours a peer was asked to serve back is dropped on its cheap hash first.
+    const hash = msg.vote.hash()
+    if (!this.requested.has(hash) && !this.voteRelay.expects(peer, hash)) return
     const vote = governanceVote(msg.vote, pool.network)
-    const ours = this.voteRelay.confirmed(peer, vote.hash)
+    const ours = this.voteRelay.confirmed(peer, hash)
     if (this.store == null) return
     if (ours?.first) this.keepVote(vote, ours.payload)
-    if (ours == null && this.requested.delete(vote.hash)) this.keepVote(vote, msg.vote.bytes())
+    if (ours == null && this.requested.delete(hash)) this.keepVote(vote, msg.vote.bytes())
   }
 
   // Ready peers not asked for this within the hour, in random order; none while
