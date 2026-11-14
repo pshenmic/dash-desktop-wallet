@@ -40,7 +40,7 @@ const p2pkhScript = (address: string): Script => {
 }
 
 const utxo = (address: string, satoshis: bigint, txId: string): UTXO =>
-  ({address, satoshis, txId, vOut: 0, script: p2pkhScript(address), height: 1_000_000, timestamp: null, confirmations: 20})
+  ({address, satoshis, txId, vOut: 0, script: p2pkhScript(address), height: 1_000_000, timestamp: null, confirmations: 20, isLocked: false})
 
 function node(proTxHash: string, fields: Partial<NetworkMasternode>): NetworkMasternode {
   return {
