@@ -34,7 +34,7 @@ function identity(keys: IdentityKeyDto[], usernames: string[] = ['alice.dash'], 
     identifier: 'B7kcEqgCRhLp2Wq5WZbeT4yUcZR8BWh3X1o3qDtLCpQH',
     usernames,
     keys,
-    balance: { amount, usdAmount: '0.0' },
+    balance: { amount },
     derivationPath: "m/9'/1'/0'/0/0",
     assetLockTxid: null,
   }

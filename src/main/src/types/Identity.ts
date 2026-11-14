@@ -1,4 +1,4 @@
-import {AmountWithUsd} from "./WalletBalance";
+import {Amount} from "./WalletBalance";
 import {IdentityKey} from "./IdentityKeys";
 
 export interface Identity {
@@ -15,7 +15,7 @@ export interface IdentityInfo {
   // Every DPNS name the identity owns on Platform, oldest first.
   usernames: string[]
   keys: IdentityKey[]
-  balance: AmountWithUsd
+  balance: Amount
   derivationPath: string
   assetLockTxid: string | null
 }

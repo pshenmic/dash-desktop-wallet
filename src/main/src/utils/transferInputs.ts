@@ -4,8 +4,7 @@ import {CoreRecipient, TransferInput, TransferInputSelection} from '../types/Cor
 import {UTXO} from '../types/UTXO'
 import {DUST_THRESHOLD_DUFFS, MAX_CORE_RECIPIENTS} from '../constants/chain'
 import {selectCoins} from './coinSelection'
-
-const outpointKey = (txid: string, vout: number): string => `${txid}:${vout}`
+import {outpointKey} from './outpointKey'
 
 const pickedOutpointKeys = (source?: CoreSpendSource): Set<string> | null =>
   source?.kind === 'outpoints'

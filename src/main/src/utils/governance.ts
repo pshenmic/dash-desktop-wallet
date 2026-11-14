@@ -1,4 +1,5 @@
 import {GovernanceObject as SDKGovernanceObject, GovernanceVote as SDKGovernanceVote, utils as sdkUtils, VoteSignal} from 'dash-core-sdk'
+import {outpointKey} from './outpointKey'
 import type {GovernanceProposal} from 'dash-core-sdk'
 import {
   DUFFS_PER_DASH,
@@ -119,10 +120,10 @@ export function requireVotingNode(owned: Masternode[], proTxHash: string, votes:
 // Core keeps each node's latest vote per signal and drops one whose key is not
 // the node's current voting key.
 export function proposalTally(votes: GovernanceVote[], masternodes: NetworkMasternode[]): ProposalTally {
-  const nodes = new Map(masternodes.map(node => [`${node.collateralTxid}:${node.collateralVout}`, node]))
+  const nodes = new Map(masternodes.map(node => [outpointKey(node.collateralTxid, node.collateralVout), node]))
   const latest = new Map<string, GovernanceVote>()
   for (const vote of votes) {
-    const outpoint = `${vote.collateralTxid}:${vote.collateralVout}`
+    const outpoint = outpointKey(vote.collateralTxid, vote.collateralVout)
     if (vote.signal !== VoteSignal.FUNDING || vote.voter == null || vote.voter !== nodes.get(outpoint)?.votingAddress) continue
     if ((latest.get(outpoint)?.time ?? -1) < vote.time) latest.set(outpoint, vote)
   }

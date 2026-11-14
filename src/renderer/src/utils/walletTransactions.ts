@@ -131,7 +131,6 @@ export function mapWalletTransaction(raw: WalletTxDto, ownedAddresses?: Readonly
     subtitleLabel: direction === 'in' ? 'from' : 'to',
     labelValue: direction === 'in' && raw.vin.length > 1 ? `${raw.vin.length} inputs` : raw.address,
     amount: raw.transferAmount,
-    usdAmount: raw.usdAmount,
     date: new Date(raw.date),
     direction,
     vin: raw.vin,

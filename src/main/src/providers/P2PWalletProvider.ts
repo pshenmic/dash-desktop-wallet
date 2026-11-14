@@ -10,6 +10,7 @@ import {WalletProvider} from './WalletProvider'
 import {TxLockStatus} from '../types/TxLockStatus'
 import {confirmationsAt} from '../utils/confirmations'
 import {dedupeTransactions} from '../utils/dedupeTransactions'
+import {outpointKey} from '../utils/outpointKey'
 import {AddressUsage} from '../types/AddressDiscovery'
 import {ConnectionStatus} from '../types/ConnectionStatus'
 import {Masternode, MasternodeKeyFilter, NetworkMasternode} from '../types/Masternode'
@@ -77,7 +78,7 @@ export class P2PWalletProvider implements WalletProvider {
       this.transactionDAO.getUtxosByAddresses(this.walletId, addresses),
       this.transactionDAO.getLockedOutpoints(this.walletId),
     ])
-    const locked = new Set(lockedOutpoints.map(({txid, vout}) => `${txid}:${vout}`))
+    const locked = new Set(lockedOutpoints.map(({txid, vout}) => outpointKey(txid, vout)))
     const {tipHeight} = this.walletSyncService.getStatus()
     return utxos.map(u => ({
       address: u.address,
@@ -88,7 +89,7 @@ export class P2PWalletProvider implements WalletProvider {
       height: u.height,
       timestamp: new Date(u.blockTime * 1000),
       confirmations: confirmationsAt(u.height, tipHeight),
-      isLocked: locked.has(`${u.txid}:${u.vout}`),
+      isLocked: locked.has(outpointKey(u.txid, u.vout)),
     }))
   }
 
@@ -145,11 +146,11 @@ export class P2PWalletProvider implements WalletProvider {
     if (list == null) return null
     const wanted = new Set(values)
     const coins = filter === 'collateral'
-      ? new Map((await this.getWalletUtxos()).map(({txId, vOut, address}) => [`${txId}:${vOut}`, address]))
+      ? new Map((await this.getWalletUtxos()).map(({txId, vOut, address}) => [outpointKey(txId, vOut), address]))
       : new Map<string, string>()
     return list
       .map(node => node.collateralAddress != null ? node
-        : {...node, collateralAddress: coins.get(`${node.collateralTxid}:${node.collateralVout}`) ?? null})
+        : {...node, collateralAddress: coins.get(outpointKey(node.collateralTxid, node.collateralVout)) ?? null})
       .filter(node => {
         const key = nodeKey(filter, node)
         return key != null && wanted.has(key)

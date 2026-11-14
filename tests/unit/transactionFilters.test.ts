@@ -31,7 +31,6 @@ function coreTransaction(overrides: Partial<WalletTxItem> = {}): WalletTxItem {
     title: 'Receive',
     subtitleLabel: 'from',
     labelValue: 'Xwallet',
-    usdAmount: '0.0',
     size: 100,
     confirmations: 10,
     blockHeight: 123,

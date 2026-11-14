@@ -1,6 +1,7 @@
 import {ContactDAO} from '../../database/ContactDAO'
 import {Contact} from '../../types/Contact'
 import {Network} from '../../types/Network'
+import {parseNetwork} from '../../utils/parseNetwork'
 
 export class ContactService {
   private contactDAO: ContactDAO
@@ -23,9 +24,7 @@ export class ContactService {
     if (trimmedAddress.length === 0) {
       throw new Error('Address is required')
     }
-    if (network !== 'mainnet' && network !== 'testnet') {
-      throw new Error('Invalid network')
-    }
+    parseNetwork('addContact', network)
 
     await this.contactDAO.insertContact(trimmedLabel, trimmedAddress, network, Date.now())
   }

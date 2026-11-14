@@ -1,5 +1,5 @@
 import {IpcMainInvokeEvent} from 'electron/utility'
-import {NetworkNameSchema} from '../preferences/network'
+import {parseNetwork} from '../utils/parseNetwork'
 import {ApplicationService} from '../services/app/ApplicationService'
 
 export class GetDapiUrlsHandler {
@@ -10,11 +10,8 @@ export class GetDapiUrlsHandler {
   }
 
   handle = async (_event: IpcMainInvokeEvent, network: unknown): Promise<string[]> => {
-    const parsed = NetworkNameSchema.safeParse(network)
-    if (!parsed.success) {
-      throw new Error(`getDapiUrls: expected 'mainnet' or 'testnet', got ${JSON.stringify(network)}`)
-    }
+    const networkName = parseNetwork('getDapiUrls', network)
 
-    return [...this.applicationService.preferences.network.dapi[parsed.data]]
+    return [...this.applicationService.preferences.network.dapi[networkName]]
   }
 }

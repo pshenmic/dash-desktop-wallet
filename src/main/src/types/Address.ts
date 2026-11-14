@@ -8,7 +8,6 @@ export interface Address {
   isUsed: boolean
   label: string | null
   balance?: bigint | null
-  usdBalance?: string | null
   txCount?: number | null
 }
 

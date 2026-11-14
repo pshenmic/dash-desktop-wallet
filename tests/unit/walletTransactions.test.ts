@@ -9,7 +9,7 @@ function outgoingTransaction(): WalletTxDto {
   return {
     walletId: 'wallet-1', txid: 'outgoing', address: 'Xrecipient', direction: -1,
     inAmount: 200_000_000n, outAmount: 49_999_999n, transferAmount: 150_000_001n,
-    usdAmount: '0.0', date: new Date('2026-08-19T09:00:00.000Z'), blockHeight: 0,
+    date: new Date('2026-08-19T09:00:00.000Z'), blockHeight: 0,
     size: 225, confirmations: 0, status: 'Locked', instantLocked: true, chainlocked: false, isLocal: true,
     vin: [{addr: 'Xsender', value: '2.00000000', n: 0, prevTxId: 'prev', prevVout: 0, sequence: 0}],
     vout: [
@@ -115,7 +115,6 @@ describe('mapWalletTransaction', () => {
       inAmount: 0n,
       outAmount: 125000000n,
       transferAmount: 125000000n,
-      usdAmount: '0.0',
       date: new Date('2026-08-19T08:00:00.000Z'),
       blockHeight: 2300000,
       size: 225,
@@ -139,7 +138,6 @@ describe('mapWalletTransaction', () => {
       subtitleLabel: 'from',
       labelValue: 'XwalletOutput',
       amount: 125000000n,
-      usdAmount: '0.0',
       date: new Date('2026-08-19T08:00:00.000Z'),
       direction: 'in',
       vin: raw.vin,
@@ -156,7 +154,6 @@ describe('mapWalletTransaction', () => {
       inAmount: 200000000n,
       outAmount: 50000000n,
       transferAmount: 150000000n,
-      usdAmount: '0.0',
       date: new Date('2026-08-19T09:00:00.000Z'),
       blockHeight: 0,
       size: 200,

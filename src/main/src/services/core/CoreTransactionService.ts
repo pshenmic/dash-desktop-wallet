@@ -8,7 +8,6 @@ import {
   TransactionType,
   utils as sdkUtils,
 } from 'dash-core-sdk'
-import {Base58Check} from 'dash-core-sdk/src/base58check.js'
 import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
 import {ProUpRegTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRegTx.js'
 import {ProUpRevTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRevTx.js'
@@ -19,7 +18,6 @@ import {OutPoint} from 'dash-core-sdk/src/types/OutPoint.js'
 import {bytesToHex} from '@noble/hashes/utils.js'
 import {KeyPairController} from 'dash-platform-sdk/src/keyPair/index.js'
 import {Network} from '../../types/Network'
-import {ADDRESS_DECODED_LENGTH, ADDRESS_PREFIX} from '../../constants/addresses'
 import {
   DUST_THRESHOLD_DUFFS,
   MASTERNODE_TYPE_CODE,
@@ -42,6 +40,7 @@ import {MasternodeRegistration, MasternodeServiceUpdate, MasternodeType, Provide
 import {buildAssetLockOutputs} from '../../utils/assetLockTx'
 import {derivePath256} from '../../utils/dashPayKeys'
 import {serviceAddressParts} from '../../utils/providerTx'
+import {decodeCoreAddress} from '../../utils/coreScript'
 
 
 export class CoreTransactionService {
@@ -50,20 +49,10 @@ export class CoreTransactionService {
   private keyPair = new KeyPairController()
 
   classifyAddress(address: string, network: Network): RecipientType {
-    let decoded: Uint8Array
-    try {
-      decoded = Base58Check.decode(address)
-    } catch {
-      throw new Error(`Invalid address: ${address}`)
-    }
-    if (decoded.length !== ADDRESS_DECODED_LENGTH) {
-      throw new Error(`Invalid address: ${address}`)
-    }
-    const prefixes = ADDRESS_PREFIX[network]
-    const version = decoded[0]
-    if (version === prefixes.p2pkh) return 'p2pkh'
-    if (version === prefixes.p2sh) return 'p2sh'
-    throw new Error(`${address} is not a valid ${network} address`)
+    const decoded = decodeCoreAddress(address, network)
+    if (decoded === 'invalid') throw new Error(`Invalid address: ${address}`)
+    if (decoded === 'wrong-network') throw new Error(`${address} is not a valid ${network} address`)
+    return decoded.type
   }
 
   // Change is paid to a P2PKH output by construction, so a P2SH address named

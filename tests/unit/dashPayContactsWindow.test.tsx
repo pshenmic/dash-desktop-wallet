@@ -66,7 +66,7 @@ const identity: IdentityApiDto = {
   identifier: ACTING,
   usernames: ['owl11.dash'],
   keys: [],
-  balance: { amount: 250_660_000_000n, usdAmount: '0' },
+  balance: { amount: 250_660_000_000n },
   derivationPath: "m/9'/1'/5'/0'/0'",
   assetLockTxid: null,
 }

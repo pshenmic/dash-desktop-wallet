@@ -24,6 +24,7 @@ import {randomUUID} from 'crypto'
 import {GENESIS} from '../../../p2p/constants'
 import {peerOverridesKey} from '../../../p2p/net/peerOverrides'
 import {ScanCursorGate} from '../../utils/scanCursorGate'
+import {stoppedSyncStatus} from '../../utils/syncStatus'
 import {Preferences} from '../../preferences'
 import {Network} from '../../types/Network'
 import {GovernanceVote, Proposal, VoteRelay} from '../../types/Governance'
@@ -50,24 +51,7 @@ export class WalletSyncService {
   private child: UtilityProcess | null = null
   // Holds a 'stopped' snapshot before the fork and after exit, so the renderer
   // never sees null.
-  private status: WalletSyncStatus = {
-    phase: 'stopped',
-    network: null,
-    walletId: null,
-    tipHeight: 0,
-    tipHash: null,
-    estimatedChainHeight: 0,
-    cfheadersHeight: 0,
-    cfilterScanHeight: 0,
-    matchedBlocksPending: 0,
-    peerCount: 0,
-    filterCapablePeerCount: 0,
-    lockPeerCount: 0,
-    peerMode: null,
-    phaseEtaMs: null,
-    lastError: null,
-    updatedAt: Date.now(),
-  }
+  private status: WalletSyncStatus = stoppedSyncStatus()
   private walletDataRevisions = new Map<string, number>()
   private activeWalletId: string | null = null
   private activeNetwork: 'mainnet' | 'testnet' | null = null
@@ -200,24 +184,7 @@ export class WalletSyncService {
       }
       this.pendingVoteRelays.clear()
       this.notifyPhase('stopped')
-      this.status = {
-        phase: 'stopped',
-        network: null,
-        walletId: null,
-        tipHeight: 0,
-        tipHash: null,
-        estimatedChainHeight: 0,
-        cfheadersHeight: 0,
-        cfilterScanHeight: 0,
-        matchedBlocksPending: 0,
-        peerCount: 0,
-        filterCapablePeerCount: 0,
-        lockPeerCount: 0,
-        peerMode: null,
-        phaseEtaMs: null,
-        lastError: null,
-        updatedAt: Date.now(),
-      }
+      this.status = stoppedSyncStatus()
       this.stopRebroadcastLoop()
       this.activeNetwork = null
       this.activeWalletId = null
@@ -1070,24 +1037,7 @@ export class WalletSyncService {
     await exited
     this.child = null
     this.activeWalletId = null
-    this.status = {
-      phase: 'stopped',
-      network: null,
-      walletId: null,
-      tipHeight: 0,
-      tipHash: null,
-      estimatedChainHeight: 0,
-      cfheadersHeight: 0,
-      cfilterScanHeight: 0,
-      matchedBlocksPending: 0,
-      peerCount: 0,
-      filterCapablePeerCount: 0,
-      lockPeerCount: 0,
-      peerMode: null,
-      phaseEtaMs: null,
-      lastError: null,
-      updatedAt: Date.now(),
-    }
+    this.status = stoppedSyncStatus()
   }
 }
 

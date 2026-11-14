@@ -96,13 +96,24 @@ describe('identity funding from an asset lock', () => {
       ) => broadcast(proof)),
       done,
       fail,
+      runDetached: vi.fn((s: AssetLockFundingState, unlocked: {seed: Uint8Array}, work: () => Promise<void>) => {
+        void work()
+          .catch(error => (fail as (state: unknown, error: unknown) => void)(s, error))
+          .finally(() => unlocked.seed.fill(0))
+        return s
+      }),
     } as unknown as AssetLockService
 
     insertIdentity = vi.fn().mockResolvedValue(undefined)
+    const getByIdentifier = vi.fn().mockResolvedValue(null)
     const identityDAO = {
       getIdentitiesByWalletId: vi.fn().mockResolvedValue([]),
-      getByIdentifier: vi.fn().mockResolvedValue(null),
+      getByIdentifier,
       insertIdentity,
+      insertIdentityIfAbsent: vi.fn(async (identity: {walletId: string; identifier: string}, assetLockTxid: string | null) => {
+        const existing = await getByIdentifier(identity.walletId, identity.identifier)
+        if (existing == null) await (insertIdentity as (...args: unknown[]) => Promise<void>)(identity, assetLockTxid)
+      }),
     } as unknown as IdentityDAO
 
     request = vi.fn().mockImplementation(async (kind: string) =>

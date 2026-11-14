@@ -23,7 +23,7 @@ function identity(index: number, names: string[] = []): IdentityApiDto {
     identifier: `${'B7kcE'}${String(index).padStart(34, 'x')}LCpQH`,
     usernames: names,
     keys: [],
-    balance: { amount: 250_660_000_000n, usdAmount: '0' },
+    balance: { amount: 250_660_000_000n },
     derivationPath: `m/9'/1'/5'/0'/${index}'`,
     assetLockTxid: null,
   }

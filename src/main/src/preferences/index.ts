@@ -1,7 +1,8 @@
 import fs from "fs/promises";
 import {z} from 'zod'
 import {GeneralPreferences, GeneralPreferencesJSON, GeneralPreferencesSchema} from "./general";
-import {NetworkPreferences, NetworkPreferencesSchema, renameLegacyPeerFields} from "./network";
+import {NetworkPreferences, NetworkPreferencesSchema, PeerOverridesJSON, renameLegacyPeerFields} from "./network";
+import {Network} from '../types/Network'
 import {describePreferenceChanges} from '../utils/preferenceChanges'
 import {Logger} from '../utils/logger'
 
@@ -166,6 +167,14 @@ export class Preferences {
     if (changes.length > 0) log.info(`changed — ${changes.join('; ')}`)
 
     await this.update()
+  }
+
+  async applyGeneral(patch: Partial<GeneralPreferencesJSON>): Promise<void> {
+    await this.apply({...this, general: {...this.general, ...patch}})
+  }
+
+  async applyNetworkOverride(network: Network, patch: Partial<PeerOverridesJSON>): Promise<void> {
+    await this.apply({...this, network: {...this.network, [network]: {...this.network[network], ...patch}}})
   }
 
   /**

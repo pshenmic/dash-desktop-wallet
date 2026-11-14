@@ -9,6 +9,8 @@ import {TransactionDAO} from '../database/TransactionDAO'
 import {WalletDAO} from '../database/WalletDAO'
 import {dashscanToWalletTransactions} from '../utils/dashscanTransactions'
 import {dedupeTransactions} from '../utils/dedupeTransactions'
+import {outpointKey} from '../utils/outpointKey'
+import {chunk} from '../utils/chunk'
 import {networkMasternode} from '../utils/masternodes'
 import {dashscanProposal, isStaleProposal} from '../utils/governance'
 import {Proposal, ProposalTally} from '../types/Governance'
@@ -67,17 +69,9 @@ export class DashscanWalletProvider implements WalletProvider {
     }
   }
 
-  private chunkAddresses(addresses: string[]): string[][] {
-    const chunks: string[][] = []
-    for (let i = 0; i < addresses.length; i += DASHSCAN_ADDRESS_CHUNK) {
-      chunks.push(addresses.slice(i, i + DASHSCAN_ADDRESS_CHUNK))
-    }
-    return chunks
-  }
-
   private async addressInfo(addresses: string[]): Promise<DashscanAddressInfo[]> {
-    const chunks = await Promise.all(this.chunkAddresses(addresses).map(chunk =>
-      requestJson<DashscanAddressInfo[]>(this.request, `/addresses/info?addresses=${chunk.join(',')}`)
+    const chunks = await Promise.all(chunk(addresses, DASHSCAN_ADDRESS_CHUNK).map(group =>
+      requestJson<DashscanAddressInfo[]>(this.request, `/addresses/info?addresses=${group.join(',')}`)
     ))
     return chunks.flat()
   }
@@ -203,8 +197,8 @@ export class DashscanWalletProvider implements WalletProvider {
       collected.push(...resultSet)
       if (resultSet.length < XPUB_PAGE_LIMIT || collected.length >= pagination.total) break
     }
-    const dashPayUtxos = await Promise.all(this.chunkAddresses(await this.dashPayAddresses()).map(chunk =>
-      requestJson<DashscanUTXO[]>(this.request, `/addresses/utxo?addresses=${chunk.join(',')}`)))
+    const dashPayUtxos = await Promise.all(chunk(await this.dashPayAddresses(), DASHSCAN_ADDRESS_CHUNK).map(group =>
+      requestJson<DashscanUTXO[]>(this.request, `/addresses/utxo?addresses=${group.join(',')}`)))
     collected.push(...dashPayUtxos.flat())
 
     // Dashscan keeps listing an outpoint as unspent until it indexes the
@@ -214,12 +208,12 @@ export class DashscanWalletProvider implements WalletProvider {
       this.transactionDAO.getPendingSpends(this.walletId, Date.now() - PENDING_SPEND_TTL_MS),
       this.transactionDAO.getLockedOutpoints(this.walletId),
     ])
-    const spent = new Set(spends.map(({txid, vout}) => `${txid}:${vout}`))
-    const locked = new Set(lockedOutpoints.map(({txid, vout}) => `${txid}:${vout}`))
+    const spent = new Set(spends.map(({txid, vout}) => outpointKey(txid, vout)))
+    const locked = new Set(lockedOutpoints.map(({txid, vout}) => outpointKey(txid, vout)))
 
     return collected
       .filter(utxo => utxo.prevTxHash != null && utxo.vOutIndex != null && utxo.scriptPubKeyHex != null)
-      .filter(utxo => !spent.has(`${utxo.prevTxHash}:${utxo.vOutIndex}`))
+      .filter(utxo => !spent.has(outpointKey(utxo.prevTxHash, utxo.vOutIndex)))
       .map(utxo => ({
         address: utxo.address ?? '',
         txId: utxo.prevTxHash as string,
@@ -229,7 +223,7 @@ export class DashscanWalletProvider implements WalletProvider {
         height: utxo.blockHeight ?? 0,
         timestamp: utxo.timestamp != null ? new Date(utxo.timestamp) : null,
         confirmations: utxo.confirmations ?? 0,
-        isLocked: locked.has(`${utxo.prevTxHash}:${utxo.vOutIndex}`),
+        isLocked: locked.has(outpointKey(utxo.prevTxHash, utxo.vOutIndex)),
       }))
   }
 
@@ -333,8 +327,8 @@ export class DashscanWalletProvider implements WalletProvider {
 
   // Without a limit the endpoint answers every match in one page.
   async getMasternodes(filter: MasternodeKeyFilter, values: string[]): Promise<NetworkMasternode[]> {
-    const pages = await Promise.all(this.chunkAddresses(values).map(chunk =>
-      requestJson<DashscanPage<DashscanMasternode>>(this.request, `/masternodes?${DASHSCAN_MASTERNODE_FILTER[filter]}=${chunk.join(',')}`)
+    const pages = await Promise.all(chunk(values, DASHSCAN_ADDRESS_CHUNK).map(group =>
+      requestJson<DashscanPage<DashscanMasternode>>(this.request, `/masternodes?${DASHSCAN_MASTERNODE_FILTER[filter]}=${group.join(',')}`)
     ))
     return pages.flatMap(({resultSet}) => resultSet.map(networkMasternode))
   }

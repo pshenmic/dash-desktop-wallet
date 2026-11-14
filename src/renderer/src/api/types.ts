@@ -33,7 +33,6 @@ export type WalletAddressDto = {
   balance: bigint
   txCount: number
   label: string | null
-  usdBalance: string | null
 }
 export type GetAddressesResponse = {
   receiving: WalletAddressDto[]
@@ -550,14 +549,13 @@ export interface ExchangeRatesResult {
   stale: boolean
 }
 
-export interface AmountWithUsd {
+export interface Amount {
   amount: bigint | string
-  usdAmount: string
 }
 
 export interface WalletBalanceDto {
-  dash: AmountWithUsd
-  credits: AmountWithUsd
+  dash: Amount
+  credits: Amount
 }
 
 export interface Contact {
@@ -613,7 +611,6 @@ export interface Transaction {
   inAmount: bigint
   outAmount: bigint
   transferAmount: bigint
-  usdAmount: string
   date: Date
   size: number
   // 0 while the tx is only in the mempool

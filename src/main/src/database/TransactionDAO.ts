@@ -742,7 +742,6 @@ function shapeRowsToTransactions(rows: any[], walletId: string): Transaction[] {
       inAmount: ourInputsTotal,
       outAmount: ourOutputsTotal,
       transferAmount,
-      usdAmount: '0.0',
       // When this wallet saw the tx, for one it did: the block that later
       // carried it is dated by the miner's clock, and moves the row on the list
       // hours after the fact. Milliseconds here, unix seconds on the block.

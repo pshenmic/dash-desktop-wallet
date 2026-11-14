@@ -1,5 +1,5 @@
 import {IpcMainInvokeEvent} from 'electron/utility'
-import {NetworkNameSchema} from '../preferences/network'
+import {parseNetwork} from '../utils/parseNetwork'
 import {ApplicationService} from '../services/app/ApplicationService'
 
 export class GetBannedPeersHandler {
@@ -10,11 +10,8 @@ export class GetBannedPeersHandler {
   }
 
   handle = async (_event: IpcMainInvokeEvent, network: unknown): Promise<string[]> => {
-    const parsed = NetworkNameSchema.safeParse(network)
-    if (!parsed.success) {
-      throw new Error(`getBannedPeers: expected 'mainnet' or 'testnet', got ${JSON.stringify(network)}`)
-    }
+    const networkName = parseNetwork('getBannedPeers', network)
 
-    return [...this.applicationService.preferences.network[parsed.data].bannedPeers]
+    return [...this.applicationService.preferences.network[networkName].bannedPeers]
   }
 }

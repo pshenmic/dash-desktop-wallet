@@ -22,6 +22,7 @@ import {CHAIN_LOCK_BACKSTOP_MS, IDENTITY_LOCK_TIMEOUT_MS} from '../../constants/
 import {ASSET_LOCK_CREDIT_OUTPUT_INDEX, ASSET_LOCK_DISMISSED_ERROR} from '../../constants/credits'
 import {isStaleInstantLockProof} from '../../utils/sdkErrors'
 import {requireWallet} from '../../utils/requireWallet'
+import {zeroSeed} from '../../utils/walletSeed'
 import {coreSDK} from '../../utils/coreSDK'
 import {Logger} from '../../utils/logger'
 
@@ -139,6 +140,15 @@ export class AssetLockService {
     state.error = error instanceof Error ? error.message : String(error)
     state.phase = state.txid != null ? 'resumable' : 'error'
     log.error(`${state.txid ?? state.kind}: ${state.phase} — ${state.error}`)
+  }
+
+  // The job runs on past the method that started it, so it holds the seed and
+  // zeroes it however it settles.
+  runDetached(state: AssetLockFundingState, unlocked: {seed: Uint8Array}, work: () => Promise<void>): AssetLockFundingState {
+    void work()
+      .catch(error => this.fail(state, error))
+      .finally(() => zeroSeed(unlocked))
+    return state
   }
 
   async markBroadcastingSt(state: AssetLockFundingState, row: AssetLockFundingRow): Promise<void> {

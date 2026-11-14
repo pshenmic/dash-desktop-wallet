@@ -9,14 +9,14 @@ import {CoreSpendSource} from '../../types/CoinSelection'
 import {PlatformSpendSource} from '../../types/PlatformTransfer'
 import {Network} from '../../types/Network'
 import {Wallet} from '../../types/Wallet'
-import {Identity} from '../../types/Identity'
 import {PlatformSendResult} from '../../types/PlatformSendResult'
 import {IdentityCreateResult} from '../../types/IdentityCreateResult'
 import {ShieldResult} from '../../types/ShieldResult'
 import {unlockWallet, zeroSeed} from '../../utils/walletSeed'
 import {platformAccountXpub} from '../../utils/platformAddress'
 import {CREDITS_PER_DUFF, MIN_IDENTITY_FUNDING_CREDITS} from '../../constants/credits'
-import {identityPath} from '../../utils/identityKeys'
+import {identityPath, nextLocalIdentityIndex} from '../../utils/identityKeys'
+import {requireIdentity} from '../../utils/requireIdentity'
 import {fundingRemainderAddress, requireRecipients, selectShieldInputs, toAddressInput} from '../../utils/platformTransfer'
 import {creditsAfterFee, lockedDuffsFor} from '../../utils/assetLockTx'
 import {coreFeePerByte} from '../../utils/coreFeeRate'
@@ -111,7 +111,7 @@ export class PlatformTransferService {
 
     const {wallet, seed} = await this.unlock(walletId, password)
     const network = wallet.network
-    const identity = await this.requireIdentity(walletId, identityIdentifier)
+    const identity = await requireIdentity(this.identityDAO,walletId, identityIdentifier)
     const feeCredits = await this.fee.requireFee(walletId, 'identityToAddress', {
       amountCredits: totalCredits,
       recipient: recipients.map(entry => entry.address),
@@ -151,7 +151,7 @@ export class PlatformTransferService {
 
     const {wallet, seed} = await this.unlock(walletId, password)
     const network = wallet.network
-    const identity = await this.requireIdentity(walletId, fromIdentityIdentifier)
+    const identity = await requireIdentity(this.identityDAO,walletId, fromIdentityIdentifier)
 
     const feeCredits = await this.fee.requireFee(walletId, 'identityToIdentity', {
       amountCredits, recipient: toIdentityIdentifier, identityId: fromIdentityIdentifier,
@@ -189,7 +189,7 @@ export class PlatformTransferService {
     const network = wallet.network
 
     const existing = await this.identityDAO.getIdentitiesByWalletId(walletId)
-    const identityIndex = existing.reduce((max, identity) => Math.max(max, identity.identityIndex), -1) + 1
+    const identityIndex = nextLocalIdentityIndex(existing)
 
     const {plan, error} = await this.fee.planInputs(wallet, 'identityCreate', {
       amountCredits, recipient: '', platformSource: source,
@@ -307,7 +307,7 @@ export class PlatformTransferService {
 
     const {wallet, seed} = await this.unlock(walletId, password)
     const network = wallet.network
-    const identity = await this.requireIdentity(walletId, identityIdentifier)
+    const identity = await requireIdentity(this.identityDAO,walletId, identityIdentifier)
 
     const feeCredits = await this.fee.requireFee(walletId, 'identityWithdrawal', {
       amountCredits, recipient: toCoreAddress, identityId: identityIdentifier,
@@ -390,7 +390,7 @@ export class PlatformTransferService {
       const lockDuffs = lockedDuffsFor(amountDuffs, feeCredits)
 
       const state = await this.assetLock.begin(walletId, 'address', toPlatformAddress, lockDuffs)
-      return this.runFunding(state, unlocked, async () => {
+      return this.assetLock.runDetached(state, unlocked, async () => {
         const acquired = await this.assetLock.acquire(state, {
           walletId, kind: 'address', destination: toPlatformAddress, amountDuffs: lockDuffs, seed, source,
         })
@@ -407,19 +407,10 @@ export class PlatformTransferService {
     const {wallet, seed} = unlocked
 
     const state = this.assetLock.resume(walletId, row)
-    return this.runFunding(state, unlocked, async () => {
+    return this.assetLock.runDetached(state, unlocked, async () => {
       const acquired = await this.assetLock.reacquire(state, row)
       await this.settleFunding(seed, wallet, state, acquired)
     })
-  }
-
-  // The job runs on past the method that started it, so it holds the seed and
-  // zeroes it however it settles.
-  private runFunding(state: AssetLockFundingState, unlocked: {seed: Uint8Array}, work: () => Promise<void>): AssetLockFundingState {
-    void work()
-      .catch(error => this.assetLock.fail(state, error))
-      .finally(() => zeroSeed(unlocked))
-    return state
   }
 
   // The row keeps only what was locked, so the recipient's share is the lock
@@ -453,15 +444,6 @@ export class PlatformTransferService {
     await this.assetLock.done(state, row, stHash)
   }
 
-
-  private async requireIdentity(walletId: string, identifier: string): Promise<Identity> {
-    const identities = await this.identityDAO.getIdentitiesByWalletId(walletId)
-    const identity = identities.find(entry => entry.identifier === identifier)
-    if (identity == null) {
-      throw new Error('Identity not found in this wallet')
-    }
-    return identity
-  }
 
   private async requireIdentityBalance(network: Network, identifier: string, needed: bigint, action: string): Promise<void> {
     const {credits} = await this.platform.request('identityBalance', network, {identifier})
