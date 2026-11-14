@@ -90,22 +90,24 @@ describe('MasternodeService.discover', () => {
   }
 
   it('walks each key chain past the first window and stops at the gap', async () => {
+    // 55 is past the first window (gapLimit 50) so the walk must widen to find
+    // it; 120 is past the gap frontier (55 + 50) the walk stops at.
     await discover(source([
       node('a', {ownerAddress: key('owner', 3)}),
-      node('b', {ownerAddress: key('owner', 25)}),
-      node('c', {ownerAddress: key('owner', 80)}),
+      node('b', {ownerAddress: key('owner', 55)}),
+      node('c', {ownerAddress: key('owner', 120)}),
       node('d', {votingAddress: key('voting', 1)}),
     ]))
 
     expect((await owned()).map(({proTxHash, ownerKeyIndex, votingKeyIndex}) => [proTxHash, ownerKeyIndex, votingKeyIndex]))
-      .toEqual([['a', 3, null], ['b', 25, null], ['d', null, 1]])
+      .toEqual([['a', 3, null], ['b', 55, null], ['d', null, 1]])
   })
 
   it('owns a node by a legacy-encoded operator key or by our collateral outpoint', async () => {
     const legacy = `0${key('operator', 0).slice(1)}`
     const collateral: UTXO = {
       address: 'Xours', satoshis: 400_000_000_000n, script: new Script(), txId: 'e'.repeat(64), vOut: 0,
-      height: 1, timestamp: null, confirmations: 1,
+      height: 1, timestamp: null, confirmations: 1, isLocked: false,
     }
     await discover(source([
       node('a', {operatorPublicKey: legacy}),

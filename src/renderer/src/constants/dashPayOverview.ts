@@ -29,6 +29,7 @@ const SETUP_TODO_ICON_CLASS = 'flex size-[1.875rem] shrink-0 items-center justif
 export const SETUP_ICON_CLASS: Record<SetupStepState, string> = {
   [SetupStepState.Done]: ICON_CHIP,
   [SetupStepState.Todo]: `${SETUP_TODO_ICON_CLASS} dash-block-5 dash-text-default`,
+  [SetupStepState.Voting]: ICON_CHIP,
   [SetupStepState.Warning]: `${SETUP_TODO_ICON_CLASS} bg-dash-orange/10 text-dash-orange`,
 }
 
@@ -50,12 +51,14 @@ export const OVERVIEW_COPY = {
   onboardingEyebrow: 'Meet DashPay',
   onboardingTitle: 'Make your wallet personal.',
   onboardingBody: 'Claim a .dash name, add contacts and pay them by name.',
+  votingBody: 'Follow the vote for your .dash name.',
   noIdentityBody: 'DashPay starts with a Platform identity.',
   actingAs: 'Acting as',
   identityBalance: 'Identity balance',
   addContact: 'Add contact',
   registerUsername: 'Register username',
   yourSetup: 'Your setup',
+  copyIdentityId: 'Copy identity ID',
   of: 'of',
   stepReady: 'Ready',
   noCredits: 'No credits',
@@ -84,6 +87,7 @@ export const OVERVIEW_ACTION_LABELS: Record<OverviewAction, string> = {
   [OverviewAction.CreateIdentity]: 'Create identity',
   [OverviewAction.EnableDashPay]: 'Enable DashPay',
   [OverviewAction.RegisterUsername]: 'Register username',
+  [OverviewAction.ViewUsernames]: 'View usernames',
   [OverviewAction.FindPeople]: 'Find people',
 }
 

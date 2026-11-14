@@ -122,10 +122,11 @@ describe('transferToPlatformTransaction', () => {
     expect(sent.recipient).toEqual([part('someone-else', 1_000_000_000n)])
   })
 
-  it('reports neither a block height nor a status, which the endpoint omits', () => {
-    const row = transferToPlatformTransaction(transfer(), OUR_IDENTITY, WALLET)
+  it('reports no block height, which the endpoint omits, but keeps the status it sends', () => {
+    const row = transferToPlatformTransaction(transfer({status: 'SUCCESS'}), OUR_IDENTITY, WALLET)
     expect(row.blockHeight).toBeNull()
-    expect(row.status).toBeNull()
+    expect(row.status).toBe('SUCCESS')
+    expect(transferToPlatformTransaction(transfer(), OUR_IDENTITY, WALLET).status).toBeNull()
   })
 })
 

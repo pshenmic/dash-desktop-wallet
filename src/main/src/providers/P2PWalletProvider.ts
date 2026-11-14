@@ -73,7 +73,11 @@ export class P2PWalletProvider implements WalletProvider {
   async getWalletUtxos(): Promise<UTXO[]> {
     const {receiving, change, dashPay = []} = await this.addressDAO.getAddressesByWalletId(this.walletId)
     const addresses = [...receiving, ...change, ...dashPay].map(a => a.address)
-    const utxos = await this.transactionDAO.getUtxosByAddresses(this.walletId, addresses)
+    const [utxos, lockedOutpoints] = await Promise.all([
+      this.transactionDAO.getUtxosByAddresses(this.walletId, addresses),
+      this.transactionDAO.getLockedOutpoints(this.walletId),
+    ])
+    const locked = new Set(lockedOutpoints.map(({txid, vout}) => `${txid}:${vout}`))
     const {tipHeight} = this.walletSyncService.getStatus()
     return utxos.map(u => ({
       address: u.address,
@@ -84,6 +88,7 @@ export class P2PWalletProvider implements WalletProvider {
       height: u.height,
       timestamp: new Date(u.blockTime * 1000),
       confirmations: confirmationsAt(u.height, tipHeight),
+      isLocked: locked.has(`${u.txid}:${u.vout}`),
     }))
   }
 
@@ -98,6 +103,12 @@ export class P2PWalletProvider implements WalletProvider {
     }
   }
 
+  async ensureReadyToList(): Promise<void> {
+    if (await this.getConnectionStatus() === 'syncing') {
+      throw new Error('Wallet sync is not complete — wait for sync to finish before listing coins')
+    }
+  }
+
   async getConnectionStatus(): Promise<ConnectionStatus> {
     const status = this.walletSyncService.getStatus()
     if (status.walletId !== this.walletId || status.phase === 'idle' || status.phase === 'stopped') {
@@ -106,7 +117,7 @@ export class P2PWalletProvider implements WalletProvider {
     return status.phase === 'synced' ? 'synced' : 'syncing'
   }
 
-  async nextUnusedAddress(): Promise<string> {
+  async nextUnusedAddress(exclude: Set<string> = new Set()): Promise<string> {
     const {receiving} = await this.addressDAO.getAddressesByWalletId(this.walletId)
     if (receiving.length === 0) throw new Error('Wallet has no receiving addresses')
 
@@ -114,7 +125,7 @@ export class P2PWalletProvider implements WalletProvider {
       await this.transactionDAO.getUsedAddresses(this.walletId, receiving.map(a => a.address)),
     )
 
-    return (receiving.find(({address}) => !used.has(address)) ?? receiving[receiving.length - 1]).address
+    return (receiving.find(({address}) => !used.has(address) && !exclude.has(address)) ?? receiving[receiving.length - 1]).address
   }
 
   async getUsedAddresses(addresses: string[]): Promise<string[]> {

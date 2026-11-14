@@ -28,7 +28,7 @@ const address = (name: string, index: number, isChange: boolean, isUsed = false)
 })
 
 const utxo = (owner: string, satoshis: bigint, txId: string): UTXO =>
-  ({address: owner, satoshis, txId, vOut: 0, script: Script.fromHex(SCRIPT_HEX), height: 1, timestamp: null, confirmations: 1})
+  ({address: owner, satoshis, txId, vOut: 0, script: Script.fromHex(SCRIPT_HEX), height: 1, timestamp: null, confirmations: 1, isLocked: false})
 
 const grouped = (receiving: Address[], change: Address[]): GroupedAddresses => ({receiving, change})
 
@@ -119,6 +119,22 @@ describe('selecting transfer inputs from a wallet-wide utxo set', () => {
     const {transferInputs} = selectTransferInputs(wallet, [utxo('recv-1', 50_000_000n, 'aa')], 1_000_000n, FEE)
 
     expect(transferInputs[0].derivationPath).toBe("m/44'/1'/0'/0/1")
+  })
+
+  it('ignores locked UTXOs in automatic mode and refuses locked picked outpoints', () => {
+    const locked = {...utxo('recv-0', 900_000_000n, 'aa'), isLocked: true}
+    const unlocked = utxo('recv-1', 50_000_000n, 'bb')
+
+    const {transferInputs} = selectTransferInputs(wallet, [locked, unlocked], 1_000_000n, FEE)
+    expect(transferInputs.map(i => i.txId)).toEqual(['bb'])
+
+    expect(() => selectTransferInputs(
+      wallet,
+      [locked, unlocked],
+      1_000_000n,
+      FEE,
+      {kind: 'outpoints', outpoints: [{txid: 'aa', vout: 0}]},
+    )).toThrow('Selected UTXO no longer available')
   })
 })
 

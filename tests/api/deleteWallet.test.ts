@@ -14,6 +14,8 @@ const rows = (walletId: string): Record<string, Record<string, unknown>> => ({
   transactions: {wallet_id: walletId, txid: `tx-${walletId}`, block_height: 1, block_hash: 'h', block_time: 0, raw: Buffer.from([1])},
   transaction_outputs: {wallet_id: walletId, txid: `tx-${walletId}`, vout: 0, satoshis: '1000'},
   transaction_inputs: {wallet_id: walletId, txid: `tx-${walletId}`, vin: 0, prev_txid: 'p', prev_vout: 0, sequence: 0},
+  locked_utxos: {wallet_id: walletId, txid: `tx-${walletId}`, vout: 0},
+  payment_requests: {wallet_id: walletId, address: `req-${walletId}`, created_at: 0},
   wallet_sync_state: {wallet_id: walletId},
   asset_lock_fundings: {wallet_id: walletId, txid: `al-${walletId}`, output_index: 0, credit_derivation_path: "m/9'/1'/5'/2'/0", amount_duffs: '1000', to_platform_address: 'dest', status: 'l1_broadcast'},
   platform_addresses: {wallet_id: walletId, address_index: 0, address: `pa-${walletId}`, derivation_path: "m/9'/1'/17'/0'/0'/0"},

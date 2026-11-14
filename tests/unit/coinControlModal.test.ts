@@ -18,8 +18,8 @@ vi.mock('react-dom', () => ({createPortal: (element: ReactNode) => element}))
 vi.mock('dash-ui-kit/react', () => ({DashLogo: 'svg', useTheme: () => ({theme: 'light'})}))
 vi.mock('@renderer/contexts/ConnectionModeContext', () => ({useConnectionModeContext: () => ({showSyncWarning: true})}))
 vi.mock('@renderer/hooks/useFiat', () => ({useFiat: () => ({rateReady: false, format: () => '$0.00'})}))
-vi.mock('@renderer/components/dash-ui-kit-extended', () => ({Button: 'button', ArrowIcon: 'svg', CreditsIcon: 'svg', CrossIcon: 'svg', HighlightedIdentifier: 'span', ShieldSmallIcon: 'svg', Text: 'span'}))
-vi.mock('@renderer/components/dash-ui-kit-extended/icons', () => ({FilterIcon: 'svg', QrCodeIcon: 'svg', RefreshIcon: 'svg'}))
+vi.mock('@renderer/components/dash-ui-kit-extended', () => ({Button: 'button', ArrowIcon: 'svg', CreditsIcon: 'svg', CrossIcon: 'svg', HighlightedIdentifier: 'span', ShieldSmallIcon: 'svg', Text: 'span', Tooltip: 'span'}))
+vi.mock('@renderer/components/dash-ui-kit-extended/icons', () => ({FilterIcon: 'svg', LockIcon: 'svg', QrCodeIcon: 'svg', RefreshIcon: 'svg'}))
 vi.mock('@renderer/components/modal/AddressQrModal', () => ({default: 'dialog'}))
 vi.mock('@renderer/components/ui/Checkbox', () => ({default: 'input'}))
 vi.mock('@renderer/components/ui/CopyButton', () => ({default: 'button'}))
@@ -31,8 +31,8 @@ import Spinner from '../../src/renderer/src/components/ui/Spinner'
 
 function elements(node: ReactNode): ReactElement<Record<string, unknown>>[] {
   if (Array.isArray(node)) return node.flatMap(elements)
-  if (!isValidElement<{children?: ReactNode, below?: ReactNode}>(node)) return []
-  return [node, ...elements(node.props.children), ...elements(node.props.below)]
+  if (!isValidElement<{children?: ReactNode, below?: ReactNode, actions?: ReactNode, lockAction?: ReactNode}>(node)) return []
+  return [node, ...elements(node.props.children), ...elements(node.props.below), ...elements(node.props.actions), ...elements(node.props.lockAction)]
 }
 
 function applyButton(nodes: ReactElement<Record<string, unknown>>[]): ReactElement<Record<string, unknown>> {
@@ -49,7 +49,7 @@ function modalProps(): CoinControlModalProps {
     isOpen: true, operation: TransferOperation.CoreSend,
     selection: {kind: 'coreOutpoints', outpoints: ['coin:0']},
     coreAddresses: [], coreAddressesLoading: false, coreAddressesError: null,
-    utxos: [{txid: 'coin', vout: 0, address: 'address', satoshis: 100_000n, height: 10, timestamp: null, confirmations: 1}],
+    utxos: [{txid: 'coin', vout: 0, address: 'address', satoshis: 100_000n, height: 10, timestamp: null, confirmations: 1, isLocked: false}],
     utxosLoading: false, utxosLocalSnapshot: false, utxosError: null, coreSyncIncomplete: false,
     platformAddresses: [], platformAddressesLoading: false, platformAddressesError: null,
     shieldedNotes: [], identityLabel: null, identityId: null, platformAddress: undefined,
@@ -386,5 +386,41 @@ describe('coin control UTXO refresh', () => {
     expect(failed.some(node => node.props['aria-label'] === 'Retry loading funds')).toBe(true)
     expect(failed.some(node => node.props.text === 'No spendable UTXOs')).toBe(false)
     expect(render(props).some(node => node.props.text === 'No spendable UTXOs')).toBe(true)
+  })
+
+  it('disables locked UTXOs from selection and unselects a UTXO when locked', () => {
+    const onToggleUtxoLock = vi.fn()
+    const props = {
+      ...modalProps(),
+      onToggleUtxoLock,
+      selection: {kind: 'coreOutpoints' as const, outpoints: ['coin:0']},
+      utxos: [
+        {...modalProps().utxos[0], txid: 'coin', isLocked: false},
+        {...modalProps().utxos[0], txid: 'locked', isLocked: true},
+      ],
+    }
+
+    const initial = render(props)
+    const unlockedRow = initial.find(node => node.key === 'coin:0')!
+    const lockedRow = initial.find(node => node.key === 'locked:0')!
+    expect(unlockedRow.props.disabled).toBe(false)
+    expect(unlockedRow.props.checked).toBe(true)
+    expect(lockedRow.props.disabled).toBe(true)
+    expect(lockedRow.props.checked).toBe(false)
+
+    ;(lockedRow.props.onChange as (checked: boolean) => void)(true)
+    expect(render(props).find(node => node.key === 'locked:0')!.props.checked).toBe(false)
+
+    const lockButton = initial.find(node => node.type === 'button' && node.props['aria-label'] === 'Lock UTXO coin:0')!
+    expect(lockButton.props['aria-pressed']).toBe(false)
+    ;(lockButton.props.onClick as () => void)()
+
+    expect(onToggleUtxoLock).toHaveBeenCalledWith(props.utxos[0])
+    const afterLock = render({...props, utxos: [{...props.utxos[0], isLocked: true}, props.utxos[1]]})
+    const nowLockedRow = afterLock.find(node => node.key === 'coin:0')!
+    expect(nowLockedRow.props.checked).toBe(false)
+    expect(nowLockedRow.props.disabled).toBe(true)
+    const unlockButton = afterLock.find(node => node.type === 'button' && node.props['aria-label'] === 'Unlock UTXO coin:0')!
+    expect(unlockButton.props['aria-pressed']).toBe(true)
   })
 })

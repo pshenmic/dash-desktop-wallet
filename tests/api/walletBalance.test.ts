@@ -14,6 +14,7 @@ const providerStub = (walletBalance: bigint): WalletProvider => ({
   getBalance: async () => { throw new Error('per-address balance is not the wallet total') },
   getWalletUtxos: async () => [],
   ensureReady: async () => undefined,
+  ensureReadyToList: async () => undefined,
   getConnectionStatus: async () => 'online',
   scanAddressUsage: async () => null,
   getUsedAddresses: async () => [],

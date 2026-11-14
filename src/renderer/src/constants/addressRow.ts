@@ -7,4 +7,6 @@ export const ADDRESS_ROW_FIAT_CLASS = `${CHIP_VALUE} dash-text-primary font-medi
 
 export const ADDRESS_ROW_EXPLORER_LABEL = 'Open in explorer'
 
+export const ADDRESS_ROW_EXPORT_KEY_LABEL = 'Export private key'
+
 export const ADDRESS_ROW_ICON_BUTTON_CLASS = 'size-5 shrink-0 rounded-[.3125rem] flex items-center justify-center dash-block-5 hover:opacity-80 transition-opacity duration-200 cursor-pointer'

@@ -57,6 +57,7 @@ export enum DashPaySetupStep {
 export enum SetupStepState {
   Done = 'done',
   Todo = 'todo',
+  Voting = 'voting',
   Warning = 'warning',
 }
 
@@ -117,6 +118,7 @@ export enum OverviewAction {
   CreateIdentity = 'create-identity',
   EnableDashPay = 'enable-dashpay',
   RegisterUsername = 'register-username',
+  ViewUsernames = 'view-usernames',
   FindPeople = 'find-people',
 }
 

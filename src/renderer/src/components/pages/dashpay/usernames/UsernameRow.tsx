@@ -1,18 +1,17 @@
 import { Text, Tooltip } from '@renderer/components/dash-ui-kit-extended'
 import CopyButton from '@renderer/components/ui/CopyButton'
 import CustomBadge from '@renderer/components/ui/CustomBadge'
-import StatusPill from '@renderer/components/ui/StatusPill'
 import { DASHPAY_CONTACT_ROW_CLASS } from '@renderer/constants/dashPay'
-import { USERNAME_LIST_COPY } from '@renderer/constants/dashPayUsernames'
-import { USERNAME_PRESENTATION, DPNS_NAME_SUFFIX } from '@renderer/constants/dpns'
+import { USERNAME_LIST_COPY, USERNAME_TYPE_COPY } from '@renderer/constants/dashPayUsernames'
+import { DPNS_NAME_SUFFIX } from '@renderer/constants/dpns'
 import { ROW_OPEN_OVERLAY_CLASS } from '@renderer/constants/listToolbar'
 import { CHIP_ACTION, ICON_CHIP } from '@renderer/constants/surfaces'
 import { UsernamePresentation } from '@renderer/enums/DashPay'
 import type { UsernameRowProps } from '@renderer/types/DashPayUsernames'
 import { usernameCaption } from '@renderer/utils/usernames'
+import UsernameStatusPill from './UsernameStatusPill'
 
 export default function UsernameRow({ row, now, onOpen, onRegister }: UsernameRowProps): React.JSX.Element {
-  const spec = USERNAME_PRESENTATION[row.presentation]
   const caption = usernameCaption(row, now)
   const registered = row.presentation === UsernamePresentation.Registered
 
@@ -50,14 +49,14 @@ export default function UsernameRow({ row, now, onOpen, onRegister }: UsernameRo
               </span>
             </Tooltip>
           )}
-          {row.isContested && <CustomBadge variant={"muted"} text={USERNAME_LIST_COPY.contested} className={"shrink-0"} />}
+          {row.isContested && <CustomBadge variant={"premium"} text={USERNAME_TYPE_COPY.premium} className={"shrink-0"} />}
         </div>
         {caption != null && (
           <Text reset size={10} weight={"medium"} color={"brand"} opacity={50} className={"min-w-0 truncate"}>{caption}</Text>
         )}
       </div>
       <div className={"relative z-10 flex items-center gap-3"}>
-        <StatusPill tone={spec.tone}>{spec.label}</StatusPill>
+        <UsernameStatusPill presentation={row.presentation} />
         {action}
       </div>
     </li>

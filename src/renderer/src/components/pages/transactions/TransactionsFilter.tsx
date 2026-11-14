@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react'
-import { Text, FilterIcon, Input, SearchIcon } from '@renderer/components/dash-ui-kit-extended'
+import { Text, FilterIcon } from '@renderer/components/dash-ui-kit-extended'
 import { transactionsPage } from '@renderer/constants'
+import { TOOLBAR_CONTROL_CLASS } from '@renderer/constants/listToolbar'
 import { useClickOutside } from '@renderer/hooks/useClickOutside'
-import { changeTxFilterSource, isDefaultTxFilter, transactionTypeOptions } from '@renderer/utils/transactionFilters'
+import { changeTxFilterSource, transactionTypeOptions } from '@renderer/utils/transactionFilters'
 import type { FilterSectionProps, TransactionsFilterProps } from '@renderer/types/WalletTransaction'
 import { TX_BALANCE_CHANGE_OPTIONS, TX_FILTER_LABELS, TX_SOURCE_OPTIONS } from '@renderer/constants/transactionFilters'
 import { POPOVER, POPOVER_OPTION } from '@renderer/constants/surfaces'
@@ -34,34 +35,22 @@ export default function TransactionsFilter(props: TransactionsFilterProps): Reac
   useClickOutside(ref, () => setOpen(false))
 
   const { filter: filterLabel, filters } = transactionsPage.transactions
-  const active = !isDefaultTxFilter(props.filter)
 
   return (
-    <div className={"relative"} ref={ref}>
+    <div className={"relative shrink-0"} ref={ref}>
       <button
         type={"button"}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className={"flex items-center gap-2 px-3 py-2 rounded-[.625rem] dash-block dash-black-border cursor-pointer hover:opacity-80 transition-opacity duration-200"}
+        className={`flex items-center gap-2 ${TOOLBAR_CONTROL_CLASS} cursor-pointer hover:opacity-80 transition-opacity duration-200 focus-visible:outline-2 focus-visible:outline-dash-brand dark:focus-visible:outline-dash-mint`}
       >
         <FilterIcon size={12} color={"currentColor"} className={"dash-text-primary"} />
         <Text size={12} weight={"medium"} color={"brand"}>{filterLabel}</Text>
-        {active && <span className={"size-1.5 rounded-full bg-dash-brand dark:bg-dash-mint"} />}
+        {props.active && <span className={"size-1.5 rounded-full bg-dash-brand dark:bg-dash-mint"} />}
       </button>
 
       {open && (
         <div className={`absolute right-0 top-[calc(100%+.375rem)] z-30 w-64 max-h-[65vh] overflow-y-auto flex flex-col gap-2 ${POPOVER}`}>
-          <Input
-            type={"search"}
-            size={"sm"}
-            colorScheme={"light"}
-            variant={"filled"}
-            value={props.filter.search}
-            onChange={(event) => props.onChange({ ...props.filter, search: event.target.value })}
-            placeholder={filters.search.placeholder}
-            aria-label={filters.search.label}
-            prefix={<SearchIcon size={14} color={"currentColor"} className={"dash-text-default"} />}
-          />
           <FilterSection
             label={TX_FILTER_LABELS.source}
             options={TX_SOURCE_OPTIONS}
