@@ -48,6 +48,6 @@ describe('what a broadcast tells the rest of main', () => {
 
     phase(service, 'broadcasting')
 
-    expect(onProgress).toHaveBeenCalledWith('broadcasting', 0, 0)
+    expect(onProgress).toHaveBeenCalledWith('broadcasting')
   })
 })

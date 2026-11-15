@@ -4,8 +4,8 @@ import {CoreRecipient, TransferInput, TransferInputSelection} from '../types/Cor
 import {UTXO} from '../types/UTXO'
 import {DUST_THRESHOLD_DUFFS, MAX_CORE_RECIPIENTS} from '../constants/chain'
 import {selectCoins} from './coinSelection'
-
-const outpointKey = (txid: string, vout: number): string => `${txid}:${vout}`
+import {outpointKey} from './outpointKey'
+import {walletAddresses} from './walletAddresses'
 
 const pickedOutpointKeys = (source?: CoreSpendSource): Set<string> | null =>
   source?.kind === 'outpoints'
@@ -60,7 +60,7 @@ export function selectableTransferUtxos(
   utxos: UTXO[],
   source?: CoreSpendSource,
 ): SelectableUtxo[] {
-  const owned = new Set([...grouped.receiving, ...grouped.change, ...grouped.dashPay ?? []].map(a => a.address))
+  const owned = new Set(walletAddresses(grouped).map(a => a.address))
   const picked = pickedOutpointKeys(source)
 
   return utxos
@@ -80,7 +80,7 @@ export function selectableTransferUtxos(
 }
 
 export function addressPaths(grouped: GroupedAddresses): Map<string, string> {
-  return new Map([...grouped.receiving, ...grouped.change, ...grouped.dashPay ?? []].map(a => [a.address, a.derivationPath]))
+  return new Map(walletAddresses(grouped).map(a => [a.address, a.derivationPath]))
 }
 
 export function selectTransferInputs(

@@ -82,15 +82,20 @@ export async function spendFeeCurve(payload: CurvePayload, ctx: OperationContext
 // the floor. A shielded fee is exact, so nothing may be added to it.
 export async function transitionFee(payload: Payload, ctx: OperationContext): Promise<Result> {
   const {operation, params} = payload
-  if (operation === 'usernameRegister') return usernameRegisterFee(ctx, paid(params)[0], params.identityId ?? '')
-  if (operation === 'dashPayContactRequest') return dashPayContactRequestFee(ctx, paid(params)[0], params.identityId ?? '')
-  if (operation === 'identityUpdateKeys') {
-    const update = {add: params.keys ?? [], disable: params.keyIds ?? []}
-    return identityUpdateKeysFee(update, await ctx.sdk.identities.getIdentityPublicKeys(params.identityId ?? ''))
-  }
-  return {
-    feeCredits: protocolFee(operation, params, ctx, await ctx.sdk.node.getProtocolVersion()),
-    metered: operation !== 'shield' && operation !== 'assetLockShield',
+  switch (operation) {
+    case 'usernameRegister':
+      return usernameRegisterFee(ctx, paid(params)[0], params.identityId ?? '')
+    case 'dashPayContactRequest':
+      return dashPayContactRequestFee(ctx, paid(params)[0], params.identityId ?? '')
+    case 'identityUpdateKeys': {
+      const update = {add: params.keys ?? [], disable: params.keyIds ?? []}
+      return identityUpdateKeysFee(update, await ctx.sdk.identities.getIdentityPublicKeys(params.identityId ?? ''))
+    }
+    default:
+      return {
+        feeCredits: protocolFee(operation, params, ctx, await ctx.sdk.node.getProtocolVersion()),
+        metered: operation !== 'shield' && operation !== 'assetLockShield',
+      }
   }
 }
 

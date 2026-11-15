@@ -17,12 +17,6 @@ export class SetPlatformFeeMultiplierHandler {
     const preferences = this.applicationService.preferences
     const {general} = preferences
 
-    await preferences.apply({
-      ...preferences,
-      general: {
-        ...general,
-        platformFeeMultiplier: {...general.platformFeeMultiplier, [operation]: multiplier},
-      },
-    })
+    await preferences.applyGeneral({platformFeeMultiplier: {...general.platformFeeMultiplier, [operation]: multiplier}})
   }
 }

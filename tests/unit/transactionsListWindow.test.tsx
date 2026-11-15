@@ -17,7 +17,7 @@ vi.stubGlobal('React', React)
 function received(id: string, hour: number): WalletTxItem {
   return {
     id, status: 'success', confirmations: 6, blockHeight: 1, size: 225, kind: 'core', title: 'Receive',
-    subtitleLabel: 'from', labelValue: 'Xsender', amount: 100_000_000n, usdAmount: '0.0',
+    subtitleLabel: 'from', labelValue: 'Xsender', amount: 100_000_000n,
     date: new Date(2026, 9, 22, hour), direction: 'in', vin: [], vout: [],
   }
 }

@@ -91,7 +91,7 @@ describe('coinControlSourceAddresses', () => {
   it('falls back to the wallet addresses when Core has no UTXOs', () => {
     const coreAddress = (address: string): WalletAddressDto => ({
       walletId: 'wallet', accountId: 0, address, derivationPath: '', index: 0, isChange: 0,
-      isUsed: false, balance: 0n, txCount: 0, label: null, usdBalance: null,
+      isUsed: false, balance: 0n, txCount: 0, label: null,
     })
     const empty = {...funds, utxos: [], coreAddresses: [coreAddress('wallet-1'), coreAddress('wallet-1'), coreAddress('wallet-2')]}
     expect(coinControlSourceAddresses(SourceKind.Core, empty)).toEqual(['wallet-1', 'wallet-2'])

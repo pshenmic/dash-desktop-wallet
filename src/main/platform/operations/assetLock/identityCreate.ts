@@ -3,6 +3,7 @@ import {PlatformOperations} from '../../types/messages'
 import {OperationContext, OperationError} from '../types'
 import {broadcast} from '../broadcast'
 import {assetLockProofParams} from '../assetLockProof'
+import {deriveCreditKey} from '../creditKey'
 import {IDENTITY_KEY_DEFINITIONS} from '../../../src/constants/credits'
 import {sdkContractBounds} from '../identity/contractBounds'
 
@@ -14,9 +15,7 @@ export async function identityCreateFromAssetLock(payload: Payload, ctx: Operati
   const {seed, identityIndex, txid, outputIndex} = payload
 
   const hdKey = sdk.keyPair.seedToHdKey(seed, network)
-  const derived = await sdk.keyPair.derivePath(hdKey, payload.creditDerivationPath)
-  if (!derived.privateKey) throw new OperationError('Failed to derive the identity registration key', 'internal')
-  const registrationKey = PrivateKeyWASM.fromBytes(derived.privateKey as Uint8Array, network)
+  const registrationKey = await deriveCreditKey(sdk, hdKey, network, payload.creditDerivationPath)
 
   const identityKeys = IDENTITY_KEY_DEFINITIONS.map(({id}) => {
     const child = sdk.keyPair.deriveIdentityPrivateKey(hdKey, identityIndex, id, network)

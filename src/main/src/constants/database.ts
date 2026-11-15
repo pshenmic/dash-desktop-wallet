@@ -36,8 +36,16 @@ export const SELECT_CHUNK_SIZE = 300
 export const PERSIST_ATTEMPTS = 3
 export const PERSIST_RETRY_MS = 1_000
 
+// A child that just exited can leave its LevelDB lock held until the OS reaps
+// it, so wiping chain.db retries rather than failing on the first refusal.
+export const CHAINDB_RM_ATTEMPTS = 6
+export const CHAINDB_RM_RETRY_MS = 250
+
 // Prefixes the source of a history row this wallet wrote itself, from a
 // transition it has just sent: the explorer lists it a block or two later, and
 // the note behind it cannot be read until the next sync. The address it
 // prefixes is the one whose authoritative row replaces it.
 export const LOCAL_SOURCE_PREFIX = 'local:'
+
+// Every column wallet.fromRow reads; the four wallet selects share it.
+export const WALLET_COLUMNS = ['encrypted_mnemonic', 'network', 'wallet_id', 'label', 'selected', 'platform_xpub', 'core_xpub', 'dashpay_xpub'] as const

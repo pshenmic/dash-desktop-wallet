@@ -31,7 +31,6 @@ export type WalletTxItem = {
   subtitleLabel: 'from' | 'to'
   labelValue: string
   amount: bigint
-  usdAmount: string
   date: Date
   direction: 'in' | 'out'
   vin: TransactionInput[]

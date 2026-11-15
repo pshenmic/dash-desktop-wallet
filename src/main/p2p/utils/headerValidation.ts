@@ -1,5 +1,5 @@
 import {MAX_FUTURE_BLOCK_TIME, POW_LIMIT_TARGET} from '../constants'
-import {bitsToTarget, hashHeaderRaw, headerWork, rawPrevHash} from './pow'
+import {bitsToTarget, hashHeaderRaw, headerFields, headerWork, rawPrevHash} from './pow'
 import {bitsAccepted, expectedBits, expectedBitsForRange} from './difficulty'
 import {Network} from '../../src/types/Network'
 import type {PersistedHeader} from '../types/chainStore'
@@ -22,12 +22,12 @@ export function validateHeaders(
   const batch: DifficultyBlock[] = []
   for (const raw of rawHeaders) {
     const height = startHeight + batch.length + 1
-    if (raw.length < 80) {
+    const fields = headerFields(raw)
+    if (fields == null) {
       log.warn(`reject ~h=${height} short header (${raw.length} bytes)`)
       return null
     }
-    const view = new DataView(raw.buffer, raw.byteOffset, raw.byteLength)
-    batch.push({height, time: view.getUint32(68, true), nBits: view.getUint32(72, true)})
+    batch.push({height, time: fields.time, nBits: fields.nBits})
   }
   // Every context block sits below the batch, so the committed window answers it
   // even on a fork, where the heights above belong to another branch.

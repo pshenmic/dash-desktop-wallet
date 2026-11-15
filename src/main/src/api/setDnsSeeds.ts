@@ -1,5 +1,6 @@
 import {IpcMainInvokeEvent} from 'electron/utility'
 import {z} from 'zod'
+import {zodErrorMessage} from '../utils/zodErrorMessage'
 import {isDnsSeedHost} from '../../p2p/net/peerAddress'
 import {NetworkNameSchema, PeerListSchema} from '../preferences/network'
 import {ApplicationService} from '../services/app/ApplicationService'
@@ -18,9 +19,8 @@ export class SetDnsSeedsHandler {
 
   handle = async (_event: IpcMainInvokeEvent, network: unknown, seeds: unknown): Promise<void> => {
     const args = ArgsSchema.safeParse({network, seeds})
-    // A ZodError crossing IPC arrives as its class name only.
     if (!args.success) {
-      throw new Error(`setDnsSeeds: ${args.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join(', ')}`)
+      throw new Error(zodErrorMessage('setDnsSeeds', args.error))
     }
 
     const invalid = args.data.seeds.filter(seed => !isDnsSeedHost(seed))
@@ -29,13 +29,7 @@ export class SetDnsSeedsHandler {
     }
 
     const preferences = this.applicationService.preferences
-    await preferences.apply({
-      ...preferences,
-      network: {
-        ...preferences.network,
-        [args.data.network]: {...preferences.network[args.data.network], dnsSeeds: args.data.seeds},
-      },
-    })
+    await preferences.applyNetworkOverride(args.data.network, {dnsSeeds: args.data.seeds})
 
     // A pool resolves its seeds once, on connect, so the session has to be
     // rebuilt — unlike a ban, which the running pools take in place.

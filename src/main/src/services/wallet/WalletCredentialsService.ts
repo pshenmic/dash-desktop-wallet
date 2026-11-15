@@ -8,7 +8,7 @@ import {AddressKeyInfo} from '../../types/Address'
 import {Network} from '../../types/Network'
 import {COIN_TYPE, PLATFORM_ACCOUNT} from '../../constants/addresses'
 import {decryptMnemonic, encryptMnemonic} from '../../utils'
-import {coreAccountPath} from '../../utils/addressDiscovery'
+import {coreAccountPath, coreAddressPath} from '../../utils/addressDiscovery'
 import {masternodeKeys} from '../../utils/masternodeKeys'
 import {derivePath256} from '../../utils/dashPayKeys'
 import {requireWallet} from '../../utils/requireWallet'
@@ -143,7 +143,7 @@ export class WalletCredentialsService {
       const hdKey = this.keyPair.seedToHdKey(seed, network)
       const coinType = COIN_TYPE[network]
 
-      const key = await this.keyPair.derivePath(hdKey, `m/44'/${coinType}'/0'/1/${referenceWalletAddress.index}`)
+      const key = await this.keyPair.derivePath(hdKey, coreAddressPath(coinType, true, referenceWalletAddress.index))
       if (!key.publicKey) {
         return false
       }

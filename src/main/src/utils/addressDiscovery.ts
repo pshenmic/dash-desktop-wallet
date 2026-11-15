@@ -11,6 +11,10 @@ export function coreAccountPath(coinType: number, accountId: number): string {
   return `m/44'/${coinType}'/${accountId}'`
 }
 
+export function coreAddressPath(coinType: number, isChange: boolean, index: number): string {
+  return `${coreAccountPath(coinType, 0)}/${isChange ? 1 : 0}/${index}`
+}
+
 export function deriveCorePublicKey(coreXpub: string, network: Network, isChange: boolean, index: number): Uint8Array {
   const accountNode = HDKey.fromExtendedKey(coreXpub, HD_VERSIONS[network])
   const child = accountNode.deriveChild(isChange ? 1 : 0).deriveChild(index)
@@ -23,12 +27,12 @@ export function deriveCorePublicKey(coreXpub: string, network: Network, isChange
 // One BIP-44 chain of the account xpub. Account 0 is the only account this
 // wallet has, so the path is fixed once the chain is chosen.
 export function coreAddressDeriver(coreXpub: string, network: Network, isChange: boolean): AddressDeriver {
-  const chainPath = `${coreAccountPath(COIN_TYPE[network], 0)}/${isChange ? 1 : 0}`
+  const coinType = COIN_TYPE[network]
   return {
     derive: index => ({
       index,
       address: keyPair.p2pkhAddress(deriveCorePublicKey(coreXpub, network, isChange, index), network),
-      derivationPath: `${chainPath}/${index}`,
+      derivationPath: coreAddressPath(coinType, isChange, index),
     }),
   }
 }

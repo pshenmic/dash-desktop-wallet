@@ -47,21 +47,18 @@ export async function identityCreateFromAddresses(payload: Payload, ctx: Operati
   const stHash = await broadcast(sdk, transition.toStateTransition(), ctx)
 
   // The id is derived from the master key, so it is only readable back off the
-  // chain once the transition is in a block.
+  // chain once the transition is in a block. The read stays inside the guard:
+  // a resolved-but-malformed answer falls back the same as a rejection.
   const masterKeyHash = keys[0].privateKey.getPublicKeyHash()
-  let identifier: string
-  try {
-    identifier = (await sdk.identities.getIdentityByPublicKeyHash(masterKeyHash)).id.base58()
-  } catch {
-    try {
-      identifier = (await sdk.identities.getIdentityByNonUniquePublicKeyHash(masterKeyHash)).id.base58()
-    } catch {
-      throw new OperationError(
-        'Identity was broadcast but could not be resolved yet — re-open the wallet to pick it up',
-        'network',
-        stHash,
-      )
-    }
+  const identifier =
+    await sdk.identities.getIdentityByPublicKeyHash(masterKeyHash).then(identity => identity.id.base58()).catch(() => null)
+    ?? await sdk.identities.getIdentityByNonUniquePublicKeyHash(masterKeyHash).then(identity => identity.id.base58()).catch(() => null)
+  if (identifier == null) {
+    throw new OperationError(
+      'Identity was broadcast but could not be resolved yet — re-open the wallet to pick it up',
+      'network',
+      stHash,
+    )
   }
 
   return {stHash, identifier}

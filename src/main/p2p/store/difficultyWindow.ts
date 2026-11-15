@@ -1,4 +1,5 @@
 import {DIFFICULTY_WINDOW_DEPTH} from '../constants'
+import {headerFields} from '../utils/pow'
 import type {ChainStore} from './ChainStore'
 import type {DifficultyBlock} from '../types/difficulty'
 
@@ -21,9 +22,9 @@ export class DifficultyWindow {
     const from = Math.max(2, tipHeight - DIFFICULTY_WINDOW_DEPTH)
     this.floorHeight = from
     for (const {height, raw} of await chainStore.iterateHeadersInRange(from, tipHeight)) {
-      if (raw.length < 80) continue
-      const view = new DataView(raw.buffer, raw.byteOffset, raw.byteLength)
-      this.byHeight.set(height, {height, time: view.getUint32(68, true), nBits: view.getUint32(72, true)})
+      const fields = headerFields(raw)
+      if (fields == null) continue
+      this.byHeight.set(height, {height, time: fields.time, nBits: fields.nBits})
     }
   }
 

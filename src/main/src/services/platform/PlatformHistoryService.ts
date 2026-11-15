@@ -7,6 +7,7 @@ import {ShieldedNoteDAO} from '../../database/ShieldedNoteDAO'
 import {ShieldedPoolDAO} from '../../database/ShieldedPoolDAO'
 import {WalletDAO} from '../../database/WalletDAO'
 import {PlatformExplorerProvider} from '../../providers/PlatformExplorerProvider'
+import {joinInFlight} from '../../utils/concurrency'
 import {Logger} from '../../utils/logger'
 import {requireWallet} from '../../utils/requireWallet'
 import {ShieldedSend} from '../../types/PlatformTransaction'
@@ -72,20 +73,13 @@ export class PlatformHistoryService {
   async refresh(walletId: string): Promise<void> {
     // A send during the periodic refresh, or two sends in a row, would otherwise
     // ask the explorer for the same pages twice over.
-    const walking = this.walks.get(walletId)
-    if (walking != null) return walking
-
-    const walk = this.walkSources(walletId)
-    this.walks.set(walletId, walk)
-    try {
-      await walk
-      this.failedRefreshes.delete(walletId)
-    } catch (err) {
-      this.failedRefreshes.add(walletId)
-      throw err
-    } finally {
-      this.walks.delete(walletId)
-    }
+    return joinInFlight(this.walks, walletId, () => this.walkSources(walletId).then(
+      () => { this.failedRefreshes.delete(walletId) },
+      err => {
+        this.failedRefreshes.add(walletId)
+        throw err
+      },
+    ))
   }
 
   private async walkSources(walletId: string): Promise<void> {

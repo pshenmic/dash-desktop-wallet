@@ -1,5 +1,6 @@
 import {IpcMainInvokeEvent} from 'electron/utility'
 import {z} from 'zod'
+import {zodErrorMessage} from '../utils/zodErrorMessage'
 import {bannedSet, dialTarget, parsePeerAddress} from '../../p2p/net/peerAddress'
 import {NetworkNameSchema, PeerListSchema} from '../preferences/network'
 import {ApplicationService} from '../services/app/ApplicationService'
@@ -19,7 +20,7 @@ export class SetBannedPeersHandler {
   handle = async (_event: IpcMainInvokeEvent, network: unknown, peers: unknown): Promise<void> => {
     const args = ArgsSchema.safeParse({network, peers})
     if (!args.success) {
-      throw new Error(`setBannedPeers: ${args.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join(', ')}`)
+      throw new Error(zodErrorMessage('setBannedPeers', args.error))
     }
 
     // A ban is matched against the socket a peer opened, which always names a
@@ -46,13 +47,7 @@ export class SetBannedPeersHandler {
       }
     }
 
-    await preferences.apply({
-      ...preferences,
-      network: {
-        ...preferences.network,
-        [args.data.network]: {...preferences.network[args.data.network], bannedPeers: args.data.peers},
-      },
-    })
+    await preferences.applyNetworkOverride(args.data.network, {bannedPeers: args.data.peers})
 
     await this.walletSyncService.reloadBannedPeers()
   }

@@ -4,7 +4,7 @@ import { coreOwnedAddresses, platformOwnedParticipants } from '../../src/rendere
 
 function address(value: string, walletId = 'wallet-a'): WalletAddressDto {
   return { walletId, address: value, accountId: 0, derivationPath: '', index: 0,
-    isChange: 0, isUsed: true, balance: 0n, txCount: 1, label: null, usdBalance: null }
+    isChange: 0, isUsed: true, balance: 0n, txCount: 1, label: null }
 }
 
 describe('transaction address ownership', () => {

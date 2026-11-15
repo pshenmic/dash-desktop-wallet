@@ -6,6 +6,7 @@ import {PlatformOperations} from '../../types/messages'
 import {OperationContext, throwIfAborted} from '../types'
 import {DPNS_CONTESTED_INDEX, DPNS_PARENT_DOMAIN, VOTE_POLL_DURATION_MS, VOTE_STATE_NOT_FOUND} from '../../constants'
 import {UsernameVote, UsernameVoteOutcome} from '../../../src/types/Username'
+import {errorMessage} from '../../../src/utils/errorMessage'
 import {usernameStatusOf, scheduledVoteEnd} from '../../../src/utils/username'
 
 type Payload = PlatformOperations['usernameStatus']['payload']
@@ -38,7 +39,7 @@ export async function contest({sdk, network}: OperationContext, normalizedLabel:
         : scheduledVoteEnd(createdAts, VOTE_POLL_DURATION_MS[network]),
     }
   } catch (err) {
-    if (VOTE_STATE_NOT_FOUND.test(err instanceof Error ? err.message : String(err))) return null
+    if (VOTE_STATE_NOT_FOUND.test(errorMessage(err))) return null
     throw err
   }
 }

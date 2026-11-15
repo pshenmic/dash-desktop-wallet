@@ -16,6 +16,9 @@ import {ShieldedSpendPlan, ShieldedSyncState} from '../../src/main/src/types/Shi
 import {FeeQuoteParams, TransitionFeeOperation, UnsignedTransition} from '../../src/main/platform/types/messages'
 import {coreFeeDuffsFor, coreFeePerByte} from '../../src/main/src/utils/coreFeeRate'
 import {lockedDuffsFor} from '../../src/main/src/utils/assetLockTx'
+import {selectTransferInputs} from '../../src/main/src/utils/transferInputs'
+import {CoreSpendSource} from '../../src/main/src/types/CoinSelection'
+import {GroupedAddresses} from '../../src/main/src/types/GroupedAddresses'
 import {ASSET_LOCK_PAYLOAD_BYTES, DUST_THRESHOLD_DUFFS} from '../../src/main/src/constants/chain'
 import {CREDITS_PER_DUFF} from '../../src/main/src/constants/credits'
 import {DEFAULT_PLATFORM_FEE_MULTIPLIER} from '../../src/main/src/constants/fee/platform'
@@ -88,6 +91,28 @@ function service(options: {utxos?: UTXO[]; candidates?: PlatformSourceCandidate[
   const providers = {
     forWallet: () => ({ensureReady, getWalletUtxos: async () => options.utxos ?? []}),
     spendableUtxos: async () => options.utxos ?? [],
+    coreSelection: async (
+      _walletId: string,
+      _network: unknown,
+      amountDuffs: bigint,
+      outputsCount: number,
+      payloadBytes = 0,
+      source?: CoreSpendSource,
+      changeTo?: string,
+    ) => {
+      const grouped = await addressDAO.getAddressesByWalletId() as unknown as GroupedAddresses
+      await ensureReady()
+      const utxos = options.utxos ?? []
+      const selection = selectTransferInputs(
+        grouped,
+        utxos,
+        amountDuffs,
+        inputsCount => coreFeeDuffsFor(DEFAULT_CORE_FEE_MULTIPLIER, inputsCount, outputsCount, true, payloadBytes),
+        source,
+        changeTo,
+      )
+      return {selection, utxos, grouped}
+    },
   }
 
   const svc = new FeeService(

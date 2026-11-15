@@ -121,6 +121,6 @@ describe('CreateWalletHandler', () => {
   it('rejects an invalid network', async () => {
     await expect(
       handler.handle(null as never, VALID_SEEDPHRASE, 'invalidnet' as never, PASSWORD),
-    ).rejects.toThrow('Invalid network')
+    ).rejects.toThrow("createWallet: expected 'mainnet' or 'testnet'")
   })
 })

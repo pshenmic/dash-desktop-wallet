@@ -11,6 +11,7 @@ import {AddressInfo} from '../../../platform/types/messages'
 import {PLATFORM_ADDRESS_WINDOW} from '../../constants/addresses'
 import {platformAddressDeriver} from '../../utils/platformAddress'
 import {runAddressWindow} from '../../utils/addressWindow'
+import {joinInFlight, serializeByKey} from '../../utils/concurrency'
 import {requireWallet} from '../../utils/requireWallet'
 
 // The wallet's DIP-17 transparent addresses: the account xpub, the gap window
@@ -22,6 +23,7 @@ export class PlatformAddressService {
   private platformAddressDAO: PlatformAddressDAO
   private platform: PlatformWorkerService
   private windowInflight = new Map<string, Promise<void>>()
+  private addQueue = new Map<string, Promise<unknown>>()
 
   constructor(walletDAO: WalletDAO, platformAddressDAO: PlatformAddressDAO, platform: PlatformWorkerService) {
     this.walletDAO = walletDAO
@@ -65,6 +67,12 @@ export class PlatformAddressService {
   // Reveals one more address than the window found on its own. Public
   // derivation, so no password: the account xpub is all it takes.
   async addPlatformAddress(walletId: string): Promise<PlatformAddressEntry[]> {
+    // Serialized per wallet: two concurrent reveals would otherwise read the
+    // same frontier and derive the same index, losing one reveal.
+    return serializeByKey(this.addQueue, walletId, () => this.revealNextPlatformAddress(walletId))
+  }
+
+  private async revealNextPlatformAddress(walletId: string): Promise<PlatformAddressEntry[]> {
     const wallet = await requireWallet(this.walletDAO, walletId)
     if (wallet.platformXpub == null) {
       throw new Error('Platform addresses are not derived yet')
@@ -78,16 +86,10 @@ export class PlatformAddressService {
     return this.getPlatformAddresses(walletId)
   }
 
-  // A walk is several sequential worker round trips, on a channel the renderer
-  // polls — the same guard as CoreDiscoveryService.discoveryInflight.
+  // A walk is several sequential worker round trips on a channel the renderer
+  // polls, so concurrent callers share one rather than each starting a walk.
   private extendWindowOnce(wallet: Wallet, infos: Map<string, AddressInfo>): Promise<void> {
-    const existing = this.windowInflight.get(wallet.walletId)
-    if (existing) return existing
-
-    const run = this.extendWindow(wallet, infos)
-      .finally(() => this.windowInflight.delete(wallet.walletId))
-    this.windowInflight.set(wallet.walletId, run)
-    return run
+    return joinInFlight(this.windowInflight, wallet.walletId, () => this.extendWindow(wallet, infos))
   }
 
   private async extendWindow(wallet: Wallet, infos: Map<string, AddressInfo>): Promise<void> {

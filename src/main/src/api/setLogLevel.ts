@@ -15,13 +15,7 @@ export class SetLogLevelHandler {
   handle = async (_event: IpcMainInvokeEvent, logLevel: LogLevel): Promise<void> => {
     const preferences = this.applicationService.preferences
 
-    await preferences.apply({
-      ...preferences,
-      general: {
-        ...preferences.general,
-        logLevel,
-      }
-    })
+    await preferences.applyGeneral({logLevel})
 
     // Each utility process filters at its own end, so a suppressed line never
     // crosses the pipe in the first place.

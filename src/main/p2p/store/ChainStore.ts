@@ -5,6 +5,7 @@ import {displayHexToWire} from '../utils/byteOrder'
 import {ChainTipState, GovernanceSyncState, PersistedHeader, StoredState} from '../types/chainStore'
 import type {ProviderRegistration} from '../types/masternodeList'
 import {HEIGHT_KEY_WIDTH} from '../constants'
+import {createSerializer} from '../utils/serializer'
 
 function headerKey(height: number): string {
   return `h:${height.toString().padStart(HEIGHT_KEY_WIDTH, '0')}`
@@ -56,13 +57,7 @@ export class ChainStore {
   // 'chainExtended' after its write resolves — so without this a burst of
   // tip-follow pushes can announce h+3 before h, and CFilterSyncWorker builds a
   // filter batch over a height it has no hash for.
-  private tipWrites: Promise<void> = Promise.resolve()
-
-  private serializeTipWrite(write: () => Promise<void>): Promise<void> {
-    const next = this.tipWrites.then(write, write)
-    this.tipWrites = next.catch(() => {})
-    return next
-  }
+  private readonly serializeTipWrite = createSerializer()
 
   constructor(path: string, readonly network: Network) {
     this.db = new ClassicLevel<string, Uint8Array>(path, {
@@ -86,8 +81,7 @@ export class ChainStore {
 
   initSyncState = async (): Promise<ChainTipState> => {
     const defaultValue = async (): Promise<{tipHeight: number, tipHash: null}> => {
-      const initial: StoredState = {tipHeight: 0, tipHash: null, updatedAt: Date.now()}
-      await this.db.put(stateKey(this.network), encodeJson(initial))
+      await this.db.put(stateKey(this.network), encodeJson(storedState({tipHeight: 0, tipHash: null})))
       return {tipHeight: 0, tipHash: null}
     }
 
@@ -118,12 +112,7 @@ export class ChainStore {
         // sync x11-rehashing every header on launch — minutes for a full chain.
         batch.put(hashKey(h.height), displayHexToWire(h.hash))
       }
-      const stored: StoredState = {
-        tipHeight: nextState.tipHeight,
-        tipHash: nextState.tipHash,
-        updatedAt: Date.now(),
-      }
-      batch.put(stateKey(this.network), encodeJson(stored))
+      batch.put(stateKey(this.network), encodeJson(storedState(nextState)))
       await batch.write()
     })
   }
@@ -142,12 +131,7 @@ export class ChainStore {
           await iter.close()
         }
       }
-      const stored: StoredState = {
-        tipHeight: nextState.tipHeight,
-        tipHash: nextState.tipHash,
-        updatedAt: Date.now(),
-      }
-      batch.put(stateKey(this.network), encodeJson(stored))
+      batch.put(stateKey(this.network), encodeJson(storedState(nextState)))
       await batch.write()
     })
   }
@@ -171,20 +155,7 @@ export class ChainStore {
     from: number,
     to: number,
     cb: (height: number, wire: Uint8Array) => void,
-  ): Promise<number> => {
-    if (to < from) return 0
-    let n = 0
-    const iter = this.db.iterator({gte: hashKey(from), lte: hashKey(to)})
-    try {
-      for await (const [key, value] of iter) {
-        cb(parseInt(key.slice(2), 10), value)
-        n++
-      }
-    } finally {
-      await iter.close()
-    }
-    return n
-  }
+  ): Promise<number> => this.forEachKeyInRange(hashKey, from, to, cb)
 
   // Migrates chain.db that has headers but no hashes. Chunked during the slow
   // x11 path so partial progress survives a restart.
@@ -200,10 +171,17 @@ export class ChainStore {
     from: number,
     to: number,
     cb: (height: number, header: Uint8Array) => void,
-  ): Promise<number> => {
+  ): Promise<number> => this.forEachKeyInRange(filterHeaderKey, from, to, cb)
+
+  private async forEachKeyInRange(
+    keyOf: (height: number) => string,
+    from: number,
+    to: number,
+    cb: (height: number, value: Uint8Array) => void,
+  ): Promise<number> {
     if (to < from) return 0
     let n = 0
-    const iter = this.db.iterator({gte: filterHeaderKey(from), lte: filterHeaderKey(to)})
+    const iter = this.db.iterator({gte: keyOf(from), lte: keyOf(to)})
     try {
       for await (const [key, value] of iter) {
         cb(parseInt(key.slice(2), 10), value)
@@ -352,4 +330,8 @@ export class ChainStore {
 
 function encodeJson(value: unknown): Uint8Array {
   return new TextEncoder().encode(JSON.stringify(value))
+}
+
+function storedState(tip: ChainTipState): StoredState {
+  return {tipHeight: tip.tipHeight, tipHash: tip.tipHash, updatedAt: Date.now()}
 }

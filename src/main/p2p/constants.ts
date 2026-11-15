@@ -8,6 +8,9 @@ export const HEIGHT_KEY_WIDTH = 12
 
 export const HASH_LEN = 32
 
+// A serialized block header is exactly this long; anything shorter is not one.
+export const HEADER_SIZE = 80
+
 export const POW_LIMIT_BITS = 0x1e0fffff
 
 // powLimit itself (~uint256(0) >> 20), not the round-trip of POW_LIMIT_BITS —
@@ -247,6 +250,10 @@ export const MEMPOOL_REPORT_INTERVAL_MS = 5 * 60_000
 // ── CFilter sync ────────────────────────────────────────────────────────────
 
 export const FILTER_TYPE = 0
+
+// BIP 157: one cfcheckpt anchor per this many blocks, and the cfheaders walk
+// chunks on the same boundaries so every chunk verifies against an anchor.
+export const CF_CHECKPOINT_INTERVAL = 1000
 
 // What the genesis filter header chains from — BIP 157 starts the chain on the
 // zero hash. Read-only; nothing derives from it but the height-1 header.

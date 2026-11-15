@@ -1,3 +1,4 @@
+import {HEADER_SIZE} from '../constants'
 import {wireToDisplayHex} from './byteOrder'
 import {x11Wire} from './x11'
 
@@ -35,6 +36,13 @@ export function headerWork(bits: number): bigint {
 // Bytes 4..35 of a header are its parent's hash, in wire order.
 export function rawPrevHash(raw: Uint8Array): string {
   return wireToDisplayHex(raw.subarray(4, 36))
+}
+
+// time and nBits off the wire header; null when it is too short to be one.
+export function headerFields(raw: Uint8Array): {time: number; nBits: number} | null {
+  if (raw.length < HEADER_SIZE) return null
+  const view = new DataView(raw.buffer, raw.byteOffset, raw.byteLength)
+  return {time: view.getUint32(68, true), nBits: view.getUint32(72, true)}
 }
 
 export function hashHeaderRaw(raw: Uint8Array): string {

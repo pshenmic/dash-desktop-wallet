@@ -9,7 +9,6 @@ function tx(overrides: Partial<Transaction>): Transaction {
     inAmount: 0n,
     outAmount: 0n,
     transferAmount: 0n,
-    usdAmount: '0.0',
     date: new Date('2026-01-01T00:00:00Z'),
     size: 200,
     blockHeight: 0,

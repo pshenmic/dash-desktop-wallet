@@ -32,114 +32,14 @@ export class TransactionDAO {
     }
 
     await this.knex.transaction(async trx => {
-      const txRows = block.txs.map(t => ({
-        wallet_id: block.walletId,
-        txid: t.txid,
-        block_height: block.height,
-        block_hash: block.blockHash,
-        block_time: block.blockTime,
-        raw: Buffer.from(t.raw.buffer, t.raw.byteOffset, t.raw.byteLength),
-      }))
-      // merge (not ignore) so a tx we recorded optimistically at broadcast
-      // (block_height = 0) gets its real height/hash/time when its block is
-      // finally scanned.
-      for (const rows of chunk(txRows, INSERT_CHUNK_SIZE)) {
-        await trx('transactions')
-          .insert(rows)
-          .onConflict(['wallet_id', 'txid'])
-          .merge(['block_height', 'block_hash', 'block_time', 'raw'])
-      }
-
-      const outputRows = block.txs.flatMap(t =>
-        t.outputs.map(o => ({
-          wallet_id: block.walletId,
-          txid: t.txid,
-          vout: o.vout,
-          address: o.address,
-          satoshis: o.satoshis,
-          is_mine: o.isMine,
-        }))
-      )
-      for (const rows of chunk(outputRows, INSERT_CHUNK_SIZE)) {
-        await trx('transaction_outputs')
-          .insert(rows)
-          .onConflict(['wallet_id', 'txid', 'vout'])
-          .ignore()
-      }
-
-      const inputRows = block.txs.flatMap(t =>
-        t.inputs.map(i => ({
-          wallet_id: block.walletId,
-          txid: t.txid,
-          vin: i.vin,
-          prev_txid: i.prevTxid,
-          prev_vout: i.prevVout,
-          sequence: i.sequence,
-        }))
-      )
-      for (const rows of chunk(inputRows, INSERT_CHUNK_SIZE)) {
-        await trx('transaction_inputs')
-          .insert(rows)
-          .onConflict(['wallet_id', 'txid', 'vin'])
-          .ignore()
-      }
-
-      // The send-side address is read right before flipping spent_in_txid, to
-      // avoid re-issuing the lookup afterwards.
-      const usedAddresses = new Set<string>()
-      for (const tx of block.txs) {
-        for (const o of tx.outputs) {
-          if (o.isMine && o.address) usedAddresses.add(o.address)
-        }
-      }
-      // Outpoints whose optimistic (pre-confirmation) spender lost to a
-      // different on-chain spender — those local txs can never confirm.
-      const conflicted = new Set<string>()
-      for (const s of block.spends) {
-        const row = await trx('transaction_outputs')
-          .select('address', 'spent_in_txid')
-          .where({wallet_id: block.walletId, txid: s.prevTxid, vout: s.prevVout})
-          .first()
-        if (row?.address) usedAddresses.add(row.address as string)
-        const prevSpender = row?.spent_in_txid as string | null | undefined
-        if (prevSpender && prevSpender !== s.spentInTxid) conflicted.add(prevSpender)
-        await trx('transaction_outputs')
-          .where({wallet_id: block.walletId, txid: s.prevTxid, vout: s.prevVout})
-          .update({spent_in_txid: s.spentInTxid, spent_at_height: block.height})
-      }
-
-      // Pinned here because after a restart the cfilter scan cannot re-detect
-      // these spends — their inputs were excluded from the seed.
-      for (const tx of block.txs) {
-        await trx('transaction_outputs')
-          .where({wallet_id: block.walletId, spent_in_txid: tx.txid})
-          .whereNull('spent_at_height')
-          .update({spent_at_height: block.height})
-      }
-
-      // Drop local txs displaced by a conflicting on-chain spend.
-      for (const txid of conflicted) {
-        await abandonWithinTrx(trx, block.walletId, txid)
-      }
-      if (usedAddresses.size > 0) {
-        const updated = await trx('addresses')
-          .where('wallet_id', block.walletId)
-          .whereIn('address', [...usedAddresses])
-          .andWhere('is_used', false)
-          .update({is_used: true})
-        log.info(`marked ${updated} address(es) used at h=${block.height} (${usedAddresses.size} candidate(s))`)
-      }
-
-      if (advanceCursor) {
-        await trx('wallet_sync_state')
-          .insert({wallet_id: block.walletId, cfilter_cursor_height: block.height})
-          .onConflict('wallet_id')
-          .merge({
-            cfilter_cursor_height: trx.raw(
-              'MAX(wallet_sync_state.cfilter_cursor_height, excluded.cfilter_cursor_height)'
-            ),
-          })
-      }
+      await insertBlockTxs(trx, block)
+      await insertBlockOutputs(trx, block)
+      await insertBlockInputs(trx, block)
+      const {usedAddresses, conflicted} = await markBlockSpends(trx, block)
+      await pinSpendHeights(trx, block)
+      await abandonConflicted(trx, block.walletId, conflicted)
+      await markAddressesUsed(trx, block, usedAddresses)
+      if (advanceCursor) await advanceCursorMax(trx, block.walletId, block.height)
     })
   }
 
@@ -171,14 +71,7 @@ export class TransactionDAO {
   // Standalone cursor advance (MAX semantics). Used at cfilter scan
   // completion when the scan tip moves past blocks that produced no matches.
   advanceCursor = async (walletId: string, height: number): Promise<void> => {
-    await this.knex('wallet_sync_state')
-      .insert({wallet_id: walletId, cfilter_cursor_height: height})
-      .onConflict('wallet_id')
-      .merge({
-        cfilter_cursor_height: this.knex.raw(
-          'MAX(wallet_sync_state.cfilter_cursor_height, excluded.cfilter_cursor_height)'
-        ),
-      })
+    await advanceCursorMax(this.knex, walletId, height)
   }
 
   // No MAX, unlike advanceCursor: the rewind path has to move the cursor
@@ -238,29 +131,8 @@ export class TransactionDAO {
         .onConflict(['wallet_id', 'txid'])
         .ignore()
 
-      const outputRows = tx.outputs.map(o => ({
-        wallet_id: walletId,
-        txid: tx.txid,
-        vout: o.vout,
-        address: o.address,
-        satoshis: o.satoshis,
-        is_mine: o.isMine,
-      }))
-      for (const rows of chunk(outputRows, INSERT_CHUNK_SIZE)) {
-        await trx('transaction_outputs').insert(rows).onConflict(['wallet_id', 'txid', 'vout']).ignore()
-      }
-
-      const inputRows = tx.inputs.map(i => ({
-        wallet_id: walletId,
-        txid: tx.txid,
-        vin: i.vin,
-        prev_txid: i.prevTxid,
-        prev_vout: i.prevVout,
-        sequence: i.sequence,
-      }))
-      for (const rows of chunk(inputRows, INSERT_CHUNK_SIZE)) {
-        await trx('transaction_inputs').insert(rows).onConflict(['wallet_id', 'txid', 'vin']).ignore()
-      }
+      await insertChunked(trx, 'transaction_outputs', outputRows(walletId, [tx]), ['wallet_id', 'txid', 'vout'])
+      await insertChunked(trx, 'transaction_inputs', inputRows(walletId, [tx]), ['wallet_id', 'txid', 'vin'])
 
       // Only currently-unspent outputs, so an already-recorded spend is never
       // clobbered. No height yet — the spend is still pending.
@@ -652,6 +524,137 @@ export class TransactionDAO {
   }
 }
 
+// The row shapes both the block path and the pending-tx path insert.
+function outputRows(walletId: string, txs: AppliedTx[]): object[] {
+  return txs.flatMap(t => t.outputs.map(o => ({
+    wallet_id: walletId,
+    txid: t.txid,
+    vout: o.vout,
+    address: o.address,
+    satoshis: o.satoshis,
+    is_mine: o.isMine,
+  })))
+}
+
+function inputRows(walletId: string, txs: AppliedTx[]): object[] {
+  return txs.flatMap(t => t.inputs.map(i => ({
+    wallet_id: walletId,
+    txid: t.txid,
+    vin: i.vin,
+    prev_txid: i.prevTxid,
+    prev_vout: i.prevVout,
+    sequence: i.sequence,
+  })))
+}
+
+// MAX semantics so out-of-order application (tip-follow racing the scan)
+// cannot regress the resume marker.
+async function advanceCursorMax(db: Knex | Knex.Transaction, walletId: string, height: number): Promise<void> {
+  await db('wallet_sync_state')
+    .insert({wallet_id: walletId, cfilter_cursor_height: height})
+    .onConflict('wallet_id')
+    .merge({
+      cfilter_cursor_height: db.raw(
+        'MAX(wallet_sync_state.cfilter_cursor_height, excluded.cfilter_cursor_height)'
+      ),
+    })
+}
+
+// Chunked upsert for the block and pending row inserts: merge refreshes the
+// named columns on conflict, ignore leaves an existing row alone.
+async function insertChunked(
+  trx: Knex.Transaction,
+  table: string,
+  rows: object[],
+  conflict: string[],
+  merge?: string[],
+): Promise<void> {
+  for (const slice of chunk(rows, INSERT_CHUNK_SIZE)) {
+    const query = trx(table).insert(slice).onConflict(conflict)
+    await (merge ? query.merge(merge) : query.ignore())
+  }
+}
+
+// merge (not ignore) so a tx we recorded optimistically at broadcast
+// (block_height = 0) gets its real height/hash/time when its block is
+// finally scanned.
+async function insertBlockTxs(trx: Knex.Transaction, block: AppliedBlock): Promise<void> {
+  const txRows = block.txs.map(t => ({
+    wallet_id: block.walletId,
+    txid: t.txid,
+    block_height: block.height,
+    block_hash: block.blockHash,
+    block_time: block.blockTime,
+    raw: Buffer.from(t.raw.buffer, t.raw.byteOffset, t.raw.byteLength),
+  }))
+  await insertChunked(trx, 'transactions', txRows, ['wallet_id', 'txid'], ['block_height', 'block_hash', 'block_time', 'raw'])
+}
+
+async function insertBlockOutputs(trx: Knex.Transaction, block: AppliedBlock): Promise<void> {
+  await insertChunked(trx, 'transaction_outputs', outputRows(block.walletId, block.txs), ['wallet_id', 'txid', 'vout'])
+}
+
+async function insertBlockInputs(trx: Knex.Transaction, block: AppliedBlock): Promise<void> {
+  await insertChunked(trx, 'transaction_inputs', inputRows(block.walletId, block.txs), ['wallet_id', 'txid', 'vin'])
+}
+
+// The send-side address is read right before flipping spent_in_txid, to avoid
+// re-issuing the lookup afterwards. Returns the addresses to mark used and the
+// optimistic spenders a conflicting on-chain spend displaced.
+async function markBlockSpends(
+  trx: Knex.Transaction,
+  block: AppliedBlock,
+): Promise<{usedAddresses: Set<string>; conflicted: Set<string>}> {
+  const usedAddresses = new Set<string>()
+  for (const o of block.txs.flatMap(tx => tx.outputs)) {
+    if (o.isMine && o.address) usedAddresses.add(o.address)
+  }
+  // Outpoints whose optimistic (pre-confirmation) spender lost to a
+  // different on-chain spender — those local txs can never confirm.
+  const conflicted = new Set<string>()
+  for (const s of block.spends) {
+    const row = await trx('transaction_outputs')
+      .select('address', 'spent_in_txid')
+      .where({wallet_id: block.walletId, txid: s.prevTxid, vout: s.prevVout})
+      .first()
+    if (row?.address) usedAddresses.add(row.address as string)
+    const prevSpender = row?.spent_in_txid as string | null | undefined
+    if (prevSpender && prevSpender !== s.spentInTxid) conflicted.add(prevSpender)
+    await trx('transaction_outputs')
+      .where({wallet_id: block.walletId, txid: s.prevTxid, vout: s.prevVout})
+      .update({spent_in_txid: s.spentInTxid, spent_at_height: block.height})
+  }
+  return {usedAddresses, conflicted}
+}
+
+// Pinned here because after a restart the cfilter scan cannot re-detect these
+// spends — their inputs were excluded from the seed.
+async function pinSpendHeights(trx: Knex.Transaction, block: AppliedBlock): Promise<void> {
+  for (const tx of block.txs) {
+    await trx('transaction_outputs')
+      .where({wallet_id: block.walletId, spent_in_txid: tx.txid})
+      .whereNull('spent_at_height')
+      .update({spent_at_height: block.height})
+  }
+}
+
+// Drop local txs displaced by a conflicting on-chain spend.
+async function abandonConflicted(trx: Knex.Transaction, walletId: string, conflicted: Set<string>): Promise<void> {
+  for (const txid of conflicted) {
+    await abandonWithinTrx(trx, walletId, txid)
+  }
+}
+
+async function markAddressesUsed(trx: Knex.Transaction, block: AppliedBlock, usedAddresses: Set<string>): Promise<void> {
+  if (usedAddresses.size === 0) return
+  const updated = await trx('addresses')
+    .where('wallet_id', block.walletId)
+    .whereIn('address', [...usedAddresses])
+    .andWhere('is_used', false)
+    .update({is_used: true})
+  log.info(`marked ${updated} address(es) used at h=${block.height} (${usedAddresses.size} candidate(s))`)
+}
+
 // Frees only inputs held pending, never a confirmed spend, then deletes the
 // phantom rows. Confirmed txs are left untouched.
 async function abandonWithinTrx(trx: Knex.Transaction, walletId: string, txid: string): Promise<void> {
@@ -666,9 +669,49 @@ async function abandonWithinTrx(trx: Knex.Transaction, walletId: string, txid: s
   await trx('transactions').where({wallet_id: walletId, txid}).delete()
 }
 
-// Collapses the cartesian-product join rows into one Transaction per txid.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function txInputRow(r: any): TransactionInput {
+  return {
+    value: ((Number(r.i_prev_satoshis ?? '0')) / 1e8).toFixed(8),
+    n: r.i_vin ?? 0,
+    addr: r.i_prev_address ?? '',
+    prevTxId: r.i_prev_txid ?? '',
+    prevVout: r.i_prev_vout ?? 0,
+    sequence: r.i_sequence ?? 0,
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function txOutputRow(r: any): TransactionOutput {
+  return {
+    value: ((Number(r.o_satoshis ?? '0')) / 1e8).toFixed(8),
+    n: r.o_vout ?? 0,
+    address: r.o_address ?? '',
+    spentTxId: r.o_spent_in_txid ?? '',
+    spentIndex: 0,
+    spentHeight: r.o_spent_at_height ?? 0,
+  }
+}
+
 // Direction, amounts and primary address come from the is_mine column on each
 // output, and on the prev output for inputs.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function txSummary(inputRows: any[], outputRows: any[]) {
+  const inAmount: bigint = inputRows
+    .filter(r => r.i_prev_is_mine === 1)
+    .reduce((sum: bigint, r) => sum + BigInt(r.i_prev_satoshis ?? '0'), 0n)
+  const outAmount: bigint = outputRows
+    .filter(r => r.o_is_mine === 1)
+    .reduce((sum: bigint, r) => sum + BigInt(r.o_satoshis ?? '0'), 0n)
+  const direction = inAmount > outAmount ? -1 : 1
+  const transferAmount = direction === -1 ? inAmount - outAmount : outAmount - inAmount
+  const primaryAddress = direction === -1
+    ? inputRows.find(r => r.i_prev_is_mine === 1)?.i_prev_address ?? ''
+    : outputRows.find(r => r.o_is_mine === 1)?.o_address ?? ''
+  return {inAmount, outAmount, direction, transferAmount, primaryAddress}
+}
+
+// Collapses the cartesian-product join rows into one Transaction per txid.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function shapeRowsToTransactions(rows: any[], walletId: string): Transaction[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -699,50 +742,14 @@ function shapeRowsToTransactions(rows: any[], walletId: string): Transaction[] {
     const inputRows = [...acc.inputs.values()].sort((a, b) => a.i_vin - b.i_vin)
     const outputRows = [...acc.outputs.values()].sort((a, b) => a.o_vout - b.o_vout)
 
-    const ourInputsTotal: bigint = inputRows
-      .filter(r => r.i_prev_is_mine === 1)
-      .reduce((sum: bigint, r) => sum + BigInt(r.i_prev_satoshis ?? '0'), 0n)
-    const ourOutputsTotal: bigint = outputRows
-      .filter(r => r.o_is_mine === 1)
-      .reduce((sum: bigint, r) => sum + BigInt(r.o_satoshis ?? '0'), 0n)
-
-    const direction = ourInputsTotal > ourOutputsTotal ? -1 : 1
-    const transferAmount = direction === -1
-      ? ourInputsTotal - ourOutputsTotal
-      : ourOutputsTotal - ourInputsTotal
-
-    let primaryAddress = ''
-    if (direction === -1) {
-      primaryAddress = inputRows.find(r => r.i_prev_is_mine === 1)?.i_prev_address ?? ''
-    } else {
-      primaryAddress = outputRows.find(r => r.o_is_mine === 1)?.o_address ?? ''
-    }
-
-    const vin: TransactionInput[] = inputRows.map(r => ({
-      value: ((Number(r.i_prev_satoshis ?? '0')) / 1e8).toFixed(8),
-      n: r.i_vin ?? 0,
-      addr: r.i_prev_address ?? '',
-      prevTxId: r.i_prev_txid ?? '',
-      prevVout: r.i_prev_vout ?? 0,
-      sequence: r.i_sequence ?? 0,
-    }))
-
-    const vout: TransactionOutput[] = outputRows.map(r => ({
-      value: ((Number(r.o_satoshis ?? '0')) / 1e8).toFixed(8),
-      n: r.o_vout ?? 0,
-      address: r.o_address ?? '',
-      spentTxId: r.o_spent_in_txid ?? '',
-      spentIndex: 0,
-      spentHeight: r.o_spent_at_height ?? 0,
-    }))
+    const {inAmount, outAmount, direction, transferAmount, primaryAddress} = txSummary(inputRows, outputRows)
 
     out.push({
       address: primaryAddress,
       direction,
-      inAmount: ourInputsTotal,
-      outAmount: ourOutputsTotal,
+      inAmount,
+      outAmount,
       transferAmount,
-      usdAmount: '0.0',
       // When this wallet saw the tx, for one it did: the block that later
       // carried it is dated by the miner's clock, and moves the row on the list
       // hours after the fact. Milliseconds here, unix seconds on the block.
@@ -753,8 +760,8 @@ function shapeRowsToTransactions(rows: any[], walletId: string): Transaction[] {
       walletId,
       confirmations: 0,
       txid,
-      vin,
-      vout,
+      vin: inputRows.map(txInputRow),
+      vout: outputRows.map(txOutputRow),
       instantLocked: acc.instantLocked,
       chainlocked: acc.chainlocked,
       isLocal: acc.isLocal,

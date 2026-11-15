@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { totalIdentityCredits, totalPlatformAddressCredits, totalWalletCredits } from '../../src/renderer/src/utils/platformBalances'
 
-const identity = (amount: bigint) => ({ balance: { amount, usdAmount: '0' } })
+const identity = (amount: bigint) => ({ balance: { amount } })
 const address = (balanceCredits: bigint) => ({ balanceCredits })
 
 describe('totalIdentityCredits', () => {

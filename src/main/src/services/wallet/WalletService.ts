@@ -27,6 +27,8 @@ import {WalletSyncService} from '../core/WalletSyncService'
 import {encryptMnemonic} from "../../utils";
 import {withUnlockedWallet} from "../../utils/walletSeed";
 import {requireSelectedWallet, requireWallet} from '../../utils/requireWallet'
+import {parseNetwork} from '../../utils/parseNetwork'
+import {retry} from '../../utils/retry'
 import {mergePlatformTransactions} from '../../utils/platformExplorerTransactions'
 import {dashPayAccountPath} from '../../utils/dashPayKeys'
 import {masternodeKeys} from '../../utils/masternodeKeys'
@@ -41,13 +43,12 @@ import {
   IDENTITY_SCAN_LIMIT,
   PLATFORM_ACCOUNT,
 } from '../../constants/addresses'
-import {coreFeeDuffsFor} from '../../utils/coreFeeRate'
 import {identityPath} from '../../utils/identityKeys'
 import {coreAccountPath, coreAddressDeriver} from "../../utils/addressDiscovery";
 import {CoreSpendSource, ListedUtxo} from '../../types/CoinSelection'
 import {withCollateralFlag} from '../../utils/masternodes'
 import {CoreRecipient} from '../../types/CoreTransaction'
-import {requireCoreRecipients, selectableTransferUtxos, selectTransferInputs} from '../../utils/transferInputs'
+import {requireCoreRecipients, selectableTransferUtxos} from '../../utils/transferInputs'
 import {Preferences} from '../../preferences'
 import {ConnectionStatus} from '../../types/ConnectionStatus'
 import {Logger} from '../../utils/logger'
@@ -121,9 +122,7 @@ export class WalletService {
       throw new Error('Seedphrase must be 12, 15, 18, 21, or 24 words')
     }
 
-    if (network !== 'mainnet' && network !== 'testnet') {
-      throw new Error('Invalid network ("mainnet", "testnet")')
-    }
+    parseNetwork('createWallet', network)
 
     const walletId = randomBytes(4).toString('hex')
     const encryptedMnemonic = encryptMnemonic(seedphrase, password, this.pbkdf2Iterations)
@@ -303,12 +302,10 @@ export class WalletService {
     const infos = await provider.getAddressInfos(all.map(a => a.address))
     const byAddress = new Map(infos.map(info => [info.address, info]))
 
-    // TODO: add real usd balance
     const withBalance = (address: Address): Address => ({
       ...address,
       balance: byAddress.get(address.address)?.balance ?? 0n,
       txCount: byAddress.get(address.address)?.txCount ?? 0,
-      usdBalance: '0.0'
     })
 
     return {
@@ -317,14 +314,13 @@ export class WalletService {
     }
   }
 
+  // forWallet resolves the preference per call, so a mode flip during the
+  // window scan still answers with the provider the caller is now on.
   private async coreReadProvider(wallet: Wallet): Promise<WalletProvider> {
-    while (true) {
-      const connectionType = this.preferences.general.connectionType
-      if (connectionType === 'rpc') await this.discovery.ensureXpubAddressWindow(wallet.walletId)
-      if (connectionType === this.preferences.general.connectionType) {
-        return this.providers.forWallet(wallet.walletId, wallet.network)
-      }
+    if (this.preferences.general.connectionType === 'rpc') {
+      await this.discovery.ensureXpubAddressWindow(wallet.walletId)
     }
+    return this.providers.forWallet(wallet.walletId, wallet.network)
   }
 
   // Both chains of one wallet, alongside getWalletBalance. Only L1 reaches the
@@ -368,15 +364,15 @@ export class WalletService {
   // New contact requests, then every address chain they hand out. Without a
   // network the chains wait for the next poll.
   async fetchContactRequestsAndDiscover(walletId: string, attempts = 1): Promise<void> {
-    for (let attempt = 1; attempt <= attempts; attempt++) {
-      try {
-        await this.identities.refreshDashPayRequests(walletId)
-        break
-      } catch (err) {
+    let attempt = 0
+    // A failed fetch is logged and tolerated — discovery still runs.
+    await retry(() => {
+      attempt++
+      return this.identities.refreshDashPayRequests(walletId).catch(err => {
         log.warn(`${walletId}: contact requests not fetched, attempt ${attempt} of ${attempts}:`, err)
-        if (attempt < attempts) await new Promise(resolve => setTimeout(resolve, DASHPAY_START_RETRY_MS))
-      }
-    }
+        throw err
+      })
+    }, attempts, DASHPAY_START_RETRY_MS).catch(() => undefined)
 
     await this.discovery.discoverCoreAddresses(walletId)
   }
@@ -415,9 +411,7 @@ export class WalletService {
   }
 
   async getTransactionByHash(hash: string, network: Network): Promise<Transaction> {
-    if (network !== 'mainnet' && network !== 'testnet') {
-      throw new Error('Invalid network ("mainnet", "testnet")')
-    }
+    parseNetwork('getTransactionByHash', network)
 
     const wallet = await requireSelectedWallet(this.walletDAO)
 
@@ -437,24 +431,20 @@ export class WalletService {
     return {
       dash: {
         amount: addressesBalance,
-        usdAmount: '0.0'
       },
       credits: {
         amount: identitiesBalance,
-        usdAmount: '0.0'
       }
     }
   }
 
   async getBalance(address: string | string[], network: Network): Promise<bigint> {
-    if (network !== 'mainnet' && network !== 'testnet') {
-      throw new Error('Invalid network ("mainnet", "testnet")')
-    }
+    parseNetwork('getBalance', network)
 
     const wallet = await requireSelectedWallet(this.walletDAO)
     const provider = this.providers.forWallet(wallet.walletId, network)
 
-    return await provider.getBalance(address)
+    return provider.getBalance(address)
   }
 
   // One transaction pays many addresses: each recipient is another output, which
@@ -487,19 +477,8 @@ export class WalletService {
         recipientType: this.coreTransactionService.classifyAddress(recipient.address, network),
       }))
       if (changeTo != null) this.coreTransactionService.requireChangeAddress(changeTo, network)
-      const grouped = await this.addressDAO.getAddressesByWalletId(walletId)
-      const provider = this.providers.forWallet(walletId, network)
-      await provider.ensureReady()
-      const {coreFeeMultiplier} = this.preferences.general
-      const {transferInputs, inputTotal, changeAddress, feeDuffs} =
-        selectTransferInputs(
-          grouped,
-          await this.providers.spendableUtxos(walletId, network, source),
-          amountDuffs,
-          inputsCount => coreFeeDuffsFor(coreFeeMultiplier, inputsCount, outputs.length, true),
-          source,
-          changeTo,
-        )
+      const {selection} = await this.providers.coreSelection(walletId, network, amountDuffs, outputs.length, 0, source, changeTo)
+      const {transferInputs, inputTotal, changeAddress, feeDuffs} = selection
 
       const tx = await this.coreTransactionService.buildSignedTransfer({
         inputs: transferInputs,

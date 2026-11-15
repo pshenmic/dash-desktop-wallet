@@ -136,7 +136,7 @@ describe('SyncService reorg forwarding', () => {
   const headerWorker = (): Record<string, unknown> => captured.headerWorkers[captured.headerWorkers.length - 1]!
   const cfilterWorker = (): Record<string, unknown> => captured.cfilterWorkers[captured.cfilterWorkers.length - 1]!
 
-  // The cfilter worker is only built once header sync reports 'synced'.
+  // The cfilter worker boots once header sync reports 'synced'.
   const reachCFilterPhase = async (): Promise<void> => {
     ;(headerWorker() as unknown as {emit: (e: string, s: unknown) => void}).emit('status', {
       phase: 'synced',

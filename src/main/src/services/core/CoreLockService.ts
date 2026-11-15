@@ -1,14 +1,11 @@
-import {AddressDAO} from '../../database/AddressDAO'
 import {WalletDAO} from '../../database/WalletDAO'
 import {WalletProviderFactory} from '../../providers/WalletProviderFactory'
 import {AssetLockFunder, BuiltAssetLock} from '../../types/AssetLock'
 import {Network} from '../../types/Network'
 import {TxLockStatus} from '../../types/TxLockStatus'
-import {pickCreditChangeAddress, selectTransferInputs} from '../../utils/transferInputs'
+import {pickCreditChangeAddress} from '../../utils/transferInputs'
 import {ASSET_LOCK_PAYLOAD_BYTES} from '../../constants/chain'
 import {CoreSpendSource} from '../../types/CoinSelection'
-import {coreFeeDuffsFor} from '../../utils/coreFeeRate'
-import {Preferences} from '../../preferences'
 import {requireWallet} from '../../utils/requireWallet'
 import {CoreTransactionService} from './CoreTransactionService'
 import {WalletSyncService} from './WalletSyncService'
@@ -18,26 +15,20 @@ const log = new Logger('coreLock')
 
 export class CoreLockService implements AssetLockFunder {
   private walletDAO: WalletDAO
-  private addressDAO: AddressDAO
   private walletSyncService: WalletSyncService
   private coreTransactionService: CoreTransactionService
   private providers: WalletProviderFactory
-  private preferences: Preferences
 
   constructor(
     walletDAO: WalletDAO,
-    addressDAO: AddressDAO,
     walletSyncService: WalletSyncService,
     coreTransactionService: CoreTransactionService,
     providers: WalletProviderFactory,
-    preferences: Preferences,
   ) {
     this.walletDAO = walletDAO
-    this.addressDAO = addressDAO
     this.walletSyncService = walletSyncService
     this.coreTransactionService = coreTransactionService
     this.providers = providers
-    this.preferences = preferences
   }
 
   async buildAssetLock(
@@ -53,18 +44,8 @@ export class CoreLockService implements AssetLockFunder {
 
     const network = (await requireWallet(this.walletDAO, walletId)).network
 
-    const grouped = await this.addressDAO.getAddressesByWalletId(walletId)
-    const provider = this.providers.forWallet(walletId, network)
-    await provider.ensureReady()
-    const {coreFeeMultiplier} = this.preferences.general
-    const {transferInputs, inputTotal, changeAddress, feeDuffs} =
-      selectTransferInputs(
-        grouped,
-        await this.providers.spendableUtxos(walletId, network, source),
-        amountDuffs,
-        inputsCount => coreFeeDuffsFor(coreFeeMultiplier, inputsCount, 1, true, ASSET_LOCK_PAYLOAD_BYTES),
-        source,
-      )
+    const {selection, grouped} = await this.providers.coreSelection(walletId, network, amountDuffs, 1, ASSET_LOCK_PAYLOAD_BYTES, source)
+    const {transferInputs, inputTotal, changeAddress, feeDuffs} = selection
 
     const creditTarget = credit ?? pickCreditChangeAddress(grouped, changeAddress)
 

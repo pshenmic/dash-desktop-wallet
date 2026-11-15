@@ -1,6 +1,7 @@
 import {bytesToHex, hexToBytes} from '@noble/hashes/utils.js'
 import {bls} from 'dash-core-sdk'
 import {MASTERNODE_KEY_CHAINS} from '../constants/addresses'
+import {outpointKey} from './outpointKey'
 import {DUFFS_PER_DASH, MASTERNODE_COLLATERAL_DUFFS} from '../constants/chain'
 import {DerivedAddress} from '../types/AddressWindow'
 import {DashscanMasternode} from '../types/Dashscan'
@@ -159,13 +160,13 @@ export function collateralsToStore(owned: Masternode[], stored: MasternodeCollat
 
 // By outpoint, so a node whose collateral moved since the list was read keeps no stale address.
 export function ownedCollaterals(stored: MasternodeCollateral[], listed: Masternode[]): OwnedCollateral[] {
-  const addresses = new Map(listed.map(node => [`${node.collateralTxid}:${node.collateralVout}`, node.collateralAddress]))
-  return stored.map(({proTxHash, txid, vout}) => ({proTxHash, txid, vout, address: addresses.get(`${txid}:${vout}`) ?? null}))
+  const addresses = new Map(listed.map(node => [outpointKey(node.collateralTxid, node.collateralVout), node.collateralAddress]))
+  return stored.map(({proTxHash, txid, vout}) => ({proTxHash, txid, vout, address: addresses.get(outpointKey(txid, vout)) ?? null}))
 }
 
 // By outpoint: another output of the same transaction is an ordinary coin.
 function collateralOutpoints(collaterals: MasternodeCollateral[]): Set<string> {
-  return new Set(collaterals.map(({txid, vout}) => `${txid}:${vout}`))
+  return new Set(collaterals.map(({txid, vout}) => outpointKey(txid, vout)))
 }
 
 // A selection never takes a collateral on its own, since spending it drops the
@@ -173,12 +174,12 @@ function collateralOutpoints(collaterals: MasternodeCollateral[]): Set<string> {
 export function withoutCollaterals(utxos: UTXO[], collaterals: MasternodeCollateral[], source?: CoreSpendSource): UTXO[] {
   if (source?.kind === 'outpoints') return utxos
   const locked = collateralOutpoints(collaterals)
-  return utxos.filter(({txId, vOut}) => !locked.has(`${txId}:${vOut}`))
+  return utxos.filter(({txId, vOut}) => !locked.has(outpointKey(txId, vOut)))
 }
 
 export function withCollateralFlag(utxos: SelectableUtxo[], collaterals: MasternodeCollateral[]): ListedUtxo[] {
   const locked = collateralOutpoints(collaterals)
-  return utxos.map(utxo => ({...utxo, collateral: locked.has(`${utxo.txid}:${utxo.vout}`)}))
+  return utxos.map(utxo => ({...utxo, collateral: locked.has(outpointKey(utxo.txid, utxo.vout))}))
 }
 
 // A node is ours when it carries one of our derived or imported keys, or spends
@@ -190,7 +191,7 @@ export function ownedMasternodes(
   imported: ImportedMasternodeKey[],
   collateral: UTXO[],
 ): Masternode[] {
-  const outpoints = new Set(collateral.map(({txId, vOut}) => `${txId}:${vOut}`))
+  const outpoints = new Set(collateral.map(({txId, vOut}) => outpointKey(txId, vOut)))
   const unique = new Map(nodes.map(node => [node.proTxHash, node]))
   return [...unique.values()]
     .map(node => ({
@@ -200,7 +201,7 @@ export function ownedMasternodes(
       operatorKeyIndex: matches.operator.get(node.proTxHash) ?? null,
       importedRoles: MASTERNODE_KEY_CHAINS.filter(role => imported.some(key => key.role === role && carriesKey(node, key))),
     }))
-    .filter(node => outpoints.has(`${node.collateralTxid}:${node.collateralVout}`)
+    .filter(node => outpoints.has(outpointKey(node.collateralTxid, node.collateralVout))
       || node.importedRoles.length > 0
       || Object.values(matches).some(chainMatches => chainMatches.has(node.proTxHash)))
 }

@@ -171,7 +171,7 @@ describe('mempool watch reporting', () => {
   let logged: string[]
 
   const report = (service: SyncService): void => {
-    ;(service as unknown as {reportMempoolWatch: () => void}).reportMempoolWatch()
+    ;(service as unknown as {lockWatcher: {report: () => void}}).lockWatcher.report()
   }
 
   beforeEach(() => {
@@ -348,9 +348,9 @@ describe('mempool request', () => {
 
     await service.listen({type: 'listen', network: 'testnet'})
 
-    const state = service as unknown as {lockWalletId: string | null; lockAddresses: Set<string>}
-    expect(state.lockWalletId).toBeNull()
-    expect(state.lockAddresses).toEqual(new Set())
+    const state = service as unknown as {lockWatcher: {walletId: string | null; addresses: Set<string>}}
+    expect(state.lockWatcher.walletId).toBeNull()
+    expect(state.lockWatcher.addresses).toEqual(new Set())
   })
 })
 

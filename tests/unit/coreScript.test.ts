@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { utils as sdkUtils } from 'dash-core-sdk'
 import { Base58Check } from 'dash-core-sdk/src/base58check.js'
-import { coreAddressToScript } from '../../src/main/src/utils/coreScript'
+import { coreAddressToScript, decodeCoreAddress } from '../../src/main/src/utils/coreScript'
 
 const keyHash = new Uint8Array(20).fill(7)
 const keyHashHex = '07'.repeat(20)
@@ -32,5 +32,21 @@ describe('coreAddressToScript', () => {
   it('rejects an address from the wrong network', () => {
     expect(() => coreAddressToScript(mainnetP2PKH, 'testnet')).toThrow('not a valid testnet address')
     expect(() => coreAddressToScript(testnetP2SH, 'mainnet')).toThrow('not a valid mainnet address')
+  })
+})
+
+describe('decodeCoreAddress', () => {
+  it('decodes p2pkh and p2sh with the hash', () => {
+    expect(decodeCoreAddress(testnetP2PKH, 'testnet')).toEqual({type: 'p2pkh', hash: keyHash})
+    expect(decodeCoreAddress(testnetP2SH, 'testnet')).toEqual({type: 'p2sh', hash: keyHash})
+  })
+
+  it('returns invalid for malformed or wrong-length input', () => {
+    expect(decodeCoreAddress('not-an-address', 'testnet')).toBe('invalid')
+    expect(decodeCoreAddress(Base58Check.encode(new Uint8Array([19, 1, 2])), 'testnet')).toBe('invalid')
+  })
+
+  it('returns wrong-network for another network\'s address', () => {
+    expect(decodeCoreAddress(mainnetP2PKH, 'testnet')).toBe('wrong-network')
   })
 })

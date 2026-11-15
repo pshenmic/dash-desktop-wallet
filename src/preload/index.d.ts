@@ -217,7 +217,6 @@ interface TransactionDTO {
   inAmount: bigint
   outAmount: bigint
   transferAmount: bigint
-  usdAmount: string
   date: Date
   size: number
   blockHeight: number

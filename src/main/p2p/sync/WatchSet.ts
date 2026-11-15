@@ -41,6 +41,7 @@ export class WatchSet {
   private readonly addresses = new Set<string>()
   private readonly byAddress = new Map<string, WatchAddress>()
   private matchItems: Uint8Array[] = []
+  private itemsDirty = false
   // Display-order proTxHashes. Core puts a ProUpRegTx's proTxHash in the block's
   // filter, so a payout change to one of these matches with nothing of ours spent.
   private readonly providers = new Set<string>()
@@ -58,8 +59,20 @@ export class WatchSet {
     for (const a of addresses) this.add(a)
   }
 
-  // The cfilter match set (GCS membership test input).
+  // The cfilter match set (GCS membership test input): our scripts, the outpoints
+  // we own or spend, and the providers we follow. Derived from the maps below and
+  // rebuilt on read after any of them changes.
   get items(): Uint8Array[] {
+    if (this.itemsDirty) {
+      const outpoints = new Map<string, WalletSyncUtxo | UnconfirmedInputOutpoint>(this.utxos)
+      for (const [key, outpoint] of this.unconfirmedInputOutpoints) outpoints.set(key, outpoint)
+      this.matchItems = [
+        ...[...this.addresses].map(p2pkhScript),
+        ...[...outpoints.values()].map(o => new OutPoint(o.txid, o.vout).bytes()),
+        ...[...this.providers].map(displayHexToWire),
+      ]
+      this.itemsDirty = false
+    }
     return this.matchItems
   }
 
@@ -91,7 +104,7 @@ export class WatchSet {
     if (this.addresses.has(a.address)) return false
     this.addresses.add(a.address)
     this.byAddress.set(a.address, a)
-    this.matchItems.push(p2pkhScript(a.address))
+    this.itemsDirty = true
     this.itemsRevision++
     const chain = this.gap[a.isChange ? 'change' : 'receiving']
     if (a.index > chain.maxIndex) chain.maxIndex = a.index
@@ -102,11 +115,11 @@ export class WatchSet {
   // How many were not watched yet.
   watchProviders(proTxHashes: string[]): number {
     const added = [...new Set(proTxHashes)].filter(proTxHash => !this.providers.has(proTxHash))
-    for (const proTxHash of added) {
-      this.providers.add(proTxHash)
-      this.matchItems.push(displayHexToWire(proTxHash))
+    for (const proTxHash of added) this.providers.add(proTxHash)
+    if (added.length > 0) {
+      this.itemsDirty = true
+      this.itemsRevision++
     }
-    if (added.length > 0) this.itemsRevision++
     return added.length
   }
 
@@ -115,13 +128,7 @@ export class WatchSet {
   setWatchedOutpoints(utxos: WalletSyncUtxo[], unconfirmedInputOutpoints: UnconfirmedInputOutpoint[] = []): void {
     this.utxos = new Map(utxos.map(u => [`${u.txid}:${u.vout}`, u]))
     this.unconfirmedInputOutpoints = new Map(unconfirmedInputOutpoints.map(o => [`${o.txid}:${o.vout}`, o]))
-    const outpoints = new Map<string, WalletSyncUtxo | UnconfirmedInputOutpoint>(this.utxos)
-    for (const [key, outpoint] of this.unconfirmedInputOutpoints) outpoints.set(key, outpoint)
-    this.matchItems = [
-      ...[...this.addresses].map(p2pkhScript),
-      ...[...outpoints.values()].map(o => new OutPoint(o.txid, o.vout).bytes()),
-      ...[...this.providers].map(displayHexToWire),
-    ]
+    this.itemsDirty = true
     this.itemsRevision++
   }
 
@@ -146,49 +153,57 @@ export class WatchSet {
       const txid = tx.hash()
       const payout = payoutUpdate(tx, this.providers, height, this.network)
       if (payout != null) payouts.push(payout)
-      const inputs: AppliedTxInput[] = []
-      const outputs: AppliedTxOutput[] = []
-      let isOurs = false
-
-      for (let vin = 0; vin < tx.inputs.length; vin++) {
-        const input = tx.inputs[vin]!
-        inputs.push({vin, prevTxid: input.txId, prevVout: input.vOut, sequence: input.sequence})
-        const key = `${input.txId}:${input.vOut}`
-        const u = this.utxos.get(key)
-        const unconfirmed = this.unconfirmedInputOutpoints.get(key)
-        if (u || unconfirmed) {
-          spends.push({prevTxid: input.txId, prevVout: input.vOut, spentInTxid: txid})
-          this.utxos.delete(key)
-          isOurs = true
-          if (u) log.info(`spent ${u.txid.slice(0, 16)}…:${u.vout} -${u.satoshis} h=${height}`)
-        }
-      }
-
-      for (let vout = 0; vout < tx.outputs.length; vout++) {
-        const output = tx.outputs[vout]!
-        const address = output.getAddress(this.network === 'mainnet' ? 'Mainnet' : 'Testnet')
-        const isMine = !!(address && this.addresses.has(address))
-        outputs.push({vout, address: address ?? null, satoshis: output.satoshis.toString(), isMine})
-        if (!isMine) continue
-        const watched = this.byAddress.get(address!)
-        if (watched) {
-          const chain = this.gap[watched.isChange ? 'change' : 'receiving']
-          if (watched.index > chain.lastUsed) chain.lastUsed = watched.index
-        }
-        const k = `${txid}:${vout}`
-        if (this.utxos.has(k)) continue
-        const u: WalletSyncUtxo = {txid, vout, satoshis: output.satoshis.toString(), address: address!, height}
-        this.utxos.set(k, u)
-        this.matchItems.push(new OutPoint(txid, vout).bytes())
-        this.itemsRevision++
-        isOurs = true
-        log.info(`received ${txid.slice(0, 16)}…:${vout} +${u.satoshis} h=${height} (${address})`)
-      }
-
-      if (isOurs) txs.push({txid, raw: tx.bytes(), inputs, outputs})
+      const {inputs, isOurs: spentOurs} = this.matchInputs(tx, txid, height, spends)
+      const {outputs, isOurs: receivedOurs} = this.matchOutputs(tx, txid, height)
+      if (spentOurs || receivedOurs) txs.push({txid, raw: tx.bytes(), inputs, outputs})
     }
 
     if (txs.length === 0 && spends.length === 0 && payouts.length === 0) return null
     return {txs, spends, payouts}
+  }
+
+  private matchInputs(tx: Block['txs'][number], txid: string, height: number, spends: AppliedSpend[]): {inputs: AppliedTxInput[]; isOurs: boolean} {
+    const inputs: AppliedTxInput[] = []
+    let isOurs = false
+    for (let vin = 0; vin < tx.inputs.length; vin++) {
+      const input = tx.inputs[vin]!
+      inputs.push({vin, prevTxid: input.txId, prevVout: input.vOut, sequence: input.sequence})
+      const key = `${input.txId}:${input.vOut}`
+      const u = this.utxos.get(key)
+      const unconfirmed = this.unconfirmedInputOutpoints.get(key)
+      if (u || unconfirmed) {
+        spends.push({prevTxid: input.txId, prevVout: input.vOut, spentInTxid: txid})
+        this.utxos.delete(key)
+        isOurs = true
+        if (u) log.info(`spent ${u.txid.slice(0, 16)}…:${u.vout} -${u.satoshis} h=${height}`)
+      }
+    }
+    return {inputs, isOurs}
+  }
+
+  private matchOutputs(tx: Block['txs'][number], txid: string, height: number): {outputs: AppliedTxOutput[]; isOurs: boolean} {
+    const outputs: AppliedTxOutput[] = []
+    let isOurs = false
+    for (let vout = 0; vout < tx.outputs.length; vout++) {
+      const output = tx.outputs[vout]!
+      const address = output.getAddress(this.network === 'mainnet' ? 'Mainnet' : 'Testnet')
+      const isMine = !!(address && this.addresses.has(address))
+      outputs.push({vout, address: address ?? null, satoshis: output.satoshis.toString(), isMine})
+      if (!isMine) continue
+      const watched = this.byAddress.get(address!)
+      if (watched) {
+        const chain = this.gap[watched.isChange ? 'change' : 'receiving']
+        if (watched.index > chain.lastUsed) chain.lastUsed = watched.index
+      }
+      const k = `${txid}:${vout}`
+      if (this.utxos.has(k)) continue
+      const u: WalletSyncUtxo = {txid, vout, satoshis: output.satoshis.toString(), address: address!, height}
+      this.utxos.set(k, u)
+      this.itemsDirty = true
+      this.itemsRevision++
+      isOurs = true
+      log.info(`received ${txid.slice(0, 16)}…:${vout} +${u.satoshis} h=${height} (${address})`)
+    }
+    return {outputs, isOurs}
   }
 }

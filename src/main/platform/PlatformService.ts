@@ -1,4 +1,5 @@
 import {DashPlatformSDK} from 'dash-platform-sdk'
+import {errorMessage} from '../src/utils/errorMessage'
 import {Logger} from '../src/utils/logger'
 import {KeyedLane, Lane} from './Lane'
 import {laneFor, PROVER_LANE} from './constants'
@@ -187,7 +188,7 @@ export class PlatformService {
       return result
     } catch (err) {
       if (request.kind !== 'warmup') {
-        this.setNetworkStatus(request.network, 'error', err instanceof Error ? err.message : String(err))
+        this.setNetworkStatus(request.network, 'error', errorMessage(err))
       }
       if (err instanceof Error && ALL_NODES_BANNED.test(err.message)) this.registry.refillBannedPool(request.network)
       throw err

@@ -31,7 +31,7 @@ function identity(identifier: string, usernames: string[], keys: IdentityKeyDto[
     identifier,
     usernames,
     keys,
-    balance: { amount, usdAmount: '0.0' },
+    balance: { amount },
     derivationPath: '',
     assetLockTxid: null,
   }

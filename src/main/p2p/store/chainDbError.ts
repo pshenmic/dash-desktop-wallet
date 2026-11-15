@@ -1,7 +1,9 @@
 // The LevelDB code has to survive into the message text, because that text is
 // all isFatalChainDbError below gets to match on.
+const errorMessage = (value: unknown): string => value instanceof Error ? value.message : String(value)
+
 export function formatChainDbError(err: unknown): string {
-  const message = err instanceof Error ? err.message : String(err)
+  const message = errorMessage(err)
   const code = (err as { code?: string }).code
   return code ? `${code}: ${message}` : message
 }
@@ -9,9 +11,9 @@ export function formatChainDbError(err: unknown): string {
 // abstract-level reports every failed open as LEVEL_DATABASE_NOT_OPEN and
 // buries the real reason (held lock, IO error) in `cause`.
 export function describeChainDbError(err: unknown): string {
-  const message = err instanceof Error ? err.message : String(err)
+  const message = errorMessage(err)
   const cause = (err as { cause?: unknown })?.cause
-  const causeMsg = cause instanceof Error ? cause.message : cause != null ? String(cause) : null
+  const causeMsg = cause == null ? null : errorMessage(cause)
   return causeMsg ? `${message} (cause: ${causeMsg})` : message
 }
 

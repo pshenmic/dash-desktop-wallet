@@ -4,15 +4,24 @@ import {INSERT_CHUNK_SIZE, LOCAL_SOURCE_PREFIX} from '../constants/database'
 import {CREDITS_PER_DUFF} from '../constants/credits'
 import {chunk} from '../utils/chunk'
 
+// The amount a transition moved: its largest part, or the net credit change
+// when no parts are known; a zero net with locked credits fell back to the lock.
+function movedAmount(largest: bigint | null, net: bigint, lockedCredits: bigint | null): bigint {
+  if (largest == null) {
+    if (net === 0n && lockedCredits != null) return lockedCredits
+    return net < 0n ? -net : net
+  }
+  if (largest === 0n && net === 0n && lockedCredits != null) return lockedCredits
+  return largest
+}
+
 function fromRow({
   wallet_id, hash, type, timestamp, block_height, status, error, gas_credits, net_credits,
 }, lockedCredits: bigint | null, parts: Pick<PlatformTransaction, 'sender' | 'recipient'> | null): PlatformTransaction {
   const net = BigInt(net_credits)
   const amounts = parts == null ? [] : [...parts.sender, ...parts.recipient].map(part => part.amount)
   const largest = amounts.length === 0 ? null : amounts.reduce((amount, next) => next > amount ? next : amount)
-  const moved = largest == null
-    ? net === 0n && lockedCredits != null ? lockedCredits : (net < 0n ? -net : net)
-    : largest === 0n && net === 0n && lockedCredits != null ? lockedCredits : largest
+  const moved = movedAmount(largest, net, lockedCredits)
 
   return {
     walletId: wallet_id,

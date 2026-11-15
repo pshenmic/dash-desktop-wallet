@@ -1,5 +1,6 @@
 import {IpcMainInvokeEvent} from 'electron/utility'
 import {z} from 'zod'
+import {zodErrorMessage} from '../utils/zodErrorMessage'
 import {DEFAULT_PEER_PORT} from '../../p2p/constants'
 import {entryTarget} from '../../p2p/net/peerAddress'
 import {NetworkNameSchema, PeerEntrySchema} from '../preferences/network'
@@ -20,7 +21,7 @@ export class RemoveStaticPeerHandler {
   handle = async (_event: IpcMainInvokeEvent, network: unknown, peer: unknown): Promise<string[]> => {
     const args = ArgsSchema.safeParse({network, peer})
     if (!args.success) {
-      throw new Error(`removeStaticPeer: ${args.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join(', ')}`)
+      throw new Error(zodErrorMessage('removeStaticPeer', args.error))
     }
 
     const preferences = this.applicationService.preferences
@@ -36,13 +37,7 @@ export class RemoveStaticPeerHandler {
       throw new Error(`Removing ${args.data.peer} would leave ${args.data.network} with nothing to dial`)
     }
 
-    await preferences.apply({
-      ...preferences,
-      network: {
-        ...preferences.network,
-        [args.data.network]: {...preferences.network[args.data.network], staticPeers: next},
-      },
-    })
+    await preferences.applyNetworkOverride(args.data.network, {staticPeers: next})
 
     await this.walletSyncService.reloadPeerPreferences()
     return next

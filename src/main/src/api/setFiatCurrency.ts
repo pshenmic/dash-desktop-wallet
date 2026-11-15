@@ -11,12 +11,6 @@ export class SetFiatCurrencyHandler {
   handle = async (_event: IpcMainInvokeEvent, currency: string): Promise<void> => {
     const preferences = this.applicationService.preferences
 
-    await preferences.apply({
-      ...preferences,
-      general: {
-        ...preferences.general,
-        currency,
-      }
-    })
+    await preferences.applyGeneral({currency})
   }
 }

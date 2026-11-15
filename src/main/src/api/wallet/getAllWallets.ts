@@ -1,5 +1,5 @@
 import { IpcMainInvokeEvent } from 'electron/utility'
-import { Wallet } from '../../types/Wallet'
+import { WalletSummary } from '../../types/Wallet'
 import { WalletService } from '../../services/wallet/WalletService'
 
 export class GetAllWalletsHandler {
@@ -9,7 +9,8 @@ export class GetAllWalletsHandler {
     this.walletService = walletService
   }
 
-  handle = async (_event: IpcMainInvokeEvent): Promise<Wallet[]> => {
-    return this.walletService.getAllWallets()
+  handle = async (_event: IpcMainInvokeEvent): Promise<WalletSummary[]> => {
+    const wallets = await this.walletService.getAllWallets()
+    return wallets.map(({walletId, network, label, selected}) => ({walletId, network, label, selected}))
   }
 }

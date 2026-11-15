@@ -1,5 +1,6 @@
 import {IpcMainInvokeEvent} from 'electron/utility'
 import {z} from 'zod'
+import {zodErrorMessage} from '../utils/zodErrorMessage'
 import {DEFAULT_PEER_PORT} from '../../p2p/constants'
 import {entryTarget, parsePeerAddress, peerListEntry} from '../../p2p/net/peerAddress'
 import {NetworkNameSchema, PeerEntrySchema} from '../preferences/network'
@@ -19,9 +20,8 @@ export class PushStaticPeerHandler {
 
   handle = async (_event: IpcMainInvokeEvent, network: unknown, peer: unknown): Promise<string[]> => {
     const args = ArgsSchema.safeParse({network, peer})
-    // A ZodError crossing IPC arrives as its class name only.
     if (!args.success) {
-      throw new Error(`pushStaticPeer: ${args.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join(', ')}`)
+      throw new Error(zodErrorMessage('pushStaticPeer', args.error))
     }
 
     const port = DEFAULT_PEER_PORT[args.data.network]
@@ -47,13 +47,7 @@ export class PushStaticPeerHandler {
     }
 
     const next = [...pinned, peerEntry]
-    await preferences.apply({
-      ...preferences,
-      network: {
-        ...preferences.network,
-        [args.data.network]: {...preferences.network[args.data.network], staticPeers: next},
-      },
-    })
+    await preferences.applyNetworkOverride(args.data.network, {staticPeers: next})
 
     await this.walletSyncService.reloadPeerPreferences()
     return next

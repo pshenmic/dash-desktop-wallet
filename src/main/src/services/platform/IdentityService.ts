@@ -1,4 +1,5 @@
 import {HDKey} from '@scure/bip32'
+import {requireIdentity} from '../../utils/requireIdentity'
 import convertToHomographSafeChars from 'dash-platform-sdk/src/utils/convertToHomographSafeChars.js'
 import {HD_VERSIONS} from '../../constants/addresses'
 import {MAX_KEYS_PER_TRANSITION, MAX_KEYS_TO_DISABLE} from '../../constants/credits'
@@ -7,10 +8,11 @@ import {IdentityDAO} from '../../database/IdentityDAO'
 import {WalletDAO} from '../../database/WalletDAO'
 import {Username, UsernameSearchResult} from '../../types/Username'
 import {DashPayContact} from '../../types/DashPay'
-import {Identity, IdentityInfo} from '../../types/Identity'
+import {IdentityInfo} from '../../types/Identity'
 import {IdentityKeysUpdate, IdentityPrivateKey} from '../../types/IdentityKeys'
 import {Network} from '../../types/Network'
 import {dashPayContacts} from '../../utils/dashPayContacts'
+import {joinInFlight} from '../../utils/concurrency'
 import {dashPayAccountPath} from '../../utils/dashPayKeys'
 import {Logger} from '../../utils/logger'
 import {requireSelectedWallet, requireWallet} from '../../utils/requireWallet'
@@ -49,7 +51,6 @@ export class IdentityService {
     return stored.flatMap(entry => {
       const info = byIdentifier.get(entry.identifier)
       if (info == null) return []
-      // TODO: Implement read usd amount
       return [{
         identityIndex: entry.identityIndex,
         identifier: info.identifier,
@@ -57,20 +58,11 @@ export class IdentityService {
         keys: info.keys,
         balance: {
           amount: info.balance,
-          usdAmount: '0.0'
         },
         derivationPath: entry.derivationPath,
         assetLockTxid: entry.assetLockTxid ?? null
       }]
     })
-  }
-
-  private async requireIdentity(walletId: string, identifier: string): Promise<Identity> {
-    const identity = await this.identityDAO.getByIdentifier(walletId, identifier)
-    if (identity == null) {
-      throw new Error('Identity not found in this wallet')
-    }
-    return identity
   }
 
   // Requests never change, so only those since the newest known are fetched.
@@ -91,12 +83,7 @@ export class IdentityService {
   // Every name with its contest, contact request and contact name, from the
   // network. Callers that arrive while one runs share it.
   refreshDashPay(walletId: string): Promise<void> {
-    const running = this.dashPayRefreshes.get(walletId)
-    if (running != null) return running
-
-    const refresh = this.fetchDashPay(walletId).finally(() => this.dashPayRefreshes.delete(walletId))
-    this.dashPayRefreshes.set(walletId, refresh)
-    return refresh
+    return joinInFlight(this.dashPayRefreshes, walletId, () => this.fetchDashPay(walletId))
   }
 
   private async fetchDashPay(walletId: string): Promise<void> {
@@ -154,7 +141,7 @@ export class IdentityService {
 
   // Accepting a request is sending one back, so this does both.
   async sendDashPayContactRequest(walletId: string, identifier: string, recipient: string, password: string): Promise<DashPayContact[]> {
-    const identity = await this.requireIdentity(walletId, identifier)
+    const identity = await requireIdentity(this.identityDAO,walletId, identifier)
     if (recipient === identifier) {
       throw new Error('An identity cannot send a contact request to itself')
     }
@@ -223,7 +210,7 @@ export class IdentityService {
   }
 
   async registerUsername(walletId: string, identifier: string, label: string, password: string): Promise<Username> {
-    const identity = await this.requireIdentity(walletId, identifier)
+    const identity = await requireIdentity(this.identityDAO,walletId, identifier)
 
     log.info(`${label}: registering for ${identifier}`)
     const check = await withUnlockedWallet(this.walletDAO, walletId, password, ({wallet, seed}) =>
@@ -241,7 +228,7 @@ export class IdentityService {
   }
 
   async getIdentityPrivateKeys(walletId: string, identifier: string, password: string): Promise<IdentityPrivateKey[]> {
-    const identity = await this.requireIdentity(walletId, identifier)
+    const identity = await requireIdentity(this.identityDAO,walletId, identifier)
 
     log.info(`${identifier}: revealing its private keys`)
     const {keys} = await withUnlockedWallet(this.walletDAO, walletId, password, ({wallet, seed}) =>
@@ -251,7 +238,7 @@ export class IdentityService {
 
   // Disabling is final: Platform has no way to enable a key again.
   async updateIdentityKeys(walletId: string, identifier: string, {add, disable}: IdentityKeysUpdate, password: string): Promise<string> {
-    const identity = await this.requireIdentity(walletId, identifier)
+    const identity = await requireIdentity(this.identityDAO,walletId, identifier)
 
     if (add.length === 0 && disable.length === 0) {
       throw new Error('Choose a key to add or disable')

@@ -6,6 +6,6 @@ export interface PendingRequest {
 }
 
 export interface PlatformRequestOptions {
-  onProgress?: (phase: PlatformPhase, fetched: number, total: number) => void
+  onProgress?: (phase: PlatformPhase) => void
   onNotesSpent?: (indexes: number[]) => void
 }

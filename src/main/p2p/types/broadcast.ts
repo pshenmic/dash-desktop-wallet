@@ -8,6 +8,19 @@ export interface BroadcastRejection {
   reason: string
 }
 
+export interface BroadcastPolicy {
+  minPeerAcks: number
+  witnessPeers: number
+  waitForInstantLock: boolean
+  requireInstantLock: boolean
+  peerWaitMs: number
+  timeoutMs: number
+  rebroadcastIntervalMs: number
+  maxRebroadcasts: number
+  unsolicitedPushAfterMs: number
+  failOnReject: boolean
+}
+
 export interface BroadcastPolicyOverrides {
   waitForInstantLock?: boolean
   requireInstantLock?: boolean

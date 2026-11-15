@@ -1,10 +1,7 @@
-import {utilityProcess, UtilityProcess} from 'electron'
-import path from 'path'
+import {UtilityProcess} from 'electron'
 import {randomUUID} from 'crypto'
-import {logChildOutput} from '../../logTransport'
-import {currentLogLevel} from '../../utils/logger'
+import {forkWorker} from '../../utils/forkWorker'
 import {PendingRequest, PlatformRequestOptions} from '../../types/PlatformWorker'
-import {CHILD_OUTPUT_TAIL_LIMIT} from '../../constants/app'
 import {DAPI_URLS_WAIT_MS} from '../../constants/dapi'
 import {Network} from '../../types/Network'
 import {LogLevel} from '../../types/Log'
@@ -46,7 +43,6 @@ export class PlatformWorkerError extends Error {
 // It holds no wallet state and performs no DAO writes — callers own both.
 export class PlatformWorkerService {
   private child: UtilityProcess | null = null
-  private childOutputTail = ''
   private readonly pending = new Map<string, PendingRequest>()
   private readonly progressHandlers = new Map<string, PlatformRequestOptions>()
   private status: PlatformWorkerStatus = emptyPlatformStatus()
@@ -97,11 +93,11 @@ export class PlatformWorkerService {
         settle: outcome => {
           this.pending.delete(requestId)
           this.progressHandlers.delete(requestId)
-          if (outcome.ok) {
-            resolve(outcome.result as PlatformOperationResult<K>)
-          } else {
+          if (!outcome.ok) {
             reject(new PlatformWorkerError(outcome.error))
+            return
           }
+          resolve(outcome.result as PlatformOperationResult<K>)
         },
       })
     })
@@ -111,11 +107,6 @@ export class PlatformWorkerService {
     const request = {type: 'request', requestId, kind, network, payload} as PlatformRequestMessage
     this.send(request)
     return settled
-  }
-
-  cancel = (requestId: string): void => {
-    if (!this.pending.has(requestId)) return
-    this.send({type: 'cancel', requestId})
   }
 
   shutdown = async (): Promise<void> => {
@@ -191,39 +182,15 @@ export class PlatformWorkerService {
   private ensureChild(): UtilityProcess {
     if (this.child != null) return this.child
 
-    const scriptPath = path.join(__dirname, 'platform.js')
-    this.childOutputTail = ''
-    const child = utilityProcess.fork(scriptPath, [], {
-      serviceName: 'platform',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-
-    child.stdout?.on('data', (chunk: Buffer) => {
-      const text = chunk.toString()
-      this.childOutputTail = (this.childOutputTail + text).slice(-CHILD_OUTPUT_TAIL_LIMIT)
-      logChildOutput('platform', text, false)
-    })
-    child.stderr?.on('data', (chunk: Buffer) => {
-      const text = chunk.toString()
-      this.childOutputTail = (this.childOutputTail + text).slice(-CHILD_OUTPUT_TAIL_LIMIT)
-      logChildOutput('platform', text, true)
-    })
-
-    child.on('message', (event: PlatformEvent) => this.handleEvent(event))
-
-    child.on('exit', code => {
-      const tail = this.childOutputTail.trim()
-      log.info(`utility process exited code=${code}`)
-      if (tail) log.error(`last output before exit:\n${tail}`)
+    const child = forkWorker<PlatformEvent>('platform', log, event => this.handleEvent(event), (code, crashDetail) => {
       this.child = null
       this.pinnedNetworks.clear()
       // Every pending request must be settled here or its caller hangs forever.
-      const detail = tail ? `\n--- platform output (tail) ---\n${tail}` : ''
       for (const [requestId, record] of [...this.pending]) {
         record.settle({
           ok: false,
           error: {
-            message: `platform utility process exited (code=${code}) before ${record.kind} ${requestId} completed${detail}`,
+            message: `platform utility process exited (code=${code}) before ${record.kind} ${requestId} completed${crashDetail}`,
             stHash: null,
             code: 'internal',
           },
@@ -236,7 +203,6 @@ export class PlatformWorkerService {
       this.status = emptyPlatformStatus()
     })
 
-    child.postMessage({type: 'setLogLevel', level: currentLogLevel()})
     child.postMessage({type: 'setDapi', dapi: this.preferences.network.dapi})
     for (const [network, keys] of this.quorumKeys) child.postMessage({type: 'setQuorumKeys', network, keys})
     for (const [network, dapiUrls] of this.evonodeDapiUrls) child.postMessage({type: 'setEvonodeDapiUrls', network, dapiUrls})
@@ -246,26 +212,34 @@ export class PlatformWorkerService {
   }
 
   private handleEvent(event: PlatformEvent): void {
-    if (event.type === 'status') {
-      this.status = event.status
-    } else if (event.type === 'response') {
-      const record = this.pending.get(event.requestId)
-      // A response for a request main already settled — a cancel, or a restart.
-      if (record == null) {
-        log.warn(`response for unknown request ${event.requestId}`)
+    switch (event.type) {
+      case 'status':
+        this.status = event.status
+        return
+      case 'response': {
+        const record = this.pending.get(event.requestId)
+        // A response for a request main already settled — a cancel, or a restart.
+        if (record == null) {
+          log.warn(`response for unknown request ${event.requestId}`)
+          return
+        }
+        record.settle(event.ok ? {ok: true, result: event.result} : {ok: false, error: event.error})
         return
       }
-      record.settle(event.ok ? {ok: true, result: event.result} : {ok: false, error: event.error})
-    } else if (event.type === 'progress') {
-      if (event.phase === 'broadcasting') this.transitionBroadcast?.()
-      this.progressHandlers.get(event.requestId)?.onProgress?.(event.phase, event.fetched, event.total)
-    } else if (event.type === 'notesSpent') {
-      this.progressHandlers.get(event.requestId)?.onNotesSpent?.(event.indexes)
-    } else if (event.type === 'pinnedDapiUrls') {
-      setCoreDapiUrls(event.network, event.dapiUrls)
-      this.wakePinWaiters(event.network)
-    } else if (event.type === 'error') {
-      log.error('utility process error:', event.message)
+      case 'progress':
+        if (event.phase === 'broadcasting') this.transitionBroadcast?.()
+        this.progressHandlers.get(event.requestId)?.onProgress?.(event.phase)
+        return
+      case 'notesSpent':
+        this.progressHandlers.get(event.requestId)?.onNotesSpent?.(event.indexes)
+        return
+      case 'pinnedDapiUrls':
+        setCoreDapiUrls(event.network, event.dapiUrls)
+        this.wakePinWaiters(event.network)
+        return
+      case 'error':
+        log.error('utility process error:', event.message)
+        return
     }
   }
 }

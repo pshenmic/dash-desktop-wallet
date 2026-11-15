@@ -1,5 +1,5 @@
 import {IpcMainInvokeEvent} from 'electron/utility'
-import {PeerModeSchema} from '../preferences/network'
+import {parsePeerMode} from '../utils/parseNetwork'
 import {ApplicationService} from '../services/app/ApplicationService'
 import {WalletSyncService} from '../services/core/WalletSyncService'
 
@@ -16,15 +16,12 @@ export class SetPeerModeHandler {
   // is not. 'static' is rejected while no network has a peer to dial — see
   // NetworkPreferencesSchema.
   handle = async (_event: IpcMainInvokeEvent, mode: unknown): Promise<void> => {
-    const parsed = PeerModeSchema.safeParse(mode)
-    if (!parsed.success) {
-      throw new Error(`setPeerMode: expected 'dynamic' or 'static', got ${JSON.stringify(mode)}`)
-    }
+    const parsedMode = parsePeerMode('setPeerMode', mode)
 
     const preferences = this.applicationService.preferences
     await preferences.apply({
       ...preferences,
-      network: {...preferences.network, mode: parsed.data},
+      network: {...preferences.network, mode: parsedMode},
     })
 
     await this.walletSyncService.reloadPeerPreferences()

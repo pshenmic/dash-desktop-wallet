@@ -11,12 +11,6 @@ export class SetCollectMetricsHandler {
   handle = async (_event: IpcMainInvokeEvent, collectMetrics: boolean): Promise<void> => {
     const preferences = this.applicationService.preferences
 
-    await preferences.apply({
-      ...preferences,
-      general: {
-        ...preferences.general,
-        collectMetrics,
-      }
-    })
+    await preferences.applyGeneral({collectMetrics})
   }
 }

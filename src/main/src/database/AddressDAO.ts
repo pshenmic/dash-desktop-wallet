@@ -4,6 +4,7 @@ import {DashPayCache} from './DashPayCache'
 import {GroupedAddresses} from "../types/GroupedAddresses";
 import {INSERT_CHUNK_SIZE, SELECT_CHUNK_SIZE} from '../constants/database'
 import {chunk} from '../utils/chunk'
+import {withPaymentRequestUsage} from './paymentRequestUsage'
 
 function fromRow({wallet_id, account_id, address, derivation_path, index, is_change, is_used, label}): Address {
   return {
@@ -45,14 +46,10 @@ export class AddressDAO {
   }
 
   getAddressesByWalletId = async (walletId: string): Promise<GroupedAddresses> => {
-    // A payment request consumes the address like usage for discovery and receive
-    // selection; the stored is_used stays chain-only.
-    const rows = await this.knex('addresses')
-      .leftJoin('payment_requests as pr', function () {
-        this.on('pr.wallet_id', '=', 'addresses.wallet_id').andOn('pr.address', '=', 'addresses.address')
-      })
-      .select('addresses.wallet_id', 'account_id', 'addresses.address', 'derivation_path', 'index', 'is_change', 'addresses.label',
-        this.knex.raw('CASE WHEN pr.id IS NOT NULL THEN 1 ELSE addresses.is_used END as is_used'))
+    const rows = await withPaymentRequestUsage(
+      this.knex('addresses')
+        .select('addresses.wallet_id', 'account_id', 'addresses.address', 'derivation_path', 'index', 'is_change', 'addresses.label'),
+      this.knex, 'addresses')
       .where('addresses.wallet_id', walletId)
       .orderBy('index', 'asc')
     // Our DashPay receiving chains live in memory, derived again on each refresh.

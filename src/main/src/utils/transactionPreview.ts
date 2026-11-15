@@ -5,6 +5,7 @@ import {ShieldedSpendPlan} from '../types/Shielded'
 import {PreviewEntry, PreviewParams, PreviewRecipient, PreviewRole, PreviewUnit} from '../types/TransactionPreview'
 import {UTXO} from '../types/UTXO'
 import {toAddressInput} from './platformTransfer'
+import {outpointKey} from './outpointKey'
 import {
   FeeParams,
   IdentityFeeOperation,
@@ -12,8 +13,6 @@ import {
   SelectionFeeOperation,
   UnsignedTransition,
 } from '../../platform/types/messages'
-
-const outpoint = (txid: string, vout: number): string => `${txid}:${vout}`
 
 export function previewEntry(
   role: PreviewRole,
@@ -54,9 +53,9 @@ export function recipientEntries(recipients: PreviewRecipient[], unit: PreviewUn
 // The selection names the coins it will spend but not what they hold, so the
 // amounts come back from the set it picked them out of.
 export function coreInputEntries(inputs: TransferInput[], utxos: UTXO[]): PreviewEntry[] {
-  const held = new Map(utxos.map(utxo => [outpoint(utxo.txId, utxo.vOut), utxo.satoshis]))
+  const held = new Map(utxos.map(utxo => [outpointKey(utxo.txId, utxo.vOut), utxo.satoshis]))
   return inputs.map(input => {
-    const reference = outpoint(input.txId, input.vOut)
+    const reference = outpointKey(input.txId, input.vOut)
     const satoshis = held.get(reference)
     if (satoshis == null) throw new Error('Selected UTXO no longer available')
     return previewEntry('input', input.address, satoshis, 'duffs', reference)

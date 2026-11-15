@@ -27,8 +27,7 @@ export class ScanCursorGate {
     this.failed.delete(walletId)
   }
 
-  hasFailures (walletId?: string): boolean {
-    if (walletId != null) return (this.failed.get(walletId)?.size ?? 0) > 0
+  hasFailures (): boolean {
     return this.failed.size > 0
   }
 
@@ -36,10 +35,6 @@ export class ScanCursorGate {
     const heights = this.failed.get(walletId)
     if (heights == null || heights.size === 0) return null
     return Math.min(...heights)
-  }
-
-  failedHeights (walletId: string): number[] {
-    return [...(this.failed.get(walletId) ?? [])].sort((a, b) => a - b)
   }
 
   // Highest height the cursor may be set to for this request, or null when it

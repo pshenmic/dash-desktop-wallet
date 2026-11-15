@@ -51,6 +51,12 @@ export class IdentityDAO {
     })
   }
 
+  insertIdentityIfAbsent = async (identity: Identity, assetLockTxid: string | null): Promise<void> => {
+    const existing = await this.getByIdentifier(identity.walletId, identity.identifier)
+    if (existing != null) return
+    await this.insertIdentity(identity, assetLockTxid)
+  }
+
   removeIdentity = async (walletId: string, identifier: string): Promise<void> => {
     await this.knex('identities').where({ wallet_id: walletId, identifier }).delete()
   }

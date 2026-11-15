@@ -4,7 +4,7 @@ import { coreSendChangeTo, hasUnallocatedCoreFunds, selectedChangeAddress, sugge
 import { TransferOperation } from '../../src/renderer/src/enums/TransferOperation'
 
 function address(value: string, isUsed = false, details: Partial<WalletAddressDto> = {}): WalletAddressDto {
-  return {walletId: 'wallet', accountId: 0, address: value, derivationPath: '', index: 0, isChange: 1, isUsed, balance: 0n, txCount: 0, label: null, usdBalance: null, ...details}
+  return {walletId: 'wallet', accountId: 0, address: value, derivationPath: '', index: 0, isChange: 1, isUsed, balance: 0n, txCount: 0, label: null, ...details}
 }
 
 describe('change address draft', () => {

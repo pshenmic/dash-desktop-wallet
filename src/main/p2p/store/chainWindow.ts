@@ -1,5 +1,5 @@
-import {REORG_MAX_DEPTH} from '../constants'
-import {hashHeaderRaw, headerWork} from '../utils/pow'
+import {HEADER_SIZE, REORG_MAX_DEPTH} from '../constants'
+import {hashHeaderRaw, headerFields, headerWork} from '../utils/pow'
 import type {ChainStore} from './ChainStore'
 import type {ChainWindowEntry, TrimmedHeaders} from '../types/headerSync'
 
@@ -26,9 +26,9 @@ export class ChainWindow {
     const from = Math.max(1, this.tipHeight - REORG_MAX_DEPTH)
     const stored = await chainStore.iterateHeadersInRange(from, this.tipHeight)
     for (const {height, raw} of stored) {
-      if (raw.length < 80) continue
-      const nBits = new DataView(raw.buffer, raw.byteOffset, raw.byteLength).getUint32(72, true)
-      this.record(height, hashHeaderRaw(raw), headerWork(nBits))
+      const fields = headerFields(raw)
+      if (fields == null) continue
+      this.record(height, hashHeaderRaw(raw), headerWork(fields.nBits))
     }
     // Genesis is never written to chain.db, and neither is a resume tip whose
     // headers predate the h: keyspace. Work is only summed above a fork point.
@@ -89,7 +89,7 @@ export class ChainWindow {
 
     while (index < rawHeaders.length) {
       const raw = rawHeaders[index]!
-      if (raw.length < 80) break
+      if (raw.length < HEADER_SIZE) break
       const known = this.byHeight.get(height + 1)
       if (known == null || known.hash !== hashHeaderRaw(raw)) break
       height++

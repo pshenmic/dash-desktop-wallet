@@ -1,5 +1,6 @@
 import {IpcMainInvokeEvent} from 'electron/utility'
 import {z} from 'zod'
+import {zodErrorMessage} from '../utils/zodErrorMessage'
 import {parsePeerAddress} from '../../p2p/net/peerAddress'
 import {NetworkNameSchema, PeerListSchema} from '../preferences/network'
 import {ApplicationService} from '../services/app/ApplicationService'
@@ -18,9 +19,8 @@ export class SetDynamicPeersHandler {
 
   handle = async (_event: IpcMainInvokeEvent, network: unknown, peers: unknown): Promise<void> => {
     const args = ArgsSchema.safeParse({network, peers})
-    // A ZodError crossing IPC arrives as its class name only.
     if (!args.success) {
-      throw new Error(`setDynamicPeers: ${args.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join(', ')}`)
+      throw new Error(zodErrorMessage('setDynamicPeers', args.error))
     }
 
     // Dropped by the pool if it cannot parse. Unlike the pinned list an entry
@@ -32,13 +32,7 @@ export class SetDynamicPeersHandler {
     }
 
     const preferences = this.applicationService.preferences
-    await preferences.apply({
-      ...preferences,
-      network: {
-        ...preferences.network,
-        [args.data.network]: {...preferences.network[args.data.network], dynamicPeers: args.data.peers},
-      },
-    })
+    await preferences.applyNetworkOverride(args.data.network, {dynamicPeers: args.data.peers})
 
     await this.walletSyncService.reloadPeerPreferences()
   }

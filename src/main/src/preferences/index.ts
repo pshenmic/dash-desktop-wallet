@@ -1,7 +1,8 @@
 import fs from "fs/promises";
 import {z} from 'zod'
 import {GeneralPreferences, GeneralPreferencesJSON, GeneralPreferencesSchema} from "./general";
-import {NetworkPreferences, NetworkPreferencesSchema, renameLegacyPeerFields} from "./network";
+import {NetworkPreferences, NetworkPreferencesSchema, PeerOverridesJSON, renameLegacyPeerFields} from "./network";
+import {Network} from '../types/Network'
 import {describePreferenceChanges} from '../utils/preferenceChanges'
 import {Logger} from '../utils/logger'
 
@@ -142,10 +143,6 @@ export class Preferences {
     }
   }
 
-  /**
-   * Update preferences instance with passed values and save on disk.
-   * @param value
-   */
   async apply(value: unknown): Promise<void> {
     const parsed = PreferencesSchema.safeParse(value)
 
@@ -168,9 +165,14 @@ export class Preferences {
     await this.update()
   }
 
-  /**
-   * Save preferencess to selected folder
-   */
+  async applyGeneral(patch: Partial<GeneralPreferencesJSON>): Promise<void> {
+    await this.apply({...this, general: {...this.general, ...patch}})
+  }
+
+  async applyNetworkOverride(network: Network, patch: Partial<PeerOverridesJSON>): Promise<void> {
+    await this.apply({...this, network: {...this.network, [network]: {...this.network[network], ...patch}}})
+  }
+
   async update(): Promise<void> {
     if (this.path != null) {
       await fs.writeFile(this.path, JSON.stringify(this))

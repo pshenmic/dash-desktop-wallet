@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { utils as sdkUtils } from 'dash-core-sdk'
 import { AssetLockTx } from 'dash-core-sdk/src/types/ExtraPayload/AssetLockTx.js'
-import {buildAssetLockOutputs, creditsAfterFee, lockedDuffsFor, locksFeeOnTop, requireAboveFee} from '../../src/main/src/utils/assetLockTx'
+import {buildAssetLockOutputs, chainLockProofHeight, creditsAfterFee, lockedDuffsFor, locksFeeOnTop, requireAboveFee} from '../../src/main/src/utils/assetLockTx'
 import {
   ASSET_LOCK_CREDIT_OUTPUT_INDEX,
   ASSET_LOCK_PAYLOAD_VERSION,
@@ -93,5 +93,26 @@ describe('requireAboveFee', () => {
   it('refuses a lock the fee would consume whole and passes one it would not', () => {
     expect(() => requireAboveFee(FEE / CREDITS_PER_DUFF, FEE)).toThrow('too small')
     expect(() => requireAboveFee(FEE / CREDITS_PER_DUFF + 1n, FEE)).not.toThrow()
+  })
+})
+
+describe('chainLockProofHeight', () => {
+  const locked = {isChainLocked: true, height: 4_200}
+
+  it('names the block once platform’s chainlocked tip has reached it', () => {
+    expect(chainLockProofHeight(locked, 4_200)).toBe(4_200)
+    expect(chainLockProofHeight(locked, 4_201)).toBe(4_200)
+  })
+
+  it('waits while platform is behind the block', () => {
+    expect(chainLockProofHeight(locked, 4_199)).toBeNull()
+  })
+
+  it('waits for a block DAPI has not chainlocked, however many confirmations it has', () => {
+    expect(chainLockProofHeight({isChainLocked: false, height: 4_200}, 4_200)).toBeNull()
+  })
+
+  it('waits while DAPI cannot see the transaction', () => {
+    expect(chainLockProofHeight(null, 4_200)).toBeNull()
   })
 })

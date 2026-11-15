@@ -1,9 +1,8 @@
-export interface AmountWithUsd {
+export interface Amount {
   amount: bigint,
-  usdAmount: string,
 }
 
 export interface WalletBalance {
-  dash: AmountWithUsd
-  credits: AmountWithUsd
+  dash: Amount
+  credits: Amount
 }
