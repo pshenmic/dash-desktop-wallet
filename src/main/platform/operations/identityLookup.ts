@@ -1,4 +1,5 @@
 import {IDENTITY_NOT_FOUND} from '../constants'
+import {errorMessage} from '../../src/utils/errorMessage'
 import {Logger} from '../../src/utils/logger'
 
 const log = new Logger('platform')
@@ -11,7 +12,7 @@ export async function lookupIdentity<T>(query: Promise<T>, label: string): Promi
   try {
     return await query
   } catch (err) {
-    if (!IDENTITY_NOT_FOUND.test(err instanceof Error ? err.message : String(err))) {
+    if (!IDENTITY_NOT_FOUND.test(errorMessage(err))) {
       log.warn(`${label}: identity lookup failed:`, err)
     }
     return null

@@ -1,5 +1,6 @@
 import {createClient} from 'dash-platform-sdk'
 import status from 'dash-platform-sdk/src/node/status.js'
+import {errorMessage} from '../../src/utils/errorMessage'
 import {Network} from '../../src/types/Network'
 import {DAPI_MAX_BLOCK_AGE_MS, DAPI_POOL_READY, DAPI_PROBE_BATCH, DAPI_STATUS_TIMEOUT_MS} from '../constants'
 import {DapiUrlStatus} from '../types/messages'
@@ -59,7 +60,7 @@ export async function probeDapiUrl(dapiUrl: string, network: Network): Promise<D
   } catch (err) {
     const error = abortController.signal.aborted
       ? `no getStatus answer within ${DAPI_STATUS_TIMEOUT_MS}ms`
-      : err instanceof Error ? err.message : String(err)
+      : errorMessage(err)
     return {dapiUrl, proTxHash: null, pingMs: null, driveVersion: null, blockHeight: null, error}
   } finally {
     clearTimeout(timer)

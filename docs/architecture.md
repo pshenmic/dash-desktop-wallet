@@ -90,8 +90,8 @@ numbers in `src/constants/credits`, `src/constants/fee/platform` and
 `src/constants/addresses` (`COIN_TYPE`, `PLATFORM_ACCOUNT`, `SHIELDED_ACCOUNT`),
 all read by `platform/`, plus `src/types/IdentityKeys` in the identity-key
 operations. Separately, `platform/` reaches into a few `src/utils/` helpers —
-`addressOrder`, `coreScript`, `dashPayKeys`, `identityKeys`, `sdkErrors`,
-`shieldedNoteSelection`. That is pure shared logic, not the rule's subject, but
+`addressOrder`, `coreScript`, `dashPayKeys`, `errorMessage`, `identityKeys`,
+`sdkErrors`, `shieldedNoteSelection`. That is pure shared logic, not the rule's subject, but
 do not read the rule as "nothing crosses". `p2p/` does the same with
 `src/utils/governance` (the govobj and vote codecs main signs with), and types
 what it posts to main with `src/types/Masternode` and `src/types/Governance`.

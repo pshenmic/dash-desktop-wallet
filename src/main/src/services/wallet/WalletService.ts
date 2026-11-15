@@ -28,6 +28,7 @@ import {encryptMnemonic} from "../../utils";
 import {withUnlockedWallet} from "../../utils/walletSeed";
 import {requireSelectedWallet, requireWallet} from '../../utils/requireWallet'
 import {parseNetwork} from '../../utils/parseNetwork'
+import {retry} from '../../utils/retry'
 import {mergePlatformTransactions} from '../../utils/platformExplorerTransactions'
 import {dashPayAccountPath} from '../../utils/dashPayKeys'
 import {masternodeKeys} from '../../utils/masternodeKeys'
@@ -363,15 +364,15 @@ export class WalletService {
   // New contact requests, then every address chain they hand out. Without a
   // network the chains wait for the next poll.
   async fetchContactRequestsAndDiscover(walletId: string, attempts = 1): Promise<void> {
-    for (let attempt = 1; attempt <= attempts; attempt++) {
-      try {
-        await this.identities.refreshDashPayRequests(walletId)
-        break
-      } catch (err) {
+    let attempt = 0
+    // A failed fetch is logged and tolerated — discovery still runs.
+    await retry(() => {
+      attempt++
+      return this.identities.refreshDashPayRequests(walletId).catch(err => {
         log.warn(`${walletId}: contact requests not fetched, attempt ${attempt} of ${attempts}:`, err)
-        if (attempt < attempts) await new Promise(resolve => setTimeout(resolve, DASHPAY_START_RETRY_MS))
-      }
-    }
+        throw err
+      })
+    }, attempts, DASHPAY_START_RETRY_MS).catch(() => undefined)
 
     await this.discovery.discoverCoreAddresses(walletId)
   }
