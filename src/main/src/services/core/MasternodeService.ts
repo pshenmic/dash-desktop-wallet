@@ -12,6 +12,7 @@ import {
   Masternode,
   MasternodeKeyChain,
   MasternodeKeyFilter,
+  MasternodeKeys,
   MasternodeRegistrarUpdate,
   MasternodeRegistration,
   MasternodeRegistrationResult,
@@ -23,6 +24,7 @@ import {
   ProviderTxContext,
   ProviderTxPlan,
   RevocationReason,
+  VotingKeyChoice,
 } from '../../types/Masternode'
 import {memoryWindowStore, runAddressWindow} from '../../utils/addressWindow'
 import {coreFeeDuffsFor} from '../../utils/coreFeeRate'
@@ -175,9 +177,7 @@ export class MasternodeService {
       const node = ownerNode(owned, proTxHash)
       const owner = masternodeKeyDeriver(keys, network, 'owner').derive(node.ownerKeyIndex)
 
-      const votingAddress = update.voting.kind === 'keep' ? node.votingAddress
-        : update.voting.kind === 'wallet' ? masternodeKeyDeriver(keys, network, 'voting').derive(unusedKeyIndex(owned, 'voting')).address
-        : update.voting.address
+      const votingAddress = this.votingAddressFor(update.voting, node, keys, network, owned)
       if (this.coreTransactionService.classifyAddress(votingAddress, network) !== 'p2pkh') throw new Error('A voting key is a P2PKH address')
       if (votingAddress === node.collateralAddress) throw new Error('The voting key may not be the collateral address')
 
@@ -230,21 +230,37 @@ export class MasternodeService {
     }, proTxHash)
   }
 
+  private votingAddressFor(voting: VotingKeyChoice, node: Masternode, keys: MasternodeKeys, network: Network, owned: Masternode[]): string {
+    switch (voting.kind) {
+      case 'keep':
+        return node.votingAddress
+      case 'wallet':
+        return masternodeKeyDeriver(keys, network, 'voting').derive(unusedKeyIndex(owned, 'voting')).address
+      case 'external':
+        return voting.address
+    }
+  }
+
   // Operator keys are unique across the list, so an external one is checked
   // against it; a wallet one is unused by construction.
   private async operatorKey(node: Masternode, choice: OperatorKeyChoice, {network, keys, owned, imported, provider}: ProviderTxContext): Promise<string> {
     const deriver = masternodeKeyDeriver(keys, network, 'operator')
-    if (choice.kind === 'wallet') return deriver.derive(unusedKeyIndex(owned, 'operator')).address
-    if (choice.kind === 'keep') {
-      if (node.operatorKeyIndex != null) return deriver.derive(node.operatorKeyIndex).address
-      return imported.find(key => key.role === 'operator' && carriesKey(node, key))?.publicKey
-        ?? bytesToHex(bls.toBasicPublicKey(hexToBytes(node.operatorPublicKey)))
+    switch (choice.kind) {
+      case 'wallet':
+        return deriver.derive(unusedKeyIndex(owned, 'operator')).address
+      case 'keep': {
+        if (node.operatorKeyIndex != null) return deriver.derive(node.operatorKeyIndex).address
+        return imported.find(key => key.role === 'operator' && carriesKey(node, key))?.publicKey
+          ?? bytesToHex(bls.toBasicPublicKey(hexToBytes(node.operatorPublicKey)))
+      }
+      case 'external': {
+        const publicKey = requireBasicOperatorKey(choice.publicKey)
+        const listed = await provider.getMasternodes('operator', masternodeFilterValues('operator', publicKey))
+        if (listed == null) throw new Error('The masternode list has not arrived yet')
+        if (listed.some(entry => entry.proTxHash !== node.proTxHash)) throw new Error('Another masternode already uses this operator key')
+        return publicKey
+      }
     }
-    const publicKey = requireBasicOperatorKey(choice.publicKey)
-    const listed = await provider.getMasternodes('operator', masternodeFilterValues('operator', publicKey))
-    if (listed == null) throw new Error('The masternode list has not arrived yet')
-    if (listed.some(entry => entry.proTxHash !== node.proTxHash)) throw new Error('Another masternode already uses this operator key')
-    return publicKey
   }
 
   // The change is the only output, so it is what has to clear dust. `target` is

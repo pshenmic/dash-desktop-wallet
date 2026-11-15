@@ -39,7 +39,7 @@ export class TransactionDAO {
       await pinSpendHeights(trx, block)
       await abandonConflicted(trx, block.walletId, conflicted)
       await markAddressesUsed(trx, block, usedAddresses)
-      if (advanceCursor) await advanceBlockCursor(trx, block)
+      if (advanceCursor) await advanceCursorMax(trx, block.walletId, block.height)
     })
   }
 
@@ -71,14 +71,7 @@ export class TransactionDAO {
   // Standalone cursor advance (MAX semantics). Used at cfilter scan
   // completion when the scan tip moves past blocks that produced no matches.
   advanceCursor = async (walletId: string, height: number): Promise<void> => {
-    await this.knex('wallet_sync_state')
-      .insert({wallet_id: walletId, cfilter_cursor_height: height})
-      .onConflict('wallet_id')
-      .merge({
-        cfilter_cursor_height: this.knex.raw(
-          'MAX(wallet_sync_state.cfilter_cursor_height, excluded.cfilter_cursor_height)'
-        ),
-      })
+    await advanceCursorMax(this.knex, walletId, height)
   }
 
   // No MAX, unlike advanceCursor: the rewind path has to move the cursor
@@ -138,29 +131,8 @@ export class TransactionDAO {
         .onConflict(['wallet_id', 'txid'])
         .ignore()
 
-      const outputRows = tx.outputs.map(o => ({
-        wallet_id: walletId,
-        txid: tx.txid,
-        vout: o.vout,
-        address: o.address,
-        satoshis: o.satoshis,
-        is_mine: o.isMine,
-      }))
-      for (const rows of chunk(outputRows, INSERT_CHUNK_SIZE)) {
-        await trx('transaction_outputs').insert(rows).onConflict(['wallet_id', 'txid', 'vout']).ignore()
-      }
-
-      const inputRows = tx.inputs.map(i => ({
-        wallet_id: walletId,
-        txid: tx.txid,
-        vin: i.vin,
-        prev_txid: i.prevTxid,
-        prev_vout: i.prevVout,
-        sequence: i.sequence,
-      }))
-      for (const rows of chunk(inputRows, INSERT_CHUNK_SIZE)) {
-        await trx('transaction_inputs').insert(rows).onConflict(['wallet_id', 'txid', 'vin']).ignore()
-      }
+      await insertChunked(trx, 'transaction_outputs', outputRows(walletId, [tx]), ['wallet_id', 'txid', 'vout'])
+      await insertChunked(trx, 'transaction_inputs', inputRows(walletId, [tx]), ['wallet_id', 'txid', 'vin'])
 
       // Only currently-unspent outputs, so an already-recorded spend is never
       // clobbered. No height yet — the spend is still pending.
@@ -552,8 +524,44 @@ export class TransactionDAO {
   }
 }
 
-// Chunked upsert for the three block row inserts: merge refreshes the named
-// columns on conflict, ignore leaves an existing row alone.
+// The row shapes both the block path and the pending-tx path insert.
+function outputRows(walletId: string, txs: AppliedTx[]): object[] {
+  return txs.flatMap(t => t.outputs.map(o => ({
+    wallet_id: walletId,
+    txid: t.txid,
+    vout: o.vout,
+    address: o.address,
+    satoshis: o.satoshis,
+    is_mine: o.isMine,
+  })))
+}
+
+function inputRows(walletId: string, txs: AppliedTx[]): object[] {
+  return txs.flatMap(t => t.inputs.map(i => ({
+    wallet_id: walletId,
+    txid: t.txid,
+    vin: i.vin,
+    prev_txid: i.prevTxid,
+    prev_vout: i.prevVout,
+    sequence: i.sequence,
+  })))
+}
+
+// MAX semantics so out-of-order application (tip-follow racing the scan)
+// cannot regress the resume marker.
+async function advanceCursorMax(db: Knex | Knex.Transaction, walletId: string, height: number): Promise<void> {
+  await db('wallet_sync_state')
+    .insert({wallet_id: walletId, cfilter_cursor_height: height})
+    .onConflict('wallet_id')
+    .merge({
+      cfilter_cursor_height: db.raw(
+        'MAX(wallet_sync_state.cfilter_cursor_height, excluded.cfilter_cursor_height)'
+      ),
+    })
+}
+
+// Chunked upsert for the block and pending row inserts: merge refreshes the
+// named columns on conflict, ignore leaves an existing row alone.
 async function insertChunked(
   trx: Knex.Transaction,
   table: string,
@@ -583,31 +591,11 @@ async function insertBlockTxs(trx: Knex.Transaction, block: AppliedBlock): Promi
 }
 
 async function insertBlockOutputs(trx: Knex.Transaction, block: AppliedBlock): Promise<void> {
-  const outputRows = block.txs.flatMap(t =>
-    t.outputs.map(o => ({
-      wallet_id: block.walletId,
-      txid: t.txid,
-      vout: o.vout,
-      address: o.address,
-      satoshis: o.satoshis,
-      is_mine: o.isMine,
-    }))
-  )
-  await insertChunked(trx, 'transaction_outputs', outputRows, ['wallet_id', 'txid', 'vout'])
+  await insertChunked(trx, 'transaction_outputs', outputRows(block.walletId, block.txs), ['wallet_id', 'txid', 'vout'])
 }
 
 async function insertBlockInputs(trx: Knex.Transaction, block: AppliedBlock): Promise<void> {
-  const inputRows = block.txs.flatMap(t =>
-    t.inputs.map(i => ({
-      wallet_id: block.walletId,
-      txid: t.txid,
-      vin: i.vin,
-      prev_txid: i.prevTxid,
-      prev_vout: i.prevVout,
-      sequence: i.sequence,
-    }))
-  )
-  await insertChunked(trx, 'transaction_inputs', inputRows, ['wallet_id', 'txid', 'vin'])
+  await insertChunked(trx, 'transaction_inputs', inputRows(block.walletId, block.txs), ['wallet_id', 'txid', 'vin'])
 }
 
 // The send-side address is read right before flipping spent_in_txid, to avoid
@@ -665,17 +653,6 @@ async function markAddressesUsed(trx: Knex.Transaction, block: AppliedBlock, use
     .andWhere('is_used', false)
     .update({is_used: true})
   log.info(`marked ${updated} address(es) used at h=${block.height} (${usedAddresses.size} candidate(s))`)
-}
-
-async function advanceBlockCursor(trx: Knex.Transaction, block: AppliedBlock): Promise<void> {
-  await trx('wallet_sync_state')
-    .insert({wallet_id: block.walletId, cfilter_cursor_height: block.height})
-    .onConflict('wallet_id')
-    .merge({
-      cfilter_cursor_height: trx.raw(
-        'MAX(wallet_sync_state.cfilter_cursor_height, excluded.cfilter_cursor_height)'
-      ),
-    })
 }
 
 // Frees only inputs held pending, never a confirmed spend, then deletes the

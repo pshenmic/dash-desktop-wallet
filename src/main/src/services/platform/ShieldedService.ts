@@ -21,6 +21,7 @@ import {coreFeePerByte} from '../../utils/coreFeeRate'
 import {platformAccountXpub, platformAddressDeriver} from '../../utils/platformAddress'
 import {shieldedAddressDeriver} from '../../utils/shieldedAddress'
 import {runAddressWindow} from '../../utils/addressWindow'
+import {joinInFlight, serializeByKey} from '../../utils/concurrency'
 import {AddressWindowStore, DerivedAddress, UsageOracle} from '../../types/AddressWindow'
 import {ShieldedAddressRow} from '../../types/ShieldedAddress'
 import {Preferences} from '../../preferences'
@@ -129,6 +130,24 @@ export class ShieldedService {
     state.error = e instanceof Error ? e.message : String(e)
   }
 
+  // Unlock and run the setup; a failure before the job takes the seed zeroes
+  // it and lands in the state the caller polls.
+  private async startJob(
+    state: {phase: string; error: string | null},
+    walletId: string,
+    password: string,
+    run: (unlocked: UnlockedWallet) => Promise<void> | void,
+  ): Promise<void> {
+    let unlocked: UnlockedWallet | null = null
+    try {
+      unlocked = await unlockWallet(this.walletDAO, walletId, password)
+      await run(unlocked)
+    } catch (e) {
+      if (unlocked != null) zeroSeed(unlocked)
+      this.failed(state, e)
+    }
+  }
+
   getStatus(): ShieldedStatus {
     const {prover, proverError} = this.platform.getStatus()
     return {prover, ready: prover === 'ready', error: proverError}
@@ -156,14 +175,7 @@ export class ShieldedService {
   // addresses, but the second has to read the count the first wrote or one of
   // them is silently lost.
   async addAddress(walletId: string, password: string): Promise<string[]> {
-    const prior = this.addQueue.get(walletId) ?? Promise.resolve()
-    const run = prior.catch(() => {}).then(() => this.revealNextAddress(walletId, password))
-    this.addQueue.set(walletId, run)
-    try {
-      return await run
-    } finally {
-      if (this.addQueue.get(walletId) === run) this.addQueue.delete(walletId)
-    }
+    return serializeByKey(this.addQueue, walletId, () => this.revealNextAddress(walletId, password))
   }
 
   // One index past the frontier. The walk already extended the window so a full
@@ -255,12 +267,7 @@ export class ShieldedService {
   // when the user unlocks a sync. Deduped per network, so wallets sharing one
   // share the download.
   private checkForNewNotes(network: Network, onProgress?: (fetched: number, total: number) => void): Promise<void> {
-    const inFlight = this.noteFetches.get(network)
-    if (inFlight != null) return inFlight
-    const fetch = this.fetchNewNotes(network, onProgress)
-      .finally(() => this.noteFetches.delete(network))
-    this.noteFetches.set(network, fetch)
-    return fetch
+    return joinInFlight(this.noteFetches, network, () => this.fetchNewNotes(network, onProgress))
   }
 
   // Cannot detect incoming notes on its own — that needs trial-decryption, so a
@@ -335,19 +342,11 @@ export class ShieldedService {
 
     const paid = payload.recipients[0]
       ?? (identityId == null ? null : {address: identityId, amountCredits: payload.amountCredits})
-    const ours = paid != null && await this.ownsShieldedAddress(walletId, paid.address)
-
-    await this.history.recordShieldedSend(walletId, {
-      hash,
-      type: SHIELDED_TRANSITION_TYPES[payload.kind],
-      sides: [
-        {address: from, credits: -payload.amountCredits},
-        // Paid to a shielded address of ours: the credits never left, so the
-        // send costs the fee and nothing else.
-        ...(ours ? [{address: paid.address, credits: paid.amountCredits}] : []),
-      ],
-      paid: ours || paid == null ? null : {source: paid.address, amount: paid.amountCredits},
-    }).catch(e => log.error('failed to record a sent shielded transition', e))
+    await this.recordShieldedMove(
+      walletId, hash, SHIELDED_TRANSITION_TYPES[payload.kind],
+      {address: from, credits: payload.amountCredits},
+      paid == null ? null : {address: paid.address, credits: paid.amountCredits},
+    )
   }
 
   // Shielding to anybody else's address is a payment out, so only the address
@@ -357,17 +356,33 @@ export class ShieldedService {
     hash: string,
     shield: {from: string, to: string, credits: bigint},
   ): Promise<void> {
-    const ours = await this.ownsShieldedAddress(walletId, shield.to)
+    await this.recordShieldedMove(
+      walletId, hash, SHIELDED_TRANSITION_TYPES.shield,
+      {address: shield.from, credits: shield.credits},
+      {address: shield.to, credits: shield.credits},
+    )
+  }
+
+  // Paid to a shielded address of ours: the credits never left, so the send
+  // costs the fee and nothing else.
+  private async recordShieldedMove(
+    walletId: string,
+    hash: string,
+    type: string,
+    from: {address: string; credits: bigint},
+    paid: {address: string; credits: bigint} | null,
+  ): Promise<void> {
+    const ours = paid != null && await this.ownsShieldedAddress(walletId, paid.address)
 
     await this.history.recordShieldedSend(walletId, {
       hash,
-      type: SHIELDED_TRANSITION_TYPES.shield,
+      type,
       sides: [
-        {address: shield.from, credits: -shield.credits},
-        ...(ours ? [{address: shield.to, credits: shield.credits}] : []),
+        {address: from.address, credits: -from.credits},
+        ...(ours ? [{address: paid.address, credits: paid.credits}] : []),
       ],
-      paid: ours ? null : {source: shield.to, amount: shield.credits},
-    }).catch(e => log.error('failed to record a sent shield', e))
+      paid: ours || paid == null ? null : {source: paid.address, amount: paid.credits},
+    }).catch(e => log.error('failed to record a sent shielded transition', e))
   }
 
   private async ownsShieldedAddress(walletId: string, address: string): Promise<boolean> {
@@ -404,21 +419,13 @@ export class ShieldedService {
     const {state, running} = this.beginSync(walletId)
     if (running) return state
 
-    let unlocked: UnlockedWallet | null = null
-    try {
-      unlocked = await unlockWallet(this.walletDAO, walletId, password)
-      const {wallet: {network}, seed} = unlocked
-
+    await this.startJob(state, walletId, password, ({wallet: {network}, seed}) => {
       // The scan outlives this method, so it owns the seed and zeroes it however
       // it settles.
-      const held = unlocked
       this.syncNotes(walletId, network, seed, state)
         .catch(e => this.failed(state, e))
-        .finally(() => zeroSeed(held))
-    } catch (e) {
-      if (unlocked != null) zeroSeed(unlocked)
-      this.failed(state, e)
-    }
+        .finally(() => zeroSeed({seed}))
+    })
     return state
   }
 
@@ -548,12 +555,8 @@ export class ShieldedService {
     const {state, running} = this.beginSpend(walletId)
     if (running) return state
 
-    let unlocked: UnlockedWallet | null = null
-    try {
+    await this.startJob(state, walletId, password, async ({wallet: {network}, seed}) => {
       const amountCredits = requireShieldedRecipients(recipients)
-
-      unlocked = await unlockWallet(this.walletDAO, walletId, password)
-      const {wallet: {network}, seed} = unlocked
       await this.revealWindow(walletId, seed, network)
       const notes = await this.loadSpendNotes(network, state)
 
@@ -570,10 +573,7 @@ export class ShieldedService {
         failureAddress: null,
         coreFeePerByte: coreFeePerByte(this.preferences.general.coreFeeMultiplier),
       })
-    } catch (e) {
-      if (unlocked != null) zeroSeed(unlocked)
-      this.failed(state, e)
-    }
+    })
     return state
   }
 
@@ -615,12 +615,9 @@ export class ShieldedService {
     const {state, running} = this.beginSpend(walletId)
     if (running) return state
 
-    let unlocked: UnlockedWallet | null = null
-    try {
+    await this.startJob(state, walletId, password, async ({wallet, seed}) => {
       if (denominationCredits <= 0n) throw new Error('Amount must be greater than zero')
 
-      unlocked = await unlockWallet(this.walletDAO, walletId, password)
-      const {wallet, seed} = unlocked
       const network = wallet.network
       await this.revealWindow(walletId, seed, network)
       const notes = await this.loadSpendNotes(network, state)
@@ -643,10 +640,7 @@ export class ShieldedService {
         failureAddress,
         coreFeePerByte: coreFeePerByte(this.preferences.general.coreFeeMultiplier),
       }, {identityIndex})
-    } catch (e) {
-      if (unlocked != null) zeroSeed(unlocked)
-      this.failed(state, e)
-    }
+    })
     return state
   }
 
@@ -665,7 +659,7 @@ export class ShieldedService {
 
     const unlocked = await unlockWallet(this.walletDAO, walletId, password)
     const {wallet, seed} = unlocked
-    try {
+    return this.assetLock.launch(unlocked, async () => {
       // settleShield subtracts the same fee again, so the amount asked for reaches the pool.
       const lockDuffs = lockedDuffsFor(amountDuffs, await this.shieldFundingFee(wallet.network, amountDuffs, destination))
       const state = await this.assetLock.begin(walletId, 'shielded', destination, lockDuffs)
@@ -675,10 +669,7 @@ export class ShieldedService {
         })
         await this.settleShield(wallet, seed, state, acquired)
       })
-    } catch (error) {
-      zeroSeed(unlocked)
-      throw error
-    }
+    })
   }
 
   async resumeShieldFromL1(walletId: string, row: AssetLockFundingRow, password: string): Promise<AssetLockFundingState> {

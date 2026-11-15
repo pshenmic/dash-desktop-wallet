@@ -8,13 +8,10 @@ import {ShieldedService} from '../platform/ShieldedService'
 import {Preferences} from '../../preferences'
 import {Network} from '../../types/Network'
 import {Wallet} from '../../types/Wallet'
-import {GroupedAddresses} from '../../types/GroupedAddresses'
 import {OperationFee} from '../../types/Fee'
-import {CoreSpendSource} from '../../types/CoinSelection'
-import {PlatformInputOutcome, ShieldInputPlan} from '../../types/PlatformTransfer'
-import {TransferInputSelection, TransferOutput} from '../../types/CoreTransaction'
+import {PlatformInputPlan, ShieldInputPlan} from '../../types/PlatformTransfer'
+import {TransferOutput} from '../../types/CoreTransaction'
 import {PreviewParams, TransactionPreview} from '../../types/TransactionPreview'
-import {UTXO} from '../../types/UTXO'
 import {
   AssetLockFeeOperation,
   FeeOperation,
@@ -29,14 +26,13 @@ import {ASSET_LOCK_PAYLOAD_BYTES} from '../../constants/chain'
 import {CREDITS_PER_DUFF} from '../../constants/credits'
 import {IDENTITY_TRANSFER_MIN_FEE_CREDITS} from '../../constants/fee/platform'
 import {requireWallet} from '../../utils/requireWallet'
-import {maxSelectableAmount, requireAutomaticSelection, selectCoins} from '../../utils/coinSelection'
+import {maxSelectableAmount, selectCoins} from '../../utils/coinSelection'
 import {
   PlatformFeeForInputs,
   automaticWithdrawal,
   maxPlatformCredits,
   maxWithdrawalCredits,
   planWithdrawalInputs,
-  requireAutomaticInputs,
   requireRecipients,
   selectPlatformInputsWithFee,
   planShieldInputs,
@@ -45,10 +41,10 @@ import {
 } from '../../utils/platformTransfer'
 import {coreFeeDuffsFor, coreFeePerByte} from '../../utils/coreFeeRate'
 import {lockedDuffsFor, locksFeeOnTop, requireAboveFee} from '../../utils/assetLockTx'
+import {requireQuoteSources} from '../../utils/quoteSources'
 import {
   pickCreditChangeAddress,
   requireCoreRecipients,
-  selectTransferInputs,
   selectableTransferUtxos,
 } from '../../utils/transferInputs'
 import {
@@ -118,12 +114,12 @@ export class FeeService {
   // how it is priced; what that price is belongs to the worker, not here.
   async estimateFee(walletId: string, operation: FeeOperation, params: FeeParams): Promise<OperationFee> {
     const wallet = await requireWallet(this.walletDAO, walletId)
+    requireQuoteSources(operation, params)
 
     switch (operation) {
       // Paid in Dash on L1, per byte, so the quote runs the selection the send
       // will run rather than a floor the send is free to exceed.
       case 'coreSend': {
-        requireAutomaticInputs(params.platformSource)
         const outputsCount = Array.isArray(params.recipient) ? Math.max(params.recipient.length, 1) : 1
         return {feeCredits: null, ...await this.coreQuote(wallet, params, outputsCount, 0), maxPerTx: null, noteLimit: null}
       }
@@ -135,7 +131,6 @@ export class FeeService {
       case 'assetLockShield':
       case 'identityRegister':
       case 'identityTopUpL1':
-        requireAutomaticInputs(params.platformSource)
         return {
           feeCredits: await this.protocolFee(wallet, operation, params, 1),
           // A lock pays its burn output whatever the recipient list names.
@@ -149,8 +144,6 @@ export class FeeService {
       case 'unshield':
       case 'shieldedWithdrawal':
       case 'identityCreateFromShielded': {
-        requireAutomaticSelection(params.coreSource)
-        requireAutomaticInputs(params.platformSource)
         const outputCount = Array.isArray(params.recipient) ? Math.max(params.recipient.length, 1) : 1
         return this.shielded.estimateSpendFee(
           walletId, operation, params.amountCredits, params.shieldedSource ?? null, outputCount)
@@ -162,7 +155,6 @@ export class FeeService {
       case 'addressWithdrawal':
       case 'identityCreate':
       case 'identityTopUp':
-        requireAutomaticSelection(params.coreSource)
         return this.platformQuote(wallet, operation, params)
 
       // Spends an identity's balance, so there is no price until one is picked.
@@ -173,15 +165,12 @@ export class FeeService {
       case 'usernameRegister':
       case 'dashPayContactRequest':
       case 'identityUpdateKeys':
-        requireAutomaticSelection(params.coreSource)
-        requireAutomaticInputs(params.platformSource)
         return this.credits(params.identityId == null
           ? null
           : await this.protocolFee(wallet, operation, params, 1))
 
       // maxPerTx is what the addresses can shield once input 0 keeps the reserve.
       case 'shield': {
-        requireAutomaticSelection(params.coreSource)
         const {feeCredits, plan} = await this.shieldPlan(wallet, params)
         return {...this.credits(feeCredits), maxPerTx: plan.maxShieldableCredits}
       }
@@ -212,6 +201,7 @@ export class FeeService {
     // Every operation pays something, even where the something is an identity
     // that does not exist yet, so the first recipient always names a payee.
     if (params.recipients.length === 0) throw new Error('A preview needs the recipients the send would pay')
+    requireQuoteSources(operation, params)
     const feeParams = previewFeeParams(params)
 
     switch (operation) {
@@ -247,7 +237,6 @@ export class FeeService {
   }
 
   private async previewCoreSend(wallet: Wallet, params: PreviewParams): Promise<TransactionPreview> {
-    requireAutomaticInputs(params.platformSource)
     const recipients = coreRecipients(params.recipients)
     const amountDuffs = requireCoreRecipients(recipients)
     if (params.changeTo != null) this.core.requireChangeAddress(params.changeTo, wallet.network)
@@ -258,8 +247,8 @@ export class FeeService {
       recipientType: this.core.classifyAddress(recipient.address, wallet.network),
     }))
 
-    const {selection, utxos} = await this.corePlan(
-      wallet, params.coreSource ?? undefined, amountDuffs, outputs.length, 0, params.changeTo ?? undefined)
+    const {selection, utxos} = await this.providers.coreSelection(
+      wallet.walletId, wallet.network, amountDuffs, outputs.length, 0, params.coreSource ?? undefined, params.changeTo ?? undefined)
     const {change, feeDuffs} = coreChangeAndFee(selection, amountDuffs)
     const unsigned = this.core.buildTransfer({
       inputs: selection.transferInputs,
@@ -281,7 +270,6 @@ export class FeeService {
   // Two transactions, and the credit output is the coin whose key signs the
   // proof the L2 half spends.
   private async previewAssetLock(wallet: Wallet, operation: AssetLockFeeOperation, params: PreviewParams, feeParams: FeeParams): Promise<TransactionPreview> {
-    requireAutomaticInputs(params.platformSource)
     const amountDuffs = recipientTotal(params.recipients)
     // The credits the lock will create, which is what the funding prices
     // itself against — an L1 form carries no amount in credits.
@@ -292,8 +280,8 @@ export class FeeService {
     const lockDuffs = feeOnTop ? lockedDuffsFor(amountDuffs, feeCredits) : amountDuffs
     // No change address of its own: a lock is funded through AssetLockService,
     // which never takes one.
-    const {selection, utxos, grouped} =
-      await this.corePlan(wallet, params.coreSource ?? undefined, lockDuffs, 1, ASSET_LOCK_PAYLOAD_BYTES)
+    const {selection, utxos, grouped} = await this.providers.coreSelection(
+      wallet.walletId, wallet.network, lockDuffs, 1, ASSET_LOCK_PAYLOAD_BYTES, params.coreSource ?? undefined)
     const {change, feeDuffs} = coreChangeAndFee(selection, lockDuffs)
     const creditAddress = pickCreditChangeAddress(grouped, selection.changeAddress).address
     const unsigned = this.core.buildAssetLock({
@@ -319,8 +307,6 @@ export class FeeService {
   }
 
   private async previewShieldedSpend(wallet: Wallet, operation: PoolSpendOperation, params: PreviewParams): Promise<TransactionPreview> {
-    requireAutomaticSelection(params.coreSource)
-    requireAutomaticInputs(params.platformSource)
     const plan = await this.shielded.planSpend(
       wallet.walletId, operation, params.amountCredits, params.shieldedSource ?? null, params.recipients.length)
 
@@ -344,12 +330,10 @@ export class FeeService {
   // Credits are divisible, so what an input does not draw stays on its
   // address: these have no change output to come back to.
   private async previewAddressFunded(wallet: Wallet, operation: SelectionFeeOperation, params: PreviewParams, feeParams: FeeParams): Promise<TransactionPreview> {
-    requireAutomaticSelection(params.coreSource)
     // The one address-funded transition that fans out, and so the only one
     // whose recipient list its send validates.
     if (operation === 'addressFundsTransfer') requireRecipients(platformRecipients(params.recipients))
-    const {plan, error} = await this.planInputs(wallet, operation, feeParams)
-    if (plan === null) throw new Error(error)
+    const plan = await this.planInputs(wallet, operation, feeParams)
     const coreRate = coreFeePerByte(this.preferences.general.coreFeeMultiplier)
     const transition = addressFundedTransition(operation, params, plan, coreRate)
 
@@ -363,8 +347,6 @@ export class FeeService {
   }
 
   private async previewIdentityFunded(wallet: Wallet, operation: IdentityFeeOperation, params: PreviewParams, feeParams: FeeParams): Promise<TransactionPreview> {
-    requireAutomaticSelection(params.coreSource)
-    requireAutomaticInputs(params.platformSource)
     const identifier = params.identityId
     if (identifier == null || identifier.length === 0) {
       throw new Error(`${operation} needs the identity that funds it`)
@@ -386,7 +368,6 @@ export class FeeService {
   }
 
   private async previewShield(wallet: Wallet, params: PreviewParams, feeParams: FeeParams): Promise<TransactionPreview> {
-    requireAutomaticSelection(params.coreSource)
     const {feeCredits, plan} = await this.shieldPlan(wallet, feeParams)
     const inputs = selectShieldInputs(plan, params.amountCredits)
 
@@ -401,24 +382,26 @@ export class FeeService {
   }
 
   // The fee scales with the input count, so the selection and the price resolve
-  // together. Sends take the plan and report its refusal; quotes take its fee.
+  // together. Every caller is a send or a preview, so a refusal is thrown in
+  // the words the selection itself would use.
   async planInputs(
     wallet: Wallet,
     operation: SelectionFeeOperation,
     params: FeeParams,
-  ): Promise<PlatformInputOutcome> {
+  ): Promise<PlatformInputPlan> {
     const candidates = await this.addresses.loadCandidates(wallet)
-    if (automaticWithdrawal(operation, params)) {
-      return planWithdrawalInputs(
+    const {plan, error} = automaticWithdrawal(operation, params)
+      ? await planWithdrawalInputs(
         selectablePlatformInputs(candidates), params.amountCredits, this.inputFee(wallet, operation, params))
-    }
-    return selectPlatformInputsWithFee(
-      selectablePlatformInputs(candidates, params.platformSource),
-      params.amountCredits,
-      this.inputFee(wallet, operation, params),
-      params.platformSource,
-      this.outputCount(operation, params),
-    )
+      : await selectPlatformInputsWithFee(
+        selectablePlatformInputs(candidates, params.platformSource),
+        params.amountCredits,
+        this.inputFee(wallet, operation, params),
+        params.platformSource,
+        this.outputCount(operation, params),
+      )
+    if (plan === null) throw new Error(error)
+    return plan
   }
 
   // The shield quote is exact, so its multiplier sizes the reserve instead, as
@@ -511,34 +494,6 @@ export class FeeService {
     if (transition === null) return null
     const {unsignedHex} = await this.platform.request('previewTransition', network, transition)
     return unsignedHex
-  }
-
-  // selectTransferInputs is what the send itself calls, over the same coins at
-  // the same rate, so a preview cannot pick a set the send would not. It is
-  // also where an amount the wallet cannot fund refuses.
-  private async corePlan(
-    wallet: Wallet,
-    source: CoreSpendSource | undefined,
-    amountDuffs: bigint,
-    outputsCount: number,
-    payloadBytes: number,
-    changeTo?: string,
-  ): Promise<{selection: TransferInputSelection; utxos: UTXO[]; grouped: GroupedAddresses}> {
-    const {coreFeeMultiplier} = this.preferences.general
-    const grouped = await this.addressDAO.getAddressesByWalletId(wallet.walletId)
-    const provider = this.providers.forWallet(wallet.walletId, wallet.network)
-    await provider.ensureReady()
-    const utxos = await this.providers.spendableUtxos(wallet.walletId, wallet.network, source)
-
-    const selection = selectTransferInputs(
-      grouped,
-      utxos,
-      amountDuffs,
-      inputsCount => coreFeeDuffsFor(coreFeeMultiplier, inputsCount, outputsCount, true, payloadBytes),
-      source,
-      changeTo,
-    )
-    return {selection, utxos, grouped}
   }
 
   // The fee scales with the inputs the selection takes, so the quote runs that

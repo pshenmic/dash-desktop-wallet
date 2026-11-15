@@ -72,7 +72,7 @@ describe('resuming a funding', () => {
   beforeEach(() => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
     stub.getTransaction.mockReset()
-    stub.getTransaction.mockResolvedValue({height: TX_HEIGHT, confirmations: 1})
+    stub.getTransaction.mockResolvedValue({height: TX_HEIGHT, isChainLocked: true})
   })
 
   afterEach(() => vi.restoreAllMocks())
@@ -98,9 +98,9 @@ describe('resuming a funding', () => {
     expect(proof).toEqual({type: 'chainLock', coreChainLockedHeight: TX_HEIGHT})
   })
 
-  it('asks to wait while the transaction is unconfirmed', async () => {
+  it('asks to wait while the transaction is not chainlocked', async () => {
     const {service, funder} = wire()
-    stub.getTransaction.mockResolvedValue({height: 0, confirmations: 0})
+    stub.getTransaction.mockResolvedValue({height: 0, isChainLocked: false})
 
     await expect(service.reacquire(state(), row())).rejects.toThrow(/please wait/)
 

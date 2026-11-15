@@ -18,10 +18,9 @@ describe('PlatformTransferService seed zeroing', () => {
   beforeEach(() => {
     seed = new Uint8Array([1, 2, 3])
     const wallet = {walletId: 'w1', network: 'testnet'} as Wallet
-    const fee = {planInputs: vi.fn().mockResolvedValue({
-      plan: {inputs: [{candidate: {platformAddress: 'a'}, credits: 1n}], feeStrategy: [], feeCredits: 1n},
-      error: null,
-    })}
+    const fee = {planInputs: vi.fn().mockResolvedValue(
+      {inputs: [{candidate: {platformAddress: 'a'}, credits: 1n}], feeStrategy: [], feeCredits: 1n},
+    )}
     platform = {request: vi.fn().mockResolvedValue({stHash: 'h'})}
     service = new PlatformTransferService(
       {} as WalletDAO, {} as IdentityDAO, {} as AssetLockService,

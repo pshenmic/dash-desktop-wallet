@@ -102,6 +102,14 @@ describe('identity funding from an asset lock', () => {
           .finally(() => unlocked.seed.fill(0))
         return s
       }),
+      launch: vi.fn(async (unlocked: {seed: Uint8Array}, start: () => Promise<AssetLockFundingState>) => {
+        try {
+          return await start()
+        } catch (error) {
+          unlocked.seed.fill(0)
+          throw error
+        }
+      }),
     } as unknown as AssetLockService
 
     insertIdentity = vi.fn().mockResolvedValue(undefined)

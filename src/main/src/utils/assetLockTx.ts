@@ -32,6 +32,17 @@ export function locksFeeOnTop(operation: AssetLockFeeOperation): boolean {
   return operation === 'assetLockFunding' || operation === 'assetLockShield'
 }
 
+// The height a chain lock proof may name, or null while the tx cannot be proven
+// yet. Platform validates the proof against its own core node, so its view of
+// the chainlocked tip is the one that has to have reached the tx's block.
+export function chainLockProofHeight(
+  dapiTx: {isChainLocked: boolean; height: number} | null,
+  platformChainLockedHeight: number,
+): number | null {
+  if (dapiTx == null || !dapiTx.isChainLocked || platformChainLockedHeight < dapiTx.height) return null
+  return dapiTx.height
+}
+
 export function buildAssetLockOutputs(amountDuffs: bigint, creditAddress: string): {burnOutput: Output; extraPayload: AssetLockTx} {
   if (amountDuffs <= 0n) {
     throw new Error('Asset lock amount must be greater than zero')

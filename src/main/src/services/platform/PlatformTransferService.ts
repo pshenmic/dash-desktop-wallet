@@ -78,12 +78,11 @@ export class PlatformTransferService {
     return this.withSeed(walletId, password, async ({wallet, seed}) => {
       const network = wallet.network
 
-      const {plan, error} = await this.fee.planInputs(wallet, 'addressFundsTransfer', {
+      const plan = await this.fee.planInputs(wallet, 'addressFundsTransfer', {
         amountCredits,
         recipient: recipients.map(recipient => recipient.address),
         platformSource: source,
       })
-      if (plan === null) throw new Error(error)
 
       const {stHash} = await this.platform.request('addressTransfer', network, {
         seed,
@@ -194,10 +193,9 @@ export class PlatformTransferService {
       const existing = await this.identityDAO.getIdentitiesByWalletId(walletId)
       const identityIndex = nextLocalIdentityIndex(existing)
 
-      const {plan, error} = await this.fee.planInputs(wallet, 'identityCreate', {
+      const plan = await this.fee.planInputs(wallet, 'identityCreate', {
         amountCredits, recipient: '', platformSource: source,
       })
-      if (plan === null) throw new Error(error)
 
       const {stHash, identifier} = await this.platform.request('identityCreateFromAddresses', network, {
         seed,
@@ -241,10 +239,9 @@ export class PlatformTransferService {
       const {exists} = await this.platform.request('identityExists', network, {identifier: identityId})
       if (!exists) throw new Error('Identity not found on Platform')
 
-      const {plan, error} = await this.fee.planInputs(wallet, 'identityTopUp', {
+      const plan = await this.fee.planInputs(wallet, 'identityTopUp', {
         amountCredits, recipient: identityId, platformSource: source,
       })
-      if (plan === null) throw new Error(error)
 
       const {stHash} = await this.platform.request('identityTopUpFromAddresses', network, {
         seed,
@@ -277,10 +274,9 @@ export class PlatformTransferService {
     return this.withSeed(walletId, password, async ({wallet, seed}) => {
       const network = wallet.network
 
-      const {plan, error} = await this.fee.planInputs(wallet, 'addressWithdrawal', {
+      const plan = await this.fee.planInputs(wallet, 'addressWithdrawal', {
         amountCredits, recipient: toCoreAddress, platformSource: source,
       })
-      if (plan === null) throw new Error(error)
 
       const {stHash} = await this.platform.request('addressWithdrawal', network, {
         seed,
@@ -396,7 +392,7 @@ export class PlatformTransferService {
     const unlocked = await this.unlock(walletId, password)
     const {wallet, seed} = unlocked
 
-    try {
+    return this.assetLock.launch(unlocked, async () => {
       const feeCredits = await this.fee.lockTransitionFee(wallet, 'assetLockFunding', {
         amountCredits: amountDuffs * CREDITS_PER_DUFF,
         recipient: toPlatformAddress,
@@ -410,10 +406,7 @@ export class PlatformTransferService {
         })
         await this.settleFunding(seed, wallet, state, acquired)
       })
-    } catch (error) {
-      zeroSeed(unlocked)
-      throw error
-    }
+    })
   }
 
   async resumeFundingFromL1(walletId: string, row: AssetLockFundingRow, password: string): Promise<AssetLockFundingState> {

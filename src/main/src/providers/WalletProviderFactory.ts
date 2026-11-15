@@ -6,15 +6,17 @@ import {ApplicationService} from '../services/app/ApplicationService'
 import {CorePrevOutService} from '../services/core/CorePrevOutService'
 import {WalletSyncService} from '../services/core/WalletSyncService'
 import {CoreSpendSource} from '../types/CoinSelection'
+import {TransferInputSelection} from '../types/CoreTransaction'
+import {GroupedAddresses} from '../types/GroupedAddresses'
 import {Network} from '../types/Network'
 import {UTXO} from '../types/UTXO'
+import {coreFeeDuffsFor} from '../utils/coreFeeRate'
 import {withoutCollaterals} from '../utils/masternodes'
+import {selectTransferInputs} from '../utils/transferInputs'
 import {DashscanWalletProvider} from './DashscanWalletProvider'
 import {P2PWalletProvider} from './P2PWalletProvider'
 import {WalletProvider} from './WalletProvider'
 
-// Abstract factory
-// needed for move out getProvider() from WalletService
 export class WalletProviderFactory {
   private walletDAO: WalletDAO
   private addressDAO: AddressDAO
@@ -62,5 +64,33 @@ export class WalletProviderFactory {
       this.masternodeDAO.getCollaterals(walletId),
     ])
     return withoutCollaterals(utxos, collaterals, source)
+  }
+
+  // The selection a send runs, over the same coins at the same rate, so a
+  // preview or an asset lock cannot pick a set the send would not. It is also
+  // where an amount the wallet cannot fund refuses.
+  async coreSelection(
+    walletId: string,
+    network: Network,
+    amountDuffs: bigint,
+    outputsCount: number,
+    payloadBytes = 0,
+    source?: CoreSpendSource,
+    changeTo?: string,
+  ): Promise<{selection: TransferInputSelection; utxos: UTXO[]; grouped: GroupedAddresses}> {
+    const grouped = await this.addressDAO.getAddressesByWalletId(walletId)
+    const provider = this.forWallet(walletId, network)
+    await provider.ensureReady()
+    const utxos = await this.spendableUtxos(walletId, network, source)
+
+    const selection = selectTransferInputs(
+      grouped,
+      utxos,
+      amountDuffs,
+      inputsCount => coreFeeDuffsFor(this.applicationService.preferences.general.coreFeeMultiplier, inputsCount, outputsCount, true, payloadBytes),
+      source,
+      changeTo,
+    )
+    return {selection, utxos, grouped}
   }
 }

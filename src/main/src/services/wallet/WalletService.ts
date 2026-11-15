@@ -42,13 +42,12 @@ import {
   IDENTITY_SCAN_LIMIT,
   PLATFORM_ACCOUNT,
 } from '../../constants/addresses'
-import {coreFeeDuffsFor} from '../../utils/coreFeeRate'
 import {identityPath} from '../../utils/identityKeys'
 import {coreAccountPath, coreAddressDeriver} from "../../utils/addressDiscovery";
 import {CoreSpendSource, ListedUtxo} from '../../types/CoinSelection'
 import {withCollateralFlag} from '../../utils/masternodes'
 import {CoreRecipient} from '../../types/CoreTransaction'
-import {requireCoreRecipients, selectableTransferUtxos, selectTransferInputs} from '../../utils/transferInputs'
+import {requireCoreRecipients, selectableTransferUtxos} from '../../utils/transferInputs'
 import {Preferences} from '../../preferences'
 import {ConnectionStatus} from '../../types/ConnectionStatus'
 import {Logger} from '../../utils/logger'
@@ -314,14 +313,13 @@ export class WalletService {
     }
   }
 
+  // forWallet resolves the preference per call, so a mode flip during the
+  // window scan still answers with the provider the caller is now on.
   private async coreReadProvider(wallet: Wallet): Promise<WalletProvider> {
-    while (true) {
-      const connectionType = this.preferences.general.connectionType
-      if (connectionType === 'rpc') await this.discovery.ensureXpubAddressWindow(wallet.walletId)
-      if (connectionType === this.preferences.general.connectionType) {
-        return this.providers.forWallet(wallet.walletId, wallet.network)
-      }
+    if (this.preferences.general.connectionType === 'rpc') {
+      await this.discovery.ensureXpubAddressWindow(wallet.walletId)
     }
+    return this.providers.forWallet(wallet.walletId, wallet.network)
   }
 
   // Both chains of one wallet, alongside getWalletBalance. Only L1 reaches the
@@ -478,19 +476,8 @@ export class WalletService {
         recipientType: this.coreTransactionService.classifyAddress(recipient.address, network),
       }))
       if (changeTo != null) this.coreTransactionService.requireChangeAddress(changeTo, network)
-      const grouped = await this.addressDAO.getAddressesByWalletId(walletId)
-      const provider = this.providers.forWallet(walletId, network)
-      await provider.ensureReady()
-      const {coreFeeMultiplier} = this.preferences.general
-      const {transferInputs, inputTotal, changeAddress, feeDuffs} =
-        selectTransferInputs(
-          grouped,
-          await this.providers.spendableUtxos(walletId, network, source),
-          amountDuffs,
-          inputsCount => coreFeeDuffsFor(coreFeeMultiplier, inputsCount, outputs.length, true),
-          source,
-          changeTo,
-        )
+      const {selection} = await this.providers.coreSelection(walletId, network, amountDuffs, outputs.length, 0, source, changeTo)
+      const {transferInputs, inputTotal, changeAddress, feeDuffs} = selection
 
       const tx = await this.coreTransactionService.buildSignedTransfer({
         inputs: transferInputs,

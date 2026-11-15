@@ -16,6 +16,7 @@ import {dashPayAddressDeriver, deriveDashPayContactKey} from '../../utils/dashPa
 import {DashPayAddress, DashPayDirection} from '../../types/DashPay'
 import {Wallet} from '../../types/Wallet'
 import {runAddressWindow} from '../../utils/addressWindow'
+import {joinInFlight} from '../../utils/concurrency'
 import {WalletSyncService} from './WalletSyncService'
 import {Logger} from '../../utils/logger'
 
@@ -54,11 +55,7 @@ export class CoreDiscoveryService {
   }
 
   discoverCoreAddresses(walletId: string): Promise<void> {
-    const existing = this.discoveryInflight.get(walletId)
-    if (existing) return existing
-    const run = this.runCoreDiscovery(walletId).finally(() => this.discoveryInflight.delete(walletId))
-    this.discoveryInflight.set(walletId, run)
-    return run
+    return joinInFlight(this.discoveryInflight, walletId, () => this.runCoreDiscovery(walletId))
   }
 
   // A run in flight picked its provider when it started, so it is still asking
@@ -93,13 +90,12 @@ export class CoreDiscoveryService {
     // Both chains read one scan: the endpoint walks the whole account, and
     // asking twice would run the gap walk twice.
     const usage = await provider.scanAddressUsage(CORE_ADDRESS_WINDOW.gapLimit)
-    const scanned = Promise.resolve(usage)
 
     const added: Address[] = []
     for (const isChange of [false, true]) {
       const revealed = await runAddressWindow(
         coreAddressDeriver(wallet.coreXpub, network, isChange),
-        this.coreOracle(provider, scanned, isChange),
+        this.coreOracle(provider, usage, isChange),
         this.coreStore(walletId, isChange),
         CORE_ADDRESS_WINDOW,
       )
@@ -221,7 +217,7 @@ export class CoreDiscoveryService {
     deriver: AddressDeriver,
   ): Promise<DerivedAddress[]> {
     const chain = this.dashPayChain(wallet.walletId, identifier, contactId, direction)
-    const revealed = await runAddressWindow(deriver, this.coreOracle(provider, Promise.resolve(null), false), {
+    const revealed = await runAddressWindow(deriver, this.coreOracle(provider, null, false), {
       known: async () => chain.map(({index, isUsed}) => ({index, isUsed})),
       reveal: async addresses => {
         chain.push(...addresses.map(({index, address, derivationPath}) => ({direction, index, address, derivationPath, isUsed: false})))
@@ -237,15 +233,14 @@ export class CoreDiscoveryService {
 
   private coreOracle(
     provider: WalletProvider,
-    scanned: Promise<AddressUsage[] | null>,
+    scanned: AddressUsage[] | null,
     isChange: boolean,
   ): UsageOracle {
     return {
       scan: async () => {
-        const usage = await scanned
-        return usage == null
+        return scanned == null
           ? null
-          : usage.filter(entry => entry.isChange === isChange)
+          : scanned.filter(entry => entry.isChange === isChange)
             .map(({index, isUsed}) => ({index, isUsed}))
       },
       probe: async addresses => {

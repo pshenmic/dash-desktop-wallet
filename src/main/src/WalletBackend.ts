@@ -181,38 +181,33 @@ async function withSelectedWallet(walletDAO: WalletDAO, fn: (wallet: Wallet) => 
 }
 
 export class WalletBackend {
-  private walletService?: WalletService
-  private platformAddressService?: PlatformAddressService
-  private platformHistoryService?: PlatformHistoryService
-  private platformTransferService?: PlatformTransferService
-  private feeService?: FeeService
-  private applicationService?: ApplicationService
-  private walletSyncService?: WalletSyncService
-  private ratesService?: RatesService
-  private contactService?: ContactService
-  private paymentRequestService?: PaymentRequestService
-  private identityRegistrationService?: IdentityRegistrationService
-  private shieldedService?: ShieldedService
-  private platformWorkerService?: PlatformWorkerService
-  private assetLockService?: AssetLockService
-  private coreDiscoveryService?: CoreDiscoveryService
-  private coreLockService?: CoreLockService
-  private masternodeService?: MasternodeService
-  private governanceService?: GovernanceService
-  private walletCredentialsService?: WalletCredentialsService
-  private identityService?: IdentityService
-  private logService?: LogService
+  // All assigned by buildServices before anything reads them.
+  private walletService!: WalletService
+  private platformAddressService!: PlatformAddressService
+  private platformHistoryService!: PlatformHistoryService
+  private platformTransferService!: PlatformTransferService
+  private feeService!: FeeService
+  private applicationService!: ApplicationService
+  private walletSyncService!: WalletSyncService
+  private ratesService!: RatesService
+  private contactService!: ContactService
+  private paymentRequestService!: PaymentRequestService
+  private identityRegistrationService!: IdentityRegistrationService
+  private shieldedService!: ShieldedService
+  private platformWorkerService!: PlatformWorkerService
+  private assetLockService!: AssetLockService
+  private coreDiscoveryService!: CoreDiscoveryService
+  private coreLockService!: CoreLockService
+  private masternodeService!: MasternodeService
+  private governanceService!: GovernanceService
+  private walletCredentialsService!: WalletCredentialsService
+  private identityService!: IdentityService
+  private logService!: LogService
 
-  private walletDAO?: WalletDAO
-  private addressDAO?: AddressDAO
-  private identityDAO?: IdentityDAO
-  private prevOuts?: CorePrevOutService
+  private walletDAO!: WalletDAO
+  private prevOuts!: CorePrevOutService
 
   private initHandlers(): void {
-    if (!this.walletService || !this.platformAddressService || !this.platformHistoryService || !this.platformTransferService || !this.feeService || !this.applicationService || !this.walletSyncService || !this.ratesService || !this.contactService || !this.shieldedService || !this.assetLockService || !this.addressDAO || !this.walletDAO || !this.identityDAO || !this.identityRegistrationService || !this.coreDiscoveryService || !this.coreLockService || !this.walletCredentialsService || !this.identityService || !this.logService || !this.platformWorkerService || !this.masternodeService || !this.paymentRequestService || !this.governanceService) {
-      throw new Error('Services not initialized. Call start() first.')
-    }
-
     registerHandler('createWallet', new CreateWalletHandler(this.walletService, this.shieldedService).handle)
     registerHandler('deleteWallet', new DeleteWalletHandler(this.walletService).handle)
     registerHandler('getAllWallets', new GetAllWalletsHandler(this.walletService).handle)
@@ -354,7 +349,7 @@ export class WalletBackend {
     this.initHandlers()
     this.wireDiscovery()
     this.startPeriodicTasks()
-    this.applicationService!.markReady()
+    this.applicationService.markReady()
   }
 
   private buildServices(preferences: Preferences, knex: ReturnType<typeof getKnex>, calibratedIterations: number): void {
@@ -389,7 +384,7 @@ export class WalletBackend {
     const providers = new WalletProviderFactory(walletDAO, addressDAO, transactionDAO, this.applicationService, this.walletSyncService, prevOuts, masternodeDAO)
     const coreTransactionService = new CoreTransactionService()
     this.coreDiscoveryService = new CoreDiscoveryService(walletDAO, addressDAO, identityDAO, dashPayCache, transactionDAO, this.walletSyncService, providers)
-    this.coreLockService = new CoreLockService(walletDAO, addressDAO, this.walletSyncService, coreTransactionService, providers, preferences)
+    this.coreLockService = new CoreLockService(walletDAO, this.walletSyncService, coreTransactionService, providers)
     const masternodeKeyDAO = new MasternodeKeyDAO(knex)
     this.masternodeService = new MasternodeService(walletDAO, masternodeKeyDAO, masternodeDAO, providers, addressDAO, coreTransactionService, this.walletSyncService, preferences)
     this.governanceService = new GovernanceService(walletDAO, providers, this.masternodeService, this.walletSyncService)
@@ -409,72 +404,58 @@ export class WalletBackend {
     this.identityRegistrationService = new IdentityRegistrationService(walletDAO, identityDAO, this.assetLockService, this.platformWorkerService, this.coreLockService, this.feeService)
     this.platformTransferService = new PlatformTransferService(walletDAO, identityDAO, this.assetLockService, this.platformWorkerService, this.shieldedService, this.platformAddressService, this.feeService, preferences)
     this.walletDAO = walletDAO
-    this.addressDAO = addressDAO
-    this.identityDAO = identityDAO
   }
 
   private wireDiscovery(): void {
-    if (!this.walletSyncService || !this.applicationService || !this.coreDiscoveryService || !this.masternodeService || !this.governanceService || !this.walletService || !this.walletDAO || !this.prevOuts) {
-      throw new Error('Services not initialized. Call start() first.')
-    }
-    const discovery = this.coreDiscoveryService
-    const masternodeService = this.masternodeService
-    const governanceService = this.governanceService
-    const walletService = this.walletService
-    const walletSyncService = this.walletSyncService
-    const applicationService = this.applicationService
-    const walletDAO = this.walletDAO
-    const prevOuts = this.prevOuts
-
     // A drain outlives the 3s activity debounce that triggers it, and every
     // overlapping one would re-read the same parents from DAPI.
     let resolvingPrevOuts = false
     // rpc mode reads whole transactions from the indexer, which already carries
     // what every input spends, and never displays the local rows this fills in.
     const resolvePrevOuts = (walletId: string): void => {
-      if (applicationService.preferences.general.connectionType !== 'p2p' || resolvingPrevOuts) return
+      if (this.applicationService.preferences.general.connectionType !== 'p2p' || resolvingPrevOuts) return
       resolvingPrevOuts = true
-      prevOuts.resolveBacklog(walletId)
+      this.prevOuts.resolveBacklog(walletId)
         .catch(err => prevout.error('input resolution failed:', err))
         .finally(() => { resolvingPrevOuts = false })
     }
     const discoverSelected = async (): Promise<void> => {
-      const selected = await walletDAO.getSelectedWallet()
+      const selected = await this.walletDAO.getSelectedWallet()
       if (selected == null) return
       // Locks are needed in both connection modes, and this is the only place
       // that starts listening for them. Re-run on the periodic tick so a lost
       // utility process is picked back up.
       try {
-        await walletSyncService.startLockListen(selected.network, selected.walletId)
+        await this.walletSyncService.startLockListen(selected.network, selected.walletId)
       } catch (err) {
         locks.error('failed to start lock listener:', err)
       }
       // Each tick polls for new contact requests too, so a new contact's chain
       // is watched within one interval of its request.
-      await walletService.fetchContactRequestsAndDiscover(selected.walletId)
+      await this.walletService.fetchContactRequestsAndDiscover(selected.walletId)
       resolvePrevOuts(selected.walletId)
-      masternodeService.discover(selected.walletId).catch(err =>
+      this.masternodeService.discover(selected.walletId).catch(err =>
         discoveryLog.error('masternode discovery failed:', err))
-      governanceService.refresh(selected.walletId).catch(err =>
+      this.governanceService.refresh(selected.walletId).catch(err =>
         discoveryLog.error('governance refresh failed:', err))
     }
-    walletSyncService.onWalletActivity = (walletId) => {
-      discovery.discoverCoreAddresses(walletId).catch(err =>
+    this.walletSyncService.onWalletActivity = (walletId) => {
+      this.coreDiscoveryService.discoverCoreAddresses(walletId).catch(err =>
         discoveryLog.error('post-sync address discovery failed:', err))
       resolvePrevOuts(walletId)
     }
     // A p2p list arrives on its own schedule, with the block that changed a node, so it is matched at once.
     const rediscoverMasternodes = (network: Network): void => {
-      walletDAO.getSelectedWallet()
-        .then(selected => selected?.network === network ? masternodeService.discover(selected.walletId) : undefined)
+      this.walletDAO.getSelectedWallet()
+        .then(selected => selected?.network === network ? this.masternodeService.discover(selected.walletId) : undefined)
         .catch(err => discoveryLog.error('masternode discovery failed:', err))
     }
-    walletSyncService.onMasternodeList = rediscoverMasternodes
-    walletSyncService.onListedMasternodes = rediscoverMasternodes
+    this.walletSyncService.onMasternodeList = rediscoverMasternodes
+    this.walletSyncService.onListedMasternodes = rediscoverMasternodes
     // The scan is stopped until this answers, so it must not join a discovery
     // run that started before the block that exhausted the gap was persisted.
-    walletSyncService.onGapExhausted = (gap) => {
-      discovery.rediscoverCoreAddresses(gap.walletId).catch(err =>
+    this.walletSyncService.onGapExhausted = (gap) => {
+      this.coreDiscoveryService.rediscoverCoreAddresses(gap.walletId).catch(err =>
         discoveryLog.error('gap-exhausted address discovery failed:', err))
     }
     discoverSelected().catch(err => discoveryLog.error('startup address discovery failed:', err))
@@ -484,16 +465,8 @@ export class WalletBackend {
   }
 
   private startPeriodicTasks(): void {
-    if (!this.walletDAO || !this.shieldedService || !this.platformHistoryService || !this.platformWorkerService) {
-      throw new Error('Services not initialized. Call start() first.')
-    }
-    const walletDAO = this.walletDAO
-    const shieldedService = this.shieldedService
-    const platformHistoryService = this.platformHistoryService
-    const platformWorkerService = this.platformWorkerService
-
     const fetchShieldedNotes = (): Promise<void> =>
-      withSelectedWallet(walletDAO, w => shieldedService.prefetchNotes(w.walletId, w.network))
+      withSelectedWallet(this.walletDAO, w => this.shieldedService.prefetchNotes(w.walletId, w.network))
     fetchShieldedNotes().catch(err => shielded.error('startup note fetch failed:', err))
     setInterval(() => {
       fetchShieldedNotes().catch(err => shielded.error('periodic note fetch failed:', err))
@@ -501,7 +474,7 @@ export class WalletBackend {
 
     // Refreshed here so a stalled explorer cannot hold up a read that shows L1.
     const refreshPlatformHistory = (): Promise<void> =>
-      withSelectedWallet(walletDAO, w => platformHistoryService.refresh(w.walletId))
+      withSelectedWallet(this.walletDAO, w => this.platformHistoryService.refresh(w.walletId))
     refreshPlatformHistory().catch(err => platformLog.error('startup platform history refresh failed:', err))
     setInterval(() => {
       refreshPlatformHistory().catch(err => platformLog.error('periodic platform history refresh failed:', err))
@@ -510,8 +483,8 @@ export class WalletBackend {
     // The worker reports the broadcast, not which wallet sent: the selected one
     // is the only wallet the periodic refresh covers either.
     const refreshAfterBroadcast = (): Promise<void> =>
-      withSelectedWallet(walletDAO, w => { platformHistoryService.refreshAfterSend(w.walletId) })
-    platformWorkerService.onTransitionBroadcast(() => {
+      withSelectedWallet(this.walletDAO, w => { this.platformHistoryService.refreshAfterSend(w.walletId) })
+    this.platformWorkerService.onTransitionBroadcast(() => {
       refreshAfterBroadcast().catch(err => platformLog.error('platform history refresh after a broadcast failed:', err))
     })
   }

@@ -20,6 +20,7 @@ import {
 } from '../../types/AssetLock'
 import {CHAIN_LOCK_BACKSTOP_MS, IDENTITY_LOCK_TIMEOUT_MS} from '../../constants/chain'
 import {ASSET_LOCK_CREDIT_OUTPUT_INDEX, ASSET_LOCK_DISMISSED_ERROR} from '../../constants/credits'
+import {chainLockProofHeight} from '../../utils/assetLockTx'
 import {isStaleInstantLockProof} from '../../utils/sdkErrors'
 import {requireWallet} from '../../utils/requireWallet'
 import {zeroSeed} from '../../utils/walletSeed'
@@ -161,6 +162,17 @@ export class AssetLockService {
     return state
   }
 
+  // A launch that fails before runDetached takes the seed must zero it here,
+  // or it outlives the call that derived it.
+  async launch(unlocked: {seed: Uint8Array}, start: () => Promise<AssetLockFundingState>): Promise<AssetLockFundingState> {
+    try {
+      return await start()
+    } catch (error) {
+      zeroSeed(unlocked)
+      throw error
+    }
+  }
+
   async markBroadcastingSt(state: AssetLockFundingState, row: AssetLockFundingRow): Promise<void> {
     state.phase = 'broadcastingST'
     log.info(`${row.txid}: broadcasting state transition`)
@@ -244,11 +256,12 @@ export class AssetLockService {
       throw new Error('Your transaction could not be found, please make sure it has been sent')
     }
 
-    if (dapiTx.confirmations < 1 || (chain?.coreChainLockedHeight ?? 0) < dapiTx.height) {
+    const height = chainLockProofHeight(dapiTx, chain?.coreChainLockedHeight ?? 0)
+    if (height == null) {
       throw new Error('The asset lock transaction is not chainlocked yet - please wait a few minutes and resume again')
     }
 
-    const proof: AssetLockProofParams = {type: 'chainLock', coreChainLockedHeight: dapiTx.height}
+    const proof: AssetLockProofParams = {type: 'chainLock', coreChainLockedHeight: height}
     this.applyLockKind(state, proof)
     log.info(`${row.txid}: resumed by chain lock at h=${dapiTx.height}`)
     await this.assetLockDAO.saveProof(row.walletId, row.txid, proof)
@@ -354,11 +367,12 @@ export class AssetLockService {
         const platformHeight = dapiTx?.isChainLocked === true
           ? await this.platformChainLockedHeight(network, txid)
           : 0
-        if (dapiTx?.isChainLocked === true && platformHeight >= dapiTx.height) {
-          log.info(`${txid}: chainlocked at h=${dapiTx.height}, platform at h=${platformHeight} — building proof`)
+        const height = chainLockProofHeight(dapiTx, platformHeight)
+        if (height != null) {
+          log.info(`${txid}: chainlocked at h=${height}, platform at h=${platformHeight} — building proof`)
           return coreUtils.createAssetLockProof({
             transaction: assetLockTx,
-            coreChainLockedHeight: dapiTx.height,
+            coreChainLockedHeight: height,
             outputIndex: ASSET_LOCK_CREDIT_OUTPUT_INDEX,
           }) as ChainAssetLockProofParams
         }

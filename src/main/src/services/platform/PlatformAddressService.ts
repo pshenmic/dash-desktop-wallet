@@ -11,6 +11,7 @@ import {AddressInfo} from '../../../platform/types/messages'
 import {PLATFORM_ADDRESS_WINDOW} from '../../constants/addresses'
 import {platformAddressDeriver} from '../../utils/platformAddress'
 import {runAddressWindow} from '../../utils/addressWindow'
+import {joinInFlight, serializeByKey} from '../../utils/concurrency'
 import {requireWallet} from '../../utils/requireWallet'
 
 // The wallet's DIP-17 transparent addresses: the account xpub, the gap window
@@ -68,14 +69,7 @@ export class PlatformAddressService {
   async addPlatformAddress(walletId: string): Promise<PlatformAddressEntry[]> {
     // Serialized per wallet: two concurrent reveals would otherwise read the
     // same frontier and derive the same index, losing one reveal.
-    const prior = this.addQueue.get(walletId) ?? Promise.resolve()
-    const run = prior.catch(() => {}).then(() => this.revealNextPlatformAddress(walletId))
-    this.addQueue.set(walletId, run)
-    try {
-      return await run
-    } finally {
-      if (this.addQueue.get(walletId) === run) this.addQueue.delete(walletId)
-    }
+    return serializeByKey(this.addQueue, walletId, () => this.revealNextPlatformAddress(walletId))
   }
 
   private async revealNextPlatformAddress(walletId: string): Promise<PlatformAddressEntry[]> {
@@ -92,16 +86,10 @@ export class PlatformAddressService {
     return this.getPlatformAddresses(walletId)
   }
 
-  // A walk is several sequential worker round trips, on a channel the renderer
-  // polls — the same guard as CoreDiscoveryService.discoveryInflight.
+  // A walk is several sequential worker round trips on a channel the renderer
+  // polls, so concurrent callers share one rather than each starting a walk.
   private extendWindowOnce(wallet: Wallet, infos: Map<string, AddressInfo>): Promise<void> {
-    const existing = this.windowInflight.get(wallet.walletId)
-    if (existing) return existing
-
-    const run = this.extendWindow(wallet, infos)
-      .finally(() => this.windowInflight.delete(wallet.walletId))
-    this.windowInflight.set(wallet.walletId, run)
-    return run
+    return joinInFlight(this.windowInflight, wallet.walletId, () => this.extendWindow(wallet, infos))
   }
 
   private async extendWindow(wallet: Wallet, infos: Map<string, AddressInfo>): Promise<void> {

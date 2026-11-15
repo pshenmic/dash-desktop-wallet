@@ -1,8 +1,9 @@
-import {OrchardAddressWASM, PrivateKeyWASM, ShieldedMemoWASM} from 'pshenmic-dpp'
+import {OrchardAddressWASM, ShieldedMemoWASM} from 'pshenmic-dpp'
 import {PlatformOperations} from '../../types/messages'
-import {OperationContext, OperationError} from '../types'
+import {OperationContext} from '../types'
 import {broadcast} from '../broadcast'
 import {buildAssetLockProof} from '../assetLockProof'
+import {deriveCreditKey} from '../creditKey'
 import {SHIELD_FUNDING_DUMMY_OUTPUTS} from '../../../src/constants/fee/platform'
 import {SHIELDED_ACCOUNT} from '../../../src/constants/addresses'
 
@@ -14,10 +15,7 @@ export async function shieldFromAssetLock(payload: Payload, ctx: OperationContex
   const {seed, txid, outputIndex} = payload
 
   const hdKey = sdk.keyPair.seedToHdKey(seed, network)
-  const derived = await sdk.keyPair.derivePath(hdKey, payload.creditDerivationPath)
-  if (!derived.privateKey) throw new OperationError('Failed to derive the asset lock credit key', 'internal')
-
-  const privateKey = PrivateKeyWASM.fromBytes(derived.privateKey as Uint8Array, network)
+  const privateKey = await deriveCreditKey(sdk, hdKey, network, payload.creditDerivationPath)
   const senderOvk = sdk.keyPair.deriveShieldedOutgoingViewingKey(seed, network, SHIELDED_ACCOUNT)
 
   ctx.progress('proving', 0, 0)

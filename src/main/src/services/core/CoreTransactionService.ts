@@ -197,15 +197,20 @@ export class CoreTransactionService {
   // A ProRegTx's collateral signs Core's sign string as a message; every other
   // signer signs the payload hash itself, the operator with BLS.
   private async signPayload(payload: ProviderPayload, signer: ProviderTxSigner, seed: Uint8Array, network: Network): Promise<void> {
-    if (signer.kind === 'operator') {
-      const secretKey = bls.deriveOperatorSecretKey(seed, network, signer.index)
-      if (payload instanceof ProUpServTx) payload.signWithOperatorKey(secretKey)
-      if (payload instanceof ProUpRevTx) payload.signWithOperatorKey(secretKey)
-      return
+    switch (signer.kind) {
+      case 'operator': {
+        const secretKey = bls.deriveOperatorSecretKey(seed, network, signer.index)
+        if (payload instanceof ProUpServTx) payload.signWithOperatorKey(secretKey)
+        if (payload instanceof ProUpRevTx) payload.signWithOperatorKey(secretKey)
+        return
+      }
+      case 'address': {
+        const [key] = await this.privateKeys([signer], seed, network)
+        if (payload instanceof ProRegTX) payload.signWithCollateralKey(key, network)
+        if (payload instanceof ProUpRegTx) payload.signWithOwnerKey(key)
+        return
+      }
     }
-    const [key] = await this.privateKeys([signer], seed, network)
-    if (payload instanceof ProRegTX) payload.signWithCollateralKey(key, network)
-    if (payload instanceof ProUpRegTx) payload.signWithOwnerKey(key)
   }
 
   private payoutScript(address: string, network: Network): Script {

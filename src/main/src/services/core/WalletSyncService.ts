@@ -1,5 +1,4 @@
-import {utilityProcess, UtilityProcess} from 'electron'
-import path from 'path'
+import {UtilityProcess} from 'electron'
 import fs from 'fs'
 import {CORE_ADDRESS_WINDOW, DASHPAY_WATCH_INDEX} from '../../constants/addresses'
 import {ChainStorageFilename} from '../../constants/app'
@@ -8,12 +7,9 @@ import {dataPath} from '../../utils/dataPath'
 import {Address} from '../../types/Address'
 import {GroupedAddresses} from '../../types/GroupedAddresses'
 import {LogLevel} from '../../types/Log'
-import {logChildOutput} from '../../logTransport'
-import {currentLogLevel} from '../../utils/logger'
 import {WalletDAO} from '../../database/WalletDAO'
-import {CHILD_OUTPUT_TAIL_LIMIT} from '../../constants/app'
 import {PENDING_TX_TTL_MS, REBROADCAST_INTERVAL_MS} from '../../constants/chain'
-import {PERSIST_ATTEMPTS, PERSIST_RETRY_MS} from '../../constants/database'
+import {CHAINDB_RM_ATTEMPTS, CHAINDB_RM_RETRY_MS, PERSIST_ATTEMPTS, PERSIST_RETRY_MS} from '../../constants/database'
 import {AddressDAO} from '../../database/AddressDAO'
 import {TransactionDAO} from '../../database/TransactionDAO'
 import {P2PCommand, P2PEvent} from '../../../p2p/types/messages'
@@ -23,8 +19,11 @@ import {PeerInfo, PeerProbeResult} from '../../../p2p/types/pool'
 import {randomUUID} from 'crypto'
 import {GENESIS} from '../../../p2p/constants'
 import {peerOverridesKey} from '../../../p2p/net/peerOverrides'
+import {forkWorker} from '../../utils/forkWorker'
+import {retry} from '../../utils/retry'
 import {ScanCursorGate} from '../../utils/scanCursorGate'
 import {stoppedSyncStatus} from '../../utils/syncStatus'
+import {walletAddresses} from '../../utils/walletAddresses'
 import {Preferences} from '../../preferences'
 import {Network} from '../../types/Network'
 import {GovernanceVote, Proposal, VoteRelay} from '../../types/Governance'
@@ -58,9 +57,6 @@ export class WalletSyncService {
   // Re-pushes unconfirmed local txs on an interval while a wallet is synced.
   private rebroadcastTimer: ReturnType<typeof setInterval> | null = null
   private lockWatchSweepTimer: ReturnType<typeof setInterval> | null = null
-  // Rolling stdout+stderr tail, so a crash carries its own cause instead of a
-  // bare exit code.
-  private childOutputTail = ''
   // Keyed by requestId, which the utility process echoes back, so overlapping
   // broadcasts resolve the right promise.
   private pendingBroadcasts = new Map<string, (event: {ok: boolean; result: BroadcastResult; errorMessage: string | null}) => void>()
@@ -132,35 +128,11 @@ export class WalletSyncService {
   private ensureChild(): UtilityProcess {
     if (this.child) return this.child
 
-    const scriptPath = path.join(__dirname, 'p2p.js')
-    this.childOutputTail = ''
-    const child = utilityProcess.fork(scriptPath, [], { serviceName: 'p2p', stdio: ['ignore', 'pipe', 'pipe'] })
-    log.info('utility process forked')
-
-    // Mirror the worker's output to the main-process streams (preserving the
-    // previous 'inherit' visibility) while retaining a tail for crash reports.
-    child.stdout?.on('data', (chunk: Buffer) => {
-      const text = chunk.toString()
-      this.childOutputTail = (this.childOutputTail + text).slice(-CHILD_OUTPUT_TAIL_LIMIT)
-      logChildOutput('p2p', text, false)
-    })
-    child.stderr?.on('data', (chunk: Buffer) => {
-      const text = chunk.toString()
-      this.childOutputTail = (this.childOutputTail + text).slice(-CHILD_OUTPUT_TAIL_LIMIT)
-      logChildOutput('p2p', text, true)
-    })
-
-    child.on('message', (data: P2PEvent) => this.handleP2PEvent(data))
-
-    child.on('exit', code => {
-      const tail = this.childOutputTail.trim()
-      log.info(`utility process exited code=${code}`)
-      if (tail) log.error(`last output before exit:\n${tail}`)
+    const child = forkWorker<P2PEvent>('p2p', log, data => this.handleP2PEvent(data), (code, crashDetail) => {
       this.child = null
       // The utility process can no longer answer these, and the caller's
       // promise would hang forever. The output tail rides along so the crash
       // cause travels with the rejection.
-      const crashDetail = tail ? `\n--- p2p output (tail) ---\n${tail}` : ''
       for (const [requestId, resolve] of this.pendingBroadcasts) {
         resolve({
           ok: false,
@@ -189,8 +161,6 @@ export class WalletSyncService {
       this.activeNetwork = null
       this.activeWalletId = null
     })
-
-    child.postMessage({type: 'setLogLevel', level: currentLogLevel()})
 
     this.child = child
     return child
@@ -816,27 +786,25 @@ export class WalletSyncService {
   }
 
   private async writeAppliedBlock(block: AppliedBlock): Promise<void> {
-    for (let attempt = 0; attempt < PERSIST_ATTEMPTS; attempt++) {
-      if (attempt > 0) await new Promise(resolve => setTimeout(resolve, PERSIST_RETRY_MS))
-      try {
+    try {
+      await retry(async () => {
         const advanceCursor = this.cursorGate.allowsBlockCursor(block.walletId, block.height)
         await this.transactionDAO.applyBlock(block, {advanceCursor})
-        this.markWalletDataChanged(block.walletId)
-        this.cursorGate.succeed(block.walletId, block.height)
-        if (!this.cursorGate.hasFailures()) this.persistenceError = null
-        if (block.txs.length > 0) this.notifyWalletActivity(block.walletId)
-        return
-      } catch (err) {
-        if (attempt < PERSIST_ATTEMPTS - 1) continue
-        this.cursorGate.fail(block.walletId, block.height)
-        const message = err instanceof Error ? err.message : String(err)
-        const heldAt = this.cursorGate.lowestFailed(block.walletId)! - 1
-        this.persistenceError =
-          `Block ${block.height} could not be saved (${message}). Sync is held at height ${heldAt} ` +
-          'and will rescan from there on the next start.'
-        log.error(`applyBlock failed permanently at h=${block.height}:`, err)
-      }
+      }, PERSIST_ATTEMPTS, PERSIST_RETRY_MS)
+    } catch (err) {
+      this.cursorGate.fail(block.walletId, block.height)
+      const message = err instanceof Error ? err.message : String(err)
+      const heldAt = this.cursorGate.lowestFailed(block.walletId)! - 1
+      this.persistenceError =
+        `Block ${block.height} could not be saved (${message}). Sync is held at height ${heldAt} ` +
+        'and will rescan from there on the next start.'
+      log.error(`applyBlock failed permanently at h=${block.height}:`, err)
+      return
     }
+    this.markWalletDataChanged(block.walletId)
+    this.cursorGate.succeed(block.walletId, block.height)
+    if (!this.cursorGate.hasFailures()) this.persistenceError = null
+    if (block.txs.length > 0) this.notifyWalletActivity(block.walletId)
   }
 
   // Never past the lowest height whose write failed: everything the cursor
@@ -979,7 +947,7 @@ export class WalletSyncService {
       return
     }
     const grouped = await this.addressDAO.getAddressesByWalletId(walletId)
-    const ours = new Set([...grouped.receiving, ...grouped.change, ...grouped.dashPay ?? []].map(a => a.address))
+    const ours = new Set(walletAddresses(grouped).map(a => a.address))
     const label = network === 'mainnet' ? 'Mainnet' : 'Testnet'
     const applied: AppliedTx = {
       txid: tx.hash(),
@@ -1030,7 +998,7 @@ export class WalletSyncService {
     // skips everything below it.
     await this.persistQueue
     const chainDbPath = dataPath(ChainStorageFilename, network)
-    await rmWithRetry(chainDbPath)
+    await retry(() => fs.promises.rm(chainDbPath, {recursive: true, force: true}), CHAINDB_RM_ATTEMPTS, CHAINDB_RM_RETRY_MS)
     await this.transactionDAO.resetSyncDataByNetwork(network)
   }
 
@@ -1086,18 +1054,3 @@ function txidFromHex(txHex: string): string | undefined {
   }
 }
 
-async function rmWithRetry(target: string): Promise<void> {
-  const attempts = 6
-  const delayMs = 250
-  let lastError: unknown
-  for (let i = 0; i < attempts; i++) {
-    try {
-      await fs.promises.rm(target, { recursive: true, force: true })
-      return
-    } catch (err) {
-      lastError = err
-      if (i < attempts - 1) await new Promise(resolve => setTimeout(resolve, delayMs))
-    }
-  }
-  throw lastError
-}

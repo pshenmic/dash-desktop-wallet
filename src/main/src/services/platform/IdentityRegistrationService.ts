@@ -7,7 +7,7 @@ import {CoreSpendSource} from '../../types/CoinSelection'
 import {Network} from '../../types/Network'
 import {AssetLockService} from './AssetLockService'
 import {PlatformWorkerService} from './PlatformWorkerService'
-import {unlockWallet, zeroSeed} from '../../utils/walletSeed'
+import {unlockWallet} from '../../utils/walletSeed'
 import {findNextIdentityIndex, identityPath, nextLocalIdentityIndex} from '../../utils/identityKeys'
 import {COIN_TYPE, TOPUP_KEY_GAP_LIMIT, TOPUP_KEY_SCAN_LIMIT} from '../../constants/addresses'
 import {CREDITS_PER_DUFF} from '../../constants/credits'
@@ -75,7 +75,7 @@ export class IdentityRegistrationService {
   // the IdentityCreateTransition takes out of it.
   async startIdentityCreate(walletId: string, amountDuffs: bigint, password: string, source?: CoreSpendSource): Promise<AssetLockFundingState> {
     const unlocked = await unlockWallet(this.walletDAO, walletId, password)
-    try {
+    return this.assetLock.launch(unlocked, async () => {
       const {identityIndex, credit} = await this.prepareRegistration(walletId, unlocked)
       await this.requireFundable(unlocked.wallet, 'identityRegister', '', amountDuffs)
 
@@ -86,10 +86,7 @@ export class IdentityRegistrationService {
         })
         await this.settleCreate(walletId, unlocked, state, acquired, identityIndex)
       })
-    } catch (error) {
-      zeroSeed(unlocked)
-      throw error
-    }
+    })
   }
 
   async startIdentityTopUp(walletId: string, identityId: string, amountDuffs: bigint, password: string, source?: CoreSpendSource): Promise<AssetLockFundingState> {
@@ -97,7 +94,7 @@ export class IdentityRegistrationService {
       throw new Error('Identity identifier is required')
     }
     const unlocked = await unlockWallet(this.walletDAO, walletId, password)
-    try {
+    return this.assetLock.launch(unlocked, async () => {
       const {topUpIndex, credit} = await this.prepareTopUp(walletId, unlocked)
       await this.requireFundable(unlocked.wallet, 'identityTopUpL1', identityId, amountDuffs)
 
@@ -109,10 +106,7 @@ export class IdentityRegistrationService {
         })
         await this.settleTopUp(unlocked, state, acquired)
       })
-    } catch (error) {
-      zeroSeed(unlocked)
-      throw error
-    }
+    })
   }
 
   // The lock carries only the amount and the transition's fee comes out of it,
@@ -133,7 +127,7 @@ export class IdentityRegistrationService {
   // here; the row says which.
   async resume(walletId: string, row: AssetLockFundingRow, password: string): Promise<AssetLockFundingState> {
     const unlocked = await unlockWallet(this.walletDAO, walletId, password)
-    try {
+    return this.assetLock.launch(unlocked, async () => {
       if (row.identityIndex == null) {
         throw new Error('Funding record is missing the identity index')
       }
@@ -148,10 +142,7 @@ export class IdentityRegistrationService {
           await this.settleCreate(walletId, unlocked, state, acquired, identityIndex)
         }
       })
-    } catch (error) {
-      zeroSeed(unlocked)
-      throw error
-    }
+    })
   }
 
   private async settleCreate(

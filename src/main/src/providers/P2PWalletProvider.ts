@@ -11,6 +11,7 @@ import {TxLockStatus} from '../types/TxLockStatus'
 import {confirmationsAt} from '../utils/confirmations'
 import {dedupeTransactions} from '../utils/dedupeTransactions'
 import {outpointKey} from '../utils/outpointKey'
+import {walletAddresses} from '../utils/walletAddresses'
 import {AddressUsage} from '../types/AddressDiscovery'
 import {ConnectionStatus} from '../types/ConnectionStatus'
 import {Masternode, MasternodeKeyFilter, NetworkMasternode} from '../types/Masternode'
@@ -49,8 +50,8 @@ export class P2PWalletProvider implements WalletProvider {
   }
 
   async getWalletBalance(): Promise<bigint> {
-    const {receiving, change, dashPay = []} = await this.addressDAO.getAddressesByWalletId(this.walletId)
-    return this.transactionDAO.getBalanceForAddresses(this.walletId, [...receiving, ...change, ...dashPay].map(a => a.address))
+    const grouped = await this.addressDAO.getAddressesByWalletId(this.walletId)
+    return this.transactionDAO.getBalanceForAddresses(this.walletId, walletAddresses(grouped).map(a => a.address))
   }
 
   async getBalance(address: string | string[]): Promise<bigint> {
@@ -72,8 +73,8 @@ export class P2PWalletProvider implements WalletProvider {
   }
 
   async getWalletUtxos(): Promise<UTXO[]> {
-    const {receiving, change, dashPay = []} = await this.addressDAO.getAddressesByWalletId(this.walletId)
-    const addresses = [...receiving, ...change, ...dashPay].map(a => a.address)
+    const grouped = await this.addressDAO.getAddressesByWalletId(this.walletId)
+    const addresses = walletAddresses(grouped).map(a => a.address)
     const [utxos, lockedOutpoints] = await Promise.all([
       this.transactionDAO.getUtxosByAddresses(this.walletId, addresses),
       this.transactionDAO.getLockedOutpoints(this.walletId),

@@ -12,6 +12,7 @@ import {IdentityInfo} from '../../types/Identity'
 import {IdentityKeysUpdate, IdentityPrivateKey} from '../../types/IdentityKeys'
 import {Network} from '../../types/Network'
 import {dashPayContacts} from '../../utils/dashPayContacts'
+import {joinInFlight} from '../../utils/concurrency'
 import {dashPayAccountPath} from '../../utils/dashPayKeys'
 import {Logger} from '../../utils/logger'
 import {requireSelectedWallet, requireWallet} from '../../utils/requireWallet'
@@ -82,12 +83,7 @@ export class IdentityService {
   // Every name with its contest, contact request and contact name, from the
   // network. Callers that arrive while one runs share it.
   refreshDashPay(walletId: string): Promise<void> {
-    const running = this.dashPayRefreshes.get(walletId)
-    if (running != null) return running
-
-    const refresh = this.fetchDashPay(walletId).finally(() => this.dashPayRefreshes.delete(walletId))
-    this.dashPayRefreshes.set(walletId, refresh)
-    return refresh
+    return joinInFlight(this.dashPayRefreshes, walletId, () => this.fetchDashPay(walletId))
   }
 
   private async fetchDashPay(walletId: string): Promise<void> {

@@ -10,6 +10,7 @@ import {WalletDAO} from '../database/WalletDAO'
 import {dashscanToWalletTransactions} from '../utils/dashscanTransactions'
 import {dedupeTransactions} from '../utils/dedupeTransactions'
 import {outpointKey} from '../utils/outpointKey'
+import {walletAddresses} from '../utils/walletAddresses'
 import {chunk} from '../utils/chunk'
 import {networkMasternode} from '../utils/masternodes'
 import {dashscanProposal, isStaleProposal} from '../utils/governance'
@@ -367,7 +368,7 @@ export class DashscanWalletProvider implements WalletProvider {
 
   private allWalletAddresses(): Promise<string[]> {
     this.ownedAddresses ??= this.addressDAO.getAddressesByWalletId(this.walletId)
-      .then(grouped => [...grouped.change, ...grouped.receiving, ...grouped.dashPay ?? []].map(({address}) => address))
+      .then(grouped => walletAddresses(grouped).map(({address}) => address))
     return this.ownedAddresses
   }
 

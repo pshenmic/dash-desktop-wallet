@@ -143,10 +143,6 @@ export class Preferences {
     }
   }
 
-  /**
-   * Update preferences instance with passed values and save on disk.
-   * @param value
-   */
   async apply(value: unknown): Promise<void> {
     const parsed = PreferencesSchema.safeParse(value)
 
@@ -177,9 +173,6 @@ export class Preferences {
     await this.apply({...this, network: {...this.network, [network]: {...this.network[network], ...patch}}})
   }
 
-  /**
-   * Save preferencess to selected folder
-   */
   async update(): Promise<void> {
     if (this.path != null) {
       await fs.writeFile(this.path, JSON.stringify(this))

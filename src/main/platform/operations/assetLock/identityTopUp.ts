@@ -1,8 +1,9 @@
-import {KeyType, PrivateKeyWASM} from 'dash-platform-sdk/types.js'
+import {KeyType} from 'dash-platform-sdk/types.js'
 import {PlatformOperations} from '../../types/messages'
-import {OperationContext, OperationError} from '../types'
+import {OperationContext} from '../types'
 import {broadcast} from '../broadcast'
 import {assetLockProofParams} from '../assetLockProof'
+import {deriveCreditKey} from '../creditKey'
 
 type Payload = PlatformOperations['identityTopUpFromAssetLock']['payload']
 type Result = PlatformOperations['identityTopUpFromAssetLock']['result']
@@ -14,9 +15,7 @@ export async function identityTopUpFromAssetLock(payload: Payload, ctx: Operatio
   const {seed, txid, outputIndex} = payload
 
   const hdKey = sdk.keyPair.seedToHdKey(seed, network)
-  const derived = await sdk.keyPair.derivePath(hdKey, payload.creditDerivationPath)
-  if (!derived.privateKey) throw new OperationError('Failed to derive the asset lock funding key', 'internal')
-  const fundingKey = PrivateKeyWASM.fromBytes(derived.privateKey as Uint8Array, network)
+  const fundingKey = await deriveCreditKey(sdk, hdKey, network, payload.creditDerivationPath)
 
   ctx.progress('signing', 0, 0)
   const stateTransition = sdk.identities.createStateTransition('topUp', {
