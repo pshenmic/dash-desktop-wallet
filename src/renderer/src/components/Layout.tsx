@@ -13,7 +13,7 @@ import DataRefreshNotice from './ui/DataRefreshNotice'
 import P2pReadyNotice from './ui/P2pReadyNotice'
 import ScrollIndicator from './ui/ScrollIndicator'
 import WalletUnlockModal from './modal/WalletUnlockModal'
-import { API } from '@renderer/api'
+import { startShieldedSyncWithAddressPool } from '@renderer/hooks/useShieldedAddresses'
 import { useResolvedTheme, setThemePreference } from '@renderer/hooks/useThemeController'
 import { useConnectionModeContext } from '@renderer/contexts/ConnectionModeContext'
 import { SCROLL_CONTAINER_ID } from '@renderer/constants/scrollIndicator'
@@ -72,7 +72,7 @@ export default function Layout({ children }: LayoutProps): React.JSX.Element {
   const handleUnlock = async (password: string): Promise<void> => {
     if (!pendingWalletId) return
     await switchWallet(pendingWalletId)
-    API.startShieldedSync(pendingWalletId, password).catch(() => {})
+    startShieldedSyncWithAddressPool(pendingWalletId, password).catch(() => {})
   }
 
   return (

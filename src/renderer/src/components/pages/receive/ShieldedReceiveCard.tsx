@@ -18,6 +18,13 @@ import {
   useReceiveRequests,
 } from '@renderer/hooks/useReceiveRequests'
 import { useShieldedSyncState } from '@renderer/hooks/useShielded'
+import {
+  deriveMoreShieldedAddresses,
+  setShieldedAddresses,
+  startShieldedSyncWithAddressPool,
+  topUpShieldedAddresses,
+  useShieldedAddresses,
+} from '@renderer/hooks/useShieldedAddresses'
 import type { ReceiveRequestDto, ShieldedReceiveCardProps } from '@renderer/types/ReceiveRequest'
 import { claimedReceiveAddresses, nextReceiveShieldedAddress } from '@renderer/utils/receiveDefaults'
 import { receiveAmountDuffs } from '@renderer/utils/receiveInvoice'
@@ -27,8 +34,7 @@ import ReceiveRequestModal from './ReceiveRequestModal'
 import ReceiveRequestsTable from './ReceiveRequestsTable'
 
 export default function ShieldedReceiveCard({ walletId }: ShieldedReceiveCardProps): React.JSX.Element {
-  const [addresses, setAddresses] = useState<string[] | null>(null)
-  const [checking, setChecking] = useState(true)
+  const { addresses, loading: checking } = useShieldedAddresses(walletId)
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [revealing, setRevealing] = useState(false)
@@ -52,20 +58,8 @@ export default function ShieldedReceiveCard({ walletId }: ShieldedReceiveCardPro
   const claimed = useMemo(() => claimedReceiveAddresses(requests), [requests])
 
   useEffect(() => {
-    setAddresses(null)
     setPassword('')
     setError(null)
-    if (!walletId) {
-      setChecking(false)
-      return
-    }
-    let dead = false
-    setChecking(true)
-    API.getShieldedAddresses(walletId)
-      .then((cached) => { if (!dead) setAddresses(cached?.length ? cached : null) })
-      .catch(() => { /* fall through to unlock form */ })
-      .finally(() => { if (!dead) setChecking(false) })
-    return () => { dead = true }
   }, [walletId])
 
   const handlePasswordChange = (value: string): void => {
@@ -83,17 +77,16 @@ export default function ShieldedReceiveCard({ walletId }: ShieldedReceiveCardPro
         setError(INVALID_WALLET_PASSWORD_MESSAGE)
         return
       }
-      const nextAddresses = await API.addShieldedAddress(walletId, password)
-      setAddresses(nextAddresses)
+      await deriveMoreShieldedAddresses(walletId, password)
       setPassword('')
     } catch {
-      setError(addressFormCopy.addFailed)
+      setError(receiveCardCopy.deriveFailed)
     } finally {
       setRevealing(false)
     }
   }
 
-  if (checking) {
+  if (checking && addresses === null) {
     return <ListSkeleton rows={1} rowClassName="h-[2.5rem] rounded-[.875rem]" />
   }
 
@@ -189,7 +182,7 @@ export default function ShieldedReceiveCard({ walletId }: ShieldedReceiveCardPro
             <div className={`flex max-w-115 flex-col gap-3 ${SURFACE_SECTION}`}>
               <div className={"flex items-center gap-2"}>
                 <ShieldSmallIcon size={16} className={"text-dash-brand dark:text-dash-mint"} />
-                <Text size={14} weight={"extrabold"} color={"brand"}>New shielded address</Text>
+                <Text size={14} weight={"extrabold"} color={"brand"}>{receiveCardCopy.shieldedDeriveTitle}</Text>
               </div>
               <Text size={12} weight={"medium"} color={"brand"} opacity={50} className={"leading-[130%]"}>
                 {receiveCardCopy.shieldedDerivePrompt}
@@ -212,7 +205,7 @@ export default function ShieldedReceiveCard({ walletId }: ShieldedReceiveCardPro
                 size={"compact"}
                 className={"self-start"}
               >
-                {revealing ? receiveCardCopy.generating : 'Generate address'}
+                {revealing ? receiveCardCopy.generating : receiveCardCopy.generateAddresses}
               </Button>
             </div>
           )}
@@ -251,7 +244,13 @@ export default function ShieldedReceiveCard({ walletId }: ShieldedReceiveCardPro
         setError(INVALID_WALLET_PASSWORD_MESSAGE)
         return
       }
-      setAddresses(await API.getShieldedAddresses(walletId, password))
+      const nextAddresses = await API.getShieldedAddresses(walletId, password)
+      setShieldedAddresses(walletId, nextAddresses)
+      if (!synced && !syncRunning) {
+        startShieldedSyncWithAddressPool(walletId, password).catch(() => {})
+      } else if (synced) {
+        await topUpShieldedAddresses(walletId, password, sync.notes)
+      }
       setPassword('')
     } catch {
       setError(receiveCardCopy.loadFailed)
@@ -264,7 +263,7 @@ export default function ShieldedReceiveCard({ walletId }: ShieldedReceiveCardPro
     <div className={`flex max-w-115 flex-col gap-3 ${SURFACE_SECTION}`}>
       <div className={"flex items-center gap-2"}>
         <ShieldSmallIcon size={16} className={"text-dash-brand dark:text-dash-mint"} />
-        <Text size={14} weight={"extrabold"} color={"brand"}>Shielded address</Text>
+        <Text size={14} weight={"extrabold"} color={"brand"}>{receiveCardCopy.shieldedTitle}</Text>
       </div>
       <Text size={12} weight={"medium"} color={"brand"} opacity={50} className={"leading-[130%]"}>
         {receiveCardCopy.shieldedUnlockPrompt}
