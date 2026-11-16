@@ -93,6 +93,7 @@ export class MasternodeService {
 
     const nodes: NetworkMasternode[] = [...found]
     const matches = {} as Record<MasternodeKeyFilter, Map<string, number>>
+    const ownerIndexes = new Map<string, number>()
     for (const chain of MASTERNODE_WALKED_CHAINS) {
       const chainMatches = matches[chain] = new Map<string, number>()
       const importedValues = imported.filter(({role}) => role === chain)
@@ -103,6 +104,7 @@ export class MasternodeService {
       await runAddressWindow(masternodeKeyDeriver(keys, wallet.network, chain), {
         scan: async () => null,
         probe: async derived => {
+          if (chain === 'owner') for (const {index, address} of derived) ownerIndexes.set(address, index)
           const listed = await provider.getMasternodes(chain, derived.flatMap(({address}) => masternodeFilterValues(chain, address))) ?? []
           nodes.push(...listed)
           const probeMatches = matchMasternodeKeys(chain, derived, listed)
@@ -113,7 +115,7 @@ export class MasternodeService {
       }, memoryWindowStore(), MASTERNODE_KEY_WINDOW)
     }
 
-    const owned = await Promise.all(ownedMasternodes(nodes, matches, imported, collateral)
+    const owned = await Promise.all(ownedMasternodes(nodes, matches, imported, collateral, ownerIndexes)
       .map(node => this.withEvonodeStatus(node, wallet.network)))
     const stored = await this.masternodeDAO.getCollaterals(walletId)
     const followed = new Set(stored.filter(row => row.followed).map(({proTxHash}) => proTxHash))

@@ -1,6 +1,7 @@
 import {describe, it, expect} from 'vitest'
 import {MnListDiff, MnType, SimplifiedMNListEntry} from 'dash-core-p2p'
-import {Script, Transaction, TransactionType, utils as sdkUtils} from 'dash-core-sdk'
+import {CollateralShare, ExtNetInfo, OutPoint, Output, Script, Transaction, TransactionType, utils as sdkUtils} from 'dash-core-sdk'
+import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
 import {ProUpRegTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRegTx.js'
 import {
   evonodeDapiUrls,
@@ -61,6 +62,34 @@ const INTERNAL_TX = '030001000105cc2df608821afc9b57625e4737d61c39e039e0c3a91689a
 const EVO = '8e11eb784883d3dc9d0d74a74633f067dc61c408dfdee49b8f93bb161f2916c0'
 const EVO_TX = '03000100016ebca7f8c2852d1034b37fa4e464d6710dd952acad4f252752d9fb703bed2928200000006a47304402202ec687b9f4e8f8047690521d18196644b33b8310f64f854c0b05d2a2d90010380220120fefc98587fc0fe66a89727b1b9bb3880f7fd382148bd35be25e09d2287f760121020a25e4e16b91a17a5ef5627755d9cb81f1cd6d84026262f94ce0f4a4f2cb829dfeffffff01307af505000000001976a914f53e3ff160dab7ec3cc2a6b0afa6dd8d36e3879488ac00000000fd2a01020001000000593aaec65459ca9a97bd34b2657c8201ae83952d062715ba3af0d4255e54e86c2000000000000000000000000000ffff34599a304e1f0063eb51fcfd121e6c3eae23b90b26cd1100217b8160877a911d8bb7d1e75e2320e98cc3233c1f6972cb642424bfcec7c182c56d2c0ebb59e45f788f4d5dbfa2ebff3e3a0063eb51fcfd121e6c3eae23b90b26cd1100217b00001976a914c69a0bda7daaae481be8def95e5f347a1d00a4b488acddb1df193e8da1e028e7985d096ac11e8f38e5f85df16508487ff4ec434af2ae357cb7f558f264c99460327d48066e197c70576d308fa305412084722e83388b959b26cca1ef4aef3106b849f91e1d345c620cafece7b97426164dce31a56ca0736608b0b8ba6969a6c91e763d13db90bd9b213f7bd2a36f8ea5'
 
+// The live testnet shared registration 58842219…0d05b's payload, rebuilt: three
+// shares (500/300/200 DASH), null top-level owner, empty payouts, DSHC collateral
+// at output 3.
+function sharedRegistration(): Transaction {
+  const p2pkh = (hash: string) => Script.fromHex(`76a914${hash}88ac`)
+  const shares = [
+    new CollateralShare(50000000000n, p2pkh('f5e39ebf4b0ede3685a8de904d71bea7c71a5f9d'), p2pkh('868a3bf8d8cf221118b526b9c6b114dc3b18e4d7'), 'f9aa3a6154ee3931509e23fac33af0ed91f11096'),
+    new CollateralShare(30000000000n, p2pkh('92cc55887af36a89aa15f3b4b9b10511d2fe557d'), new Script(), '4a3d03d232aa03e67ec79a8325c61645602d2c16'),
+    new CollateralShare(20000000000n, p2pkh('108877a8e51ff82bfe7204835f209efe3494182d'), new Script(), '7d431afc4359a48d477fddb8ccca0608397ad714'),
+  ]
+  const joinSigs = [
+    '1fb68e4e453e74ae1b5eaa677579e261b6719f14f0de61432ce8230793846116a66a291f425403968fad987597da304b88cef1e62826893f4d64ca10a87cd3351f',
+    '1f110694a0d0f27efaaadec3488306ed22a62e2f6aab63edfb3822e4e1764ac9b531c9145bd2b079aaf8093bf21ae5914eb122dd9c0f308a1cb99f96f3855048f0',
+    '1fbce5eb3c04fffa982334b8951a5af3c14c0e91a2fa8986e4c5d676be6ef155eb63802112b07bf2ad4009ca8555f572ef05d118cc80b2bbabd0c196e030f916b7',
+  ]
+  const payload = new ProRegTX(3, 0, 0, new OutPoint('00'.repeat(32), 3), undefined, undefined,
+    '00'.repeat(20), 'b1861e7cebdb77ae860788edf2d8b80fda62bcd4647a4cee6841b753b7c438b4c084554b2d71703891092b6d9e509f05',
+    '40660b7a7c0ef6cd15a5cb8912cc86326661e19b', 500, new Script(), '00'.repeat(32),
+    undefined, undefined, undefined, '',
+    {netInfo: new ExtNetInfo(), payouts: [], shares, joinSigs, earlyPeriodBlocks: 17280, earlyPenalty: 500000000n})
+  return new Transaction([], [
+    new Output(3334n, p2pkh('f5e39ebf4b0ede3685a8de904d71bea7c71a5f9d')),
+    new Output(3334n, p2pkh('92cc55887af36a89aa15f3b4b9b10511d2fe557d')),
+    new Output(3332n, p2pkh('108877a8e51ff82bfe7204835f209efe3494182d')),
+    new Output(100000000000n, Script.fromHex('04445348437551')),
+  ], 0, 3, TransactionType.TRANSACTION_PROVIDER_REGISTER, payload)
+}
+
 describe('provider registrations', () => {
   it('reads a collateral the ProRegTx itself created, address included', () => {
     expect(providerRegistration(Transaction.fromHex(INTERNAL_TX), INTERNAL, 1154851, 'testnet')).toEqual({
@@ -68,6 +97,7 @@ describe('provider registrations', () => {
       collateralTxid: INTERNAL, collateralVout: 1, collateralAddress: '8oTdW2sryrLioQQv3BBGPTf7aKLT6LfbGr',
       ownerAddress: 'yLrHr1jPSrAi5bVk3Bij8T2iVAu2mHHeqw',
       payouts: [{height: 1154851, address: 'yeP7dbbKCZHhzrEHP6goTsPVqXJ91E2Bdy'}], platformP2PPort: null,
+      shares: [],
     })
   })
 
@@ -77,6 +107,22 @@ describe('provider registrations', () => {
       collateralTxid: '6ce8545e25d4f03aba1527062d9583ae01827c65b234bd979aca5954c6ae3a59', collateralVout: 32, collateralAddress: null,
       ownerAddress: 'yLMWYiFxCpPwim9YuosKAozkqsGf283XCa',
       payouts: [{height: 850334, address: 'yeRZBWYfeNE4yVUHV4ZLs83Ppn9aMRH57A'}], platformP2PPort: 36656,
+      shares: [],
+    })
+  })
+
+  it('reads a shared registration\'s share table, and no top-level owner', () => {
+    const tx = sharedRegistration()
+    expect(providerRegistration(tx, tx.hash(), 1588042, 'testnet')).toEqual({
+      height: 1588042, isEvo: false,
+      collateralTxid: tx.hash(), collateralVout: 3, collateralAddress: null,
+      ownerAddress: null,
+      payouts: [{height: 1588042, address: null}], platformP2PPort: null,
+      shares: [
+        {ownerAddress: 'yj5Z2cy5bGCva2DorKb8f4pJG7FoFSpBwk', amountDuffs: 50000000000},
+        {ownerAddress: 'yT5ywnmTkPeUQG9fQ1BgKFFMo395YT9zCf', amountDuffs: 30000000000},
+        {ownerAddress: 'yXjmhkKCaQx6ax3jkhema7ZMw7V3jFrjje', amountDuffs: 20000000000},
+      ],
     })
   })
 
@@ -101,7 +147,33 @@ describe('provider registrations', () => {
     expect(listedMasternode(entry(1, MnType.Evo, true, '68.67.122.23', 1443), undefined, 'testnet')).toMatchObject({
       type: 'Evo', status: 'ENABLED', serviceAddress: '68.67.122.23:9999', platformHttpPort: 1443,
       ownerAddress: null, collateralTxid: null, collateralVout: null, payeeAddress: null, registeredHeight: null,
+      isShared: null, shares: null,
     })
+  })
+
+  it('lists a shared node with its share table, amounts as bigint', () => {
+    const tx = sharedRegistration()
+    const listed = listedMasternode({...entry(1, MnType.Regular, true, '0.0.0.0'), nVersion: 3, address: null},
+      providerRegistration(tx, tx.hash(), 1588042, 'testnet')!, 'testnet')
+    expect(listed).toMatchObject({
+      isShared: true, ownerAddress: null, payeeAddress: null,
+      shares: [
+        {ownerAddress: 'yj5Z2cy5bGCva2DorKb8f4pJG7FoFSpBwk', amountDuffs: 50000000000n},
+        {ownerAddress: 'yT5ywnmTkPeUQG9fQ1BgKFFMo395YT9zCf', amountDuffs: 30000000000n},
+        {ownerAddress: 'yXjmhkKCaQx6ax3jkhema7ZMw7V3jFrjje', amountDuffs: 20000000000n},
+      ],
+    })
+  })
+
+  // Core drops a banned node's entry to version 1; the registration still tells.
+  it('keeps a banned shared node shared, and a solo one not shared', () => {
+    const tx = sharedRegistration()
+    const banned = listedMasternode({...entry(1, MnType.Regular, false, '0.0.0.0'), nVersion: 1, address: null},
+      providerRegistration(tx, tx.hash(), 1588042, 'testnet')!, 'testnet')
+    expect(banned).toMatchObject({isShared: true, status: 'POSE_BANNED', type: 'Regular'})
+    const solo = listedMasternode(entry(1, MnType.Regular, true, '0.0.0.0'),
+      providerRegistration(Transaction.fromHex(INTERNAL_TX), INTERNAL, 1154851, 'testnet')!, 'testnet')
+    expect(solo).toMatchObject({isShared: false, shares: []})
   })
 
   it('reads a watched node\'s new payout, and ignores one it does not watch', () => {

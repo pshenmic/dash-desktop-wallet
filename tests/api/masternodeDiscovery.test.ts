@@ -6,7 +6,7 @@ import {MasternodeService} from '../../src/main/src/services/core/MasternodeServ
 import {Masternode, MasternodeKeyFilter, MasternodeKeys, NetworkMasternode} from '../../src/main/src/types/Masternode'
 import {UTXO} from '../../src/main/src/types/UTXO'
 import {masternodeKeyDeriver} from '../../src/main/src/utils/masternodeKeys'
-import {nodeKey} from '../../src/main/src/utils/masternodes'
+import {nodeKeyValues} from '../../src/main/src/utils/masternodes'
 import {Harness, harness, PASSWORD, VALID_SEEDPHRASE} from './harness'
 
 function node(proTxHash: string, fields: Partial<NetworkMasternode> = {}): NetworkMasternode {
@@ -15,7 +15,7 @@ function node(proTxHash: string, fields: Partial<NetworkMasternode> = {}): Netwo
     collateralTxid: proTxHash.repeat(64).slice(0, 64), collateralVout: 0, collateralAddress: 'Xnobody',
     serviceAddress: '1.2.3.4:9999', payeeAddress: 'Xpayee', ownerAddress: 'Xnobody', votingAddress: 'Xnobody',
     operatorPublicKey: 'ff'.repeat(48), platformNodeId: null, platformP2PPort: null, platformHttpPort: null,
-    lastPaidBlock: 0, lastPaidTime: 0, registeredHeight: null, ...fields,
+    lastPaidBlock: 0, lastPaidTime: 0, registeredHeight: null, isShared: false, shares: [], ...fields,
   }
 }
 
@@ -30,7 +30,7 @@ function source(list: NetworkMasternode[] | null | Error, utxos: UTXO[] = [], fo
     getWalletUtxos: async () => utxos,
     getMasternodes: async (filter: MasternodeKeyFilter, values: string[]) => {
       if (list instanceof Error) throw list
-      return list?.filter(entry => values.includes(nodeKey(filter, entry) ?? '')) ?? null
+      return list?.filter(entry => nodeKeyValues(filter, entry).some(key => values.includes(key))) ?? null
     },
     watchMasternodes: async (owned: Masternode[], fresh: Masternode[]) => {
       watched.push([owned.map(({proTxHash}) => proTxHash), fresh.map(({proTxHash}) => proTxHash)])
@@ -206,6 +206,56 @@ describe('MasternodeService.discover', () => {
     await discover(source([node('a', {ownerAddress: key('owner', 0)})]))
 
     expect(watched.map(([, fresh]) => fresh)).toEqual([['a'], ['a'], ['a'], []])
+  })
+
+  it('discovers a shared node by a share owner key on the owner chain', async () => {
+    const shareOwner = key('owner', 2)
+    await discover(source([node('s', {ownerAddress: null, isShared: true, collateralVout: 3, collateralAddress: null, shares: [
+      {ownerAddress: shareOwner, amountDuffs: 20000000000n},
+      {ownerAddress: 'Xother', amountDuffs: 80000000000n},
+    ]})]))
+    const [found] = await owned()
+    expect(found).toMatchObject({proTxHash: 's', ownerKeyIndex: 2, isShared: true})
+    expect(found.shares).toEqual([
+      {ownerAddress: shareOwner, amountDuffs: 20000000000n, keyIndex: 2, imported: false},
+      {ownerAddress: 'Xother', amountDuffs: 80000000000n, keyIndex: null, imported: false},
+    ])
+    expect(await storedCollaterals()).toEqual(['s:ss:3'])
+  })
+
+  it('widens the owner walk past a key held as a share', async () => {
+    await discover(source([
+      node('t', {ownerAddress: null, isShared: true, shares: [
+        {ownerAddress: key('owner', 0), amountDuffs: 20000000000n},
+        {ownerAddress: 'Xother', amountDuffs: 80000000000n},
+      ]}),
+      node('s', {ownerAddress: null, isShared: true, shares: [
+        {ownerAddress: key('owner', 55), amountDuffs: 20000000000n},
+        {ownerAddress: 'Xother', amountDuffs: 80000000000n},
+      ]}),
+    ]))
+    expect((await owned()).map(({proTxHash, ownerKeyIndex}) => [proTxHash, ownerKeyIndex])).toEqual([['t', 0], ['s', 55]])
+  })
+
+  it('lists a shared node held by the creator\'s voting key with no share of ours', async () => {
+    await discover(source([node('s', {votingAddress: key('voting', 0), ownerAddress: null, isShared: true, shares: [
+      {ownerAddress: 'Xother1', amountDuffs: 60000000000n},
+      {ownerAddress: 'Xother2', amountDuffs: 40000000000n},
+    ]})]))
+    const [found] = await owned()
+    expect(found).toMatchObject({proTxHash: 's', ownerKeyIndex: null, votingKeyIndex: 0})
+    expect(found.shares!.map(({keyIndex, imported}) => [keyIndex, imported])).toEqual([[null, false], [null, false]])
+  })
+
+  it('finds a shared node by an imported share owner key', async () => {
+    const owner = PrivateKey.fromBytes(new Uint8Array(32).fill(9), 'mainnet')
+    current = source([node('s', {ownerAddress: null, isShared: true, shares: [
+      {ownerAddress: owner.getAddress(), amountDuffs: 20000000000n},
+      {ownerAddress: 'Xother', amountDuffs: 80000000000n},
+    ]})])
+    const found = await masternodes.importKey(walletId, 'owner', owner.toWIF())
+    expect(found!.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['s', ['owner']]])
+    expect(found![0].shares!.map(({keyIndex, imported}) => [keyIndex, imported])).toEqual([[null, true], [null, false]])
   })
 
   it('refuses a key that does not parse, and stores nothing for it', async () => {

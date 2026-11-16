@@ -26,6 +26,21 @@ export interface NetworkMasternode {
   lastPaidTime: number | null
   // Known only to the p2p index, which read the ProRegTx at this height.
   registeredHeight: number | null
+  isShared: boolean | null
+  shares: MasternodeShare[] | null
+}
+
+// One participant's contribution to a shared masternode's collateral.
+export interface MasternodeShare {
+  ownerAddress: string
+  amountDuffs: bigint
+}
+
+// A share with the wallet's marks: keyIndex is the owner-chain index holding it,
+// null when the seed does not derive it; imported is an imported owner key.
+export interface OwnedMasternodeShare extends MasternodeShare {
+  keyIndex: number | null
+  imported: boolean
 }
 
 // A masternode this wallet holds a key or the collateral of. A null index is a
@@ -35,6 +50,7 @@ export interface Masternode extends NetworkMasternode {
   votingKeyIndex: number | null
   operatorKeyIndex: number | null
   importedRoles: MasternodeKeyChain[]
+  shares: OwnedMasternodeShare[] | null
 }
 
 // publicKey is what the list carries for the role: the address for owner and
