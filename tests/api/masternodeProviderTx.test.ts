@@ -252,6 +252,15 @@ describe('MasternodeService provider transactions', () => {
       await expect(masternodes.updateRegistrar(walletId, PRO_TX_HASH, KEEP, PASSWORD)).rejects.toThrow("owner key")
     })
 
+    it('refuses a shared node, whose updates need every share owner', async () => {
+      list = [node(PRO_TX_HASH, {ownerAddress: null, isShared: true, shares: [
+        {ownerAddress: key('owner', 0), amountDuffs: 20000000000n},
+        {ownerAddress: 'Xother', amountDuffs: 80000000000n},
+      ]})]
+      await expect(masternodes.updateRegistrar(walletId, PRO_TX_HASH, KEEP, PASSWORD)).rejects.toThrow('every share owner')
+      expect(broadcast).toEqual([])
+    })
+
     it('refuses a payout to the voting key', async () => {
       await expect(masternodes.updateRegistrar(walletId, PRO_TX_HASH, {...KEEP, payoutAddress: key('voting', 0)}, PASSWORD))
         .rejects.toThrow('may not pay the owner or voting key')
@@ -316,6 +325,16 @@ describe('MasternodeService provider transactions', () => {
       list = [operated({operatorPublicKey: 'ff'.repeat(48), ownerAddress: key('owner', 0)})]
       await expect(masternodes.updateService(walletId, PRO_TX_HASH, SERVICE, PASSWORD)).rejects.toThrow('operator key')
       await expect(masternodes.revoke(walletId, PRO_TX_HASH, 'termination', PASSWORD)).rejects.toThrow('operator key')
+      expect(broadcast).toEqual([])
+    })
+
+    it('refuses a shared node: shared interactions are not supported yet', async () => {
+      list = [operated({ownerAddress: null, isShared: true, shares: [
+        {ownerAddress: 'Xother1', amountDuffs: 60000000000n},
+        {ownerAddress: 'Xother2', amountDuffs: 40000000000n},
+      ]})]
+      await expect(masternodes.updateService(walletId, PRO_TX_HASH, SERVICE, PASSWORD)).rejects.toThrow('not supported')
+      await expect(masternodes.revoke(walletId, PRO_TX_HASH, 'termination', PASSWORD)).rejects.toThrow('not supported')
       expect(broadcast).toEqual([])
     })
 

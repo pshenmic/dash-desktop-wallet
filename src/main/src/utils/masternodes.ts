@@ -148,6 +148,7 @@ export function operatedNode(owned: Masternode[], proTxHash: string): Masternode
   if (node == null) throw new Error('Not a masternode of this wallet')
   const {operatorKeyIndex} = node
   if (operatorKeyIndex == null) throw new Error("This wallet does not derive the masternode's operator key")
+  if (node.isShared) throw new Error('Shared masternode interactions are not supported yet')
   return {...node, operatorKeyIndex}
 }
 

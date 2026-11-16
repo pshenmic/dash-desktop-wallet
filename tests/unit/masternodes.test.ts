@@ -15,6 +15,7 @@ import {
   ownedCollaterals,
   ownedMasternodes,
   ownerNode,
+  operatedNode,
   requireCollateral,
   requirePayout,
   collateralsToStore,
@@ -275,6 +276,15 @@ describe('ownerNode', () => {
       {ownerAddress: 'Xother', amountDuffs: 80000000000n, keyIndex: null, imported: false},
     ]}
     expect(() => ownerNode([shared], 'aa')).toThrow('every share owner')
+  })
+})
+
+describe('operatedNode', () => {
+  it('refuses a shared node: shared interactions are not supported yet', () => {
+    const shares = [{ownerAddress: 'Xother1', amountDuffs: 60000000000n}, {ownerAddress: 'Xother2', amountDuffs: 40000000000n}]
+    const shared = {...node('aa', {isShared: true, shares}), ownerKeyIndex: null, votingKeyIndex: null, operatorKeyIndex: 0, importedRoles: [],
+      shares: shares.map(share => ({...share, keyIndex: null, imported: false}))}
+    expect(() => operatedNode([shared], 'aa')).toThrow('not supported')
   })
 })
 
