@@ -14,7 +14,7 @@ import {AddressUsage} from '../types/AddressDiscovery'
 import {ConnectionStatus} from '../types/ConnectionStatus'
 import {Masternode, MasternodeKeyFilter, NetworkMasternode} from '../types/Masternode'
 import {Network} from '../types/Network'
-import {nodeKey} from '../utils/masternodes'
+import {nodeKeyValues} from '../utils/masternodes'
 import {GovernanceVote, Proposal, ProposalTally} from '../types/Governance'
 import {isStaleProposal, proposalTally} from '../utils/governance'
 import {Logger} from '../utils/logger'
@@ -150,10 +150,7 @@ export class P2PWalletProvider implements WalletProvider {
     return list
       .map(node => node.collateralAddress != null ? node
         : {...node, collateralAddress: coins.get(`${node.collateralTxid}:${node.collateralVout}`) ?? null})
-      .filter(node => {
-        const key = nodeKey(filter, node)
-        return key != null && wanted.has(key)
-      })
+      .filter(node => nodeKeyValues(filter, node).some(key => wanted.has(key)))
   }
 
   // A fresh node not indexed yet has no height to rewind to, so it stays fresh.

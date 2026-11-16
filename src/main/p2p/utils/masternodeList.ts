@@ -36,15 +36,18 @@ export function providerRegistration(tx: Transaction, proTxHash: string, height:
   const payload = tx.extraPayload as ProRegTX
   const {txId, vOut} = payload.collateralOutpoint
   const internal = isZeroHash(txId)
+  const shares = payload.shares ?? []
   return {
     height,
     isEvo: payload.type === MnType.Evo,
     collateralTxid: internal ? proTxHash : txId,
     collateralVout: vOut,
     collateralAddress: internal ? tx.outputs[vOut]?.getAddress(network) ?? null : null,
-    ownerAddress: payload.getOwnerAddress(network),
+    // A shared registration's top-level owner key is null; its owners are the shares'.
+    ownerAddress: shares.length > 0 ? null : payload.getOwnerAddress(network),
     payouts: [{height, address: payload.getPayoutAddress(network) ?? null}],
     platformP2PPort: payload.platformP2PPort ?? null,
+    shares: shares.map(share => ({ownerAddress: share.getOwnerAddress(network), amountDuffs: Number(share.amount)})),
   }
 }
 
@@ -84,5 +87,7 @@ export function listedMasternode(entry: SimplifiedMNListEntry, registration: Pro
     lastPaidBlock: null,
     lastPaidTime: null,
     registeredHeight: registration?.height ?? null,
+    isShared: registration == null ? null : registration.shares.length > 0,
+    shares: registration == null ? null : registration.shares.map(({ownerAddress, amountDuffs}) => ({ownerAddress, amountDuffs: BigInt(amountDuffs)})),
   }
 }

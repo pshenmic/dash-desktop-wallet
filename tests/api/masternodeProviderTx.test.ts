@@ -24,7 +24,7 @@ import {
 } from '../../src/main/src/types/Masternode'
 import {UTXO} from '../../src/main/src/types/UTXO'
 import {masternodeKeyDeriver} from '../../src/main/src/utils/masternodeKeys'
-import {nodeKey} from '../../src/main/src/utils/masternodes'
+import {nodeKeyValues} from '../../src/main/src/utils/masternodes'
 import {harness, Harness, PASSWORD, VALID_SEEDPHRASE} from './harness'
 
 const DASH = 100_000_000n
@@ -48,7 +48,7 @@ function node(proTxHash: string, fields: Partial<NetworkMasternode>): NetworkMas
     collateralTxid: 'ee'.repeat(32), collateralVout: 0, collateralAddress: 'ynobody',
     serviceAddress: '1.2.3.4:19999', payeeAddress: 'ypayee', ownerAddress: 'ynobody', votingAddress: 'ynobody',
     operatorPublicKey: 'ff'.repeat(48), platformNodeId: null, platformP2PPort: null, platformHttpPort: null,
-    lastPaidBlock: 0, lastPaidTime: 0, registeredHeight: null, ...fields,
+    lastPaidBlock: 0, lastPaidTime: 0, registeredHeight: null, isShared: false, shares: [], ...fields,
   }
 }
 
@@ -115,7 +115,7 @@ describe('MasternodeService provider transactions', () => {
       ensureReady: async () => undefined,
       getWalletUtxos: async () => utxos,
       getMasternodes: async (filter: MasternodeKeyFilter, values: string[]) =>
-        list?.filter(entry => values.includes(nodeKey(filter, entry) ?? '')) ?? null,
+        list?.filter(entry => nodeKeyValues(filter, entry).some(key => values.includes(key))) ?? null,
       watchMasternodes: async () => [],
     }
     const walletSync = {

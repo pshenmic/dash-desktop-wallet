@@ -12,7 +12,7 @@ function node(proTxHash: string, fields: Partial<NetworkMasternode> = {}): Netwo
     collateralTxid: 'c'.repeat(64), collateralVout: 0, collateralAddress: null,
     serviceAddress: '1.2.3.4:19999', payeeAddress: null, ownerAddress: 'yowner', votingAddress: 'yvoting',
     operatorPublicKey: 'ff'.repeat(48), platformNodeId: null, platformP2PPort: null, platformHttpPort: null,
-    lastPaidBlock: null, lastPaidTime: null, registeredHeight: 10, ...fields,
+    lastPaidBlock: null, lastPaidTime: null, registeredHeight: 10, isShared: false, shares: [], ...fields,
   }
 }
 
@@ -43,5 +43,10 @@ describe('masternodes from the p2p list', () => {
   it('finds our collateral by the coin it spends from', async () => {
     const found = await provider([node('a'), node('b', {collateralTxid: 'd'.repeat(64)})]).getMasternodes('collateral', [OURS])
     expect(found!.map(({proTxHash, collateralAddress}) => [proTxHash, collateralAddress])).toEqual([['a', OURS]])
+  })
+
+  it('finds a shared node by a share owner address', async () => {
+    const shared = node('s', {ownerAddress: null, isShared: true, shares: [{ownerAddress: 'yshare', amountDuffs: 20000000000n}]})
+    expect((await provider([shared, node('a')]).getMasternodes('owner', ['yshare']))!.map(({proTxHash}) => proTxHash)).toEqual(['s'])
   })
 })

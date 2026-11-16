@@ -153,8 +153,9 @@ export class ProviderRegistry {
       const registrations = await store.getRegistrations()
       if (store !== this.opts.chain()) return false
       this.store = store
-      // An entry without a payout history is from an older layout: read it again.
-      this.registrations = new Map([...registrations].filter(([, registration]) => Array.isArray(registration.payouts)))
+      // An entry without a payout history or share table is from an older layout: read it again.
+      this.registrations = new Map([...registrations].filter(([, registration]) =>
+        Array.isArray(registration.payouts) && Array.isArray(registration.shares)))
     }
     return true
   }

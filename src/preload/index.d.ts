@@ -65,9 +65,20 @@ interface SelectableUtxoDTO {
   collateral: boolean
 }
 
-// Mirrors MasternodeKeyChain, ImportedMasternodeKey, Masternode and
-// OwnedCollateral in src/main/src/types/Masternode.
+// Mirrors MasternodeKeyChain, ImportedMasternodeKey, Masternode,
+// OwnedCollateral, MasternodeShare and OwnedMasternodeShare in
+// src/main/src/types/Masternode.
 type MasternodeKeyRole = 'owner' | 'voting' | 'operator'
+
+interface MasternodeShareDTO {
+  ownerAddress: string
+  amountDuffs: bigint
+}
+
+interface OwnedMasternodeShareDTO extends MasternodeShareDTO {
+  keyIndex: number | null
+  imported: boolean
+}
 
 interface MasternodeCollateralDTO {
   proTxHash: string
@@ -104,6 +115,8 @@ interface MasternodeDTO {
   lastPaidBlock: number | null
   lastPaidTime: number | null
   registeredHeight: number | null
+  isShared: boolean | null
+  shares: OwnedMasternodeShareDTO[] | null
 }
 
 interface PaymentRequestDTO {

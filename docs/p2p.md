@@ -98,6 +98,10 @@ Things the code cannot tell you, and that a plausible-looking change breaks:
   `nMasternodeMinimumConfirmations`: 15 mainnet, 1 testnet) and kept in chain.db
   under `r:`. The tx is accepted only if its hash is the proTxHash; a node whose
   ProRegTx is not there is skipped, never guessed.
+- **A shared registration carries its share table.** The index keeps each
+  share's owner address and amount, and the owner search matches them too — a
+  shared node has no top-level owner key. Entries indexed before the share table
+  was kept are read again once.
 - **The type comes from the ProRegTx when it is known.** Core resets a banned
   evonode's operator state and its entry drops to version 1, which reads as
   Regular.

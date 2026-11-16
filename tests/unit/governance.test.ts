@@ -21,7 +21,7 @@ function node(collateralTxid: string, collateralVout: number, votingAddress: str
     proTxHash: collateralTxid, type, status: 'ENABLED', posePenaltyScore: 0, collateralTxid, collateralVout,
     collateralAddress: null, serviceAddress: null, payeeAddress: null, ownerAddress: null, votingAddress,
     operatorPublicKey: 'ff'.repeat(48), platformNodeId: null, platformP2PPort: null, platformHttpPort: null,
-    lastPaidBlock: null, lastPaidTime: null, registeredHeight: null,
+    lastPaidBlock: null, lastPaidTime: null, registeredHeight: null, isShared: false, shares: [],
   }
 }
 
@@ -120,7 +120,7 @@ describe('lastVoteTime', () => {
 describe('requireVotingNode', () => {
   const TXID = 'aa'.repeat(32)
   const owned = (fields: Partial<Masternode> = {}): Masternode =>
-    ({...node(TXID, 0, 'Xvoter'), ownerKeyIndex: null, votingKeyIndex: 2, operatorKeyIndex: null, importedRoles: [], ...fields})
+    ({...node(TXID, 0, 'Xvoter'), ownerKeyIndex: null, votingKeyIndex: 2, operatorKeyIndex: null, importedRoles: [], shares: [], ...fields})
 
   it('answers what signing the vote needs', () => {
     expect(requireVotingNode([owned()], TXID, [vote({time: 100})], 100 + 3600)).toEqual(
