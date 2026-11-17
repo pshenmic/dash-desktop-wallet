@@ -29,9 +29,17 @@ function isCollateralFlagged(utxo: SelectableUtxo): boolean {
   return 'collateral' in utxo && (utxo as ListedUtxo).collateral
 }
 
+export function isConfirmingUtxo(utxo: Pick<SelectableUtxo, 'height'>): boolean {
+  return utxo.height <= 0
+}
+
 export function eligibleCollateralUtxos(utxos: SelectableUtxo[], type: 'Regular' | 'Evo'): SelectableUtxo[] {
   const required = MASTERNODE_COLLATERAL_DUFFS[type]
-  return utxos.filter(utxo => utxo.height > 0 && utxo.satoshis === required && !isCollateralFlagged(utxo))
+  const eligible = utxos.filter(utxo => utxo.satoshis === required && !isCollateralFlagged(utxo))
+  return [
+    ...eligible.filter(utxo => !isConfirmingUtxo(utxo)),
+    ...eligible.filter(utxo => isConfirmingUtxo(utxo)),
+  ]
 }
 
 export function parseOutpoint(outpoint: string): { txid: string; vout: number } | null {

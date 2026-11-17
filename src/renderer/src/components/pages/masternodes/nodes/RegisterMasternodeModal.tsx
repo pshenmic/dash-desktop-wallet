@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { API } from '@renderer/api'
 import type { MasternodeRegistrationResult } from '@renderer/api/types'
-import { HighlightedIdentifier, Text } from '@renderer/components/dash-ui-kit-extended'
+import { HighlightedIdentifier, InfoCircleIcon, Text } from '@renderer/components/dash-ui-kit-extended'
 import SignedActionModal from '@renderer/components/modal/SignedActionModal'
 import RecipientInput from '@renderer/components/pages/transfer/RecipientInput'
+import Alert from '@renderer/components/ui/Alert'
 import DropdownField from '@renderer/components/ui/DropdownField'
 import SegmentedControl from '@renderer/components/ui/SegmentedControl'
 import { ADDRESS_INPUT, ADDRESS_INPUT_TEXT_SIZES } from '@renderer/constants/addressField'
@@ -22,6 +23,7 @@ import {
 } from '@renderer/constants/masternodes'
 import { FIELD_COMPACT, SURFACE_SECTION } from '@renderer/constants/surfaces'
 import { useAuth } from '@renderer/contexts/AuthContext'
+import { AlertTone } from '@renderer/enums/AlertTone'
 import { SegmentedControlAppearance } from '@renderer/enums/SegmentedControlAppearance'
 import { refreshMasternodes } from '@renderer/hooks/useMasternodes'
 import { useWalletAddressOptions } from '@renderer/hooks/useWalletAddressOptions'
@@ -30,7 +32,7 @@ import { useWalletUtxos } from '@renderer/hooks/useWalletUtxos'
 import type { RegisterMasternodeModalProps } from '@renderer/types/MasternodeNodes'
 import { davToDash } from '@renderer/utils/balance'
 import { transactionUrl } from '@renderer/utils/explorer'
-import { buildMasternodeRegistration, eligibleCollateralUtxos } from '@renderer/utils/masternodeActions'
+import { buildMasternodeRegistration, eligibleCollateralUtxos, isConfirmingUtxo } from '@renderer/utils/masternodeActions'
 
 export default function RegisterMasternodeModal({
   walletId,
@@ -65,14 +67,21 @@ export default function RegisterMasternodeModal({
     () => collateralCoins.map(coin => ({
       value: `${coin.txid}:${coin.vout}`,
       label: `${coin.txid.slice(0, 12)}…:${coin.vout}`,
+      ...(isConfirmingUtxo(coin) ? { badge: REGISTER_MASTERNODE_COPY.confirmingBadge } : {}),
       description: coin.address,
-      metadata: [`${davToDash(coin.satoshis)} ${DASH_UNIT}`],
+      metadata: [
+        `${davToDash(coin.satoshis)} ${DASH_UNIT}`,
+        isConfirmingUtxo(coin)
+          ? REGISTER_MASTERNODE_COPY.confirmingBadge
+          : `${REGISTER_MASTERNODE_COPY.confirmedBlockPrefix}${coin.height.toLocaleString('en-US')}`,
+      ],
     })),
     [collateralCoins],
   )
   const activeCollateral = collateralOptions.some(opt => opt.value === selectedCollateral)
     ? selectedCollateral
     : (collateralOptions[0]?.value ?? '')
+  const activeCollateralCoin = collateralCoins.find(coin => `${coin.txid}:${coin.vout}` === activeCollateral) ?? null
 
   const { dto, error } = useMemo(
     () => buildMasternodeRegistration({
@@ -122,6 +131,14 @@ export default function RegisterMasternodeModal({
             onChange={setSelectedCollateral}
             ariaLabel={REGISTER_MASTERNODE_COPY.collateralLabel}
             triggerClassName={FIELD_COMPACT}
+          />
+        )}
+        {activeCollateralCoin != null && isConfirmingUtxo(activeCollateralCoin) && (
+          <Alert
+            tone={AlertTone.Warning}
+            icon={<InfoCircleIcon size={14} />}
+            title={REGISTER_MASTERNODE_COPY.confirmingCollateralTitle}
+            description={REGISTER_MASTERNODE_COPY.confirmingCollateralDescription}
           />
         )}
       </div>

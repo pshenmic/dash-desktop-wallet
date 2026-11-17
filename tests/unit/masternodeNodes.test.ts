@@ -9,6 +9,7 @@ import {
   buildRegistrarUpdate,
   buildServiceUpdate,
   eligibleCollateralUtxos,
+  isConfirmingUtxo,
   parseOperatorRewardBps,
   validateServiceEndpoint,
 } from '@renderer/utils/masternodeActions'
@@ -675,15 +676,18 @@ describe('Masternode action guards', () => {
 describe('Masternode action builders', () => {
   const txid = 'a'.repeat(64)
 
-  it('filters confirmed unspent coins matching exact collateral duffs and not flagged as collateral', () => {
+  it('includes confirming and confirmed unspent coins matching exact collateral duffs and sorts confirmed first', () => {
     const coins = [
-      { txid, vout: 0, address: 'X1', satoshis: 100_000_000_000n, height: 100, timestamp: null, confirmations: 6, isLocked: false, collateral: false },
-      { txid, vout: 1, address: 'X2', satoshis: 100_000_000_000n, height: 100, timestamp: null, confirmations: 6, isLocked: false, collateral: true },
       { txid, vout: 2, address: 'X3', satoshis: 100_000_000_000n, height: 0, timestamp: null, confirmations: 0, isLocked: false, collateral: false },
+      { txid, vout: 1, address: 'X2', satoshis: 100_000_000_000n, height: 100, timestamp: null, confirmations: 6, isLocked: false, collateral: true },
+      { txid, vout: 0, address: 'X1', satoshis: 100_000_000_000n, height: 100, timestamp: null, confirmations: 6, isLocked: false, collateral: false },
       { txid, vout: 3, address: 'X4', satoshis: 400_000_000_000n, height: 100, timestamp: null, confirmations: 6, isLocked: false, collateral: false },
     ]
-    expect(eligibleCollateralUtxos(coins, 'Regular')).toHaveLength(1)
-    expect(eligibleCollateralUtxos(coins, 'Evo')).toHaveLength(1)
+    const regular = eligibleCollateralUtxos(coins, 'Regular')
+    expect(regular.map(coin => coin.vout)).toEqual([0, 2])
+    expect(isConfirmingUtxo(regular[0]!)).toBe(false)
+    expect(isConfirmingUtxo(regular[1]!)).toBe(true)
+    expect(eligibleCollateralUtxos(coins, 'Evo').map(coin => coin.vout)).toEqual([3])
   })
 
   it('parses operator reward percentage into basis points and validates service endpoints', () => {
