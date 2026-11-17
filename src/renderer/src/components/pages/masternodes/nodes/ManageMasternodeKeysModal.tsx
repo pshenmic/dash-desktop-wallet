@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { Button, DeleteIcon, HighlightedIdentifier, Input, Text } from '@renderer/components/dash-ui-kit-extended'
+import { Button, DeleteIcon, HighlightedIdentifier, InfoCircleIcon, Input, Text } from '@renderer/components/dash-ui-kit-extended'
+import Alert from '@renderer/components/ui/Alert'
 import CopyableError from '@renderer/components/ui/CopyableError'
 import CustomBadge from '@renderer/components/ui/CustomBadge'
 import Modal from '@renderer/components/ui/Modal'
@@ -15,16 +16,18 @@ import {
   MASTERNODE_KEY_ROLE_HINTS,
   MASTERNODE_KEY_ROLE_LABELS,
   MASTERNODE_KEY_ROLE_OPTIONS,
-  NODE_MATCHED_FORMS,
+  NODES_TAB_COPY,
 } from '@renderer/constants/masternodeNodes'
 import { PASSWORD_FIELD_INPUT_CLASS } from '@renderer/constants/password'
 import { SURFACE_ROW, SURFACE_SECTION } from '@renderer/constants/surfaces'
+import { useConnectionModeContext } from '@renderer/contexts/ConnectionModeContext'
+import { AlertTone } from '@renderer/enums/AlertTone'
 import { ModalSize } from '@renderer/enums/ModalSize'
 import { SegmentedControlAppearance } from '@renderer/enums/SegmentedControlAppearance'
 import { refreshImportedMasternodeKeys, refreshMasternodes, useImportedMasternodeKeys } from '@renderer/hooks/useMasternodes'
 import type { ManageMasternodeKeysModalProps } from '@renderer/types/MasternodeNodes'
-import { countLabel } from '@renderer/utils/countLabel'
 import { getErrorMessage } from '@renderer/utils/error'
+import { importedKeyToastMessage } from '@renderer/utils/masternodeNodes'
 
 export default function ManageMasternodeKeysModal({
   walletId,
@@ -32,6 +35,7 @@ export default function ManageMasternodeKeysModal({
   onClose,
 }: ManageMasternodeKeysModalProps): React.JSX.Element {
   const inputId = useId()
+  const { desired, setDesired } = useConnectionModeContext()
   const { importedKeys, loading: keysLoading, err: keysError } = useImportedMasternodeKeys(walletId)
   const [role, setRole] = useState<MasternodeKeyRole>('owner')
   const [privateKey, setPrivateKey] = useState('')
@@ -67,7 +71,7 @@ export default function ManageMasternodeKeysModal({
     try {
       const matched = await API.importMasternodeKey(walletId, role, trimmed)
       await Promise.all([refreshImportedMasternodeKeys(walletId), refreshMasternodes(walletId)])
-      toast.success(`${MANAGE_KEYS_COPY.keyImportedToast}${matched == null ? '' : ` (${countLabel(matched.length, NODE_MATCHED_FORMS)})`}`)
+      toast.success(importedKeyToastMessage(matched, desired, role))
       if (requestId === requestIdRef.current) setPrivateKey('')
     } catch (err) {
       if (requestId === requestIdRef.current) setImportError(getErrorMessage(err))
@@ -126,6 +130,26 @@ export default function ManageMasternodeKeysModal({
             className={'self-start flex-wrap'}
           />
         </div>
+
+        {desired === 'rpc' && role === 'owner' && (
+          <Alert
+            tone={AlertTone.Info}
+            icon={<InfoCircleIcon size={16} color={'currentColor'} />}
+            title={MANAGE_KEYS_COPY.rpcOwnerNoticeTitle}
+            description={MANAGE_KEYS_COPY.rpcOwnerNoticeDescription}
+            actions={(
+              <Button
+                type={'button'}
+                size={'compact'}
+                colorScheme={'lightBlue-mint'}
+                disabled={busy}
+                onClick={() => setDesired('p2p')}
+              >
+                {NODES_TAB_COPY.switchToP2P}
+              </Button>
+            )}
+          />
+        )}
 
         <div className={'flex flex-col gap-1.5'}>
           <label htmlFor={inputId}>

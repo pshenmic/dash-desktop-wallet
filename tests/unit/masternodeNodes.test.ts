@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { MasternodeDto, OwnedMasternodeShareDto } from '@renderer/api/types'
+import type { ConnectionType, MasternodeDto, MasternodeKeyRole, OwnedMasternodeShareDto } from '@renderer/api/types'
 import { DUFFS_PER_DASH } from '@renderer/constants/balance'
+import { MANAGE_KEYS_COPY, NODES_TAB_COPY } from '@renderer/constants/masternodeNodes'
 import { NodeSegment } from '@renderer/enums/Masternodes'
 import { StatusPillTone } from '@renderer/enums/StatusPillTone'
 import {
   calculateShareSummary,
+  emptyNodesDescription,
   filterNodes,
   formatBlockHeight,
   formatOwnedShareStake,
@@ -12,6 +14,7 @@ import {
   formatSharePercent,
   hasRoleInWallet,
   hasVotingKey,
+  importedKeyToastMessage,
   isOwnedShare,
   isSharedNode,
   keyOriginBadge,
@@ -492,5 +495,78 @@ describe('Node access display, roles, badges, and service formatting', () => {
     expect(formatServiceAddress('   ')).toBe('Unassigned')
     expect(formatServiceAddress('0.0.0.0:0')).toBe('Unassigned')
     expect(formatServiceAddress('127.0.0.1:9999')).toBe('127.0.0.1:9999')
+  })
+})
+
+describe('emptyNodesDescription', () => {
+  it('shows P2P sync copy only while P2P discovery has not completed', () => {
+    expect(emptyNodesDescription('p2p', false)).toBe(NODES_TAB_COPY.p2pSyncing)
+    expect(emptyNodesDescription('p2p', true)).toBe(NODES_TAB_COPY.emptyDescription)
+  })
+
+  it('shows the RPC-specific empty description regardless of discovery state', () => {
+    expect(emptyNodesDescription('rpc', false)).toBe(NODES_TAB_COPY.rpcEmptyDescription)
+    expect(emptyNodesDescription('rpc', true)).toBe(NODES_TAB_COPY.rpcEmptyDescription)
+  })
+
+  it('keeps P2P syncing, P2P empty, and RPC empty copy distinct', () => {
+    expect(new Set([
+      NODES_TAB_COPY.p2pSyncing,
+      NODES_TAB_COPY.emptyDescription,
+      NODES_TAB_COPY.rpcEmptyDescription,
+    ]).size).toBe(3)
+  })
+})
+
+describe('importedKeyToastMessage', () => {
+  it('explains P2P switching only when an RPC owner key matches zero nodes', () => {
+    expect(importedKeyToastMessage([], 'rpc', 'owner')).toBe(MANAGE_KEYS_COPY.keySavedForP2PToast)
+    expect(MANAGE_KEYS_COPY.keySavedForP2PToast).not.toBe(MANAGE_KEYS_COPY.keyImportedToast)
+  })
+
+  it('reports matched node counts in RPC mode when owner matches nodes or for non-owner roles', () => {
+    expect(importedKeyToastMessage([regularNode], 'rpc', 'owner')).toBe(
+      'Masternode key imported (1 node matched)',
+    )
+    expect(importedKeyToastMessage([regularNode, otherNode], 'rpc', 'owner')).toBe(
+      'Masternode key imported (2 nodes matched)',
+    )
+    expect(importedKeyToastMessage([], 'rpc', 'voting')).toBe(
+      'Masternode key imported (0 nodes matched)',
+    )
+    expect(importedKeyToastMessage([], 'rpc', 'operator')).toBe(
+      'Masternode key imported (0 nodes matched)',
+    )
+    expect(importedKeyToastMessage([regularNode], 'rpc', 'voting')).toBe(
+      'Masternode key imported (1 node matched)',
+    )
+    expect(importedKeyToastMessage([regularNode, otherNode], 'rpc', 'operator')).toBe(
+      'Masternode key imported (2 nodes matched)',
+    )
+  })
+
+  it('reports matched node counts in P2P mode for all roles including zero matches', () => {
+    const roles: MasternodeKeyRole[] = ['owner', 'voting', 'operator']
+    for (const role of roles) {
+      expect(importedKeyToastMessage([], 'p2p', role)).toBe(
+        'Masternode key imported (0 nodes matched)',
+      )
+      expect(importedKeyToastMessage([regularNode], 'p2p', role)).toBe(
+        'Masternode key imported (1 node matched)',
+      )
+      expect(importedKeyToastMessage([regularNode, otherNode], 'p2p', role)).toBe(
+        'Masternode key imported (2 nodes matched)',
+      )
+    }
+  })
+
+  it('falls back to the generic import toast when matched nodes are null', () => {
+    const modes: ConnectionType[] = ['p2p', 'rpc']
+    const roles: MasternodeKeyRole[] = ['owner', 'voting', 'operator']
+    for (const mode of modes) {
+      for (const role of roles) {
+        expect(importedKeyToastMessage(null, mode, role)).toBe(MANAGE_KEYS_COPY.keyImportedToast)
+      }
+    }
   })
 })

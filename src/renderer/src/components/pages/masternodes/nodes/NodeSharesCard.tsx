@@ -1,12 +1,14 @@
-import { HighlightedIdentifier, Text } from '@renderer/components/dash-ui-kit-extended'
+import { Button, HighlightedIdentifier, InfoCircleIcon, Text } from '@renderer/components/dash-ui-kit-extended'
 import DashboardHeading from '@renderer/components/pages/dashboard/DashboardHeading'
+import Alert from '@renderer/components/ui/Alert'
 import CopyButton from '@renderer/components/ui/CopyButton'
 import CustomBadge from '@renderer/components/ui/CustomBadge'
 import { DASH_UNIT } from '@renderer/constants/balance'
-import { NODE_SHARES_COPY, SUMMARY_COPY } from '@renderer/constants/masternodeNodes'
+import { NODE_SHARES_COPY, NODES_TAB_COPY, SUMMARY_COPY } from '@renderer/constants/masternodeNodes'
 import { SURFACE_ROW, SURFACE_SECTION } from '@renderer/constants/surfaces'
 import { TRANSACTION_DETAIL_CARD_CLASS } from '@renderer/constants/transactionsPage'
 import { useConnectionModeContext } from '@renderer/contexts/ConnectionModeContext'
+import { AlertTone } from '@renderer/enums/AlertTone'
 import type { NodeSharesCardProps } from '@renderer/types/MasternodeNodes'
 import { davToDash } from '@renderer/utils/balance'
 import {
@@ -18,7 +20,7 @@ import {
 import ShareBar from '../contested-resources/ShareBar'
 
 export default function NodeSharesCard({ node }: NodeSharesCardProps): React.JSX.Element {
-  const { desired } = useConnectionModeContext()
+  const { desired, setDesired } = useConnectionModeContext()
   const summary = calculateShareSummary(node.shares)
 
   return (
@@ -71,10 +73,27 @@ export default function NodeSharesCard({ node }: NodeSharesCardProps): React.JSX
             )
           })}
         </div>
+      ) : desired === 'rpc' ? (
+        <Alert
+          tone={AlertTone.Info}
+          icon={<InfoCircleIcon size={16} color={'currentColor'} />}
+          title={NODES_TAB_COPY.rpcSharedTitle}
+          description={NODE_SHARES_COPY.rpcSharesUnavailable}
+          actions={(
+            <Button
+              type={'button'}
+              size={'compact'}
+              colorScheme={'lightBlue-mint'}
+              onClick={() => setDesired('p2p')}
+            >
+              {NODES_TAB_COPY.switchToP2P}
+            </Button>
+          )}
+        />
       ) : (
         <div className={SURFACE_SECTION}>
           <Text size={12} weight={'medium'} color={'brand'} opacity={60}>
-            {desired === 'rpc' ? NODE_SHARES_COPY.rpcSharesUnavailable : NODE_SHARES_COPY.p2pSharesPending}
+            {NODE_SHARES_COPY.p2pSharesPending}
           </Text>
         </div>
       )}

@@ -26,7 +26,11 @@ export const NODES_TAB_COPY = {
   segmentsLabel: 'Node filter',
   emptyTitle: 'No masternodes discovered',
   emptyDescription: 'Masternodes and shared masternode shares linked to this wallet’s keys or collateral appear here after discovery.',
+  rpcEmptyDescription: 'Masternodes linked to this wallet appear here after discovery. Shared masternode shares held only by an owner key require P2P mode.',
   p2pSyncing: 'Waiting for the network masternode list to sync…',
+  rpcSharedTitle: 'Shared masternode shares require P2P mode',
+  rpcSharedDescription: 'RPC mode only lists shared nodes whose voting or operator key is in this wallet, without share amounts or participant addresses.',
+  switchToP2P: 'Switch to P2P',
   noMatch: 'No nodes match',
   clearSearch: 'Clear search',
   importedKeysButton: 'Imported keys',
@@ -121,6 +125,8 @@ export const MANAGE_KEYS_COPY = {
   title: 'Imported masternode keys',
   description: 'Import an external owner, share-owner, voting or operator private key to track its masternodes in this wallet.',
   roleLabel: 'Key role',
+  rpcOwnerNoticeTitle: 'Share-owner keys match in P2P mode',
+  rpcOwnerNoticeDescription: 'In RPC mode, an imported share-owner key is saved to this wallet and matches its shared masternodes once switched to P2P.',
   privateKeyLabel: 'Private key',
   importButton: 'Import key',
   importing: 'Importing…',
@@ -129,6 +135,7 @@ export const MANAGE_KEYS_COPY = {
   remove: 'Remove',
   close: 'Done',
   keyImportedToast: 'Masternode key imported',
+  keySavedForP2PToast: 'Masternode key saved — switch to P2P to match shared masternode shares',
   keyRemovedToast: 'Masternode key removed',
 } as const
 

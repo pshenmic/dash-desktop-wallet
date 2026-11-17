@@ -1,8 +1,11 @@
-import type { MasternodeDto, MasternodeKeyRole, OwnedMasternodeShareDto } from '@renderer/api/types'
+import type { ConnectionType, MasternodeDto, MasternodeKeyRole, OwnedMasternodeShareDto } from '@renderer/api/types'
 import { DASH_UNIT } from '@renderer/constants/balance'
 import {
+  MANAGE_KEYS_COPY,
   MASTERNODE_KEY_ROLE_LABELS,
+  NODES_TAB_COPY,
   NODE_DETAIL_COPY,
+  NODE_MATCHED_FORMS,
   NODE_SHARES_COPY,
   NODE_SHARES_FORMS,
   SUMMARY_COPY,
@@ -189,4 +192,16 @@ export function masternodeType(type: string): Pick<CustomBadgeProps, 'variant' |
 
 export function formatBlockHeight(height: number): string {
   return `${NODE_DETAIL_COPY.heightPrefix}${height.toLocaleString('en-US')}`
+}
+
+export function emptyNodesDescription(connectionMode: ConnectionType, discovered: boolean): string {
+  if (connectionMode === 'p2p' && !discovered) return NODES_TAB_COPY.p2pSyncing
+  if (connectionMode === 'rpc') return NODES_TAB_COPY.rpcEmptyDescription
+  return NODES_TAB_COPY.emptyDescription
+}
+
+export function importedKeyToastMessage(matched: MasternodeDto[] | null, connectionMode: ConnectionType, role: MasternodeKeyRole): string {
+  if (connectionMode === 'rpc' && role === 'owner' && matched != null && matched.length === 0) return MANAGE_KEYS_COPY.keySavedForP2PToast
+  if (matched == null) return MANAGE_KEYS_COPY.keyImportedToast
+  return `${MANAGE_KEYS_COPY.keyImportedToast} (${countLabel(matched.length, NODE_MATCHED_FORMS)})`
 }
