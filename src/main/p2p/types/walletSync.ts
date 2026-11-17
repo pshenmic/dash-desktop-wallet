@@ -1,5 +1,6 @@
 import {Network} from '../../src/types/Network'
 import {PeerMode} from './pool'
+import type {PayoutUpdate} from './masternodeList'
 
 // Domain types for wallet sync, independent of transport: messages.ts wraps
 // them for the wire, TransactionDAO consumes the apply payload directly.
@@ -148,4 +149,5 @@ export interface AppliedBlock {
 export interface BlockMatch {
   txs: AppliedTx[]
   spends: AppliedSpend[]
+  payouts: PayoutUpdate[]
 }

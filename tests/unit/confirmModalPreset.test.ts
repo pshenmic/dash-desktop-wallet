@@ -4,7 +4,7 @@ import type {ModalActionsProps, ModalProps} from '../../src/renderer/src/types/M
 import type {PasswordFieldProps} from '../../src/renderer/src/types/PasswordField'
 import type {CoreRecipient, CoreSpendSource} from '../../src/renderer/src/api/types'
 import {TxEndpointKind} from '../../src/renderer/src/enums/TxEndpointKind'
-import {SEND_INPUTS_CHANGED_MESSAGE, SEND_PROGRESS_TITLE, SHIELD_PROGRESS_TITLE} from '../../src/renderer/src/constants/sendConfirmModal'
+import {SEND_CANCEL_DELAY_MS, SEND_INPUTS_CHANGED_MESSAGE, SEND_PROGRESS_TITLE, SHIELD_PROGRESS_TITLE} from '../../src/renderer/src/constants/sendConfirmModal'
 
 const harness = vi.hoisted(() => ({
   stateIndex: 0,
@@ -165,6 +165,7 @@ function reset(): void {
 }
 
 function restore(): void {
+  vi.useRealTimers()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 }
@@ -271,6 +272,62 @@ describe.each(CASES)('$name preset password', modal => {
     expect(harness.toastError).toHaveBeenCalledExactlyOnceWith('broadcast failed')
     expect(common.onClose).not.toHaveBeenCalled()
     expect(find(render(() => modal.view(common)), 'password-field')).toHaveLength(1)
+  })
+
+  it('locks closing initially while online, unlocks after SEND_CANCEL_DELAY_MS, ignores late rejection, and re-sends on reopen', async () => {
+    vi.useFakeTimers()
+    let rejectFirst!: (reason?: unknown) => void
+    modal.start.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectFirst = reject }))
+    const common = commonProps({presetPassword: 'secret'})
+    const initial = open(modal, common) as ReactElement<ModalProps>
+    expect(initial.props.dismissible).toBe(false)
+    initial.props.onClose()
+    expect(common.onClose).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(SEND_CANCEL_DELAY_MS)
+    const unlocked = render(() => modal.view(common)) as ReactElement<ModalProps>
+    expect(unlocked.props.dismissible).toBe(true)
+    unlocked.props.onClose()
+    expect(common.onClose).toHaveBeenCalledOnce()
+
+    render(() => modal.view({...common, isOpen: false}))
+    runEffects()
+    vi.useRealTimers()
+    rejectFirst(new Error('network lost'))
+    await flush()
+    expect(harness.toastError).not.toHaveBeenCalled()
+    expect(common.onSuccess).not.toHaveBeenCalled()
+
+    open(modal, common)
+    await flush()
+    expect(modal.start).toHaveBeenCalledTimes(2)
+    expect(common.onSuccess).toHaveBeenCalledOnce()
+  })
+
+  it('unlocks cancelling after SEND_CANCEL_DELAY_MS without a preset and still calls onSuccess if the in-flight send succeeds', async () => {
+    vi.useFakeTimers()
+    let resolveFirst!: (value: unknown) => void
+    modal.start.mockImplementationOnce(() => new Promise(resolve => { resolveFirst = resolve }))
+    const common = commonProps()
+    typePassword(open(modal, common), 'typed')
+    const confirmPromise = confirm(render(() => modal.view(common)))
+    await vi.advanceTimersByTimeAsync(0)
+    const locked = render(() => modal.view(common)) as ReactElement<ModalProps>
+    runEffects()
+    expect(locked.props.dismissible).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(SEND_CANCEL_DELAY_MS)
+    const inFlight = render(() => modal.view(common)) as ReactElement<ModalProps>
+    expect(inFlight.props.dismissible).toBe(true)
+    const actions = (find(inFlight, 'modal-actions')[0] as ReactElement<ModalActionsProps>).props
+    expect(actions.secondary?.disabled).toBe(false)
+    actions.secondary?.onClick()
+    expect(common.onClose).toHaveBeenCalledOnce()
+
+    vi.useRealTimers()
+    resolveFirst({txid: 'sent', stHash: 'hash', amount: 90n, fee: 1n, amountCredits: 1_000n, feeCredits: 10n, fromAddress: 'from', toAddress: 'to'})
+    await confirmPromise
+    expect(common.onSuccess).toHaveBeenCalledOnce()
   })
 })
 

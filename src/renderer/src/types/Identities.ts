@@ -7,7 +7,14 @@ export interface IdentitiesSearchState {
 
 export interface IdentityRowProps {
   identity: IdentityApiDto
+  votingNames: string[]
   onOpen: (identifier: string) => void
+}
+
+export interface IdentityVotingNameProps {
+  name: string
+  extraNames?: number
+  onOpen?: () => void
 }
 
 export interface IdentityDetailProps {

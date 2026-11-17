@@ -1,9 +1,10 @@
 import { CheckIcon, InfoTooltip, Text } from '@renderer/components/dash-ui-kit-extended'
 import { ExclamationIcon } from '@renderer/components/dash-ui-kit-extended/icons'
 import Alert from '@renderer/components/ui/Alert'
+import CustomBadge from '@renderer/components/ui/CustomBadge'
 import RetryButton from '@renderer/components/ui/RetryButton'
 import Spinner from '@renderer/components/ui/Spinner'
-import { USERNAME_AVAILABILITY_BLOCKING, USERNAME_CHECK_COPY } from '@renderer/constants/dashPayUsernames'
+import { USERNAME_AVAILABILITY_BLOCKING, USERNAME_CHECK_COPY, USERNAME_TYPE_COPY } from '@renderer/constants/dashPayUsernames'
 import { DPNS_LABEL_MESSAGES, VOTE_POLL_DURATION_LABEL } from '@renderer/constants/dpns'
 import { AlertTone } from '@renderer/enums/AlertTone'
 import { DpnsLabelKind, UsernameAvailability } from '@renderer/enums/DashPay'
@@ -25,8 +26,9 @@ function AvailabilityLine({ check, availability, ownerName, onRetry }: Omit<User
         <span className={"flex items-center gap-1.5 text-dash-green"}>
           <CheckIcon size={12} color={"currentColor"} className={"[&_circle]:hidden"} />
           <Text size={12} weight={"medium"} className={"text-inherit!"}>
-            {`${USERNAME_CHECK_COPY.available} · ${check.kind === DpnsLabelKind.Contested ? USERNAME_CHECK_COPY.contested : USERNAME_CHECK_COPY.instant}`}
+            {check.kind === DpnsLabelKind.Contested ? USERNAME_CHECK_COPY.available : `${USERNAME_CHECK_COPY.available} · ${USERNAME_TYPE_COPY.instant}`}
           </Text>
+          {check.kind === DpnsLabelKind.Contested && <CustomBadge variant={"premium"} text={USERNAME_TYPE_COPY.premium} />}
         </span>
       )
     case UsernameAvailability.Taken:

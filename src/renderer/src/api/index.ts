@@ -1,6 +1,6 @@
 import { WalletTxDto } from '@renderer/types/WalletTransaction'
 import { TransferOperation } from '../enums/TransferOperation'
-import { UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, SelectableUtxo, MasternodeDto} from './types'
+import { AddressKeyInfoDto, UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PaymentRequestDto, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, ListedUtxo, MasternodeDto, ImportedMasternodeKeyDto, MasternodeKeyRole} from './types'
 
 export class API {
   private static get api() {
@@ -143,12 +143,20 @@ export class API {
     return this.api.setWalletLabel(walletId, label)
   }
 
+  static async setAddressLabel(walletId: string, address: string, label: string): Promise<void> {
+    return this.api.setAddressLabel(walletId, address, label)
+  }
+
   static async getTransactions(walletId: string): Promise<WalletHistory> {
     return this.api.getTransactions(walletId) as Promise<WalletHistory>
   }
 
-  static async getUtxos(walletId: string): Promise<SelectableUtxo[]> {
+  static async getUtxos(walletId: string): Promise<ListedUtxo[]> {
     return this.api.getUtxos(walletId)
+  }
+
+  static async setUtxoLocked(walletId: string, txid: string, vout: number, locked: boolean): Promise<void> {
+    return this.api.setUtxoLocked(walletId, txid, vout, locked)
   }
 
   static async getTransactionByHash(hash: string, network: Network): Promise<WalletTxDto> {
@@ -159,8 +167,23 @@ export class API {
     return this.api.getIdentities(walletId)
   }
 
-  static async getMasternodes(walletId: string): Promise<MasternodeDto[]> {
+  static async getMasternodes(walletId: string): Promise<MasternodeDto[] | null> {
     return this.api.getMasternodes(walletId)
+  }
+
+  static async getImportedMasternodeKeys(walletId: string): Promise<ImportedMasternodeKeyDto[]> {
+    return this.api.getImportedMasternodeKeys(walletId)
+  }
+
+  // Owner and voting keys are WIF, an operator key the hex BLS secret. Answers
+  // the nodes the key was found on, which is empty for one not registered yet,
+  // and null while no masternode list has arrived to search (the key is kept).
+  static async importMasternodeKey(walletId: string, role: MasternodeKeyRole, privateKey: string): Promise<MasternodeDto[] | null> {
+    return this.api.importMasternodeKey(walletId, role, privateKey)
+  }
+
+  static async removeMasternodeKey(walletId: string, key: ImportedMasternodeKeyDto): Promise<void> {
+    return this.api.removeMasternodeKey(walletId, key)
   }
 
   // DashPay and DPNS reads answer from memory
@@ -250,6 +273,10 @@ export class API {
     return this.api.exportMnemonic(walletId, password)
   }
 
+  static async exportKeyByAddress(walletId: string, address: string, password: string): Promise<AddressKeyInfoDto> {
+    return this.api.exportKeyByAddress(walletId, address, password) as Promise<AddressKeyInfoDto>
+  }
+
   static async verifyWalletMnemonic(walletId: string, mnemonic: string): Promise<boolean> {
     return this.api.verifyWalletMnemonic(walletId, mnemonic)
   }
@@ -288,6 +315,24 @@ export class API {
 
   static async deleteContact(id: number): Promise<void> {
     return this.api.deleteContact(id)
+  }
+
+  static async createPaymentRequest(
+    walletId: string,
+    address: string,
+    amountDuffs: bigint | null,
+    label: string | null,
+    message: string | null = null,
+  ): Promise<void> {
+    return this.api.createPaymentRequest(walletId, address, amountDuffs, label, message)
+  }
+
+  static async getPaymentRequests(walletId: string): Promise<PaymentRequestDto[]> {
+    return this.api.getPaymentRequests(walletId)
+  }
+
+  static async deletePaymentRequest(walletId: string, id: number): Promise<void> {
+    return this.api.deletePaymentRequest(walletId, id)
   }
 
   static async sendTransaction(walletId: string, recipients: CoreRecipient[], password: string, source?: CoreSpendSource, changeTo?: string): Promise<SendResult> {

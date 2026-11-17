@@ -5,3 +5,6 @@ export const DAPI_URL_HOSTNAME_PATTERN = /^(\d{1,3}(\.\d{1,3}){3}|\[[\da-f:.]+\]
 
 // Longest a platform request waits for the worker's first probed evonodes
 export const DAPI_URLS_WAIT_MS = 20_000
+
+// Longest an evonode gets to report its own PoSe score before it is shown without one
+export const EVONODE_STATUS_TIMEOUT_MS = 5_000

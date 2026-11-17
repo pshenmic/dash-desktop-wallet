@@ -98,7 +98,7 @@ export default function IdentityRegistration(): React.JSX.Element {
 
   const [fromKind, setFromKind] = useState(SourceKind.Core)
   const [amount, setAmount] = useState(IDENTITY_REGISTRATION_DEFAULT_AMOUNT)
-  const { utxos, loading: utxosLoading, localSnapshot: utxosLocalSnapshot, error: utxosError, retry: retryUtxos } = useWalletUtxos()
+  const { utxos, loading: utxosLoading, localSnapshot: utxosLocalSnapshot, error: utxosError, retry: retryUtxos, toggleLock: toggleUtxoLock } = useWalletUtxos()
   const [coinControl, setCoinControl] = useState<CoinControlSelection>(automaticCoinControl)
   const [coinControlOpen, setCoinControlOpen] = useState(false)
   const [fundingState, setFundingState] = useState<AssetLockFundingState | null>(null)
@@ -767,6 +767,7 @@ export default function IdentityRegistration(): React.JSX.Element {
         identityId={null}
         platformAddress={undefined}
         onRetryUtxos={retryUtxos}
+        onToggleUtxoLock={toggleUtxoLock}
         onClose={() => setCoinControlOpen(false)}
         onApply={setCoinControl}
       />

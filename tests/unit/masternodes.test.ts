@@ -10,7 +10,11 @@ import {
   masternodeFilterValues,
   matchMasternodeKeys,
   networkMasternode,
+  ownedCollaterals,
   ownedMasternodes,
+  collateralsToStore,
+  withCollateralFlag,
+  withoutCollaterals,
 } from '../../src/main/src/utils/masternodes'
 
 const SEED = hexToBytes('5eb00bbddcf069084889a8ab9155568165f5c453ccb85e70811aaed6f6da5fc19a5ac40b389cd370d086206dec8aa6c43daea6690f20ad3d8d48b2d2ce9e38e4')
@@ -23,12 +27,12 @@ function node(proTxHash: string, fields: Partial<NetworkMasternode> = {}): Netwo
     collateralTxid: 'c'.repeat(64), collateralVout: 0, collateralAddress: 'Xcollateral',
     serviceAddress: '1.2.3.4:9999', payeeAddress: 'Xpayee', ownerAddress: 'Xowner', votingAddress: 'Xvoting',
     operatorPublicKey: 'ff'.repeat(48), platformNodeId: null, platformP2PPort: null, platformHttpPort: null,
-    lastPaidBlock: 0, lastPaidTime: 0, ...fields,
+    lastPaidBlock: 0, lastPaidTime: 0, registeredHeight: null, isShared: false, shares: [], ...fields,
   }
 }
 
 function utxo(txId: string, vOut: number, satoshis: bigint): UTXO {
-  return {address: 'Xcollateral', satoshis, script: new Script(), txId, vOut, height: 1, timestamp: null, confirmations: 1}
+  return {address: 'Xcollateral', satoshis, script: new Script(), txId, vOut, height: 1, timestamp: null, confirmations: 1, isLocked: false}
 }
 
 describe('networkMasternode', () => {
@@ -42,7 +46,18 @@ describe('networkMasternode', () => {
     expect(networkMasternode(row)).toMatchObject({
       collateralTxid: 'ab'.repeat(32), collateralVout: 1, lastPaidTime: 0, operatorPublicKey: 'a73d',
       serviceAddress: '1.2.3.4:19999', payeeAddress: 'ypayee', platformHttpPort: 22822,
+      isShared: false, shares: null,
     })
+  })
+
+  it('reads a comma-joined owner list as shared, without amounts', () => {
+    const row: DashscanMasternode = {
+      proTxHash: 'p', address: '[::]:0', payee: 'ypayee1, ypayee2', status: 'POSE_BANNED', type: 'Regular', posPenaltyScore: 0,
+      lastPaidTime: '1970-01-01T00:00:00.000Z', lastPaidBlock: 0, ownerAddress: 'yowner1, yowner2', votingAddress: 'yvoting',
+      collateralAddress: 'UNKNOWN', pubKeyOperator: 'A73D', outpoint: `${'ab'.repeat(32)}-3`,
+      platformNodeId: null, platformP2PPort: null, platformHTTPPort: null,
+    }
+    expect(networkMasternode(row)).toMatchObject({isShared: true, ownerAddress: null, payeeAddress: null, shares: null})
   })
 })
 
@@ -70,10 +85,58 @@ describe('masternode key matching', () => {
     expect([...matchMasternodeKeys('owner', [owner], listed)]).toEqual([['a', 3]])
     expect([...matchMasternodeKeys('voting', [voting], listed)]).toEqual([])
   })
+
+  // The p2p list knows an owner only once the ProRegTx is indexed.
+  it('matches nothing by an owner key not known yet', () => {
+    const owner = masternodeKeyDeriver(keys, 'mainnet', 'owner').derive(0)
+    expect([...matchMasternodeKeys('owner', [owner], [node('a', {ownerAddress: null})])]).toEqual([])
+  })
+
+  it('matches an owner key held as a share of a shared registration', () => {
+    const owner = masternodeKeyDeriver(keys, 'mainnet', 'owner').derive(2)
+    const shared = node('a', {ownerAddress: null, isShared: true, shares: [
+      {ownerAddress: owner.address, amountDuffs: 20000000000n},
+      {ownerAddress: 'Xother', amountDuffs: 80000000000n},
+    ]})
+    expect([...matchMasternodeKeys('owner', [owner], [shared])]).toEqual([['a', 2]])
+  })
 })
 
 describe('ownedMasternodes', () => {
-  const none = {owner: new Map(), voting: new Map(), operator: new Map()}
+  const none = {owner: new Map(), voting: new Map(), operator: new Map(), collateral: new Map()}
+
+  it('flags a collateral by its outpoint, not by its amount or address', () => {
+    const coin = (txid: string, vout: number) =>
+      ({txid, vout, satoshis: 100_000_000_000n, address: 'Xcollateral', height: 1, timestamp: null, confirmations: 1, isLocked: false})
+    expect(withCollateralFlag([coin('aa', 0), coin('aa', 1)], [{proTxHash: 'p', txid: 'aa', vout: 0, followed: false}]).map(({collateral}) => collateral))
+      .toEqual([true, false])
+  })
+
+  // An automatic send that took it would drop the masternode.
+  it('keeps a collateral out of a selection unless coin control picked it', () => {
+    const coins = [utxo('aa', 0, 100_000_000_000n), utxo('aa', 1, 5n)]
+    const collaterals = [{proTxHash: 'p', txid: 'aa', vout: 0, followed: false}]
+    expect(withoutCollaterals(coins, collaterals).map(({vOut}) => vOut)).toEqual([1])
+    expect(withoutCollaterals(coins, collaterals, {kind: 'address', address: 'Xcollateral'}).map(({vOut}) => vOut)).toEqual([1])
+    expect(withoutCollaterals(coins, collaterals, {kind: 'outpoints', outpoints: [{txid: 'aa', vout: 0}]})).toHaveLength(2)
+  })
+
+  // A p2p list knows a node's collateral only once its registration is indexed.
+  it('keeps a stored collateral the list cannot give yet, and never unsets followed', () => {
+    const stored = [
+      {proTxHash: 'a', txid: 'aa', vout: 0, followed: true},
+      {proTxHash: 'b', txid: 'bb', vout: 1, followed: false},
+    ]
+    const owned = [
+      {...node('a', {collateralTxid: null, collateralVout: null}), ownerKeyIndex: 0, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], shares: []},
+      {...node('b'), ownerKeyIndex: 0, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], shares: []},
+      {...node('c', {collateralTxid: null, collateralVout: null}), ownerKeyIndex: 1, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], shares: []},
+    ]
+    expect(collateralsToStore(owned, stored, ['b'])).toEqual([
+      {proTxHash: 'a', txid: 'aa', vout: 0, followed: true},
+      {proTxHash: 'b', txid: 'c'.repeat(64), vout: 0, followed: true},
+    ])
+  })
 
   it('keeps only regular and evo collateral amounts', () => {
     const coins = [utxo('a', 0, 100_000_000_000n), utxo('b', 0, 400_000_000_000n), utxo('c', 0, 100_000_000_001n)]
@@ -83,14 +146,65 @@ describe('ownedMasternodes', () => {
   it('owns a node by collateral outpoint, not by collateral address alone', () => {
     const ours = node('ours', {collateralTxid: 'aa', collateralVout: 1})
     const sameAddress = node('theirs', {collateralTxid: 'aa', collateralVout: 2})
-    const owned = ownedMasternodes([ours, sameAddress], none, [utxo('aa', 1, 100_000_000_000n)])
+    const owned = ownedMasternodes([ours, sameAddress], none, [], [utxo('aa', 1, 100_000_000_000n)], new Map())
     expect(owned.map(({proTxHash}) => proTxHash)).toEqual(['ours'])
-    expect(owned[0]).toMatchObject({ownerKeyIndex: null, votingKeyIndex: null, operatorKeyIndex: null})
+    expect(owned[0]).toMatchObject({ownerKeyIndex: null, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: []})
   })
 
   it('records each matched key index once per node and drops unmatched nodes', () => {
-    const matches = {owner: new Map([['a', 2]]), voting: new Map([['a', 4]]), operator: new Map()}
-    const owned = ownedMasternodes([node('a'), node('a'), node('b')], matches, [])
+    const matches = {owner: new Map([['a', 2]]), voting: new Map([['a', 4]]), operator: new Map(), collateral: new Map()}
+    const owned = ownedMasternodes([node('a'), node('a'), node('b')], matches, [], [], new Map())
     expect(owned).toHaveLength(1)
-    expect(owned[0]).toMatchObject({proTxHash: 'a', ownerKeyIndex: 2, votingKeyIndex: 4, operatorKeyIndex: null})  })
+    expect(owned[0]).toMatchObject({proTxHash: 'a', ownerKeyIndex: 2, votingKeyIndex: 4, operatorKeyIndex: null})
+  })
+
+  it('owns a node by a collateral-chain address the wallet holds no coin of', () => {
+    const owned = ownedMasternodes([node('a'), node('b')], {...none, collateral: new Map([['a', 0]])}, [], [], new Map())
+    expect(owned.map(({proTxHash}) => proTxHash)).toEqual(['a'])
+  })
+
+  it('owns a node by an imported key, in either operator encoding, only in that role', () => {
+    const owned = ownedMasternodes([
+      node('a', {votingAddress: 'Ximported'}),
+      node('b', {operatorPublicKey: OPERATOR_0_LEGACY}),
+      node('c', {ownerAddress: 'Xother'}),
+    ], none, [
+      {role: 'voting', publicKey: 'Ximported'},
+      {role: 'owner', publicKey: OPERATOR_0},
+      {role: 'operator', publicKey: OPERATOR_0},
+    ], [], new Map())
+    expect(owned.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['a', ['voting']], ['b', ['operator']]])
+  })
+
+  it('marks every share our keys hold, even two under different keys', () => {
+    const shared = node('a', {ownerAddress: null, isShared: true, shares: [
+      {ownerAddress: 'Xfirst', amountDuffs: 20000000000n},
+      {ownerAddress: 'Xsecond', amountDuffs: 30000000000n},
+      {ownerAddress: 'Xother', amountDuffs: 50000000000n},
+    ]})
+    const owned = ownedMasternodes([shared], {...none, owner: new Map([['a', 1]])}, [], [], new Map([['Xfirst', 1], ['Xsecond', 6]]))
+    expect(owned[0].shares!.map(({keyIndex}) => keyIndex)).toEqual([1, 6, null])
+  })
+
+  it('owns a shared node by an imported share owner key, and marks that share', () => {
+    const shared = node('a', {ownerAddress: null, isShared: true, shares: [
+      {ownerAddress: 'Ximported', amountDuffs: 30000000000n},
+      {ownerAddress: 'Xother', amountDuffs: 70000000000n},
+    ]})
+    const owned = ownedMasternodes([shared], none, [{role: 'owner', publicKey: 'Ximported'}], [], new Map())
+    expect(owned.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['a', ['owner']]])
+    expect(owned[0].shares!.map(({keyIndex, imported}) => [keyIndex, imported])).toEqual([[null, true], [null, false]])
+  })
+
+  it('names a stored collateral by the address the list gives that outpoint', () => {
+    const [listed] = ownedMasternodes([node('a', {collateralAddress: 'Xheld'})], {...none, owner: new Map([['a', 0]])}, [], [], new Map())
+    const stored = [
+      {proTxHash: 'a', txid: 'c'.repeat(64), vout: 0, followed: true},
+      {proTxHash: 'b', txid: 'c'.repeat(64), vout: 1, followed: false},
+    ]
+    expect(ownedCollaterals(stored, [listed])).toEqual([
+      {proTxHash: 'a', txid: 'c'.repeat(64), vout: 0, address: 'Xheld'},
+      {proTxHash: 'b', txid: 'c'.repeat(64), vout: 1, address: null},
+    ])
+  })
 })

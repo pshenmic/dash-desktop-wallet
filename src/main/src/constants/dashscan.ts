@@ -2,8 +2,7 @@ import {MasternodeKeyFilter} from '../types/Masternode'
 
 export const DASHSCAN_BASE_URLS: Record<'mainnet' | 'testnet', string> = {
   mainnet: 'https://dashscan.pshenmic.dev',
-  // Local instance until the masternode key filters are deployed.
-  testnet: 'http://localhost:3005'
+  testnet: 'https://testnet.dashscan.pshenmic.dev'
 }
 
 export const DASHSCAN_MASTERNODE_FILTER: Record<MasternodeKeyFilter, string> = {

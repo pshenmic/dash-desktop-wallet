@@ -31,7 +31,6 @@ export function drawReceiveInvoice(invoice: ReceiveInvoice, qr: ReceiveInvoiceQr
   const labelFont = font(weights.regular, layout.labelSize)
   const headlineFont = font(weights.extrabold, layout.headlineSize)
   const addressFont = font(weights.regular, layout.addressSize, RECEIVE_INVOICE_MONO_FONT)
-  const linkFont = font(weights.regular, layout.linkSize, RECEIVE_INVOICE_MONO_FONT)
   const innerWidth = layout.width - layout.padding * 2
   const wrap = (units: string[], lineFont: string): string[] => {
     context.font = lineFont
@@ -39,14 +38,14 @@ export function drawReceiveInvoice(invoice: ReceiveInvoice, qr: ReceiveInvoiceQr
   }
 
   const headline = wrap(receiveInvoiceHeadline(invoice.amount).split(/(?<= )/), headlineFont)
+  const requestLabel = invoice.label?.trim() ? wrap(invoice.label.trim().split(/(?<= )/), addressFont) : []
   const address = wrap([...invoice.address], addressFont)
-  const link = invoice.paymentLink == null ? [] : wrap([...invoice.paymentLink], linkFont)
   const cell = Math.floor(layout.qrMaxSize / qr.modules)
   const qrSize = cell * qr.modules
-  const linkHeight = link.length > 0 ? layout.linkGap + layout.labelLine + link.length * layout.linkLine : 0
+  const requestLabelHeight = requestLabel.length > 0 ? layout.labelLine + requestLabel.length * layout.addressLine + layout.linkGap : 0
   const height = layout.padding * 2 + layout.logoHeight + layout.headerGap + layout.eyebrowLine
     + headline.length * layout.headlineLine + layout.qrGap * 2 + qrSize
-    + layout.labelLine + address.length * layout.addressLine + linkHeight
+    + requestLabelHeight + layout.labelLine + address.length * layout.addressLine
 
   canvas.width = layout.width * layout.scale
   canvas.height = height * layout.scale
@@ -103,13 +102,13 @@ export function drawReceiveInvoice(invoice: ReceiveInvoice, qr: ReceiveInvoiceQr
   context.restore()
   y += qrSize + layout.qrGap
 
+  if (requestLabel.length > 0) {
+    writeLines([RECEIVE_INVOICE_COPY.purpose], labelFont, colors.muted, layout.labelLine)
+    writeLines(requestLabel, addressFont, colors.text, layout.addressLine)
+    y += layout.linkGap
+  }
   writeLines([invoice.addressLabel], labelFont, colors.muted, layout.labelLine)
   writeLines(address, addressFont, colors.text, layout.addressLine)
-  if (link.length > 0) {
-    y += layout.linkGap
-    writeLines([RECEIVE_INVOICE_COPY.paymentLink], labelFont, colors.muted, layout.labelLine)
-    writeLines(link, linkFont, colors.text, layout.linkLine)
-  }
   return canvas
 }
 

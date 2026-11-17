@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect /* , useRef */ } from "react"
 import { Button, Text } from "@renderer/components/dash-ui-kit-extended"
 import type { UseCreateWalletState } from '@renderer/types/auth'
 import SeedPhraseWarning from "./SeedPhraseWarning";
 import { AUTH_CTA_CLASS, BaseTexts, FillInYourSeedPhraseTexts } from "@renderer/constants";
-import { SEED_PASSPHRASE_COPY } from '@renderer/constants/auth'
-import { SeedPassphraseField } from './SeedPassphrase'
+// import { SEED_PASSPHRASE_COPY } from '@renderer/constants/auth'
+// import { SeedPassphraseField } from './SeedPassphrase'
 
 type VerifySeedPhraseData = Pick<
   FillInYourSeedPhraseTexts,
@@ -18,11 +18,11 @@ type VerifySeedPhraseProps = Pick<UseCreateWalletState, 'verifyPhrase' | 'verify
   passphrase?: string
 }
 
-export default function VerifySeedPhrase({ verifyPhrase, verifyMissingWords, data, passphrase } : VerifySeedPhraseProps): React.JSX.Element {
+export default function VerifySeedPhrase({ verifyPhrase, verifyMissingWords, data /* , passphrase */ } : VerifySeedPhraseProps): React.JSX.Element {
   const [answers, setAnswers] = useState<string[]>(() => [...verifyPhrase])
-  const [confirmation, setConfirmation] = useState('')
-  const [passphraseError, setPassphraseError] = useState<string>()
-  const confirmRef = useRef<HTMLInputElement>(null)
+  // const [confirmation, setConfirmation] = useState('')
+  // const [passphraseError, setPassphraseError] = useState<string>()
+  // const confirmRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setAnswers([...verifyPhrase])
@@ -37,11 +37,11 @@ export default function VerifySeedPhrase({ verifyPhrase, verifyMissingWords, dat
   }
 
   const handleContinue = (): void => {
-    if (passphrase && passphrase.normalize('NFKD') !== confirmation.normalize('NFKD')) {
-      setPassphraseError(SEED_PASSPHRASE_COPY.mismatch)
-      confirmRef.current?.focus()
-      return
-    }
+    // if (passphrase && passphrase.normalize('NFKD') !== confirmation.normalize('NFKD')) {
+    //   setPassphraseError(SEED_PASSPHRASE_COPY.mismatch)
+    //   confirmRef.current?.focus()
+    //   return
+    // }
     void verifyMissingWords(answers)
   }
 
@@ -81,7 +81,7 @@ export default function VerifySeedPhrase({ verifyPhrase, verifyMissingWords, dat
         })}
       </div>
 
-      {passphrase && (
+      {/* {passphrase && (
         <SeedPassphraseField
           confirm
           value={confirmation}
@@ -92,7 +92,7 @@ export default function VerifySeedPhrase({ verifyPhrase, verifyMissingWords, dat
           error={passphraseError}
           inputRef={confirmRef}
         />
-      )}
+      )} */}
       <SeedPhraseWarning {...data.seedPhraseWarning} />
 
       <div className="flex gap-[.75rem] items-center">

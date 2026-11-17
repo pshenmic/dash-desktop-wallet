@@ -52,7 +52,7 @@ const assetLockFee = (inputsCount: number): bigint =>
 const txid = (index: number): string => `${index}`.padStart(64, '0')
 
 function utxo(satoshis: bigint, index: number): UTXO {
-  return {address: RECEIVING, txId: txid(index), vOut: 0, satoshis, script: new Script(), height: 1, timestamp: null, confirmations: 1}
+  return {address: RECEIVING, txId: txid(index), vOut: 0, satoshis, script: new Script(), height: 1, timestamp: null, confirmations: 1, isLocked: false}
 }
 
 function candidate(platformAddress: string, balanceCredits: bigint, hashByte: number): PlatformSourceCandidate {
@@ -85,7 +85,10 @@ function service(options: {utxos?: UTXO[]; candidates?: PlatformSourceCandidate[
       ],
     }),
   }
-  const providers = {forWallet: () => ({ensureReady, getWalletUtxos: async () => options.utxos ?? []})}
+  const providers = {
+    forWallet: () => ({ensureReady, getWalletUtxos: async () => options.utxos ?? []}),
+    spendableUtxos: async () => options.utxos ?? [],
+  }
 
   const svc = new FeeService(
     walletDAO as unknown as WalletDAO,

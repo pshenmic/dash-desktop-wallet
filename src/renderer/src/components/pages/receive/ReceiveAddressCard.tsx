@@ -1,56 +1,142 @@
-import React, { useState } from "react"
-import { Text } from "@renderer/components/dash-ui-kit-extended"
-import { RECEIVE_EMPTY_TEXTS } from "@renderer/constants/receiveCard"
-import NoResults from "@renderer/components/ui/NoResults"
-import ReceiveAddressPanel from "./ReceiveAddressPanel"
-import { RECEIVE_INVOICE_ADDRESS_LABELS } from "@renderer/constants/receiveInvoice"
-import { SEND_AMOUNT_PATTERN } from "@renderer/constants/sendRecipients"
-import { FIELD_CONTROL_HEIGHT } from "@renderer/constants/surfaces"
-import type { ReceiveAddressCardProps } from "@renderer/types/ReceiveInvoice"
-import { defaultReceiveCoreAddress, receiveCoreAddresses } from "@renderer/utils/receiveDefaults"
-import { corePaymentUri, receiveAmountParam } from "@renderer/utils/receiveInvoice"
+import { useMemo, useState } from 'react'
+import { API } from '@renderer/api'
+import NoResults from '@renderer/components/ui/NoResults'
+import { toast } from '@renderer/components/ui/Toast'
+import { RECEIVE_EMPTY_TEXTS } from '@renderer/constants/receiveCard'
+import { RECEIVE_HISTORY_COPY } from '@renderer/constants/receivePage'
+import { refreshAddresses } from '@renderer/hooks/useAdresses'
+import { invalidateAsyncCache } from '@renderer/hooks/useAsyncWithCache'
+import {
+  addReceiveRequest,
+  deleteReceiveRequest,
+  refreshReceiveRequests,
+  useReceiveRequests,
+} from '@renderer/hooks/useReceiveRequests'
+import type { ReceiveAddressCardProps, ReceiveRequestDto } from '@renderer/types/ReceiveRequest'
+import {
+  claimedReceiveAddresses,
+  nextReceiveCoreAddress,
+  receiveCoreAddresses,
+} from '@renderer/utils/receiveDefaults'
+import { receiveAmountDuffs } from '@renderer/utils/receiveInvoice'
+import ReceiveRequestForm from './ReceiveRequestForm'
+import ReceiveRequestModal from './ReceiveRequestModal'
+import ReceiveRequestsTable from './ReceiveRequestsTable'
 
 export default function ReceiveAddressCard({
+  walletId,
   addresses,
   defaultAddress,
-  data,
 }: ReceiveAddressCardProps): React.JSX.Element {
-  const [amount, setAmount] = useState('');
-  const [selectedAddress, setSelectedAddress] = useState<string | null>(null)
+  const [label, setLabel] = useState('')
+  const [amount, setAmount] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [derivedAddress, setDerivedAddress] = useState<string | null>(null)
+  const [selectedRequest, setSelectedRequest] = useState<ReceiveRequestDto | null>(null)
 
-  const receiveAddresses = receiveCoreAddresses(addresses)
-  const selected = defaultReceiveCoreAddress(receiveAddresses, selectedAddress ?? defaultAddress)
-  if (!selected) {
+  const { requests, loading, err } = useReceiveRequests(walletId, 'core')
+  const claimed = useMemo(() => claimedReceiveAddresses(requests), [requests])
+  const current = useMemo(
+    () => nextReceiveCoreAddress(addresses, claimed, defaultAddress),
+    [addresses, claimed, defaultAddress],
+  )
+  const currentAddress = current?.address
+    ?? (derivedAddress && !claimed.has(derivedAddress) ? derivedAddress : null)
+    ?? (defaultAddress && !claimed.has(defaultAddress) ? defaultAddress : null)
+    ?? receiveCoreAddresses(addresses)[0]?.address
+    ?? defaultAddress
+
+  if (!currentAddress) {
     return <NoResults noResults={RECEIVE_EMPTY_TEXTS.noCoreAddresses} />
   }
 
-  const amountParam = receiveAmountParam(amount)
-  const paymentUri = corePaymentUri(selected.address, amountParam)
+  const handleClear = (): void => {
+    setLabel('')
+    setAmount('')
+    setFormError(null)
+  }
+
+  const handleSave = async (): Promise<void> => {
+    if (!walletId || busy) return
+    setBusy(true)
+    setFormError(null)
+    try {
+      await addReceiveRequest(
+        walletId,
+        currentAddress,
+        label,
+        receiveAmountDuffs(amount),
+      )
+      const nextClaimed = new Set(claimed)
+      nextClaimed.add(currentAddress)
+      const nextUnused = nextReceiveCoreAddress(addresses, nextClaimed, defaultAddress)
+      if (!nextUnused) {
+        const fresh = await API.addWalletAddress(walletId, false)
+        setDerivedAddress(fresh)
+      }
+      invalidateAsyncCache('receiveAddress', walletId)
+      await refreshAddresses(walletId)
+      setLabel('')
+      setAmount('')
+      toast.success(RECEIVE_HISTORY_COPY.requestCreated)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : RECEIVE_HISTORY_COPY.requestFailed
+      setFormError(message)
+      toast.error(RECEIVE_HISTORY_COPY.requestFailed)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleDelete = async (request: ReceiveRequestDto): Promise<void> => {
+    if (!walletId) return
+    try {
+      await deleteReceiveRequest(walletId, request.id)
+      invalidateAsyncCache('receiveAddress', walletId)
+      void refreshAddresses(walletId)
+      if (selectedRequest?.id === request.id) setSelectedRequest(null)
+      toast.success(RECEIVE_HISTORY_COPY.deleteSuccess)
+    } catch {
+      toast.error(RECEIVE_HISTORY_COPY.deleteFailed)
+    }
+  }
 
   return (
-    <ReceiveAddressPanel
-      addresses={receiveAddresses}
-      selected={selected}
-      onSelect={setSelectedAddress}
-      addressLabel={RECEIVE_INVOICE_ADDRESS_LABELS.core}
-      amount={amountParam}
-      paymentLink={paymentUri}
-    >
-      <label htmlFor={"amount-input"} className={"flex flex-col gap-2"}>
-        <Text size={12} weight={"medium"} color={"brand"} opacity={50}>
-          {data.amount}
-        </Text>
-        <input
-          placeholder={data.placeholder}
-          value={amount}
-          onChange={(e) => {
-            const val = e.target.value.replace(/[^0-9.]/g, '')
-            if (SEND_AMOUNT_PATTERN.test(val)) setAmount(val)
-          }}
-          id={"amount-input"}
-          className={`${FIELD_CONTROL_HEIGHT} w-full rounded-[.875rem] dash-block px-4 py-3.5 text-sm font-medium dash-text-default outline-none placeholder:text-current placeholder:opacity-40 focus-visible:ring-2 focus-visible:ring-dash-brand dark:focus-visible:ring-dash-mint`}
-        />
-      </label>
-    </ReceiveAddressPanel>
+    <div className={"flex min-w-0 flex-col gap-6 w-full"}>
+      <ReceiveRequestForm
+        address={currentAddress}
+        kind={"core"}
+        label={label}
+        amount={amount}
+        busy={busy}
+        error={formError}
+        submitDisabled={!walletId}
+        onLabelChange={(val) => {
+          setFormError(null)
+          setLabel(val)
+        }}
+        onAmountChange={(val) => {
+          setFormError(null)
+          setAmount(val)
+        }}
+        onClear={handleClear}
+        onSubmit={handleSave}
+      />
+
+      <ReceiveRequestsTable
+        requests={requests}
+        loading={loading}
+        error={err}
+        onSelect={setSelectedRequest}
+        onDelete={handleDelete}
+        onRetry={walletId ? () => refreshReceiveRequests(walletId) : undefined}
+      />
+
+      <ReceiveRequestModal
+        request={selectedRequest}
+        onClose={() => setSelectedRequest(null)}
+      />
+    </div>
   )
 }

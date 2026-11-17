@@ -11,6 +11,9 @@ import type {
   WalletSyncUtxo,
   WatchAddress,
 } from '../types/walletSync'
+import type {PayoutUpdate} from '../types/masternodeList'
+import {displayHexToWire} from '../utils/byteOrder'
+import {payoutUpdate} from '../utils/masternodeList'
 import {Logger} from '../../src/utils/logger'
 
 const log = new Logger('cfilter')
@@ -38,6 +41,9 @@ export class WatchSet {
   private readonly addresses = new Set<string>()
   private readonly byAddress = new Map<string, WatchAddress>()
   private matchItems: Uint8Array[] = []
+  // Display-order proTxHashes. Core puts a ProUpRegTx's proTxHash in the block's
+  // filter, so a payout change to one of these matches with nothing of ours spent.
+  private readonly providers = new Set<string>()
   private itemsRevision = 0
   private utxos = new Map<string, WalletSyncUtxo>()
   private unconfirmedInputOutpoints = new Map<string, UnconfirmedInputOutpoint>()
@@ -93,6 +99,17 @@ export class WatchSet {
     return true
   }
 
+  // How many were not watched yet.
+  watchProviders(proTxHashes: string[]): number {
+    const added = [...new Set(proTxHashes)].filter(proTxHash => !this.providers.has(proTxHash))
+    for (const proTxHash of added) {
+      this.providers.add(proTxHash)
+      this.matchItems.push(displayHexToWire(proTxHash))
+    }
+    if (added.length > 0) this.itemsRevision++
+    return added.length
+  }
+
   // Rebuilt rather than appended to, so that after a rewind the orphaned
   // outpoints leave the match set.
   setWatchedOutpoints(utxos: WalletSyncUtxo[], unconfirmedInputOutpoints: UnconfirmedInputOutpoint[] = []): void {
@@ -103,6 +120,7 @@ export class WatchSet {
     this.matchItems = [
       ...[...this.addresses].map(p2pkhScript),
       ...[...outpoints.values()].map(o => new OutPoint(o.txid, o.vout).bytes()),
+      ...[...this.providers].map(displayHexToWire),
     ]
     this.itemsRevision++
   }
@@ -122,9 +140,12 @@ export class WatchSet {
   applyBlock(block: Block, height: number): BlockMatch | null {
     const txs: AppliedTx[] = []
     const spends: AppliedSpend[] = []
+    const payouts: PayoutUpdate[] = []
 
     for (const tx of block.txs) {
       const txid = tx.hash()
+      const payout = payoutUpdate(tx, this.providers, height, this.network)
+      if (payout != null) payouts.push(payout)
       const inputs: AppliedTxInput[] = []
       const outputs: AppliedTxOutput[] = []
       let isOurs = false
@@ -167,7 +188,7 @@ export class WatchSet {
       if (isOurs) txs.push({txid, raw: tx.bytes(), inputs, outputs})
     }
 
-    if (txs.length === 0 && spends.length === 0) return null
-    return {txs, spends}
+    if (txs.length === 0 && spends.length === 0 && payouts.length === 0) return null
+    return {txs, spends, payouts}
   }
 }

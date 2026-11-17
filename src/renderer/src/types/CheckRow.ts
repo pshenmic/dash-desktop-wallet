@@ -8,4 +8,5 @@ export interface CheckRowProps {
   below?: ReactNode
   title?: string
   disabled?: boolean
+  dimChildren?: boolean
 }

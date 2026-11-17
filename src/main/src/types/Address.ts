@@ -11,3 +11,12 @@ export interface Address {
   usdBalance?: string | null
   txCount?: number | null
 }
+
+// One key of this wallet, revealed from the seed.
+export interface AddressKeyInfo {
+  address: string
+  path: string
+  publicKey: Uint8Array
+  privateKey: Uint8Array
+  wif: string
+}

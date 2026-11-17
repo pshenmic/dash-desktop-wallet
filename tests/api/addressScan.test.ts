@@ -26,9 +26,11 @@ const providerStub = (scan: AddressUsage[] | null): WalletProvider => ({
   getWalletUtxos: async () => [],
   getTxLockStatus: async () => ({instantLocked: false, chainlocked: false, confirmed: false}),
   ensureReady: async () => undefined,
+  ensureReadyToList: async () => undefined,
   getConnectionStatus: async () => 'online',
   nextUnusedAddress: async () => '',
   getMasternodes: async () => null,
+  watchMasternodes: async () => [],
 })
 
 describe('address discovery from an xpub scan', () => {

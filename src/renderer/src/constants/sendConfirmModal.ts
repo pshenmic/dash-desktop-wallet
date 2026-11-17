@@ -20,3 +20,6 @@ export const SEND_BROADCASTING_LABEL = 'Broadcasting transaction…'
 export const SHIELD_PROVING_PENDING_LABEL = `${SHIELDED_PROVING_LABEL}…`
 
 export const SEND_INPUTS_CHANGED_MESSAGE = 'Transaction details changed. Review them and send again.'
+
+export const SEND_CANCEL_DELAY_MS = 10_000
+

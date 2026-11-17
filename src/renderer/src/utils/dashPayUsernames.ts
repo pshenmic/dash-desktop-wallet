@@ -32,7 +32,7 @@ export function registerUsernameHref(identifier: string, label: string | null): 
 
 export function usernameTypeLabel(contested: boolean, network: Network | null): string {
   if (!contested) return USERNAME_TYPE_COPY.instant
-  return network == null ? USERNAME_TYPE_COPY.contest : `${USERNAME_TYPE_COPY.contest} · ${VOTE_POLL_DURATION_LABEL[network]}`
+  return network == null ? USERNAME_TYPE_COPY.premium : `${USERNAME_TYPE_COPY.premium} · ${VOTE_POLL_DURATION_LABEL[network]}`
 }
 
 export function balanceAfterFee(balance: bigint, fee: bigint | null): bigint | null {

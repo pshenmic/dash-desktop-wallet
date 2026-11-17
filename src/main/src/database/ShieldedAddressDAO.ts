@@ -20,9 +20,15 @@ export class ShieldedAddressDAO {
   }
 
   getAddresses = async (walletId: string): Promise<ShieldedAddressRow[]> => {
+    // A payment request consumes the address like usage for the gap walk; the
+    // stored is_used stays chain-only.
     const rows = await this.knex('shielded_addresses')
-      .select('wallet_id', 'address_index', 'address', 'is_used')
-      .where('wallet_id', walletId)
+      .leftJoin('payment_requests as pr', function () {
+        this.on('pr.wallet_id', '=', 'shielded_addresses.wallet_id').andOn('pr.address', '=', 'shielded_addresses.address')
+      })
+      .select('shielded_addresses.wallet_id', 'address_index', 'shielded_addresses.address',
+        this.knex.raw('CASE WHEN pr.id IS NOT NULL THEN 1 ELSE shielded_addresses.is_used END as is_used'))
+      .where('shielded_addresses.wallet_id', walletId)
       .orderBy('address_index', 'asc')
     return rows.map(fromRow)
   }

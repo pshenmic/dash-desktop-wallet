@@ -60,30 +60,73 @@ interface SelectableUtxoDTO {
   height: number
   timestamp: Date | null
   confirmations: number
+  isLocked: boolean
+  // A masternode collateral: spending it drops the node.
+  collateral: boolean
 }
 
-// Mirrors Masternode in src/main/src/types/Masternode.
+// Mirrors MasternodeKeyChain, ImportedMasternodeKey, Masternode,
+// OwnedCollateral, MasternodeShare and OwnedMasternodeShare in
+// src/main/src/types/Masternode.
+type MasternodeKeyRole = 'owner' | 'voting' | 'operator'
+
+interface MasternodeShareDTO {
+  ownerAddress: string
+  amountDuffs: bigint
+}
+
+interface OwnedMasternodeShareDTO extends MasternodeShareDTO {
+  keyIndex: number | null
+  imported: boolean
+}
+
+interface MasternodeCollateralDTO {
+  proTxHash: string
+  txid: string
+  vout: number
+  address: string | null
+}
+
+interface ImportedMasternodeKeyDTO {
+  role: MasternodeKeyRole
+  publicKey: string
+}
+
 interface MasternodeDTO {
   proTxHash: string
   type: string
   status: string
-  posePenaltyScore: number
-  collateralTxid: string
-  collateralVout: number
-  collateralAddress: string
-  serviceAddress: string
-  payeeAddress: string
-  ownerAddress: string
+  posePenaltyScore: number | null
+  collateralTxid: string | null
+  collateralVout: number | null
+  collateralAddress: string | null
+  serviceAddress: string | null
+  payeeAddress: string | null
+  ownerAddress: string | null
   votingAddress: string
   operatorPublicKey: string
   ownerKeyIndex: number | null
   votingKeyIndex: number | null
   operatorKeyIndex: number | null
+  importedRoles: MasternodeKeyRole[]
   platformNodeId: string | null
   platformP2PPort: number | null
   platformHttpPort: number | null
-  lastPaidBlock: number
-  lastPaidTime: number
+  lastPaidBlock: number | null
+  lastPaidTime: number | null
+  registeredHeight: number | null
+  isShared: boolean | null
+  shares: OwnedMasternodeShareDTO[] | null
+}
+
+interface PaymentRequestDTO {
+  id: number
+  walletId: string
+  address: string
+  amountDuffs: bigint | null
+  label: string | null
+  message: string | null
+  createdAt: number
 }
 
 // Hand-maintained alongside definitions.ts, and deliberately a second
@@ -167,6 +210,7 @@ declare global {
       createWallet: (seedphrase: string, network: Network, password: string) => Promise<string>
       verifyWalletPassword: (walletId: string, password: string) => Promise<boolean>
       exportMnemonic: (walletId: string, password: string) => Promise<string>
+      exportKeyByAddress: (walletId: string, address: string, password: string) => Promise<unknown>
       verifyWalletMnemonic: (walletId: string, mnemonic: string) => Promise<boolean>
       resetWalletPassword: (walletId: string, mnemonic: string, newPassword: string) => Promise<boolean>
       getAddresses: (walletId: string) => Promise<unknown>
@@ -178,7 +222,11 @@ declare global {
       getTransactionByHash: (hash: string, network: Network) => Promise<TransactionDTO>
       getBalance: (address: string | string[], network: Network) => Promise<unknown>
       getIdentities: (walletId: string) => Promise<unknown>
-      getMasternodes: (walletId: string) => Promise<MasternodeDTO[]>
+      getMasternodes: (walletId: string) => Promise<MasternodeDTO[] | null>
+      getMasternodeCollaterals: (walletId: string) => Promise<MasternodeCollateralDTO[]>
+      getImportedMasternodeKeys: (walletId: string) => Promise<ImportedMasternodeKeyDTO[]>
+      importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => Promise<MasternodeDTO[] | null>
+      removeMasternodeKey: (walletId: string, key: ImportedMasternodeKeyDTO) => Promise<void>
       getUsernames: (walletId: string) => Promise<unknown>
       refreshDashPay: (walletId: string) => Promise<void>
       registerUsername: (walletId: string, identifier: string, label: string, password: string) => Promise<unknown>
@@ -244,6 +292,7 @@ declare global {
       stopWalletSync: () => Promise<void>
       resetWalletSync: (network: Network) => Promise<void>
       getUtxos: (walletId: string) => Promise<SelectableUtxoDTO[]>
+      setUtxoLocked: (walletId: string, txid: string, vout: number, locked: boolean) => Promise<void>
       hasSyncProgress: (walletId: string) => Promise<boolean>
       getExchangeRates: () => Promise<unknown>
       saveTextFile: (defaultFileName: string, content: string) => Promise<boolean>
@@ -253,6 +302,9 @@ declare global {
       getContacts: (network?: Network) => Promise<unknown>
       addContact: (label: string, address: string, network: Network) => Promise<void>
       deleteContact: (id: number) => Promise<void>
+      createPaymentRequest: (walletId: string, address: string, amountDuffs: bigint | null, label: string | null, message: string | null) => Promise<void>
+      getPaymentRequests: (walletId: string) => Promise<PaymentRequestDTO[]>
+      deletePaymentRequest: (walletId: string, id: number) => Promise<void>
       getShieldedStatus: () => Promise<{ prover: 'idle' | 'preparing' | 'ready' | 'error'; ready: boolean; error: string | null }>
       getShieldedPoolInfo: (network: Network) => Promise<{ poolState: bigint | null; notesCount: bigint | null }>
       getShieldedNotesInfo: (walletId: string) => Promise<{ undecodedCount: number }>
