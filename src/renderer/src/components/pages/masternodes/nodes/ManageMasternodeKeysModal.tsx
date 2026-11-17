@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Button, CheckIcon, DeleteIcon, HighlightedIdentifier, InfoCircleIcon, Input, Text } from '@renderer/components/dash-ui-kit-extended'
 import Alert from '@renderer/components/ui/Alert'
 import CopyableError from '@renderer/components/ui/CopyableError'
@@ -10,22 +10,27 @@ import ListSkeleton from '@renderer/components/ui/Skeleton'
 import Spinner from '@renderer/components/ui/Spinner'
 import { API } from '@renderer/api'
 import type { ImportedMasternodeKeyDto, MasternodeKeyRole } from '@renderer/api/types'
+import { WIF_ROLE_OPTIONS } from '@renderer/constants/masternodeKeys'
 import {
   MANAGE_KEYS_COPY,
-  MASTERNODE_KEY_ROLE_HINTS,
   MASTERNODE_KEY_ROLE_LABELS,
-  MASTERNODE_KEY_ROLE_OPTIONS,
   NODES_TAB_COPY,
 } from '@renderer/constants/masternodeNodes'
 import { PASSWORD_FIELD_INPUT_CLASS } from '@renderer/constants/password'
 import { SURFACE_ROW, SURFACE_SECTION } from '@renderer/constants/surfaces'
+import { useAuth } from '@renderer/contexts/AuthContext'
 import { useConnectionModeContext } from '@renderer/contexts/ConnectionModeContext'
 import { AlertTone } from '@renderer/enums/AlertTone'
 import { ModalSize } from '@renderer/enums/ModalSize'
 import { SegmentedControlAppearance } from '@renderer/enums/SegmentedControlAppearance'
-import { refreshImportedMasternodeKeys, refreshMasternodes, useImportedMasternodeKeys } from '@renderer/hooks/useMasternodes'
+import { refreshImportedMasternodeKeys, refreshMasternodes, useImportedMasternodeKeys, useMasternodes } from '@renderer/hooks/useMasternodes'
 import type { KeyImportNotice, ManageMasternodeKeysModalProps } from '@renderer/types/MasternodeNodes'
 import { getErrorMessage } from '@renderer/utils/error'
+import {
+  detectedNetworkMismatchMessage,
+  detectMasternodePrivateKey,
+  importRoleButtonLabel,
+} from '@renderer/utils/masternodeKeyDetection'
 import { importedKeyStatusMessage } from '@renderer/utils/masternodeNodes'
 
 export default function ManageMasternodeKeysModal({
@@ -34,9 +39,13 @@ export default function ManageMasternodeKeysModal({
   onClose,
 }: ManageMasternodeKeysModalProps): React.JSX.Element {
   const inputId = useId()
+  const { status } = useAuth()
+  const walletNetwork = status?.network ?? null
   const { desired, setDesired } = useConnectionModeContext()
+  const { nodes } = useMasternodes(walletId)
   const { importedKeys, loading: keysLoading, err: keysError } = useImportedMasternodeKeys(walletId)
-  const [role, setRole] = useState<MasternodeKeyRole>('owner')
+  const [wifRole, setWifRole] = useState<'owner' | 'voting'>('owner')
+  const [wifRoleOverridden, setWifRoleOverridden] = useState(false)
   const [privateKey, setPrivateKey] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [removingKeyId, setRemovingKeyId] = useState<string | null>(null)
@@ -48,7 +57,8 @@ export default function ManageMasternodeKeysModal({
 
   useEffect(() => {
     requestIdRef.current += 1
-    setRole('owner')
+    setWifRole('owner')
+    setWifRoleOverridden(false)
     setPrivateKey('')
     setSubmitting(false)
     setRemovingKeyId(null)
@@ -61,12 +71,35 @@ export default function ManageMasternodeKeysModal({
     }
   }, [walletId, open])
 
+  const detection = useMemo(
+    () => detectMasternodePrivateKey(privateKey, walletNetwork, nodes, importedKeys),
+    [privateKey, walletNetwork, nodes, importedKeys],
+  )
+
+  const effectiveRole: MasternodeKeyRole | null = detection.kind === 'bls'
+    ? 'operator'
+    : detection.kind === 'wif'
+      ? (wifRoleOverridden ? wifRole : (detection.matchedRole ?? wifRole))
+      : null
+
   const busy = submitting || removingKeyId !== null
-  const trimmed = privateKey.trim()
-  const canImport = trimmed.length > 0 && !busy
+  const hasDraft = detection.kind !== 'empty'
+  const canImport = !busy && (
+    detection.kind === 'bls'
+    || (detection.kind === 'wif' && !detection.networkMismatch)
+  )
+
+  const resetDraft = (): void => {
+    setPrivateKey('')
+    setWifRoleOverridden(false)
+    setImportError(null)
+    setImportNotice(null)
+  }
 
   const handleImport = async (): Promise<void> => {
-    if (!canImport) return
+    if (!canImport || effectiveRole == null) return
+    const keyToImport = detection.kind === 'bls' || detection.kind === 'wif' ? detection.normalizedKey : ''
+    if (keyToImport === '') return
     const requestId = ++requestIdRef.current
     setSubmitting(true)
     setImportError(null)
@@ -74,16 +107,17 @@ export default function ManageMasternodeKeysModal({
     setRemoveError(null)
     setRemoveNotice(null)
     try {
-      const matched = await API.importMasternodeKey(walletId, role, trimmed)
+      const matched = await API.importMasternodeKey(walletId, effectiveRole, keyToImport)
       await Promise.all([refreshImportedMasternodeKeys(walletId), refreshMasternodes(walletId)])
       if (requestId === requestIdRef.current) {
         setImportNotice({
-          tone: desired === 'rpc' && role === 'owner' && matched != null && matched.length === 0
+          tone: desired === 'rpc' && effectiveRole === 'owner' && matched != null && matched.length === 0
             ? AlertTone.Info
             : AlertTone.Success,
-          message: importedKeyStatusMessage(matched, desired, role),
+          message: importedKeyStatusMessage(matched, desired, effectiveRole),
         })
         setPrivateKey('')
+        setWifRoleOverridden(false)
       }
     } catch (err) {
       if (requestId === requestIdRef.current) setImportError(getErrorMessage(err))
@@ -111,6 +145,10 @@ export default function ManageMasternodeKeysModal({
     }
   }
 
+  const primaryImportLabel = effectiveRole != null
+    ? importRoleButtonLabel(effectiveRole)
+    : MANAGE_KEYS_COPY.importButton
+
   return (
     <Modal
       open={open}
@@ -128,43 +166,6 @@ export default function ManageMasternodeKeysModal({
         className={`mt-4 flex flex-col gap-3 ${SURFACE_SECTION}`}
       >
         <div className={'flex flex-col gap-1.5'}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{MANAGE_KEYS_COPY.roleLabel}</Text>
-          <SegmentedControl
-            appearance={SegmentedControlAppearance.Pill}
-            ariaLabel={MANAGE_KEYS_COPY.roleLabel}
-            options={MASTERNODE_KEY_ROLE_OPTIONS}
-            value={role}
-            onChange={(next) => {
-              setRole(next)
-              setImportError(null)
-              setImportNotice(null)
-            }}
-            disabled={busy}
-            className={'self-start flex-wrap'}
-          />
-        </div>
-
-        {desired === 'rpc' && role === 'owner' && (
-          <Alert
-            tone={AlertTone.Info}
-            icon={<InfoCircleIcon size={16} color={'currentColor'} />}
-            title={MANAGE_KEYS_COPY.rpcOwnerNoticeTitle}
-            description={MANAGE_KEYS_COPY.rpcOwnerNoticeDescription}
-            actions={(
-              <Button
-                type={'button'}
-                size={'compact'}
-                colorScheme={'lightBlue-mint'}
-                disabled={busy}
-                onClick={() => setDesired('p2p')}
-              >
-                {NODES_TAB_COPY.switchToP2P}
-              </Button>
-            )}
-          />
-        )}
-
-        <div className={'flex flex-col gap-1.5'}>
           <label htmlFor={inputId}>
             <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{MANAGE_KEYS_COPY.privateKeyLabel}</Text>
           </label>
@@ -175,21 +176,125 @@ export default function ManageMasternodeKeysModal({
             onChange={(event) => {
               setImportError(null)
               setImportNotice(null)
+              setWifRoleOverridden(false)
               setPrivateKey(event.target.value)
             }}
-            placeholder={MASTERNODE_KEY_ROLE_HINTS[role]}
+            placeholder={MANAGE_KEYS_COPY.privateKeyPlaceholder}
             autoComplete={'off'}
             autoCorrect={'off'}
             autoCapitalize={'off'}
             spellCheck={false}
             variant={'outlined'}
-            colorScheme={importError ? 'error' : 'primary'}
+            colorScheme={importError || detection.kind === 'invalid' || (detection.kind === 'wif' && detection.networkMismatch) ? 'error' : 'primary'}
             className={PASSWORD_FIELD_INPUT_CLASS}
-            aria-invalid={importError ? true : undefined}
+            aria-invalid={importError || detection.kind === 'invalid' ? true : undefined}
             disabled={busy}
             autoFocus
           />
+          {!hasDraft && (
+            <Text size={12} weight={'medium'} color={'brand'} opacity={50} className={'leading-[135%]'}>
+              {MANAGE_KEYS_COPY.autoDetectHint}
+            </Text>
+          )}
         </div>
+
+        {detection.kind === 'bls' && (
+          <div className={`flex flex-col gap-2 ${SURFACE_ROW}`}>
+            <div className={'flex flex-wrap items-center justify-between gap-2'}>
+              <CustomBadge variant={'accent'} text={MANAGE_KEYS_COPY.detectedBlsBadge} />
+              {detection.matchedService && (
+                <Text size={12} weight={'medium'} color={'blue-mint'}>
+                  {`${MANAGE_KEYS_COPY.matchesRolePrefix} ${MASTERNODE_KEY_ROLE_LABELS.operator} ${MANAGE_KEYS_COPY.matchesNodeSeparator} ${detection.matchedService}`}
+                </Text>
+              )}
+              {detection.alreadyImported && (
+                <Text size={12} weight={'medium'} color={'brand'} opacity={60}>
+                  {`${MANAGE_KEYS_COPY.alreadyImportedPrefix} ${MASTERNODE_KEY_ROLE_LABELS.operator}`}
+                </Text>
+              )}
+            </div>
+            <div className={'flex flex-col gap-0.5'}>
+              <Text size={10} weight={'medium'} color={'brand'} opacity={50}>{MANAGE_KEYS_COPY.detectedPublicKeyLabel}</Text>
+              <HighlightedIdentifier className={'min-w-0 text-xs!'}>{detection.publicKey}</HighlightedIdentifier>
+            </div>
+            <Text size={12} weight={'medium'} color={'brand'} opacity={60}>
+              {MANAGE_KEYS_COPY.detectedOperatorDescription}
+            </Text>
+          </div>
+        )}
+
+        {detection.kind === 'wif' && (
+          <div className={`flex flex-col gap-2.5 ${SURFACE_ROW}`}>
+            <div className={'flex flex-wrap items-center justify-between gap-2'}>
+              <div className={'flex items-center gap-1.5'}>
+                <CustomBadge variant={'accent'} text={MANAGE_KEYS_COPY.detectedWifBadge} />
+                <CustomBadge variant={'muted'} text={detection.keyNetwork} />
+              </div>
+              {detection.matchedRole != null && detection.matchedService != null && (
+                <Text size={12} weight={'medium'} color={'blue-mint'}>
+                  {`${MANAGE_KEYS_COPY.matchesRolePrefix} ${MASTERNODE_KEY_ROLE_LABELS[detection.matchedRole]} ${MANAGE_KEYS_COPY.matchesNodeSeparator} ${detection.matchedService}`}
+                </Text>
+              )}
+              {detection.alreadyImportedRoles.length > 0 && (
+                <Text size={12} weight={'medium'} color={'brand'} opacity={60}>
+                  {`${MANAGE_KEYS_COPY.alreadyImportedPrefix} ${detection.alreadyImportedRoles.map(r => MASTERNODE_KEY_ROLE_LABELS[r]).join(', ')}`}
+                </Text>
+              )}
+            </div>
+
+            <div className={'flex flex-col gap-0.5'}>
+              <Text size={10} weight={'medium'} color={'brand'} opacity={50}>{MANAGE_KEYS_COPY.detectedAddressLabel}</Text>
+              <HighlightedIdentifier className={'min-w-0 text-xs!'}>{detection.address}</HighlightedIdentifier>
+            </div>
+
+            {detection.networkMismatch && walletNetwork != null ? (
+              <CopyableError message={detectedNetworkMismatchMessage(detection.keyNetwork, walletNetwork)} />
+            ) : (
+              <div className={'flex flex-wrap items-center justify-between gap-2 pt-0.5'}>
+                <Text size={12} weight={'medium'} color={'brand'} opacity={60}>
+                  {detection.matchedRole == null
+                    ? MANAGE_KEYS_COPY.roleLabel
+                    : `${MANAGE_KEYS_COPY.roleLabel} (${MASTERNODE_KEY_ROLE_LABELS[detection.matchedRole]})`}
+                </Text>
+                <SegmentedControl
+                  appearance={SegmentedControlAppearance.Pill}
+                  ariaLabel={MANAGE_KEYS_COPY.roleLabel}
+                  options={WIF_ROLE_OPTIONS}
+                  value={effectiveRole === 'voting' ? 'voting' : 'owner'}
+                  onChange={(next) => {
+                    setWifRole(next)
+                    setWifRoleOverridden(true)
+                    setImportError(null)
+                    setImportNotice(null)
+                  }}
+                  disabled={busy}
+                />
+              </div>
+            )}
+
+            {!detection.networkMismatch && desired === 'rpc' && effectiveRole === 'owner' && (
+              <Alert
+                tone={AlertTone.Info}
+                icon={<InfoCircleIcon size={16} color={'currentColor'} />}
+                title={MANAGE_KEYS_COPY.rpcOwnerNoticeTitle}
+                description={MANAGE_KEYS_COPY.rpcOwnerNoticeDescription}
+                actions={(
+                  <Button
+                    type={'button'}
+                    size={'compact'}
+                    colorScheme={'lightBlue-mint'}
+                    disabled={busy}
+                    onClick={() => setDesired('p2p')}
+                  >
+                    {NODES_TAB_COPY.switchToP2P}
+                  </Button>
+                )}
+              />
+            )}
+          </div>
+        )}
+
+        {detection.kind === 'invalid' && <CopyableError message={detection.message} />}
 
         {importError && <CopyableError message={importError} />}
 
@@ -202,20 +307,6 @@ export default function ManageMasternodeKeysModal({
             title={importNotice.message}
           />
         )}
-
-        <div className={'flex justify-end'}>
-          <Button
-            type={'submit'}
-            variant={'solid'}
-            colorScheme={'primary'}
-            size={'compact'}
-            disabled={!canImport}
-            className={'inline-flex items-center gap-2 rounded-[.75rem]'}
-          >
-            {submitting && <Spinner size={14} className={'text-current'} />}
-            {submitting ? MANAGE_KEYS_COPY.importing : MANAGE_KEYS_COPY.importButton}
-          </Button>
-        </div>
       </form>
 
       <div className={'mt-4 flex flex-col gap-2'}>
@@ -278,7 +369,35 @@ export default function ManageMasternodeKeysModal({
         )}
       </div>
 
-      <ModalActions primary={{ label: MANAGE_KEYS_COPY.close, onClick: onClose, disabled: busy }} />
+      {hasDraft ? (
+        <ModalActions
+          secondary={{
+            label: MANAGE_KEYS_COPY.clear,
+            onClick: resetDraft,
+            disabled: busy,
+          }}
+          primary={{
+            label: submitting ? MANAGE_KEYS_COPY.importing : primaryImportLabel,
+            onClick: () => { void handleImport() },
+            disabled: !canImport,
+            loading: submitting,
+          }}
+        />
+      ) : (
+        <div className={'mt-6 flex'}>
+          <Button
+            type={'button'}
+            onClick={onClose}
+            disabled={busy}
+            variant={'outline'}
+            colorScheme={'primary-light'}
+            size={'sm'}
+            className={'flex-1 rounded-[.9375rem]'}
+          >
+            {MANAGE_KEYS_COPY.close}
+          </Button>
+        </div>
+      )}
     </Modal>
   )
 }

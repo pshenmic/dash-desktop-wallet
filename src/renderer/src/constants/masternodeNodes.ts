@@ -104,33 +104,36 @@ export const MASTERNODE_KEY_ROLE_LABELS: Record<MasternodeKeyRole, string> = {
   operator: 'Operator',
 }
 
-export const MASTERNODE_KEY_ROLE_HINTS: Record<MasternodeKeyRole, string> = {
-  owner: 'WIF private key (solo or shared share owner)',
-  voting: 'WIF private key (voting address)',
-  operator: 'BLS secret key (64 hex characters)',
-}
-
-export const MASTERNODE_KEY_ROLE_OPTIONS: SegmentOption<MasternodeKeyRole>[] = [
-  { value: 'owner', label: MASTERNODE_KEY_ROLE_LABELS.owner },
-  { value: 'voting', label: MASTERNODE_KEY_ROLE_LABELS.voting },
-  { value: 'operator', label: MASTERNODE_KEY_ROLE_LABELS.operator },
-]
-
 export const NODE_MATCHED_FORMS = { one: 'node matched', other: 'nodes matched' } as const
 
 export const MANAGE_KEYS_COPY = {
   title: 'Imported masternode keys',
-  description: 'Import an external owner, share-owner, voting or operator private key to track its masternodes in this wallet.',
-  roleLabel: 'Key role',
+  description: 'Paste an owner, voting, or operator private key. The key format and role are detected automatically.',
+  roleLabel: 'Import WIF key as',
   rpcOwnerNoticeTitle: 'Share-owner keys match in P2P mode',
   rpcOwnerNoticeDescription: 'In RPC mode, an imported share-owner key is saved to this wallet and matches its shared masternodes once switched to P2P.',
   privateKeyLabel: 'Private key',
+  privateKeyPlaceholder: 'Dash WIF (Owner / Voting) or 64-hex BLS secret key (Operator)',
+  autoDetectHint: 'Supports Dash WIF (mainnet / testnet) and 64-character BLS secret keys (with or without masternodeblsprivkey=).',
+  detectedBlsBadge: 'Operator · BLS secret key',
+  detectedWifBadge: 'Dash WIF key',
+  detectedPublicKeyLabel: 'Operator public key',
+  detectedAddressLabel: 'Derived address',
+  detectedOperatorDescription: 'Automatically recognized as an Operator BLS secret key.',
+  detectedWifNoMatchDescription: 'Valid Dash WIF key. Choose whether to track it as an Owner or Voting key.',
+  matchesRolePrefix: 'Matches',
+  matchesNodeSeparator: 'on',
+  alreadyImportedPrefix: 'Already imported as:',
+  networkMismatchTemplate: 'This key belongs to {keyNetwork}, but this wallet is on {walletNetwork}.',
+  invalidKeyFormat: 'Unrecognized private key. Paste a Dash WIF key or a 64-character hex BLS secret key.',
   importButton: 'Import key',
+  importRoleButton: 'Import {role} key',
   importing: 'Importing…',
+  clear: 'Clear',
   importedTitle: 'Imported keys',
   noImportedKeys: 'No external masternode keys imported yet.',
   remove: 'Remove',
-  close: 'Done',
+  close: 'Close',
   keyImportedNotice: 'Masternode key imported',
   keySavedForP2PNotice: 'Masternode key saved — switch to P2P to match shared masternode shares',
   keyRemovedNotice: 'Masternode key removed',
