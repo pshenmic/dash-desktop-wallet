@@ -4,7 +4,7 @@ import Alert from '@renderer/components/ui/Alert'
 import CopyButton from '@renderer/components/ui/CopyButton'
 import CustomBadge from '@renderer/components/ui/CustomBadge'
 import { DASH_UNIT } from '@renderer/constants/balance'
-import { NODE_SHARES_COPY, NODES_TAB_COPY, SUMMARY_COPY } from '@renderer/constants/masternodeNodes'
+import { MASTERNODE_META_SEPARATOR, NODE_SHARES_COPY, NODES_TAB_COPY } from '@renderer/constants/masternodeNodes'
 import { SURFACE_ROW, SURFACE_SECTION } from '@renderer/constants/surfaces'
 import { TRANSACTION_DETAIL_CARD_CLASS } from '@renderer/constants/transactionsPage'
 import { useConnectionModeContext } from '@renderer/contexts/ConnectionModeContext'
@@ -27,7 +27,7 @@ export default function NodeSharesCard({ node }: NodeSharesCardProps): React.JSX
     <section className={TRANSACTION_DETAIL_CARD_CLASS}>
       <div className={'flex flex-wrap items-center justify-between gap-3 px-1'}>
         <DashboardHeading>
-          {summary != null ? `${NODE_SHARES_COPY.title}${SUMMARY_COPY.separator}${summary.totalCount}` : NODE_SHARES_COPY.title}
+          {summary != null ? `${NODE_SHARES_COPY.title}${MASTERNODE_META_SEPARATOR}${summary.totalCount}` : NODE_SHARES_COPY.title}
         </DashboardHeading>
         {summary != null && (
           summary.ownedDuffs > 0n ? (
@@ -36,7 +36,7 @@ export default function NodeSharesCard({ node }: NodeSharesCardProps): React.JSX
             </Text>
           ) : (
             <Text size={12} weight={'medium'} color={'brand'} opacity={50} className={'tabular-nums'}>
-              {`${NODE_SHARES_COPY.totalCollateral}: ${davToDash(summary.totalDuffs)} ${DASH_UNIT}${SUMMARY_COPY.separator}${NODE_SHARES_COPY.noOwnedShares}`}
+              {`${NODE_SHARES_COPY.totalCollateral}: ${davToDash(summary.totalDuffs)} ${DASH_UNIT}${MASTERNODE_META_SEPARATOR}${NODE_SHARES_COPY.noOwnedShares}`}
             </Text>
           )
         )}

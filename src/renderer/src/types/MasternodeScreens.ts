@@ -5,14 +5,6 @@ export interface MasternodesPageProps {
   walletId: string
 }
 
-export interface SummaryStripProps extends MasternodesPageProps {
-  network: Network | undefined
-  now: number
-  onSelectNodes: (segment: NodeSegment) => void
-  onSelectProposals: (segment: ProposalSegment) => void
-  onSelectContests: (segment: ContestSegment) => void
-}
-
 export interface NodesTabProps extends MasternodesPageProps {
   segment: NodeSegment
   onSegmentChange: (segment: NodeSegment) => void

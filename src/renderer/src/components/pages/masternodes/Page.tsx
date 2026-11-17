@@ -31,7 +31,6 @@ import NodeDetail from './nodes/NodeDetail'
 import NodesTab from './nodes/NodesTab'
 import ProposalDetail from './proposals/ProposalDetail'
 import ProposalsTab from './proposals/ProposalsTab'
-import SummaryStrip from './SummaryStrip'
 
 export default function MasternodesPage({ walletId }: MasternodesPageProps): React.JSX.Element {
   const { status } = useAuth()
@@ -169,14 +168,6 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
         ) : (
           <>
             <PageHeader title={PAGE_HEADERS.masternodes.title} subtitle={PAGE_HEADERS.masternodes.subtitle} />
-            <SummaryStrip
-              walletId={walletId}
-              network={network}
-              now={now}
-              onSelectNodes={selectNodes}
-              onSelectProposals={selectProposals}
-              onSelectContests={selectContests}
-            />
             <div className={`relative ${SURFACE_PANEL}`}>
               <PageTabs items={items} value={tab} onValueChange={value => selectTab(enumParam(MasternodesTab, value, MasternodesTab.Nodes), null)} />
             </div>

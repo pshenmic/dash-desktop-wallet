@@ -1,25 +1,8 @@
 import type { MasternodeKeyRole, RevocationReason } from '@renderer/api/types'
 import { NodeSegment, PayoutChoiceKind, RegistrarKeyChoiceKind } from '@renderer/enums/Masternodes'
 import type { SegmentOption } from '@renderer/types/SegmentedControl'
-import { SURFACE_PANEL } from './surfaces'
 
-export const SUMMARY_STRIP_CLASS = `mb-4 grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-dash-primary-dark-blue/8 dark:divide-white/12 ${SURFACE_PANEL}`
-export const SUMMARY_CELL_CLASS = 'flex min-w-0 flex-col gap-1 py-2 md:py-0 px-4 first:pt-0 md:first:pt-0 md:first:pl-1.5 last:pb-0 md:last:pb-0'
-export const SUMMARY_SKELETON_CLASS = 'mx-2 h-14 rounded-[.625rem] animate-pulse bg-dash-primary-dark-blue/8 dark:bg-white/8'
-export const SUMMARY_FOOTER_CLASS = 'flex min-w-0 flex-wrap items-baseline gap-x-1'
-export const SUMMARY_LINK_CLASS = 'inline-flex items-baseline text-left cursor-pointer rounded-md hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-dash-brand/40 dark:focus-visible:ring-dash-mint/40'
-
-export const SUMMARY_COPY = {
-  nodes: 'Nodes',
-  activeProposals: 'Active proposals',
-  openContests: 'Open contests',
-  active: 'active',
-  shared: 'shared',
-  withVotingKey: 'with a voting key',
-  endingSoon: 'ending soon',
-  unavailable: '—',
-  separator: ' · ',
-} as const
+export const MASTERNODE_META_SEPARATOR = ' · '
 
 export const NODES_TAB_COPY = {
   searchPlaceholder: 'ProTxHash, service or owner address',

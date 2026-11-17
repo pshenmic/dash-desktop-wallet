@@ -3,12 +3,12 @@ import { DASH_UNIT } from '@renderer/constants/balance'
 import {
   MANAGE_KEYS_COPY,
   MASTERNODE_KEY_ROLE_LABELS,
+  MASTERNODE_META_SEPARATOR,
   NODES_TAB_COPY,
   NODE_DETAIL_COPY,
   NODE_MATCHED_FORMS,
   NODE_SHARES_COPY,
   NODE_SHARES_FORMS,
-  SUMMARY_COPY,
 } from '@renderer/constants/masternodeNodes'
 import {
   ENABLED_MASTERNODE_STATUS,
@@ -63,7 +63,7 @@ export function nodeWalletRoles(node: MasternodeDto): MasternodeKeyRole[] {
 export function nodeRolesLabel(node: MasternodeDto): string {
   const roles = nodeWalletRoles(node)
   return roles.length > 0
-    ? roles.map(role => MASTERNODE_KEY_ROLE_LABELS[role]).join(SUMMARY_COPY.separator)
+    ? roles.map(role => MASTERNODE_KEY_ROLE_LABELS[role]).join(MASTERNODE_META_SEPARATOR)
     : NODE_DETAIL_COPY.collateral
 }
 
@@ -124,18 +124,18 @@ export function nodeAccessDisplay(node: MasternodeDto): NodeAccessDisplay {
     if (summary != null && summary.ownedDuffs > 0n) {
       return {
         primary: formatOwnedShareStake(summary),
-        secondary: `${summary.ownedCount} ${NODE_SHARES_COPY.ofShares} ${countLabel(summary.totalCount, NODE_SHARES_FORMS)}${hasVotingKey(node) ? `${SUMMARY_COPY.separator}${MASTERNODE_KEY_ROLE_LABELS.voting}` : ''}`,
+        secondary: `${summary.ownedCount} ${NODE_SHARES_COPY.ofShares} ${countLabel(summary.totalCount, NODE_SHARES_FORMS)}${hasVotingKey(node) ? `${MASTERNODE_META_SEPARATOR}${MASTERNODE_KEY_ROLE_LABELS.voting}` : ''}`,
       }
     }
     if (summary != null) {
       return {
         primary: nodeRolesLabel(node),
-        secondary: `0 ${NODE_SHARES_COPY.ofShares} ${countLabel(summary.totalCount, NODE_SHARES_FORMS)}${SUMMARY_COPY.separator}${nodeVotingAccessLabel(node)}`,
+        secondary: `0 ${NODE_SHARES_COPY.ofShares} ${countLabel(summary.totalCount, NODE_SHARES_FORMS)}${MASTERNODE_META_SEPARATOR}${nodeVotingAccessLabel(node)}`,
       }
     }
     return {
       primary: nodeRolesLabel(node),
-      secondary: `${NODE_SHARES_COPY.sharedCollateral}${SUMMARY_COPY.separator}${nodeVotingAccessLabel(node)}`,
+      secondary: `${NODE_SHARES_COPY.sharedCollateral}${MASTERNODE_META_SEPARATOR}${nodeVotingAccessLabel(node)}`,
     }
   }
   return {
@@ -153,7 +153,7 @@ export function formatServiceAddress(serviceAddress: string | null): string {
 export function nodeSegmentOptions(nodes: MasternodeDto[], query: string): SegmentOption<NodeSegment>[] {
   return Object.values(NodeSegment).map(value => ({
     value,
-    label: `${NODE_SEGMENT_LABELS[value]}${SUMMARY_COPY.separator}${filterNodes(nodes, query, value).length}`,
+    label: `${NODE_SEGMENT_LABELS[value]}${MASTERNODE_META_SEPARATOR}${filterNodes(nodes, query, value).length}`,
   }))
 }
 
