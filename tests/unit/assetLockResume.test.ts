@@ -4,6 +4,7 @@ const stub = vi.hoisted(() => ({getTransaction: vi.fn()}))
 
 vi.mock('dash-core-sdk', () => ({
   DashCoreSDK: class { getTransaction = stub.getTransaction },
+  VoteOutcome: {YES: 1, NO: 2, ABSTAIN: 3},
 }))
 
 import {WalletDAO} from '../../src/main/src/database/WalletDAO'
@@ -113,10 +114,10 @@ describe('resuming a funding', () => {
     await expect(service.reacquire(state(), row())).rejects.toThrow(/please wait/)
   })
 
-  it('asks to wait while DAPI cannot see the transaction', async () => {
+  it('reports the transaction as not found when DAPI cannot see it', async () => {
     const {service} = wire()
     stub.getTransaction.mockRejectedValue(new Error('No such mempool or blockchain transaction'))
 
-    await expect(service.reacquire(state(), row())).rejects.toThrow(/please wait/)
+    await expect(service.reacquire(state(), row())).rejects.toThrow(/could not be found/)
   })
 })

@@ -24,7 +24,9 @@ import * as migration0019 from '../../migrations/0019_shielded_note_nullifier'
 import * as migration0020 from '../../migrations/0020_platform_transactions'
 import * as migration0021 from '../../migrations/0021_platform_transaction_parts'
 import * as migration0022 from '../../migrations/0022_dashpay_xpub'
-import * as migration0023 from '../../migrations/0023_masternode_keys'
+import * as migration0023 from '../../migrations/0023_locked_utxos'
+import * as migration0024 from '../../migrations/0024_payment_requests'
+import * as migration0025 from '../../migrations/0025_masternode_keys'
 
 const migrations = [
   { name: '0000_init.ts', migration: migration0000 },
@@ -50,7 +52,9 @@ const migrations = [
   { name: '0020_platform_transactions.ts', migration: migration0020 },
   { name: '0021_platform_transaction_parts.ts', migration: migration0021 },
   { name: '0022_dashpay_xpub.ts', migration: migration0022 },
-  { name: '0023_masternode_keys.ts', migration: migration0023 },
+  { name: '0023_locked_utxos.ts', migration: migration0023 },
+  { name: '0024_payment_requests.ts', migration: migration0024 },
+  { name: '0025_masternode_keys.ts', migration: migration0025 },
 ]
 
 const inlineMigrationSource = {

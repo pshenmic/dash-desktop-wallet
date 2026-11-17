@@ -43,6 +43,12 @@ describe('nextUnusedAddress on the local store', () => {
     expect(getTransactionsByAddress).not.toHaveBeenCalled()
   })
 
+  it('skips addresses reserved by payment requests', async () => {
+    const {provider: p} = provider(['addr-0'])
+
+    expect(await p.nextUnusedAddress(new Set(['addr-1']))).toBe('addr-2')
+  })
+
   it('falls back to the last address when every one is used', async () => {
     const {provider: p} = provider(receiving.map(a => a.address))
 

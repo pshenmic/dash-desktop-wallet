@@ -1,10 +1,11 @@
 import { Tabs } from 'dash-ui-kit/react'
 import type { PageTabsProps } from '@renderer/types/PageTabs'
 
-export default function PageTabs(props: PageTabsProps): React.JSX.Element {
+export default function PageTabs({ className = '', ...props }: PageTabsProps): React.JSX.Element {
   return (
     <Tabs
       {...props}
+      className={`min-w-0 ${className}`.trim()}
       size={"xl"}
       triggerClassName={
         'font-medium tracking-[-0.03em] ' +

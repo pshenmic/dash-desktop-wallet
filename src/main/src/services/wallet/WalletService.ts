@@ -3,6 +3,8 @@ import {KeyPairController} from 'dash-platform-sdk/src/keyPair/index.js'
 import {PlatformWorkerService} from '../platform/PlatformWorkerService'
 import {WalletDAO} from '../../database/WalletDAO'
 import {AddressDAO} from '../../database/AddressDAO'
+import {TransactionDAO} from '../../database/TransactionDAO'
+import {PaymentRequestDAO} from '../../database/PaymentRequestDAO'
 import {IdentityDAO} from '../../database/IdentityDAO'
 import {PlatformTransactionDAO} from '../../database/PlatformTransactionDAO'
 import {MasternodeKeyDAO} from '../../database/MasternodeKeyDAO'
@@ -56,6 +58,8 @@ const locks = new Logger('locks')
 export class WalletService {
   private walletDAO: WalletDAO
   private addressDAO: AddressDAO
+  private transactionDAO: TransactionDAO
+  private paymentRequestDAO: PaymentRequestDAO
   private identityDAO: IdentityDAO
   private platformTransactionDAO: PlatformTransactionDAO
   private masternodeKeyDAO: MasternodeKeyDAO
@@ -76,6 +80,8 @@ export class WalletService {
   constructor(
     walletDAO: WalletDAO,
     addressDAO: AddressDAO,
+    transactionDAO: TransactionDAO,
+    paymentRequestDAO: PaymentRequestDAO,
     identityDAO: IdentityDAO,
     platformTransactionDAO: PlatformTransactionDAO,
     masternodeKeyDAO: MasternodeKeyDAO,
@@ -92,6 +98,8 @@ export class WalletService {
   ) {
     this.walletDAO = walletDAO
     this.addressDAO = addressDAO
+    this.transactionDAO = transactionDAO
+    this.paymentRequestDAO = paymentRequestDAO
     this.identityDAO = identityDAO
     this.platformTransactionDAO = platformTransactionDAO
     this.masternodeKeyDAO = masternodeKeyDAO
@@ -242,6 +250,10 @@ export class WalletService {
     return this.walletDAO.updateLabel(walletId, label)
   }
 
+  async setUtxoLocked(walletId: string, txid: string, vout: number, locked: boolean): Promise<void> {
+    return this.transactionDAO.setUtxoLocked(walletId, txid, vout, locked)
+  }
+
   // No password: the account xpub is persisted, and a receive address is public
   // derivation off it. Only signing needs the seed.
   async addAddress(walletId: string, isChange: boolean): Promise<string> {
@@ -275,8 +287,9 @@ export class WalletService {
   async getReceiveAddress(walletId: string): Promise<string> {
     const wallet = await requireWallet(this.walletDAO, walletId)
 
+    const reserved = new Set((await this.paymentRequestDAO.getRequests(walletId)).map(request => request.address))
     const provider = this.providers.forWallet(wallet.walletId, wallet.network)
-    return provider.nextUnusedAddress()
+    return provider.nextUnusedAddress(reserved)
   }
 
   async getAddressesByWalletId(walletId: string): Promise<GroupedAddresses> {
@@ -385,14 +398,13 @@ export class WalletService {
     return dashPayPayments(core, addresses('receiving'), addresses('external'))
   }
 
-  // Guarded like a send rather than like a read: a picker fed a partial set does
-  // not under-display, it narrows what the user can pick to coins they cannot
-  // tell are only some of theirs.
+  // Mid-scan the set grows under the picker, so listing refuses; a paused store
+  // is a stable snapshot. Sends keep the stricter ensureReady gate.
   async getUtxos(walletId: string): Promise<ListedUtxo[]> {
     const wallet = await requireWallet(this.walletDAO, walletId)
 
     const provider = this.providers.forWallet(wallet.walletId, wallet.network)
-    await provider.ensureReady()
+    await provider.ensureReadyToList()
     const [grouped, utxos, collaterals] = await Promise.all([
       this.addressDAO.getAddressesByWalletId(walletId),
       provider.getWalletUtxos(),

@@ -1,9 +1,10 @@
 import type {Message, MnListDiff, Peer} from 'dash-core-p2p'
+import {isCbTxV24} from 'dash-core-sdk'
 import type {PoolService} from '../net/PoolService'
 import {ProviderRegistry} from './providerRegistry'
 import {MNLIST_REFRESH_MS, MNLIST_REPLY_TIMEOUT_MS, PLATFORM_QUORUM_PEERS} from '../constants'
 import {isZeroHash, wireToDisplayHex} from '../utils/byteOrder'
-import {committedList, committedQuorums, evonodeDapiUrls, isV24Active, quorumKey} from '../utils/masternodeList'
+import {evonodeDapiUrls, quorumKey} from '../utils/masternodeList'
 import type {MasternodeListOptions, ProvenList} from '../types/masternodeList'
 import {Logger} from '../../src/utils/logger'
 
@@ -111,7 +112,7 @@ export class MasternodeList {
     log.info(`masternode list at ${diff.blockHash} from ${peer.host}:${peer.port}: ${dapiUrls.length} evonode DAPI url(s)`)
     this.opts.events.evonodeDapiUrls(pool.network, dapiUrls)
     if (announced) return
-    this.opts.events.listedMasternodes(pool.network, diff.mnList.map(({proRegTxHash}) => proRegTxHash), askedAt, isV24Active(diff))
+    this.opts.events.listedMasternodes(pool.network, diff.mnList.map(({proRegTxHash}) => proRegTxHash), askedAt, isCbTxV24(diff.coinbaseVersion ?? 0))
   }
 
   // Asked at a block our chain already holds, so the answer can be proven against
@@ -170,13 +171,15 @@ export class MasternodeList {
     const header = await store.getHeaderByHeight(height)
     const replaced = height <= (this.proven?.height ?? 0) || (!full && this.proven !== base)
     if (header == null || store !== this.opts.chain() || replaced) return false
-    const commitments = committedQuorums(diff, header, base?.commitments ?? [])
-    const entries = committedList(diff, header, base?.entries ?? [])
-    if (commitments == null || entries == null) {
-      log.warn(`${peer.host}:${peer.port} sent a masternode list block ${height} does not commit to`)
+    const entries = diff.applyTo(base?.entries ?? [])
+    const commitments = diff.applyQuorumsTo(base?.commitments ?? [])
+    try {
+      diff.verify(header, entries, commitments)
+    } catch (err) {
+      log.warn(`${peer.host}:${peer.port} sent a masternode list block ${height} does not commit to:`, err)
       return false
     }
-    const v24Active = isV24Active(diff)
+    const v24Active = isCbTxV24(diff.coinbaseVersion ?? 0)
     this.proven = {blockHash: diff.blockHash, height, entries, commitments, v24Active}
     for (const [blockHash, at] of this.asked) if (at <= askedAt) this.asked.delete(blockHash)
     this.opts.events.platformQuorums(store.network, new Map(commitments.map(quorum =>

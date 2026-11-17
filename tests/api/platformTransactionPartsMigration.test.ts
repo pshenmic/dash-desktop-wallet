@@ -63,7 +63,7 @@ describe('platform transaction parts migration', () => {
 
     expect(await dao.getTransactions(WALLET)).toEqual([{
       walletId: WALLET,
-      hash: HASH,
+      hash: HASH.toLowerCase(),
       type: 'IDENTITY_TOP_UP',
       date: new Date(0),
       blockHeight: null,

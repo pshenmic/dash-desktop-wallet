@@ -14,15 +14,6 @@ export interface Proposal {
   collateralHash: string
 }
 
-// The fields every governance object carries, whatever its type.
-export interface GovernanceObject {
-  hash: string
-  type: number
-  time: number
-  collateralHash: string
-  data: string
-}
-
 // A vote as a peer relayed it, with Core's codes. voter is the address its signature
 // recovers to (null for none); it counts only as the collateral's node's voting key.
 export interface GovernanceVote {
@@ -44,9 +35,6 @@ export interface VotingNode {
   collateralTxid: string
   collateralVout: number
 }
-
-// What a vote signs, before it is signed.
-export type UnsignedVote = Omit<GovernanceVote, 'hash' | 'voter'>
 
 // Funding votes, weighted as Core counts them: an evonode's counts four times.
 export interface ProposalTally {

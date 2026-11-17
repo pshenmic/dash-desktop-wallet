@@ -153,7 +153,7 @@ describe('provider registry', () => {
   })
 
   it('drops a node that left the list', async () => {
-    store.registrations.set('cd'.repeat(32), {...{} as ProviderRegistration, height: 1, payouts: [{height: 1, address: null}]})
+    store.registrations.set('cd'.repeat(32), {...{} as ProviderRegistration, height: 1, payouts: [{height: 1, address: null}], shares: []})
     await registry.offer(store as never, TIP, [])
 
     expect(store.registrations.size).toBe(0)
@@ -189,6 +189,14 @@ describe('provider registry', () => {
 
     await registry.applyPayouts([{proTxHash: EVO, payoutAddress: 'yRemined', height: REGISTERED + 11}])
     expect(store.registrations.get(EVO)!.payouts.at(-1)!.address).toBe('yRemined')
+  })
+
+  it('reads again a registration from before the share table was kept', async () => {
+    store.registrations.set(EVO, {...{} as ProviderRegistration, height: REGISTERED, payouts: [{height: REGISTERED, address: null}]})
+    await registry.offer(store as never, TIP, [entry(EVO, CONFIRMED_HASH)])
+    registry.onBlock(peer as never, {block: registrationBlock()} as never)
+    await vi.waitFor(() => expect(lists).toHaveLength(1))
+    expect(store.registrations.get(EVO)!.shares).toEqual([])
   })
 
   it('reads again a registration whose own block was rewound', async () => {

@@ -6,10 +6,6 @@ import {MasternodeList} from '../../src/main/p2p/sync/masternodeList'
 vi.mock('../../src/main/p2p/utils/masternodeList', async original => ({
   ...await original<typeof import('../../src/main/p2p/utils/masternodeList')>(),
   evonodeDapiUrls: () => [],
-  committedQuorums: () => [],
-  isV24Active: (diff: {v24?: boolean}) => diff.v24 ?? false,
-  committedList: (diff: {blockHash: string; deletedMNs: string[]; mnList: {proRegTxHash: string}[]}, _header: unknown, previous: {proRegTxHash: string}[]) =>
-    diff.blockHash === 'forged' ? null : [...previous.filter(({proRegTxHash}) => !diff.deletedMNs.includes(proRegTxHash)), ...diff.mnList],
 }))
 
 const ZERO = '00'.repeat(32)
@@ -104,8 +100,16 @@ describe('following the tip', () => {
   })
 
   const answer = async (baseBlockHash: string, blockHash: string, coinbaseHeight: number, mnList: string[], deletedMNs: string[] = [], v24 = false): Promise<void> => {
-    list.onDiff(first, {mnlistdiff: {baseBlockHash, blockHash, coinbaseHeight, deletedMNs, v24,
-      mnList: mnList.map(proRegTxHash => ({proRegTxHash, confirmedHash: ZERO, keyIDVoting: '00'.repeat(20), pubKeyOperator: '00'.repeat(48)}))}} as never)
+    const entries = mnList.map(proRegTxHash => ({proRegTxHash, confirmedHash: ZERO, keyIDVoting: '00'.repeat(20), pubKeyOperator: '00'.repeat(48)}))
+    const diff = {
+      baseBlockHash, blockHash, coinbaseHeight, deletedMNs, mnList: entries,
+      coinbaseVersion: v24 ? 4 : 3,
+      applyTo: (previous: {proRegTxHash: string}[]) =>
+        [...previous.filter(({proRegTxHash}) => !deletedMNs.includes(proRegTxHash)), ...entries],
+      applyQuorumsTo: () => [],
+      verify: () => { if (blockHash === 'forged') throw new Error('not committed') },
+    }
+    list.onDiff(first, {mnlistdiff: diff} as never)
     await new Promise(resolve => setTimeout(resolve, 0))
   }
   const lastListed = (): string[] => listed.mock.calls.at(-1)![1]

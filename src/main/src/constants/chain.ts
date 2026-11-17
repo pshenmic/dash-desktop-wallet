@@ -1,3 +1,4 @@
+import {VoteOutcome as VoteOutcomeCode} from 'dash-core-sdk'
 import {VoteOutcome} from '../types/Governance'
 import {MasternodeType, RevocationReason} from '../types/Masternode'
 import {Network} from '../types/Network'
@@ -28,12 +29,9 @@ export const NON_ROUTABLE_IPV4: Array<[string, number]> = [
   ['198.51.100.0', 24], ['203.0.113.0', 24], ['255.255.255.255', 32],
 ]
 export const REVOCATION_REASON_CODE: Record<RevocationReason, number> = {notSpecified: 0, termination: 1, compromisedKeys: 2, changeOfKeys: 3}
-export const BLS_SIGNATURE_SIZE = 96
 
-// Core's governance codes: an object's type, a vote's signal and its outcome.
-export const GOVERNANCE_PROPOSAL_TYPE = 1
-export const VOTE_SIGNAL_FUNDING = 1
-export const VOTE_OUTCOME_CODE: Record<VoteOutcome, number> = {yes: 1, no: 2, abstain: 3}
+// The renderer's vote outcomes as Core's codes.
+export const VOTE_OUTCOME_CODE: Record<VoteOutcome, VoteOutcomeCode> = {yes: VoteOutcomeCode.YES, no: VoteOutcomeCode.NO, abstain: VoteOutcomeCode.ABSTAIN}
 export const MASTERNODE_VOTE_WEIGHT: Record<MasternodeType, number> = {Regular: 1, Evo: 4}
 // Core's GOVERNANCE_UPDATE_MIN: a node's next vote on an object within it is dropped.
 export const GOVERNANCE_UPDATE_MIN_SECONDS = 60 * 60
@@ -42,9 +40,6 @@ export const POSE_BANNED_STATUS = 'POSE_BANNED'
 // One superblock cycle (nSuperblockCycle × the 2.5-minute target). A proposal
 // that ended before the current cycle began can be paid by no superblock left.
 export const SUPERBLOCK_CYCLE_SECONDS: Record<Network, number> = {mainnet: 16_616 * 150, testnet: 24 * 150}
-
-// Dash Core's strMessageMagic, kept from its DarkCoin days.
-export const MESSAGE_MAGIC = 'DarkCoin Signed Message:\n'
 
 // Not consensus: a standard transaction may not exceed 100 kB, and at 34 bytes
 // per output this keeps a send well inside what peers relay.

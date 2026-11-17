@@ -1,14 +1,12 @@
 import {beforeEach, describe, expect, it} from 'vitest'
-import {secp256k1} from '@noble/curves/secp256k1.js'
-import {concatBytes, hexToBytes} from '@noble/hashes/utils.js'
-import {Script, Transaction, utils as sdkUtils} from 'dash-core-sdk'
+import {hexToBytes} from '@noble/hashes/utils.js'
+import {bls, recoverHashSigner, recoverMessageSigner, Script, Transaction, utils as sdkUtils} from 'dash-core-sdk'
 import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
 import {ProUpRegTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRegTx.js'
 import {ProUpRevTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRevTx.js'
 import {ProUpServTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpServTx.js'
 import {bls12_381} from '@noble/curves/bls12-381.js'
 import {bytesToHex} from '@noble/hashes/utils.js'
-import {KeyPairController} from 'dash-platform-sdk/src/keyPair/index.js'
 import {MasternodeDAO} from '../../src/main/src/database/MasternodeDAO'
 import {Preferences} from '../../src/main/src/preferences'
 import {WalletProviderFactory} from '../../src/main/src/providers/WalletProviderFactory'
@@ -26,8 +24,7 @@ import {
 } from '../../src/main/src/types/Masternode'
 import {UTXO} from '../../src/main/src/types/UTXO'
 import {masternodeKeyDeriver} from '../../src/main/src/utils/masternodeKeys'
-import {nodeKey} from '../../src/main/src/utils/masternodes'
-import {payloadDigest, proRegSignString, providerInputsHash, signedMessageHash} from '../../src/main/src/utils/providerTx'
+import {nodeKeyValues} from '../../src/main/src/utils/masternodes'
 import {harness, Harness, PASSWORD, VALID_SEEDPHRASE} from './harness'
 
 const DASH = 100_000_000n
@@ -43,7 +40,7 @@ const p2pkhScript = (address: string): Script => {
 }
 
 const utxo = (address: string, satoshis: bigint, txId: string): UTXO =>
-  ({address, satoshis, txId, vOut: 0, script: p2pkhScript(address), height: 1_000_000, timestamp: null, confirmations: 20})
+  ({address, satoshis, txId, vOut: 0, script: p2pkhScript(address), height: 1_000_000, timestamp: null, confirmations: 20, isLocked: false})
 
 function node(proTxHash: string, fields: Partial<NetworkMasternode>): NetworkMasternode {
   return {
@@ -51,20 +48,19 @@ function node(proTxHash: string, fields: Partial<NetworkMasternode>): NetworkMas
     collateralTxid: 'ee'.repeat(32), collateralVout: 0, collateralAddress: 'ynobody',
     serviceAddress: '1.2.3.4:19999', payeeAddress: 'ypayee', ownerAddress: 'ynobody', votingAddress: 'ynobody',
     operatorPublicKey: 'ff'.repeat(48), platformNodeId: null, platformP2PPort: null, platformHttpPort: null,
-    lastPaidBlock: 0, lastPaidTime: 0, registeredHeight: null, ...fields,
+    lastPaidBlock: 0, lastPaidTime: 0, registeredHeight: null, isShared: false, shares: [], ...fields,
   }
 }
-
-const keyPair = new KeyPairController()
 
 const EVO_FIELDS: Partial<MasternodeRegistration> & {platformNodeId: string} =
   {type: 'Evo', platformNodeId: '5b6ddd9532c5863b8bb113ef92d77f77b66f859b', platformP2PPort: 36656, platformHttpPort: 1443}
 
 function payloadSigner(payload: ProRegTX | ProUpRegTx): string {
   const signature = hexToBytes(payload.payloadSig)
-  const recovered = concatBytes(Uint8Array.of((signature[0] - 27) & 3), signature.slice(1))
-  const hash = payload instanceof ProRegTX ? signedMessageHash(proRegSignString(payload, 'testnet')) : payloadDigest(payload)
-  return keyPair.p2pkhAddress(secp256k1.recoverPublicKey(recovered, hash, {prehash: false}), 'testnet')
+  const signer = payload instanceof ProRegTX
+    ? recoverMessageSigner(payload.signString('testnet'), signature)
+    : recoverHashSigner(payload.payloadHash(), signature)
+  return signer.getAddress(sdkUtils.networkValueToEnumValue('testnet'))
 }
 
 const keyIdOf = (address: string): string => bytesToHex(sdkUtils.addressToPublicKeyHash(address))
@@ -119,7 +115,7 @@ describe('MasternodeService provider transactions', () => {
       ensureReady: async () => undefined,
       getWalletUtxos: async () => utxos,
       getMasternodes: async (filter: MasternodeKeyFilter, values: string[]) =>
-        list?.filter(entry => values.includes(nodeKey(filter, entry) ?? '')) ?? null,
+        list?.filter(entry => nodeKeyValues(filter, entry).some(key => values.includes(key))) ?? null,
       watchMasternodes: async () => [],
     }
     const walletSync = {
@@ -143,7 +139,7 @@ describe('MasternodeService provider transactions', () => {
     expect(payload.type).toBe(0)
     expect(payload.collateralOutpoint).toMatchObject({txId: 'cc'.repeat(32), vOut: 0})
     expect(tx.inputs.map(input => input.txId)).toEqual(['aa'.repeat(32)])
-    expect(payload.inputsHash).toBe(providerInputsHash(tx.inputs))
+    expect(payload.inputsHash).toBe(tx.providerInputsHash())
     expect(payloadSigner(payload)).toBe(owned[0])
     expect(payload.getPayoutAddress('testnet')).toBe(owned[2])
     expect(payload.ipAddress).toBe('45.33.12.7')
@@ -229,7 +225,7 @@ describe('MasternodeService provider transactions', () => {
       expect(payload.scriptPayout.getAddress('testnet')).toBe(owned[1])
       expect(payloadSigner(payload)).toBe(key('owner', 0))
       expect(tx.inputs.map(input => input.txId)).toEqual(['aa'.repeat(32)])
-      expect(payload.inputsHash).toBe(providerInputsHash(tx.inputs))
+      expect(payload.inputsHash).toBe(tx.providerInputsHash())
     })
 
     it('keeps the current payout when none is passed', async () => {
@@ -256,6 +252,15 @@ describe('MasternodeService provider transactions', () => {
       await expect(masternodes.updateRegistrar(walletId, PRO_TX_HASH, KEEP, PASSWORD)).rejects.toThrow("owner key")
     })
 
+    it('refuses a shared node, whose updates need every share owner', async () => {
+      list = [node(PRO_TX_HASH, {ownerAddress: null, isShared: true, shares: [
+        {ownerAddress: key('owner', 0), amountDuffs: 20000000000n},
+        {ownerAddress: 'Xother', amountDuffs: 80000000000n},
+      ]})]
+      await expect(masternodes.updateRegistrar(walletId, PRO_TX_HASH, KEEP, PASSWORD)).rejects.toThrow('every share owner')
+      expect(broadcast).toEqual([])
+    })
+
     it('refuses a payout to the voting key', async () => {
       await expect(masternodes.updateRegistrar(walletId, PRO_TX_HASH, {...KEEP, payoutAddress: key('voting', 0)}, PASSWORD))
         .rejects.toThrow('may not pay the owner or voting key')
@@ -271,10 +276,8 @@ describe('MasternodeService provider transactions', () => {
       collateralTxid: 'cc'.repeat(32), collateralAddress: owned[0], operatorPublicKey: key('operator', 0), ...fields,
     })
 
-    const signedByOperator = (payload: ProUpServTx | ProUpRevTx): boolean => {
-      const {longSignatures} = bls12_381
-      return longSignatures.verify(hexToBytes(payload.payloadSig), longSignatures.hash(payloadDigest(payload)), hexToBytes(key('operator', 0)))
-    }
+    const signedByOperator = (payload: ProUpServTx | ProUpRevTx): boolean =>
+      bls.blsVerify(hexToBytes(payload.payloadSig), payload.payloadHash(), hexToBytes(key('operator', 0)))
 
     const lastBroadcast = (): Transaction => Transaction.fromHex(broadcast.at(-1)!)
 
@@ -325,6 +328,16 @@ describe('MasternodeService provider transactions', () => {
       expect(broadcast).toEqual([])
     })
 
+    it('refuses a shared node: shared interactions are not supported yet', async () => {
+      list = [operated({ownerAddress: null, isShared: true, shares: [
+        {ownerAddress: 'Xother1', amountDuffs: 60000000000n},
+        {ownerAddress: 'Xother2', amountDuffs: 40000000000n},
+      ]})]
+      await expect(masternodes.updateService(walletId, PRO_TX_HASH, SERVICE, PASSWORD)).rejects.toThrow('not supported')
+      await expect(masternodes.revoke(walletId, PRO_TX_HASH, 'termination', PASSWORD)).rejects.toThrow('not supported')
+      expect(broadcast).toEqual([])
+    })
+
     it('revokes with the reason code, signed by the operator key', async () => {
       list = [operated()]
       await masternodes.revoke(walletId, PRO_TX_HASH, 'changeOfKeys', PASSWORD)
@@ -333,7 +346,7 @@ describe('MasternodeService provider transactions', () => {
 
       expect(tx.type).toBe(4)
       expect([payload.version, payload.proTxHash, payload.reason]).toEqual([2, PRO_TX_HASH, 3])
-      expect(payload.inputsHash).toBe(providerInputsHash(tx.inputs))
+      expect(payload.inputsHash).toBe(tx.providerInputsHash())
       expect(signedByOperator(payload)).toBe(true)
     })
 

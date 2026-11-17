@@ -1,4 +1,5 @@
 import {
+  bls,
   Input,
   Output,
   PrivateKey,
@@ -40,8 +41,7 @@ import {
 import {MasternodeRegistration, MasternodeServiceUpdate, MasternodeType, ProviderKeyIds, RevocationReason} from '../../types/Masternode'
 import {buildAssetLockOutputs} from '../../utils/assetLockTx'
 import {derivePath256} from '../../utils/dashPayKeys'
-import {operatorSecretKey} from '../../utils/masternodeKeys'
-import {payloadDigest, proRegSignString, providerInputsHash, serviceAddressParts, signBls, signHash, signMessage} from '../../utils/providerTx'
+import {serviceAddressParts} from '../../utils/providerTx'
 
 
 export class CoreTransactionService {
@@ -198,8 +198,8 @@ export class CoreTransactionService {
     this.addInputs(transaction, inputs)
     this.addChange(transaction, inputTotal - feeDuffs, changeAddress)
 
-    payload.inputsHash = providerInputsHash(inputs)
-    payload.payloadSig = bytesToHex(await this.payloadSignature(payload, signer, seed, network))
+    payload.inputsHash = transaction.providerInputsHash()
+    await this.signPayload(payload, signer, seed, network)
     transaction.sign(await this.privateKeys(inputs, seed, network))
 
     return transaction
@@ -207,12 +207,16 @@ export class CoreTransactionService {
 
   // A ProRegTx's collateral signs Core's sign string as a message; every other
   // signer signs the payload hash itself, the operator with BLS.
-  private async payloadSignature(payload: ProviderPayload, signer: ProviderTxSigner, seed: Uint8Array, network: Network): Promise<Uint8Array> {
-    if (signer.kind === 'operator') return signBls(payloadDigest(payload), operatorSecretKey(seed, network, signer.index))
+  private async signPayload(payload: ProviderPayload, signer: ProviderTxSigner, seed: Uint8Array, network: Network): Promise<void> {
+    if (signer.kind === 'operator') {
+      const secretKey = bls.deriveOperatorSecretKey(seed, network, signer.index)
+      if (payload instanceof ProUpServTx) payload.signWithOperatorKey(secretKey)
+      if (payload instanceof ProUpRevTx) payload.signWithOperatorKey(secretKey)
+      return
+    }
     const [key] = await this.privateKeys([signer], seed, network)
-    return payload instanceof ProRegTX
-      ? signMessage(proRegSignString(payload, network), key.bytes())
-      : signHash(payloadDigest(payload), key.bytes())
+    if (payload instanceof ProRegTX) payload.signWithCollateralKey(key, network)
+    if (payload instanceof ProUpRegTx) payload.signWithOwnerKey(key)
   }
 
   private payoutScript(address: string, network: Network): Script {

@@ -1,4 +1,5 @@
 import {beforeEach, describe, expect, it} from 'vitest'
+import {GovernanceVote as SDKGovernanceVote} from 'dash-core-sdk'
 import {WalletProviderFactory} from '../../src/main/src/providers/WalletProviderFactory'
 import {GovernanceService} from '../../src/main/src/services/core/GovernanceService'
 import {MasternodeService} from '../../src/main/src/services/core/MasternodeService'
@@ -22,7 +23,7 @@ function node(proTxHash: string, fields: Partial<Masternode> = {}): Masternode {
     proTxHash, type: 'Regular', status: 'ENABLED', posePenaltyScore: 0, collateralTxid: proTxHash, collateralVout: 1,
     collateralAddress: null, serviceAddress: null, payeeAddress: null, ownerAddress: null, votingAddress: 'Xvoting',
     operatorPublicKey: 'ff'.repeat(48), platformNodeId: null, platformP2PPort: null, platformHttpPort: null,
-    lastPaidBlock: null, lastPaidTime: null, registeredHeight: null,
+    lastPaidBlock: null, lastPaidTime: null, registeredHeight: null, isShared: false, shares: [],
     ownerKeyIndex: null, votingKeyIndex: 2, operatorKeyIndex: null, importedRoles: [], ...fields,
   }
 }
@@ -70,7 +71,7 @@ describe('GovernanceService.vote', () => {
     const results = await service().vote(walletId, PROPOSAL, 'no', ['aa'.repeat(32)], PASSWORD)
 
     expect(results).toEqual([{proTxHash: 'aa'.repeat(32), peers: 3, accepted: 2}])
-    expect(governanceVote(relayed[0], network)).toMatchObject({
+    expect(governanceVote(SDKGovernanceVote.fromBytes(relayed[0]), network)).toMatchObject({
       collateralTxid: 'aa'.repeat(32), collateralVout: 1, parentHash: PROPOSAL, outcome: 2, signal: 1, voter: owned![0].votingAddress,
     })
   })

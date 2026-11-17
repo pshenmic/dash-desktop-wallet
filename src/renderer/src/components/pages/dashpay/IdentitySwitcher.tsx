@@ -1,12 +1,14 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Text } from '@renderer/components/dash-ui-kit-extended'
+import { Text, Tooltip } from '@renderer/components/dash-ui-kit-extended'
 import { AddIcon } from '@renderer/components/dash-ui-kit-extended/icons'
 import IdentitySelect from '@renderer/components/ui/IdentitySelect'
 import { DASHPAY_READINESS_BADGES, READINESS_TONE_CLASS } from '@renderer/constants/dashPay'
 import { DASHPAY_REGISTER_IDENTITY_HREF, REQUEST_COUNT_FORMS, SWITCHER_COPY } from '@renderer/constants/dashPayOverview'
+import { USERNAME_VOTE_TOOLTIP } from '@renderer/constants/dpns'
 import { POPOVER_OPTION } from '@renderer/constants/surfaces'
 import { useAuth } from '@renderer/contexts/AuthContext'
+import { UsernameStatus } from '@renderer/enums/DashPay'
 import { IdentitySelectAppearance } from '@renderer/enums/IdentitySelectAppearance'
 import { useDashPayUsernames } from '@renderer/hooks/useDashPayUsernames'
 import type { IdentityApiDto } from '@renderer/hooks/useIdentities'
@@ -33,7 +35,9 @@ export default function IdentitySwitcher({
 
   const renderTriggerMeta = (entry: IdentityApiDto): React.ReactNode => {
     const badgeStatus = identityStatus(entry)
-    return badgeStatus == null ? null : <span className={READINESS_TONE_CLASS[badgeStatus]}>{DASHPAY_READINESS_BADGES[badgeStatus].text}</span>
+    if (badgeStatus == null) return null
+    const badge = <span className={READINESS_TONE_CLASS[badgeStatus]}>{DASHPAY_READINESS_BADGES[badgeStatus].text}</span>
+    return badgeStatus === UsernameStatus.Voting ? <Tooltip label={USERNAME_VOTE_TOOLTIP} align={'end'}>{badge}</Tooltip> : badge
   }
 
   const renderMeta = (entry: IdentityApiDto): React.ReactNode => {

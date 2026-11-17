@@ -4,7 +4,7 @@ import { TooltipBubble } from '@renderer/components/dash-ui-kit-extended'
 import { COPY_BUTTON_SIZES } from '@renderer/constants/clipboard'
 import type { CopyButtonProps } from '@renderer/types/CopyButton'
 
-export default function CopyButton({ text, className = '', disabled = false, label, size = 'compact' }: CopyButtonProps): React.JSX.Element {
+export default function CopyButton({ text, className = '', disabled = false, label, size = 'compact', onCopy }: CopyButtonProps): React.JSX.Element {
   const [copiedRect, setCopiedRect] = useState<DOMRect | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const dimensions = COPY_BUTTON_SIZES[size]
@@ -17,6 +17,7 @@ export default function CopyButton({ text, className = '', disabled = false, lab
     setCopiedRect(event.currentTarget.getBoundingClientRect())
     clearTimeout(timer.current)
     timer.current = setTimeout(() => setCopiedRect(null), 1200)
+    onCopy?.()
   }
 
   return (

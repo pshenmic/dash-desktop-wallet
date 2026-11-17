@@ -45,9 +45,15 @@ export class AddressDAO {
   }
 
   getAddressesByWalletId = async (walletId: string): Promise<GroupedAddresses> => {
+    // A payment request consumes the address like usage for discovery and receive
+    // selection; the stored is_used stays chain-only.
     const rows = await this.knex('addresses')
-      .select('wallet_id', 'account_id', 'address', 'derivation_path', 'index', 'is_change', 'is_used', 'label')
-      .where('wallet_id', walletId)
+      .leftJoin('payment_requests as pr', function () {
+        this.on('pr.wallet_id', '=', 'addresses.wallet_id').andOn('pr.address', '=', 'addresses.address')
+      })
+      .select('addresses.wallet_id', 'account_id', 'addresses.address', 'derivation_path', 'index', 'is_change', 'addresses.label',
+        this.knex.raw('CASE WHEN pr.id IS NOT NULL THEN 1 ELSE addresses.is_used END as is_used'))
+      .where('addresses.wallet_id', walletId)
       .orderBy('index', 'asc')
     // Our DashPay receiving chains live in memory, derived again on each refresh.
     const dashPay = [...this.dashPayCache.wallet(walletId).chains.values()].flat()

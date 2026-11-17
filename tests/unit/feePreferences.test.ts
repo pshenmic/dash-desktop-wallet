@@ -16,6 +16,7 @@ function parseWith(platformFeeMultiplier: unknown): ReturnType<typeof GeneralPre
     platformFeeMultiplier,
     coreFeeMultiplier: 1,
     logLevel: 'info',
+    collectMetrics: false,
   })
 }
 

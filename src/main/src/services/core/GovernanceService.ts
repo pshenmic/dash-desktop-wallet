@@ -1,12 +1,13 @@
 import {HDKey} from '@scure/bip32'
+import {GovernanceVote, OutPoint, PrivateKey, utils as sdkUtils, VoteSignal} from 'dash-core-sdk'
 import {WalletDAO} from '../../database/WalletDAO'
 import {WalletProviderFactory} from '../../providers/WalletProviderFactory'
 import {HD_VERSIONS} from '../../constants/addresses'
-import {VOTE_OUTCOME_CODE, VOTE_SIGNAL_FUNDING} from '../../constants/chain'
+import {VOTE_OUTCOME_CODE} from '../../constants/chain'
 import {Proposal, ProposalTally, VoteOutcome, VoteResult} from '../../types/Governance'
-import {governanceVote, requireVoteRequest, requireVotingNode, voteBytes, voteDigest} from '../../utils/governance'
+import {requireVoteRequest, requireVotingNode} from '../../utils/governance'
 import {masternodeAccountPath} from '../../utils/masternodeKeys'
-import {isHash, signHash} from '../../utils/providerTx'
+import {isHash} from '../../utils/providerTx'
 import {requireWallet} from '../../utils/requireWallet'
 import {withUnlockedWallet} from '../../utils/walletSeed'
 import {Logger} from '../../utils/logger'
@@ -62,11 +63,11 @@ export class GovernanceService {
     const signed = await withUnlockedWallet(this.walletDAO, walletId, password, async ({seed}) => {
       const account = HDKey.fromMasterSeed(seed, HD_VERSIONS[network]).derive(masternodeAccountPath(network, 'voting'))
       return nodes.map(({proTxHash, votingKeyIndex, votingAddress, collateralTxid, collateralVout}) => {
-        const unsigned = {collateralTxid, collateralVout, parentHash: proposalHash, outcome: VOTE_OUTCOME_CODE[outcome], signal: VOTE_SIGNAL_FUNDING, time}
-        const bytes = voteBytes(unsigned, signHash(voteDigest(unsigned, network), account.deriveChild(votingKeyIndex).privateKey!))
-        const signer = governanceVote(bytes, network).voter
+        const vote = new GovernanceVote(new OutPoint(collateralTxid, collateralVout), proposalHash, VOTE_OUTCOME_CODE[outcome], VoteSignal.FUNDING, time)
+        vote.sign(PrivateKey.fromBytes(account.deriveChild(votingKeyIndex).privateKey!, network), network)
+        const signer = vote.recoverSigner(network).getAddress(sdkUtils.networkValueToEnumValue(network))
         if (signer !== votingAddress) throw new Error(`Masternode ${proTxHash} lists voting key ${votingAddress}, not ${signer}`)
-        return {proTxHash, bytes}
+        return {proTxHash, bytes: vote.bytes()}
       })
     })
 

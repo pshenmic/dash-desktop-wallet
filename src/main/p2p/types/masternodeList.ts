@@ -20,10 +20,13 @@ export interface ProviderRegistration {
   collateralTxid: string
   collateralVout: number
   collateralAddress: string | null
-  ownerAddress: string
+  ownerAddress: string | null
   // The ProRegTx's payout, then each change in height order; the last one is
   // current. Kept whole so a rewind drops only the changes above the fork.
   payouts: Array<{height: number; address: string | null}>
+  // A shared registration's share table, empty for a solo node. number, not
+  // bigint: chain.db stores JSON; listedMasternode answers bigint.
+  shares: Array<{ownerAddress: string; amountDuffs: number}>
   // An evonode's, which a list entry older than ExtAddr does not carry.
   platformP2PPort: number | null
 }

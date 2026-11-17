@@ -7,6 +7,7 @@ import ListSkeleton from '@renderer/components/ui/Skeleton'
 import ShieldedUnlockModal from '@renderer/components/modal/ShieldedUnlockModal'
 import ShieldedNotesAlert from '@renderer/components/ui/ShieldedNotesAlert'
 import { API } from '@renderer/api'
+import { useReceiveRequests } from '@renderer/hooks/useReceiveRequests'
 import { useShieldedSyncState } from '@renderer/hooks/useShielded'
 import { shieldedBalancesByAddress } from '@renderer/utils/shieldedBalances'
 import { creditsToDuffs } from '@renderer/utils/balance'
@@ -30,6 +31,7 @@ export default function ShieldedAddressTab({ walletId }: { walletId: string | un
   const [syncOpen, setSyncOpen] = useState(false)
 
   const sync = useShieldedSyncState(walletId)
+  const { labelsByAddress } = useReceiveRequests(walletId, 'shielded')
   const { isBalanceVisible } = useBalanceVisibility()
   const synced = sync.phase === ShieldedSyncPhase.Done
   const syncRunning = sync.phase === ShieldedSyncPhase.Syncing || sync.phase === ShieldedSyncPhase.Recovering
@@ -146,6 +148,7 @@ export default function ShieldedAddressTab({ walletId }: { walletId: string | un
           <AddressRow
             key={address}
             address={address}
+            label={labelsByAddress.get(address) ?? null}
             leading={<ShieldSmallIcon size={16} className={"shrink-0 text-dash-brand dark:text-dash-mint"} />}
             amount={synced ? (
               <CreditsAmount credits={credits} compact unit={"Credits"} showFiat={false} align={"end"} amountClassName={"font-bold"} />

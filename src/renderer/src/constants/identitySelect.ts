@@ -39,6 +39,8 @@ export const IDENTITY_SELECT_COPY = {
   searchLabel: 'Search identities',
   actingIdentity: 'Acting identity',
   change: 'Change identity',
+  copyId: 'Copy identity ID',
+  copyUsername: 'Copy username',
   attention: 'Other identities have requests',
   noMatch: 'No identities match',
 } as const

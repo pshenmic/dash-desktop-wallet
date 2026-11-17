@@ -1,6 +1,7 @@
 import { useEffect, useId, useImperativeHandle, useRef, useState } from 'react'
 import { ChevronIcon, HighlightedIdentifier, Text } from '@renderer/components/dash-ui-kit-extended'
 import { RefreshIcon } from '@renderer/components/dash-ui-kit-extended/icons'
+import CopyButton from '@renderer/components/ui/CopyButton'
 import CreditsAmount from '@renderer/components/ui/CreditsAmount'
 import CustomBadge from '@renderer/components/ui/CustomBadge'
 import IdentityAvatar from '@renderer/components/ui/IdentityAvatar'
@@ -20,11 +21,13 @@ import {
   IDENTITY_SELECT_SEARCH_MIN,
   IDENTITY_SELECT_STYLES,
 } from '@renderer/constants/identitySelect'
+import { ROW_OPEN_OVERLAY_CLASS } from '@renderer/constants/listToolbar'
 import { POPOVER, POPOVER_OPTION } from '@renderer/constants/surfaces'
 import { IdentityAvatarSize } from '@renderer/enums/IdentityAvatarSize'
 import { IdentitySelectAppearance } from '@renderer/enums/IdentitySelectAppearance'
 import { ListNavigationKey } from '@renderer/enums/ListNavigationKey'
 import type {
+  IdentityHeadlineProps,
   IdentityMetaProps,
   IdentityNameProps,
   IdentitySelectPopoverProps,
@@ -42,14 +45,31 @@ function IdentityName({identity}: IdentityNameProps): React.JSX.Element {
   return <HighlightedIdentifier className={CONTACT_IDENTIFIER_CLASS}>{identity.identifier}</HighlightedIdentifier>
 }
 
-function IdentityHeadline({identity}: IdentityNameProps): React.JSX.Element {
+function IdentityHeadline({identity, showCopy = false}: IdentityHeadlineProps): React.JSX.Element {
   const name = identityName(identity)
   const extraNames = name == null ? 0 : Math.max(0, identity.usernames.length - 1)
+  const copy = showCopy && (
+    <CopyButton
+      text={name ?? identity.identifier}
+      label={name == null ? IDENTITY_SELECT_COPY.copyId : IDENTITY_SELECT_COPY.copyUsername}
+      className={'pointer-events-auto inline-flex! shrink-0 align-middle'}
+    />
+  )
   return (
     <span className={'flex min-w-0 items-center gap-1.5'}>
       {name == null
-        ? <HighlightedIdentifier className={IDENTITY_SELECT_COMPACT_IDENTIFIER_CLASS}>{identity.identifier}</HighlightedIdentifier>
+        ? (
+          <HighlightedIdentifier className={IDENTITY_SELECT_COMPACT_IDENTIFIER_CLASS}>
+            {showCopy ? (
+              <>
+                {identity.identifier.slice(0, -4)}
+                <span className={'inline-block whitespace-nowrap [&>button]:ml-1'}>{identity.identifier.slice(-4)}{copy}</span>
+              </>
+            ) : identity.identifier}
+          </HighlightedIdentifier>
+        )
         : <Text reset size={14} weight={'medium'} color={'brand'} className={'min-w-0 truncate leading-[130%]'}>{name}</Text>}
+      {name != null && copy}
       {extraNames > 0 && <CustomBadge variant={'muted'} text={`+${extraNames}`} className={'shrink-0'} />}
     </span>
   )
@@ -94,8 +114,12 @@ export function IdentitySelectPopover({
   const optionId = (index: number): string => `${baseId}-option-${index}`
 
   useEffect(() => {
-    if (!showSearch) listRef.current?.focus()
-    listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
+    if (!showSearch) {
+      const initialOption = header && active >= 0 ? document.getElementById(optionId(active)) : null
+      const initialFocus = initialOption ?? listRef.current
+      initialFocus?.focus()
+    }
+    listRef.current?.querySelector('[aria-selected="true"], [aria-current="true"]')?.scrollIntoView({ block: 'nearest' })
   }, [])
 
   useEffect(() => {
@@ -118,18 +142,22 @@ export function IdentitySelectPopover({
   }
 
   const handleListKey = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    const onList = event.target === event.currentTarget
+    if (header && !onList && (event.target as HTMLElement).id !== optionId(active)) return
     if (IDENTITY_SELECT_NAVIGATION_KEYS.includes(event.key)) {
       event.preventDefault()
-      setActive(nextListIndex(active, event.key, visible.length))
+      const next = nextListIndex(active, event.key, visible.length)
+      setActive(next)
+      if (header) document.getElementById(optionId(next))?.focus()
       return
     }
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' && (!header || onList)) {
       event.preventDefault()
       const identity = visible[active]
       if (identity) onSelect(identity.identifier)
       return
     }
-    if (showSearch && event.key.length === 1 && !event.ctrlKey && !event.metaKey) {
+    if (showSearch && event.key.length === 1 && (!header || event.key !== ' ') && !event.ctrlKey && !event.metaKey) {
       searchRef.current?.focus()
       return
     }
@@ -141,7 +169,8 @@ export function IdentitySelectPopover({
       event.preventDefault()
       if (visible.length === 0) return
       setActive(0)
-      listRef.current?.focus()
+      if (header) document.getElementById(optionId(0))?.focus()
+      else listRef.current?.focus()
     } else if (event.key === 'Enter') {
       event.preventDefault()
       if (visible[0]) onSelect(visible[0].identifier)
@@ -154,6 +183,39 @@ export function IdentitySelectPopover({
     const isSelected = identity.identifier === selected?.identifier
     const meta = renderMeta?.(identity)
     const badge = renderBadge?.(identity)
+    const optionClass = `${styles.option} ${POPOVER_OPTION} ${isSelected ? 'dash-block-accent-5' : ''}${index === active ? ' dash-block-accent-10' : ''}`
+    if (header) {
+      const id = optionId(index)
+      const metaId = `${id}-meta`
+      const badgeId = `${id}-badge`
+      const choose = (): void => onSelect(identity.identifier)
+      return (
+        <div key={identity.identifier} role={'listitem'} className={`relative ${optionClass}`}>
+          <button
+            id={id}
+            type={'button'}
+            aria-label={identityLabel(identity)}
+            aria-describedby={badge == null ? metaId : `${metaId} ${badgeId}`}
+            aria-current={isSelected || undefined}
+            onFocus={() => setActive(index)}
+            onClick={choose}
+            className={`${ROW_OPEN_OVERLAY_CLASS} rounded-[.625rem]!`}
+          />
+          <span className={'pointer-events-none'}>
+            <IdentityAvatar identifier={identity.identifier} size={IdentityAvatarSize.Xs} />
+          </span>
+          <div className={'relative pointer-events-none flex min-w-0 flex-col gap-0.5'}>
+            <IdentityHeadline identity={identity} showCopy />
+            <span id={metaId}><IdentityMeta identity={identity} meta={meta} /></span>
+          </div>
+          {badge != null && (
+            <span id={badgeId} className={'relative inline-flex'} onMouseDown={event => event.preventDefault()} onClick={choose}>
+              {badge}
+            </span>
+          )}
+        </div>
+      )
+    }
     return (
       <button
         key={identity.identifier}
@@ -163,31 +225,18 @@ export function IdentitySelectPopover({
         aria-selected={isSelected}
         tabIndex={-1}
         onClick={() => onSelect(identity.identifier)}
-        className={`${styles.option} ${POPOVER_OPTION} ${isSelected ? 'dash-block-accent-5' : ''}${index === active ? ' dash-block-accent-10' : ''}`}
+        className={optionClass}
       >
-        {header ? (
-          <>
-            <IdentityAvatar identifier={identity.identifier} size={IdentityAvatarSize.Xs} />
-            <span className={'flex min-w-0 flex-col gap-0.5'}>
-              <IdentityHeadline identity={identity} />
-              <IdentityMeta identity={identity} meta={meta} />
-            </span>
+        {badge == null ? <IdentityName identity={identity} /> : (
+          <span className={'flex w-full items-start justify-between gap-2'}>
+            <IdentityName identity={identity} />
             {badge}
-          </>
-        ) : (
-          <>
-            {badge == null ? <IdentityName identity={identity} /> : (
-              <span className={'flex w-full items-start justify-between gap-2'}>
-                <IdentityName identity={identity} />
-                {badge}
-              </span>
-            )}
-            <Text size={12} weight={"medium"} color={"brand"} opacity={50}>
-              <CreditsAmount credits={identity.balance.amount} />
-              {meta != null && <> · {meta}</>}
-            </Text>
-          </>
+          </span>
         )}
+        <Text size={12} weight={"medium"} color={"brand"} opacity={50}>
+          <CreditsAmount credits={identity.balance.amount} />
+          {meta != null && <> · {meta}</>}
+        </Text>
       </button>
     )
   })
@@ -210,6 +259,8 @@ export function IdentitySelectPopover({
 
   return (
     <div
+      role={header ? 'dialog' : undefined}
+      aria-label={header ? IDENTITY_SELECT_COPY.identities : undefined}
       onKeyDown={handlePopoverKey}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) onDismiss(false)
@@ -235,10 +286,10 @@ export function IdentitySelectPopover({
       {visible.length > 0 ? (
         <div
           ref={listRef}
-          role={"listbox"}
+          role={header ? 'list' : 'listbox'}
           tabIndex={-1}
           aria-label={IDENTITY_SELECT_COPY.identities}
-          aria-activedescendant={activeDescendant}
+          aria-activedescendant={header ? undefined : activeDescendant}
           onKeyDown={handleListKey}
           className={`${styles.list} flex flex-col outline-none`}
         >
@@ -395,7 +446,7 @@ export default function IdentitySelect({
         type={"button"}
         aria-label={label}
         aria-busy={loading}
-        aria-haspopup={"listbox"}
+        aria-haspopup={header ? 'dialog' : 'listbox'}
         aria-expanded={open}
         disabled={loading}
         onClick={handleClick}

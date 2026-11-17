@@ -1,5 +1,5 @@
 import { Text } from '@renderer/components/dash-ui-kit-extended'
-import { PlatformAddressDto } from '@renderer/api/types'
+import type { PlatformAddressCardProps } from '@renderer/types/ExportKey'
 import { useAuth } from '@renderer/contexts/AuthContext'
 import { platformAddressUrl } from '@renderer/utils/explorer'
 import { creditsToDuffs } from '@renderer/utils/balance'
@@ -11,7 +11,9 @@ export default function PlatformAddressCard({
   platformAddress,
   balanceCredits,
   nonce,
-}: PlatformAddressDto): React.JSX.Element {
+  label = null,
+  onExportKey,
+}: PlatformAddressCardProps): React.JSX.Element {
   const { status: appStatus } = useAuth()
   const { isBalanceVisible } = useBalanceVisibility()
   const network = appStatus?.network ?? null
@@ -19,6 +21,7 @@ export default function PlatformAddressCard({
   return (
     <AddressRow
       address={platformAddress}
+      label={label}
       meta={
         <Text size={10} weight={"medium"} color={"brand"} opacity={50}>
           Tx count: <span className={"font-bold"}>{nonce}</span>
@@ -26,6 +29,7 @@ export default function PlatformAddressCard({
       }
       amount={<CreditsAmount credits={balanceCredits} compact unit={"Credits"} showFiat={false} align={"end"} amountClassName={"font-bold"} />}
       fiatDuffs={creditsToDuffs(balanceCredits)}
+      onExportKey={onExportKey}
       explorerUrl={network ? platformAddressUrl(platformAddress, network) : undefined}
       hidden={!isBalanceVisible}
     />

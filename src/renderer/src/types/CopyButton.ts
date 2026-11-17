@@ -4,4 +4,5 @@ export interface CopyButtonProps {
   disabled?: boolean
   label?: string
   size?: 'compact' | 'field'
+  onCopy?: () => void
 }

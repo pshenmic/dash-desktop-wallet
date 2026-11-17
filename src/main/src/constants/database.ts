@@ -9,6 +9,8 @@ export const WALLET_SCOPED_TABLES = [
   'transactions',
   'transaction_outputs',
   'transaction_inputs',
+  'locked_utxos',
+  'payment_requests',
   'wallet_sync_state',
   'asset_lock_fundings',
   'shielded_addresses',
