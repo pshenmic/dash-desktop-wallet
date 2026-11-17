@@ -3,10 +3,15 @@ import { API } from '@renderer/api'
 import type { MasternodeRegistrationResult } from '@renderer/api/types'
 import { HighlightedIdentifier, Text } from '@renderer/components/dash-ui-kit-extended'
 import SignedActionModal from '@renderer/components/modal/SignedActionModal'
+import RecipientInput from '@renderer/components/pages/transfer/RecipientInput'
 import DropdownField from '@renderer/components/ui/DropdownField'
 import SegmentedControl from '@renderer/components/ui/SegmentedControl'
 import { ADDRESS_INPUT, ADDRESS_INPUT_TEXT_SIZES } from '@renderer/constants/addressField'
 import { DASH_UNIT } from '@renderer/constants/balance'
+import {
+  MASTERNODE_PAYOUT_RECIPIENT_COPY,
+  MASTERNODE_YOUR_ADDRESSES_HEADING,
+} from '@renderer/constants/masternodeAddresses'
 import { REGISTER_MASTERNODE_COPY, REGISTER_MASTERNODE_TYPE_OPTIONS } from '@renderer/constants/masternodeNodes'
 import {
   MAINNET_PLATFORM_HTTP_PORT,
@@ -18,8 +23,8 @@ import {
 import { FIELD_COMPACT, SURFACE_SECTION } from '@renderer/constants/surfaces'
 import { useAuth } from '@renderer/contexts/AuthContext'
 import { SegmentedControlAppearance } from '@renderer/enums/SegmentedControlAppearance'
-import { useAdresses } from '@renderer/hooks/useAdresses'
 import { refreshMasternodes } from '@renderer/hooks/useMasternodes'
+import { useWalletAddressOptions } from '@renderer/hooks/useWalletAddressOptions'
 import { refreshBalance } from '@renderer/hooks/useWalletBalance'
 import { useWalletUtxos } from '@renderer/hooks/useWalletUtxos'
 import type { RegisterMasternodeModalProps } from '@renderer/types/MasternodeNodes'
@@ -35,7 +40,13 @@ export default function RegisterMasternodeModal({
   const { status } = useAuth()
   const network = status?.network ?? null
   const { utxos } = useWalletUtxos()
-  const { receiving } = useAdresses(open ? walletId : undefined)
+  const {
+    options: addressOptions,
+    badgeFor,
+    loading: addressesLoading,
+    err: addressesError,
+    retry: retryAddresses,
+  } = useWalletAddressOptions(open ? walletId : undefined)
   const [type, setType] = useState<'Regular' | 'Evo'>('Regular')
   const [selectedCollateral, setSelectedCollateral] = useState('')
   const [payoutAddress, setPayoutAddress] = useState('')
@@ -62,16 +73,6 @@ export default function RegisterMasternodeModal({
   const activeCollateral = collateralOptions.some(opt => opt.value === selectedCollateral)
     ? selectedCollateral
     : (collateralOptions[0]?.value ?? '')
-
-  const addressOptions = useMemo(
-    () => receiving.map(addr => ({
-      value: addr.address,
-      label: addr.address,
-      description: addr.label ?? addr.derivationPath,
-      metadata: [`${davToDash(addr.balance)} ${DASH_UNIT}`],
-    })),
-    [receiving],
-  )
 
   const { dto, error } = useMemo(
     () => buildMasternodeRegistration({
@@ -127,16 +128,18 @@ export default function RegisterMasternodeModal({
 
       <div className={'flex flex-col gap-1.5'}>
         <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.payoutLabel}</Text>
-        <DropdownField
-          editable
-          highlightValue
-          options={addressOptions}
+        <RecipientInput
+          compact
           value={payoutAddress}
+          valueBadge={badgeFor(payoutAddress)}
           onChange={setPayoutAddress}
-          placeholder={REGISTER_MASTERNODE_COPY.payoutPlaceholder}
+          data={MASTERNODE_PAYOUT_RECIPIENT_COPY}
           ariaLabel={REGISTER_MASTERNODE_COPY.payoutLabel}
-          menuHeading={REGISTER_MASTERNODE_COPY.pickWalletAddress}
-          triggerClassName={FIELD_COMPACT}
+          ownOptions={addressOptions}
+          ownOptionsHeading={MASTERNODE_YOUR_ADDRESSES_HEADING}
+          ownOptionsLoading={addressesLoading}
+          ownOptionsError={addressesError}
+          onRetryOwnOptions={retryAddresses}
         />
       </div>
 

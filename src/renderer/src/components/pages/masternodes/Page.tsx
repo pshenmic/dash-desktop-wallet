@@ -21,6 +21,7 @@ import { refreshDashPay } from '@renderer/hooks/useDashPayRefresh'
 import { useDetailScrollRestore } from '@renderer/hooks/useDetailScrollRestore'
 import { refreshGovernanceProposals } from '@renderer/hooks/useGovernanceProposals'
 import { prefetchAddresses } from '@renderer/hooks/useAdresses'
+import { prefetchReceiveRequests } from '@renderer/hooks/useReceiveRequests'
 import { useNow } from '@renderer/hooks/useNow'
 import type { MasternodesNavigationState } from '@renderer/types/MasternodeNodes'
 import type { MasternodesPageProps } from '@renderer/types/MasternodeScreens'
@@ -59,6 +60,7 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
 
   useEffect(() => {
     prefetchAddresses(walletId).catch(() => {})
+    prefetchReceiveRequests(walletId).catch(() => {})
     const timer = setInterval(() => {
       refreshDashPay(walletId).catch(() => {})
       refreshGovernanceProposals(walletId).catch(() => {})

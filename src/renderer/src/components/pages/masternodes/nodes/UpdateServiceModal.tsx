@@ -3,9 +3,13 @@ import { API } from '@renderer/api'
 import type { MasternodeUpdateResult } from '@renderer/api/types'
 import { HighlightedIdentifier, Text } from '@renderer/components/dash-ui-kit-extended'
 import SignedActionModal from '@renderer/components/modal/SignedActionModal'
-import DropdownField from '@renderer/components/ui/DropdownField'
+import RecipientInput from '@renderer/components/pages/transfer/RecipientInput'
 import { ADDRESS_INPUT, ADDRESS_INPUT_TEXT_SIZES } from '@renderer/constants/addressField'
 import { DASH_UNIT } from '@renderer/constants/balance'
+import {
+  MASTERNODE_OPERATOR_PAYOUT_RECIPIENT_COPY,
+  MASTERNODE_YOUR_ADDRESSES_HEADING,
+} from '@renderer/constants/masternodeAddresses'
 import { REGISTER_MASTERNODE_COPY, UPDATE_SERVICE_COPY } from '@renderer/constants/masternodeNodes'
 import {
   MAINNET_PLATFORM_HTTP_PORT,
@@ -16,8 +20,8 @@ import {
 } from '@renderer/constants/masternodes'
 import { FIELD_COMPACT, SURFACE_SECTION } from '@renderer/constants/surfaces'
 import { useAuth } from '@renderer/contexts/AuthContext'
-import { useAdresses } from '@renderer/hooks/useAdresses'
 import { refreshMasternodes } from '@renderer/hooks/useMasternodes'
+import { useWalletAddressOptions } from '@renderer/hooks/useWalletAddressOptions'
 import { refreshBalance } from '@renderer/hooks/useWalletBalance'
 import type { UpdateServiceModalProps } from '@renderer/types/MasternodeNodes'
 import { davToDash } from '@renderer/utils/balance'
@@ -32,7 +36,13 @@ export default function UpdateServiceModal({
 }: UpdateServiceModalProps): React.JSX.Element {
   const { status } = useAuth()
   const network = status?.network ?? null
-  const { receiving } = useAdresses(open ? walletId : undefined)
+  const {
+    options: addressOptions,
+    badgeFor,
+    loading: addressesLoading,
+    err: addressesError,
+    retry: retryAddresses,
+  } = useWalletAddressOptions(open ? walletId : undefined)
   const [serviceAddress, setServiceAddress] = useState(
     node.serviceAddress && node.serviceAddress !== UNASSIGNED_SERVICE_ADDRESS ? node.serviceAddress : '',
   )
@@ -43,16 +53,6 @@ export default function UpdateServiceModal({
   )
   const [platformHttpPort, setPlatformHttpPort] = useState(
     String(node.platformHttpPort ?? (network === 'testnet' ? TESTNET_DEFAULT_PLATFORM_HTTP_PORT : MAINNET_PLATFORM_HTTP_PORT)),
-  )
-
-  const addressOptions = useMemo(
-    () => receiving.map(addr => ({
-      value: addr.address,
-      label: addr.address,
-      description: addr.label ?? addr.derivationPath,
-      metadata: [`${davToDash(addr.balance)} ${DASH_UNIT}`],
-    })),
-    [receiving],
   )
 
   const { dto, error } = useMemo(
@@ -93,16 +93,18 @@ export default function UpdateServiceModal({
 
       <div className={'flex flex-col gap-1.5'}>
         <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{UPDATE_SERVICE_COPY.operatorPayoutLabel}</Text>
-        <DropdownField
-          editable
-          highlightValue
-          options={addressOptions}
+        <RecipientInput
+          compact
           value={operatorPayoutAddress}
+          valueBadge={badgeFor(operatorPayoutAddress)}
           onChange={setOperatorPayoutAddress}
-          placeholder={UPDATE_SERVICE_COPY.operatorPayoutPlaceholder}
+          data={MASTERNODE_OPERATOR_PAYOUT_RECIPIENT_COPY}
           ariaLabel={UPDATE_SERVICE_COPY.operatorPayoutLabel}
-          menuHeading={REGISTER_MASTERNODE_COPY.pickWalletAddress}
-          triggerClassName={FIELD_COMPACT}
+          ownOptions={addressOptions}
+          ownOptionsHeading={MASTERNODE_YOUR_ADDRESSES_HEADING}
+          ownOptionsLoading={addressesLoading}
+          ownOptionsError={addressesError}
+          onRetryOwnOptions={retryAddresses}
         />
       </div>
 

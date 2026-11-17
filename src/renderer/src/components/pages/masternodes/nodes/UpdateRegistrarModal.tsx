@@ -3,11 +3,16 @@ import { API } from '@renderer/api'
 import type { MasternodeUpdateResult } from '@renderer/api/types'
 import { HighlightedIdentifier, InfoCircleIcon, Text } from '@renderer/components/dash-ui-kit-extended'
 import SignedActionModal from '@renderer/components/modal/SignedActionModal'
+import RecipientInput from '@renderer/components/pages/transfer/RecipientInput'
 import Alert from '@renderer/components/ui/Alert'
-import DropdownField from '@renderer/components/ui/DropdownField'
 import SegmentedControl from '@renderer/components/ui/SegmentedControl'
 import { ADDRESS_INPUT, ADDRESS_INPUT_TEXT_SIZES } from '@renderer/constants/addressField'
 import { DASH_UNIT } from '@renderer/constants/balance'
+import {
+  MASTERNODE_PAYOUT_RECIPIENT_COPY,
+  MASTERNODE_VOTING_RECIPIENT_COPY,
+  MASTERNODE_YOUR_ADDRESSES_HEADING,
+} from '@renderer/constants/masternodeAddresses'
 import {
   PAYOUT_CHOICE_OPTIONS,
   REGISTER_MASTERNODE_COPY,
@@ -19,10 +24,11 @@ import { useAuth } from '@renderer/contexts/AuthContext'
 import { AlertTone } from '@renderer/enums/AlertTone'
 import { PayoutChoiceKind, RegistrarKeyChoiceKind } from '@renderer/enums/Masternodes'
 import { SegmentedControlAppearance } from '@renderer/enums/SegmentedControlAppearance'
-import { useAdresses } from '@renderer/hooks/useAdresses'
 import { refreshMasternodes } from '@renderer/hooks/useMasternodes'
+import { useWalletAddressOptions } from '@renderer/hooks/useWalletAddressOptions'
 import { refreshBalance } from '@renderer/hooks/useWalletBalance'
 import type { UpdateRegistrarModalProps } from '@renderer/types/MasternodeNodes'
+import { isValidDashChangeAddress } from '@renderer/utils/address'
 import { davToDash } from '@renderer/utils/balance'
 import { transactionUrl } from '@renderer/utils/explorer'
 import { buildRegistrarUpdate } from '@renderer/utils/masternodeActions'
@@ -35,7 +41,13 @@ export default function UpdateRegistrarModal({
 }: UpdateRegistrarModalProps): React.JSX.Element {
   const { status } = useAuth()
   const network = status?.network ?? null
-  const { receiving } = useAdresses(open ? walletId : undefined)
+  const {
+    options: addressOptions,
+    badgeFor,
+    loading: addressesLoading,
+    err: addressesError,
+    retry: retryAddresses,
+  } = useWalletAddressOptions(open ? walletId : undefined)
   const [payoutChoice, setPayoutChoice] = useState<PayoutChoiceKind>(
     node.payeeAddress != null ? PayoutChoiceKind.Keep : PayoutChoiceKind.Custom,
   )
@@ -44,16 +56,6 @@ export default function UpdateRegistrarModal({
   const [operatorPublicKey, setOperatorPublicKey] = useState('')
   const [votingChoice, setVotingChoice] = useState<RegistrarKeyChoiceKind>(RegistrarKeyChoiceKind.Keep)
   const [votingAddress, setVotingAddress] = useState('')
-
-  const addressOptions = useMemo(
-    () => receiving.map(addr => ({
-      value: addr.address,
-      label: addr.address,
-      description: addr.label ?? addr.derivationPath,
-      metadata: [`${davToDash(addr.balance)} ${DASH_UNIT}`],
-    })),
-    [receiving],
-  )
 
   const { dto, error } = useMemo(
     () => buildRegistrarUpdate({
@@ -92,16 +94,18 @@ export default function UpdateRegistrarModal({
           <HighlightedIdentifier className={'min-w-0 text-xs!'}>{node.payeeAddress}</HighlightedIdentifier>
         )}
         {payoutChoice === PayoutChoiceKind.Custom && (
-          <DropdownField
-            editable
-            highlightValue
-            options={addressOptions}
+          <RecipientInput
+            compact
             value={payoutAddress}
+            valueBadge={badgeFor(payoutAddress)}
             onChange={setPayoutAddress}
-            placeholder={UPDATE_REGISTRAR_COPY.payoutPlaceholder}
+            data={MASTERNODE_PAYOUT_RECIPIENT_COPY}
             ariaLabel={UPDATE_REGISTRAR_COPY.payoutSection}
-            menuHeading={REGISTER_MASTERNODE_COPY.pickWalletAddress}
-            triggerClassName={FIELD_COMPACT}
+            ownOptions={addressOptions}
+            ownOptionsHeading={MASTERNODE_YOUR_ADDRESSES_HEADING}
+            ownOptionsLoading={addressesLoading}
+            ownOptionsError={addressesError}
+            onRetryOwnOptions={retryAddresses}
           />
         )}
       </div>
@@ -157,16 +161,20 @@ export default function UpdateRegistrarModal({
           <HighlightedIdentifier className={'min-w-0 text-xs!'}>{node.votingAddress}</HighlightedIdentifier>
         )}
         {votingChoice === RegistrarKeyChoiceKind.External && (
-          <div className={`w-full flex items-center ${FIELD_COMPACT}`}>
-            <input
-              type={'text'}
-              aria-label={UPDATE_REGISTRAR_COPY.votingSection}
-              value={votingAddress}
-              onChange={e => setVotingAddress(e.target.value)}
-              placeholder={UPDATE_REGISTRAR_COPY.votingPlaceholder}
-              className={`${ADDRESS_INPUT} ${ADDRESS_INPUT_TEXT_SIZES[14]}`}
-            />
-          </div>
+          <RecipientInput
+            compact
+            value={votingAddress}
+            valueBadge={badgeFor(votingAddress)}
+            onChange={setVotingAddress}
+            data={MASTERNODE_VOTING_RECIPIENT_COPY}
+            ariaLabel={UPDATE_REGISTRAR_COPY.votingSection}
+            validate={addr => isValidDashChangeAddress(addr, network ?? undefined)}
+            ownOptions={addressOptions}
+            ownOptionsHeading={MASTERNODE_YOUR_ADDRESSES_HEADING}
+            ownOptionsLoading={addressesLoading}
+            ownOptionsError={addressesError}
+            onRetryOwnOptions={retryAddresses}
+          />
         )}
       </div>
 
