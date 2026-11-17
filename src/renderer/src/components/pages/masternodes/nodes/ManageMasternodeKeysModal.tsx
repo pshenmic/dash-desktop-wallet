@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { Button, DeleteIcon, HighlightedIdentifier, InfoCircleIcon, Input, Text } from '@renderer/components/dash-ui-kit-extended'
+import { Button, CheckIcon, DeleteIcon, HighlightedIdentifier, InfoCircleIcon, Input, Text } from '@renderer/components/dash-ui-kit-extended'
 import Alert from '@renderer/components/ui/Alert'
 import CopyableError from '@renderer/components/ui/CopyableError'
 import CustomBadge from '@renderer/components/ui/CustomBadge'
@@ -8,7 +8,6 @@ import ModalActions from '@renderer/components/ui/ModalActions'
 import SegmentedControl from '@renderer/components/ui/SegmentedControl'
 import ListSkeleton from '@renderer/components/ui/Skeleton'
 import Spinner from '@renderer/components/ui/Spinner'
-import { toast } from '@renderer/components/ui/Toast'
 import { API } from '@renderer/api'
 import type { ImportedMasternodeKeyDto, MasternodeKeyRole } from '@renderer/api/types'
 import {
@@ -25,9 +24,9 @@ import { AlertTone } from '@renderer/enums/AlertTone'
 import { ModalSize } from '@renderer/enums/ModalSize'
 import { SegmentedControlAppearance } from '@renderer/enums/SegmentedControlAppearance'
 import { refreshImportedMasternodeKeys, refreshMasternodes, useImportedMasternodeKeys } from '@renderer/hooks/useMasternodes'
-import type { ManageMasternodeKeysModalProps } from '@renderer/types/MasternodeNodes'
+import type { KeyImportNotice, ManageMasternodeKeysModalProps } from '@renderer/types/MasternodeNodes'
 import { getErrorMessage } from '@renderer/utils/error'
-import { importedKeyToastMessage } from '@renderer/utils/masternodeNodes'
+import { importedKeyStatusMessage } from '@renderer/utils/masternodeNodes'
 
 export default function ManageMasternodeKeysModal({
   walletId,
@@ -42,7 +41,9 @@ export default function ManageMasternodeKeysModal({
   const [submitting, setSubmitting] = useState(false)
   const [removingKeyId, setRemovingKeyId] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
+  const [importNotice, setImportNotice] = useState<KeyImportNotice | null>(null)
   const [removeError, setRemoveError] = useState<string | null>(null)
+  const [removeNotice, setRemoveNotice] = useState<string | null>(null)
   const requestIdRef = useRef(0)
 
   useEffect(() => {
@@ -52,7 +53,9 @@ export default function ManageMasternodeKeysModal({
     setSubmitting(false)
     setRemovingKeyId(null)
     setImportError(null)
+    setImportNotice(null)
     setRemoveError(null)
+    setRemoveNotice(null)
     return () => {
       requestIdRef.current += 1
     }
@@ -67,12 +70,21 @@ export default function ManageMasternodeKeysModal({
     const requestId = ++requestIdRef.current
     setSubmitting(true)
     setImportError(null)
+    setImportNotice(null)
     setRemoveError(null)
+    setRemoveNotice(null)
     try {
       const matched = await API.importMasternodeKey(walletId, role, trimmed)
       await Promise.all([refreshImportedMasternodeKeys(walletId), refreshMasternodes(walletId)])
-      toast.success(importedKeyToastMessage(matched, desired, role))
-      if (requestId === requestIdRef.current) setPrivateKey('')
+      if (requestId === requestIdRef.current) {
+        setImportNotice({
+          tone: desired === 'rpc' && role === 'owner' && matched != null && matched.length === 0
+            ? AlertTone.Info
+            : AlertTone.Success,
+          message: importedKeyStatusMessage(matched, desired, role),
+        })
+        setPrivateKey('')
+      }
     } catch (err) {
       if (requestId === requestIdRef.current) setImportError(getErrorMessage(err))
     } finally {
@@ -86,14 +98,14 @@ export default function ManageMasternodeKeysModal({
     const requestId = ++requestIdRef.current
     setRemovingKeyId(id)
     setRemoveError(null)
+    setRemoveNotice(null)
+    setImportNotice(null)
     try {
       await API.removeMasternodeKey(walletId, key)
       await Promise.all([refreshImportedMasternodeKeys(walletId), refreshMasternodes(walletId)])
-      toast.success(MANAGE_KEYS_COPY.keyRemovedToast)
+      if (requestId === requestIdRef.current) setRemoveNotice(MANAGE_KEYS_COPY.keyRemovedNotice)
     } catch (err) {
-      const message = getErrorMessage(err)
-      if (requestId === requestIdRef.current) setRemoveError(message)
-      toast.error(message)
+      if (requestId === requestIdRef.current) setRemoveError(getErrorMessage(err))
     } finally {
       if (requestId === requestIdRef.current) setRemovingKeyId(null)
     }
@@ -125,6 +137,7 @@ export default function ManageMasternodeKeysModal({
             onChange={(next) => {
               setRole(next)
               setImportError(null)
+              setImportNotice(null)
             }}
             disabled={busy}
             className={'self-start flex-wrap'}
@@ -161,6 +174,7 @@ export default function ManageMasternodeKeysModal({
             value={privateKey}
             onChange={(event) => {
               setImportError(null)
+              setImportNotice(null)
               setPrivateKey(event.target.value)
             }}
             placeholder={MASTERNODE_KEY_ROLE_HINTS[role]}
@@ -178,6 +192,16 @@ export default function ManageMasternodeKeysModal({
         </div>
 
         {importError && <CopyableError message={importError} />}
+
+        {importNotice && (
+          <Alert
+            tone={importNotice.tone}
+            icon={importNotice.tone === AlertTone.Info
+              ? <InfoCircleIcon size={16} color={'currentColor'} />
+              : <CheckIcon size={16} color={'currentColor'} className={'[&_circle]:hidden'} />}
+            title={importNotice.message}
+          />
+        )}
 
         <div className={'flex justify-end'}>
           <Button
@@ -205,6 +229,14 @@ export default function ManageMasternodeKeysModal({
         </div>
 
         {removeError && <CopyableError message={removeError} />}
+
+        {removeNotice && (
+          <Alert
+            tone={AlertTone.Success}
+            icon={<CheckIcon size={16} color={'currentColor'} className={'[&_circle]:hidden'} />}
+            title={removeNotice}
+          />
+        )}
 
         {keysLoading && importedKeys.length === 0 ? (
           <ListSkeleton rows={2} rowClassName={'h-11 rounded-[.875rem]'} />

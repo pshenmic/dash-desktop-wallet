@@ -131,9 +131,9 @@ export const MANAGE_KEYS_COPY = {
   noImportedKeys: 'No external masternode keys imported yet.',
   remove: 'Remove',
   close: 'Done',
-  keyImportedToast: 'Masternode key imported',
-  keySavedForP2PToast: 'Masternode key saved — switch to P2P to match shared masternode shares',
-  keyRemovedToast: 'Masternode key removed',
+  keyImportedNotice: 'Masternode key imported',
+  keySavedForP2PNotice: 'Masternode key saved — switch to P2P to match shared masternode shares',
+  keyRemovedNotice: 'Masternode key removed',
 } as const
 
 export const REGISTER_MASTERNODE_COPY = {

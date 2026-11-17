@@ -201,6 +201,7 @@ export default function UpdateServiceModal({
       }
       confirmLabel={UPDATE_SERVICE_COPY.confirm}
       confirmDisabled={dto == null}
+      inlineErrors
       pendingLabel={UPDATE_SERVICE_COPY.pending}
       run={run}
       renderDone={result => ({

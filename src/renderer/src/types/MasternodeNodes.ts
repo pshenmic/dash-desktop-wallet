@@ -1,5 +1,11 @@
 import type { MasternodeDto, Network } from '@renderer/api/types'
+import type { AlertTone } from '@renderer/enums/AlertTone'
 import type { PayoutChoiceKind, RegistrarKeyChoiceKind } from '@renderer/enums/Masternodes'
+
+export interface KeyImportNotice {
+  tone: AlertTone
+  message: string
+}
 
 export interface MasternodesNavigationState {
   fromList: boolean

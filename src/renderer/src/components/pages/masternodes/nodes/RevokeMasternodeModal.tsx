@@ -85,6 +85,7 @@ export default function RevokeMasternodeModal({
         </div>
       }
       confirmLabel={REVOKE_MASTERNODE_COPY.confirm}
+      inlineErrors
       pendingLabel={REVOKE_MASTERNODE_COPY.pending}
       run={run}
       renderDone={result => ({

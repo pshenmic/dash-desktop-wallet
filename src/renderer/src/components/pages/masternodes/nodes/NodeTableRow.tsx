@@ -6,7 +6,6 @@ import StatusPill from '@renderer/components/ui/StatusPill'
 import { NODE_DETAIL_COPY, NODE_ROW_COPY } from '@renderer/constants/masternodeNodes'
 import { MASTERNODE_TABLE_GRID } from '@renderer/constants/masternodes'
 import { SECTION_TABLE_ROW } from '@renderer/constants/sectionTable'
-import { copyWithToast } from '@renderer/utils/clipboard'
 import { formatServiceAddress, isSharedNode, masternodeStatus, masternodeType, nodeAccessDisplay } from '@renderer/utils/masternodeNodes'
 import type { NodeTableRowProps } from '@renderer/types/MasternodeNodes'
 
@@ -28,7 +27,7 @@ export default function NodeTableRow({ node, onOpen }: NodeTableRowProps): React
           id: 'copy',
           label: NODE_ROW_COPY.copy,
           icon: <CopyIcon2 size={10} color={'currentColor'} />,
-          onSelect: () => copyWithToast(node.proTxHash),
+          onSelect: () => { void navigator.clipboard.writeText(node.proTxHash) },
         },
       ]}
     >

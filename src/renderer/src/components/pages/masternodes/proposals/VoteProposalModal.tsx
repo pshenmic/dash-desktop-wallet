@@ -181,6 +181,7 @@ export default function VoteProposalModal({
       }
       confirmLabel={VOTE_PROPOSAL_COPY.confirm}
       confirmDisabled={selectedHashes.size === 0}
+      inlineErrors
       pendingLabel={VOTE_PROPOSAL_COPY.pending}
       run={run}
       renderDone={results => {

@@ -200,10 +200,10 @@ export function emptyNodesDescription(connectionMode: ConnectionType, discovered
   return NODES_TAB_COPY.emptyDescription
 }
 
-export function importedKeyToastMessage(matched: MasternodeDto[] | null, connectionMode: ConnectionType, role: MasternodeKeyRole): string {
-  if (connectionMode === 'rpc' && role === 'owner' && matched != null && matched.length === 0) return MANAGE_KEYS_COPY.keySavedForP2PToast
-  if (matched == null) return MANAGE_KEYS_COPY.keyImportedToast
-  return `${MANAGE_KEYS_COPY.keyImportedToast} (${countLabel(matched.length, NODE_MATCHED_FORMS)})`
+export function importedKeyStatusMessage(matched: MasternodeDto[] | null, connectionMode: ConnectionType, role: MasternodeKeyRole): string {
+  if (connectionMode === 'rpc' && role === 'owner' && matched != null && matched.length === 0) return MANAGE_KEYS_COPY.keySavedForP2PNotice
+  if (matched == null) return MANAGE_KEYS_COPY.keyImportedNotice
+  return `${MANAGE_KEYS_COPY.keyImportedNotice} (${countLabel(matched.length, NODE_MATCHED_FORMS)})`
 }
 
 export function canUpdateNodeRegistrar(node: MasternodeDto): boolean {

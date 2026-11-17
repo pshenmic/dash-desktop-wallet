@@ -15,7 +15,6 @@ import { StatusPillTone } from '@renderer/enums/StatusPillTone'
 import type { ProposalTableRowProps } from '@renderer/types/GovernanceProposals'
 import type { ContextMenuItem } from '@renderer/types/ContextMenu'
 import { davToDash } from '@renderer/utils/balance'
-import { copyWithToast } from '@renderer/utils/clipboard'
 import { formatTimestamp } from '@renderer/utils/date'
 import {
   isProposalEndingSoon,
@@ -45,7 +44,7 @@ export default function ProposalTableRow({ proposal, now, network, onOpen }: Pro
       id: 'copy',
       label: PROPOSALS_TAB_COPY.copyHash,
       icon: <CopyIcon2 size={10} color={'currentColor'} />,
-      onSelect: () => copyWithToast(proposal.hash),
+      onSelect: () => { void navigator.clipboard.writeText(proposal.hash) },
     },
   ]
 

@@ -24,7 +24,7 @@ import {
   formatSharePercent,
   hasRoleInWallet,
   hasVotingKey,
-  importedKeyToastMessage,
+  importedKeyStatusMessage,
   isOwnedShare,
   isSharedNode,
   keyOriginBadge,
@@ -531,29 +531,29 @@ describe('emptyNodesDescription', () => {
   })
 })
 
-describe('importedKeyToastMessage', () => {
+describe('importedKeyStatusMessage', () => {
   it('explains P2P switching only when an RPC owner key matches zero nodes', () => {
-    expect(importedKeyToastMessage([], 'rpc', 'owner')).toBe(MANAGE_KEYS_COPY.keySavedForP2PToast)
-    expect(MANAGE_KEYS_COPY.keySavedForP2PToast).not.toBe(MANAGE_KEYS_COPY.keyImportedToast)
+    expect(importedKeyStatusMessage([], 'rpc', 'owner')).toBe(MANAGE_KEYS_COPY.keySavedForP2PNotice)
+    expect(MANAGE_KEYS_COPY.keySavedForP2PNotice).not.toBe(MANAGE_KEYS_COPY.keyImportedNotice)
   })
 
   it('reports matched node counts in RPC mode when owner matches nodes or for non-owner roles', () => {
-    expect(importedKeyToastMessage([regularNode], 'rpc', 'owner')).toBe(
+    expect(importedKeyStatusMessage([regularNode], 'rpc', 'owner')).toBe(
       'Masternode key imported (1 node matched)',
     )
-    expect(importedKeyToastMessage([regularNode, otherNode], 'rpc', 'owner')).toBe(
+    expect(importedKeyStatusMessage([regularNode, otherNode], 'rpc', 'owner')).toBe(
       'Masternode key imported (2 nodes matched)',
     )
-    expect(importedKeyToastMessage([], 'rpc', 'voting')).toBe(
+    expect(importedKeyStatusMessage([], 'rpc', 'voting')).toBe(
       'Masternode key imported (0 nodes matched)',
     )
-    expect(importedKeyToastMessage([], 'rpc', 'operator')).toBe(
+    expect(importedKeyStatusMessage([], 'rpc', 'operator')).toBe(
       'Masternode key imported (0 nodes matched)',
     )
-    expect(importedKeyToastMessage([regularNode], 'rpc', 'voting')).toBe(
+    expect(importedKeyStatusMessage([regularNode], 'rpc', 'voting')).toBe(
       'Masternode key imported (1 node matched)',
     )
-    expect(importedKeyToastMessage([regularNode, otherNode], 'rpc', 'operator')).toBe(
+    expect(importedKeyStatusMessage([regularNode, otherNode], 'rpc', 'operator')).toBe(
       'Masternode key imported (2 nodes matched)',
     )
   })
@@ -561,24 +561,24 @@ describe('importedKeyToastMessage', () => {
   it('reports matched node counts in P2P mode for all roles including zero matches', () => {
     const roles: MasternodeKeyRole[] = ['owner', 'voting', 'operator']
     for (const role of roles) {
-      expect(importedKeyToastMessage([], 'p2p', role)).toBe(
+      expect(importedKeyStatusMessage([], 'p2p', role)).toBe(
         'Masternode key imported (0 nodes matched)',
       )
-      expect(importedKeyToastMessage([regularNode], 'p2p', role)).toBe(
+      expect(importedKeyStatusMessage([regularNode], 'p2p', role)).toBe(
         'Masternode key imported (1 node matched)',
       )
-      expect(importedKeyToastMessage([regularNode, otherNode], 'p2p', role)).toBe(
+      expect(importedKeyStatusMessage([regularNode, otherNode], 'p2p', role)).toBe(
         'Masternode key imported (2 nodes matched)',
       )
     }
   })
 
-  it('falls back to the generic import toast when matched nodes are null', () => {
+  it('falls back to the generic import notice when matched nodes are null', () => {
     const modes: ConnectionType[] = ['p2p', 'rpc']
     const roles: MasternodeKeyRole[] = ['owner', 'voting', 'operator']
     for (const mode of modes) {
       for (const role of roles) {
-        expect(importedKeyToastMessage(null, mode, role)).toBe(MANAGE_KEYS_COPY.keyImportedToast)
+        expect(importedKeyStatusMessage(null, mode, role)).toBe(MANAGE_KEYS_COPY.keyImportedNotice)
       }
     }
   })

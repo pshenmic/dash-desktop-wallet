@@ -270,6 +270,7 @@ export default function RegisterMasternodeModal({
       }
       confirmLabel={REGISTER_MASTERNODE_COPY.confirm}
       confirmDisabled={dto == null}
+      inlineErrors
       pendingLabel={REGISTER_MASTERNODE_COPY.pending}
       run={run}
       renderDone={result => ({

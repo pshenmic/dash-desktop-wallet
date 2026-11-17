@@ -50,6 +50,7 @@ export interface SignedActionModalProps<R> {
   shortfall?: ReactNode
   confirmLabel: string
   confirmDisabled?: boolean
+  inlineErrors?: boolean
   pendingLabel: string
   run: (password: string) => Promise<R>
   renderDone: (result: R, controls: SignedActionControls) => SignedActionDoneView

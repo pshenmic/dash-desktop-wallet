@@ -215,6 +215,7 @@ export default function UpdateRegistrarModal({
       }
       confirmLabel={UPDATE_REGISTRAR_COPY.confirm}
       confirmDisabled={dto == null}
+      inlineErrors
       pendingLabel={UPDATE_REGISTRAR_COPY.pending}
       run={run}
       renderDone={result => ({
