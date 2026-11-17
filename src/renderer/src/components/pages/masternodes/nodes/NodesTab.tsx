@@ -1,5 +1,5 @@
-import { useDeferredValue, useMemo } from 'react'
-import { Text } from '@renderer/components/dash-ui-kit-extended'
+import { useDeferredValue, useMemo, useState } from 'react'
+import { Button, KeyIcon, Text } from '@renderer/components/dash-ui-kit-extended'
 import ListSkeleton from '@renderer/components/ui/Skeleton'
 import NoResults from '@renderer/components/ui/NoResults'
 import RetryButton from '@renderer/components/ui/RetryButton'
@@ -13,11 +13,12 @@ import { CHIP_ACTION } from '@renderer/constants/surfaces'
 import { useConnectionModeContext } from '@renderer/contexts/ConnectionModeContext'
 import { NoResultsTone } from '@renderer/enums/NoResultsTone'
 import { SegmentedControlAppearance } from '@renderer/enums/SegmentedControlAppearance'
-import { refreshMasternodes, useMasternodes } from '@renderer/hooks/useMasternodes'
+import { refreshMasternodes, useImportedMasternodeKeys, useMasternodes } from '@renderer/hooks/useMasternodes'
 import { useScrollEndSentinel } from '@renderer/hooks/useScrollEndSentinel'
 import { windowList } from '@renderer/utils/listWindow'
 import { filterNodes, nodeSegmentOptions } from '@renderer/utils/masternodeNodes'
 import type { NodesTabProps } from '@renderer/types/MasternodeScreens'
+import ManageMasternodeKeysModal from './ManageMasternodeKeysModal'
 import NodeTableRow from './NodeTableRow'
 
 export default function NodesTab({
@@ -31,14 +32,29 @@ export default function NodesTab({
   onOpenNode,
 }: NodesTabProps): React.JSX.Element {
   const { desired } = useConnectionModeContext()
-  const { nodes, loading, err } = useMasternodes(walletId)
+  const { nodes, discovered, loading, err } = useMasternodes(walletId)
+  const { importedKeys } = useImportedMasternodeKeys(walletId)
+  const [keysOpen, setKeysOpen] = useState(false)
   const appliedQuery = useDeferredValue(query)
   const options = useMemo(() => nodeSegmentOptions(nodes, appliedQuery), [nodes, appliedQuery])
   const filtered = useMemo(() => filterNodes(nodes, appliedQuery, segment), [nodes, appliedQuery, segment])
   const view = useMemo(() => windowList(filtered, visibleCount), [filtered, visibleCount])
   const hasNodes = nodes.length > 0
-  const showSkeleton = loading && !hasNodes
+  const showSkeleton = loading && !discovered && !hasNodes
   const sentinelRef = useScrollEndSentinel(view.hasMore && !showSkeleton, onShowMore, visibleCount)
+
+  const importedKeysButton = (
+    <Button
+      type={'button'}
+      size={'compact'}
+      colorScheme={'primary-light'}
+      onClick={() => setKeysOpen(true)}
+      className={'inline-flex items-center gap-1.5 rounded-[.75rem]'}
+    >
+      <KeyIcon size={12} color={'currentColor'} />
+      {`${NODES_TAB_COPY.importedKeysButton}${importedKeys.length > 0 ? ` (${importedKeys.length})` : ''}`}
+    </Button>
+  )
 
   let body: React.JSX.Element
   if (showSkeleton) {
@@ -55,19 +71,23 @@ export default function NodesTab({
     body = (
       <NoResults
         title={NODES_TAB_COPY.emptyTitle}
-        description={desired === 'p2p' ? NODES_TAB_COPY.rpcDiscovery : NODES_TAB_COPY.emptyDescription}
+        description={desired === 'p2p' && !discovered ? NODES_TAB_COPY.p2pSyncing : NODES_TAB_COPY.emptyDescription}
+        action={importedKeysButton}
       />
     )
   } else {
     body = (
       <div className={'flex flex-col gap-4'}>
-        <SearchField
-          value={query}
-          onChange={onQueryChange}
-          placeholder={NODES_TAB_COPY.searchPlaceholder}
-          ariaLabel={NODES_TAB_COPY.searchLabel}
-          className={'max-w-[22rem]'}
-        />
+        <div className={'flex flex-wrap items-center justify-between gap-3'}>
+          <SearchField
+            value={query}
+            onChange={onQueryChange}
+            placeholder={NODES_TAB_COPY.searchPlaceholder}
+            ariaLabel={NODES_TAB_COPY.searchLabel}
+            className={'flex-1 max-w-[22rem]'}
+          />
+          {importedKeysButton}
+        </div>
         <SegmentedControl
           appearance={SegmentedControlAppearance.Pill}
           ariaLabel={NODES_TAB_COPY.segmentsLabel}
@@ -107,6 +127,7 @@ export default function NodesTab({
   return (
     <div className={'flex flex-col gap-4 pt-2'}>
       {body}
+      {keysOpen && <ManageMasternodeKeysModal walletId={walletId} open={keysOpen} onClose={() => setKeysOpen(false)} />}
     </div>
   )
 }
