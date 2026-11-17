@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { MasternodeDto } from '@renderer/api/types'
+import type { ConnectionType, MasternodeDto, MasternodeKeyRole, OwnedMasternodeShareDto } from '@renderer/api/types'
+import { DUFFS_PER_DASH } from '@renderer/constants/balance'
+import { MANAGE_KEYS_COPY, NODES_TAB_COPY, NODE_DETAIL_COPY } from '@renderer/constants/masternodeNodes'
 import { NodeSegment, PayoutChoiceKind, RegistrarKeyChoiceKind } from '@renderer/enums/Masternodes'
 import { StatusPillTone } from '@renderer/enums/StatusPillTone'
 import {
@@ -11,15 +13,47 @@ import {
   validateServiceEndpoint,
 } from '@renderer/utils/masternodeActions'
 import {
+  calculateShareSummary,
+  canOperateNode,
+  canUpdateNodeRegistrar,
+  emptyNodesDescription,
   filterNodes,
+  formatBlockHeight,
+  formatOwnedShareStake,
   formatServiceAddress,
+  formatSharePercent,
+  hasRoleInWallet,
   hasVotingKey,
+  importedKeyToastMessage,
+  isOwnedShare,
+  isSharedNode,
   keyOriginBadge,
   masternodeStatus,
   masternodeType,
+  nodeAccessDisplay,
   nodeRolesLabel,
+  nodeSegmentOptions,
   nodeVotingAccessLabel,
+  nodeWalletRoles,
+  operateNodeDisabledReason,
+  shareOriginBadge,
+  shareRatio,
+  updateRegistrarDisabledReason,
 } from '@renderer/utils/masternodeNodes'
+
+function dash(amount: number): bigint {
+  return BigInt(amount) * DUFFS_PER_DASH
+}
+
+function makeShare(overrides: Partial<OwnedMasternodeShareDto> = {}): OwnedMasternodeShareDto {
+  return {
+    ownerAddress: 'XshareOwner',
+    amountDuffs: dash(500),
+    keyIndex: null,
+    imported: false,
+    ...overrides,
+  }
+}
 
 const regularNode: MasternodeDto = {
   proTxHash: 'first',
@@ -44,6 +78,8 @@ const regularNode: MasternodeDto = {
   lastPaidBlock: 0,
   lastPaidTime: 0,
   registeredHeight: null,
+  isShared: false,
+  shares: null,
 }
 
 const otherNode: MasternodeDto = {
@@ -54,42 +90,585 @@ const otherNode: MasternodeDto = {
   votingKeyIndex: null,
 }
 
+function makeNode(overrides: Partial<MasternodeDto> = {}): MasternodeDto {
+  return {
+    ...regularNode,
+    ...overrides,
+  }
+}
+
 describe('Masternode display', () => {
   const nodes = [otherNode, regularNode]
 
-  it('uses the backend key index or imported role to distinguish voting keys', () => {
+  it('uses the backend key index, including zero, to distinguish voting keys', () => {
     expect(filterNodes(nodes, '', NodeSegment.VotingKey)).toEqual([regularNode])
     expect(filterNodes(nodes, '', NodeSegment.NoVotingKey)).toEqual([otherNode])
-    const importedVoting: MasternodeDto = { ...otherNode, importedRoles: ['voting'] }
-    expect(hasVotingKey(importedVoting)).toBe(true)
-    expect(nodeVotingAccessLabel(importedVoting)).toBe('Imported key')
   })
 
-  it('searches the backend service address and ProTxHash and handles null serviceAddress', () => {
+  it('searches the backend service address and ProTxHash', () => {
     expect(filterNodes(nodes, '192.0.2.1', NodeSegment.Issues)).toEqual([otherNode])
     expect(filterNodes(nodes, ' FIRST ', NodeSegment.All)).toEqual([regularNode])
-    const nullService: MasternodeDto = { ...regularNode, serviceAddress: null }
-    expect(filterNodes([nullService], 'first', NodeSegment.All)).toEqual([nullService])
-    expect(formatServiceAddress(null)).toBe('Unassigned')
-    expect(formatServiceAddress('0.0.0.0:0')).toBe('Unassigned')
   })
 
   it('shows unknown statuses and types as returned by the backend', () => {
     expect(masternodeStatus('UNKNOWN')).toEqual({ tone: StatusPillTone.Inactive, label: 'UNKNOWN' })
     expect(masternodeType('FutureType')).toEqual({ variant: 'muted', text: 'FutureType' })
+    expect(masternodeStatus('ENABLED')).toEqual({ tone: StatusPillTone.Success, label: 'Active' })
+    expect(masternodeStatus('POSE_BANNED')).toEqual({ tone: StatusPillTone.Danger, label: 'PoSe banned' })
+    expect(masternodeType('Regular')).toEqual({ variant: 'muted', text: 'Masternode' })
+    expect(masternodeType('Evo')).toEqual({ variant: 'accent', text: 'Evonode' })
+    expect(formatBlockHeight(123456)).toBe('#123,456')
+  })
+})
+
+describe('Shared masternode detection and filtering', () => {
+  it('identifies shared nodes via isShared or populated shares', () => {
+    expect(isSharedNode(makeNode({ isShared: true, shares: null }))).toBe(true)
+    expect(isSharedNode(makeNode({ isShared: true, shares: [makeShare()] }))).toBe(true)
+    expect(isSharedNode(makeNode({ isShared: false, shares: [makeShare()] }))).toBe(true)
+    expect(isSharedNode(makeNode({ isShared: false, shares: null }))).toBe(false)
+    expect(isSharedNode(makeNode({ isShared: false, shares: [] }))).toBe(false)
+    expect(isSharedNode(makeNode({ isShared: null, shares: null }))).toBe(false)
+    expect(isSharedNode(makeNode({ isShared: null, shares: [] }))).toBe(false)
   })
 
-  it('summarises wallet and imported roles and key origins', () => {
-    const multiRole: MasternodeDto = {
-      ...regularNode,
-      ownerKeyIndex: 1,
+  it('recognizes both votingKeyIndex: 0 and imported voting keys in VotingKey / NoVotingKey segments', () => {
+    const importedVotingNode = makeNode({
+      proTxHash: 'alpha',
       votingKeyIndex: null,
-      importedRoles: ['operator'],
+      importedRoles: ['voting'],
+    })
+    const nonVotingImportedNode = makeNode({
+      proTxHash: 'zeta',
+      votingKeyIndex: null,
+      importedRoles: ['owner', 'operator'],
+    })
+    const mixed = [otherNode, nonVotingImportedNode, importedVotingNode, regularNode]
+
+    expect(hasVotingKey(regularNode)).toBe(true)
+    expect(hasVotingKey(importedVotingNode)).toBe(true)
+    expect(hasVotingKey(nonVotingImportedNode)).toBe(false)
+    expect(hasVotingKey(otherNode)).toBe(false)
+
+    expect(filterNodes(mixed, '', NodeSegment.VotingKey)).toEqual([importedVotingNode, regularNode])
+    expect(filterNodes(mixed, '', NodeSegment.NoVotingKey)).toEqual([otherNode, nonVotingImportedNode])
+  })
+
+  it('filters NodeSegment.Shared and reports segment counts accurately', () => {
+    const sharedIndexed = makeNode({
+      proTxHash: 'shared-indexed',
+      isShared: true,
+      votingKeyIndex: null,
+      importedRoles: ['voting'],
+      shares: [makeShare({ ownerAddress: 'Xshare1', keyIndex: 0 })],
+    })
+    const sharedRpc = makeNode({
+      proTxHash: 'shared-rpc',
+      isShared: true,
+      votingKeyIndex: null,
+      shares: null,
+    })
+    const list = [otherNode, sharedRpc, regularNode, sharedIndexed]
+
+    expect(filterNodes(list, '', NodeSegment.Shared)).toEqual([sharedIndexed, sharedRpc])
+    expect(nodeSegmentOptions(list, '')).toEqual([
+      { value: NodeSegment.All, label: 'All · 4' },
+      { value: NodeSegment.Shared, label: 'Shared · 2' },
+      { value: NodeSegment.VotingKey, label: 'Voting key in wallet · 2' },
+      { value: NodeSegment.NoVotingKey, label: 'No voting key in wallet · 2' },
+      { value: NodeSegment.Issues, label: 'Issues · 1' },
+    ])
+    expect(nodeSegmentOptions(list, 'shared-rpc')).toEqual([
+      { value: NodeSegment.All, label: 'All · 1' },
+      { value: NodeSegment.Shared, label: 'Shared · 1' },
+      { value: NodeSegment.VotingKey, label: 'Voting key in wallet · 0' },
+      { value: NodeSegment.NoVotingKey, label: 'No voting key in wallet · 1' },
+      { value: NodeSegment.Issues, label: 'Issues · 0' },
+    ])
+  })
+
+  it('searches ownerAddress, payeeAddress, collateralAddress, and shares[].ownerAddress with null fields', () => {
+    const sharedWithNulls = makeNode({
+      proTxHash: 'shared-nulls',
+      serviceAddress: null,
+      payeeAddress: null,
+      ownerAddress: null,
+      collateralAddress: null,
+      isShared: true,
+      shares: [
+        makeShare({ ownerAddress: 'XParticipantOne', amountDuffs: dash(500), keyIndex: 0 }),
+        makeShare({ ownerAddress: 'XParticipantTwo', amountDuffs: dash(500) }),
+      ],
+    })
+    const soloWithAddresses = makeNode({
+      proTxHash: 'solo-addr',
+      serviceAddress: null,
+      ownerAddress: 'XSoloOwner',
+      payeeAddress: 'XSoloPayee',
+      collateralAddress: 'XSoloCollateral',
+    })
+    const sparseNode = makeNode({
+      proTxHash: 'sparse-node',
+      serviceAddress: null,
+      payeeAddress: null,
+      ownerAddress: null,
+      collateralAddress: null,
+      shares: null,
+    })
+    const list = [sparseNode, soloWithAddresses, sharedWithNulls]
+
+    expect(filterNodes(list, ' participanttwo ', NodeSegment.Shared)).toEqual([sharedWithNulls])
+    expect(filterNodes(list, 'xsoloowner', NodeSegment.All)).toEqual([soloWithAddresses])
+    expect(filterNodes(list, 'xsolopayee', NodeSegment.All)).toEqual([soloWithAddresses])
+    expect(filterNodes(list, 'xsolocollateral', NodeSegment.All)).toEqual([soloWithAddresses])
+    expect(filterNodes(list, 'sparse-node', NodeSegment.All)).toEqual([sparseNode])
+    expect(filterNodes(list, 'missing-query', NodeSegment.All)).toEqual([])
+  })
+})
+
+describe('Share summary and ratio calculations', () => {
+  it('computes single wallet share stake (500 Dash of 1000 Dash -> 50%)', () => {
+    const zeroIndex = makeShare({ ownerAddress: 'Xzero', amountDuffs: dash(500), keyIndex: 0 })
+    const external = makeShare({ ownerAddress: 'Xexternal', amountDuffs: dash(500) })
+    expect(isOwnedShare(zeroIndex)).toBe(true)
+    const shares = [zeroIndex, external]
+
+    const summary = calculateShareSummary(shares)
+    expect(summary).toEqual({
+      totalDuffs: dash(1000),
+      ownedDuffs: dash(500),
+      ownedCount: 1,
+      totalCount: 2,
+      ownedRatio: 0.5,
+    })
+    expect(shareRatio(dash(500), dash(1000))).toBe(0.5)
+    expect(formatSharePercent(0.5)).toBe('50%')
+    expect(formatOwnedShareStake(summary!)).toBe('500 / 1000 Dash (50%)')
+  })
+
+  it('aggregates multiple wallet shares from derived and imported keys', () => {
+    const derived = makeShare({ ownerAddress: 'Xderived', amountDuffs: dash(200), keyIndex: 1, imported: false })
+    const imported = makeShare({ ownerAddress: 'Ximported', amountDuffs: dash(300), keyIndex: null, imported: true })
+    const external = makeShare({ ownerAddress: 'Xexternal', amountDuffs: dash(500), keyIndex: null, imported: false })
+
+    expect(isOwnedShare(derived)).toBe(true)
+    expect(isOwnedShare(imported)).toBe(true)
+    expect(isOwnedShare(external)).toBe(false)
+
+    const summary = calculateShareSummary([derived, imported, external])
+    expect(summary).toEqual({
+      totalDuffs: dash(1000),
+      ownedDuffs: dash(500),
+      ownedCount: 2,
+      totalCount: 3,
+      ownedRatio: 0.5,
+    })
+    expect(formatOwnedShareStake(summary!)).toBe('500 / 1000 Dash (50%)')
+  })
+
+  it('computes fractional Evonode share percentages (250 Dash of 4000 Dash -> 6.25%)', () => {
+    const shares = [
+      makeShare({ ownerAddress: 'Xevo', amountDuffs: dash(250), keyIndex: 0 }),
+      makeShare({ ownerAddress: 'Xrest', amountDuffs: dash(3750) }),
+    ]
+
+    const summary = calculateShareSummary(shares)
+    expect(summary).toEqual({
+      totalDuffs: dash(4000),
+      ownedDuffs: dash(250),
+      ownedCount: 1,
+      totalCount: 2,
+      ownedRatio: 0.0625,
+    })
+    expect(shareRatio(dash(250), dash(4000))).toBe(0.0625)
+    expect(formatSharePercent(0.0625)).toBe('6.25%')
+    expect(formatOwnedShareStake(summary!)).toBe('250 / 4000 Dash (6.25%)')
+  })
+
+  it('handles zero owned shares, zero total duffs, null shares, and empty shares', () => {
+    const externalOnly = [
+      makeShare({ ownerAddress: 'Xext1', amountDuffs: dash(400) }),
+      makeShare({ ownerAddress: 'Xext2', amountDuffs: dash(600) }),
+    ]
+
+    const summary = calculateShareSummary(externalOnly)
+    expect(summary).toEqual({
+      totalDuffs: dash(1000),
+      ownedDuffs: 0n,
+      ownedCount: 0,
+      totalCount: 2,
+      ownedRatio: 0,
+    })
+    expect(formatSharePercent(0)).toBe('0%')
+    expect(formatOwnedShareStake(summary!)).toBe('0 / 1000 Dash (0%)')
+
+    expect(shareRatio(dash(100), 0n)).toBe(0)
+    expect(calculateShareSummary(null)).toBeNull()
+    expect(calculateShareSummary([])).toBeNull()
+  })
+})
+
+describe('Node access display, roles, badges, and service formatting', () => {
+  it('renders nodeAccessDisplay for shared nodes with owned shares (with and without voting key)', () => {
+    const withVoting = makeNode({
+      isShared: true,
+      votingKeyIndex: 0,
+      shares: [
+        makeShare({ ownerAddress: 'Xwallet', amountDuffs: dash(500), keyIndex: 0 }),
+        makeShare({ ownerAddress: 'Xext', amountDuffs: dash(500) }),
+      ],
+    })
+    const withoutVoting = makeNode({
+      isShared: true,
+      votingKeyIndex: null,
+      importedRoles: [],
+      shares: [
+        makeShare({ ownerAddress: 'Xderived', amountDuffs: dash(200), keyIndex: 1 }),
+        makeShare({ ownerAddress: 'Ximported', amountDuffs: dash(300), imported: true }),
+        makeShare({ ownerAddress: 'Xext', amountDuffs: dash(500) }),
+      ],
+    })
+    const singleShareWithImportedVoting = makeNode({
+      isShared: true,
+      votingKeyIndex: null,
+      importedRoles: ['voting'],
+      shares: [
+        makeShare({ ownerAddress: 'XsoloShare', amountDuffs: dash(1000), keyIndex: 0 }),
+      ],
+    })
+
+    expect(nodeAccessDisplay(withVoting)).toEqual({
+      primary: '500 / 1000 Dash (50%)',
+      secondary: '1 of 2 shares · Voting',
+    })
+    expect(nodeAccessDisplay(withoutVoting)).toEqual({
+      primary: '500 / 1000 Dash (50%)',
+      secondary: '2 of 3 shares',
+    })
+    expect(nodeAccessDisplay(singleShareWithImportedVoting)).toEqual({
+      primary: '1000 / 1000 Dash (100%)',
+      secondary: '1 of 1 share · Voting',
+    })
+  })
+
+  it('renders nodeAccessDisplay for shared nodes with zero owned shares', () => {
+    const sharedWithVoting = makeNode({
+      isShared: true,
+      votingKeyIndex: 2,
+      shares: [
+        makeShare({ ownerAddress: 'Xext1', amountDuffs: dash(500) }),
+        makeShare({ ownerAddress: 'Xext2', amountDuffs: dash(500) }),
+      ],
+    })
+    const sharedWithImportedVoting = makeNode({
+      ...sharedWithVoting,
+      votingKeyIndex: null,
+      importedRoles: ['voting'],
+    })
+    const sharedNoWalletKeys = makeNode({
+      ...sharedWithVoting,
+      votingKeyIndex: null,
+      importedRoles: [],
+    })
+
+    expect(nodeAccessDisplay(sharedWithVoting)).toEqual({
+      primary: 'Voting',
+      secondary: '0 of 2 shares · In this wallet',
+    })
+    expect(nodeAccessDisplay(sharedWithImportedVoting)).toEqual({
+      primary: 'Voting',
+      secondary: '0 of 2 shares · Imported key',
+    })
+    expect(nodeAccessDisplay(sharedNoWalletKeys)).toEqual({
+      primary: 'Collateral',
+      secondary: '0 of 2 shares · Outside this wallet',
+    })
+  })
+
+  it('renders nodeAccessDisplay for shared nodes with null shares', () => {
+    const sharedNullSharesWalletVoting = makeNode({
+      isShared: true,
+      shares: null,
+      votingKeyIndex: 0,
+    })
+    const sharedNullSharesImported = makeNode({
+      isShared: true,
+      shares: null,
+      votingKeyIndex: null,
+      importedRoles: ['owner', 'voting'],
+    })
+    const sharedNullSharesExternal = makeNode({
+      isShared: true,
+      shares: null,
+      votingKeyIndex: null,
+      importedRoles: [],
+    })
+
+    expect(nodeAccessDisplay(sharedNullSharesWalletVoting)).toEqual({
+      primary: 'Voting',
+      secondary: 'Shared collateral · In this wallet',
+    })
+    expect(nodeAccessDisplay(sharedNullSharesImported)).toEqual({
+      primary: 'Owner · Voting',
+      secondary: 'Shared collateral · Imported key',
+    })
+    expect(nodeAccessDisplay(sharedNullSharesExternal)).toEqual({
+      primary: 'Collateral',
+      secondary: 'Shared collateral · Outside this wallet',
+    })
+  })
+
+  it('renders nodeAccessDisplay and role labels for solo nodes', () => {
+    const allRoles = makeNode({
+      isShared: false,
+      ownerKeyIndex: 0,
+      operatorKeyIndex: 1,
+      votingKeyIndex: 2,
+    })
+    const importedVotingOnly = makeNode({
+      isShared: false,
+      ownerKeyIndex: null,
+      operatorKeyIndex: null,
+      votingKeyIndex: null,
+      importedRoles: ['voting'],
+    })
+    const collateralOnly = makeNode({
+      isShared: false,
+      ownerKeyIndex: null,
+      operatorKeyIndex: null,
+      votingKeyIndex: null,
+      importedRoles: [],
+    })
+
+    expect(nodeWalletRoles(allRoles)).toEqual(['owner', 'operator', 'voting'])
+    expect(nodeRolesLabel(allRoles)).toBe('Owner · Operator · Voting')
+    expect(nodeVotingAccessLabel(allRoles)).toBe('In this wallet')
+    expect(nodeAccessDisplay(allRoles)).toEqual({
+      primary: 'Owner · Operator · Voting',
+      secondary: 'In this wallet',
+    })
+
+    expect(nodeVotingAccessLabel(importedVotingOnly)).toBe('Imported key')
+    expect(nodeAccessDisplay(importedVotingOnly)).toEqual({
+      primary: 'Voting',
+      secondary: 'Imported key',
+    })
+
+    expect(nodeRolesLabel(collateralOnly)).toBe('Collateral')
+    expect(nodeVotingAccessLabel(collateralOnly)).toBe('Outside this wallet')
+    expect(nodeAccessDisplay(collateralOnly)).toEqual({
+      primary: 'Collateral',
+      secondary: 'Outside this wallet',
+    })
+  })
+
+  it('resolves shareOriginBadge, keyOriginBadge, and role checks', () => {
+    expect(shareOriginBadge(makeShare({ keyIndex: 0, imported: false }))).toEqual({
+      variant: 'accent',
+      text: 'Wallet key',
+    })
+    expect(shareOriginBadge(makeShare({ keyIndex: null, imported: true }))).toEqual({
+      variant: 'accent',
+      text: 'Imported',
+    })
+    expect(shareOriginBadge(makeShare({ keyIndex: null, imported: false }))).toEqual({
+      variant: 'muted',
+      text: 'External',
+    })
+
+    const mixedRoleNode = makeNode({
+      ownerKeyIndex: 0,
+      votingKeyIndex: null,
+      operatorKeyIndex: null,
+      importedRoles: ['voting'],
+    })
+
+    const shareOwnedOnly = makeNode({
+      ownerKeyIndex: null,
+      votingKeyIndex: null,
+      operatorKeyIndex: null,
+      importedRoles: [],
+      isShared: true,
+      shares: [makeShare({ keyIndex: 0 })],
+    })
+
+    expect(hasRoleInWallet(mixedRoleNode, 'owner')).toBe(true)
+    expect(hasRoleInWallet(mixedRoleNode, 'voting')).toBe(true)
+    expect(hasRoleInWallet(mixedRoleNode, 'operator')).toBe(false)
+    expect(hasRoleInWallet(shareOwnedOnly, 'owner')).toBe(true)
+
+    expect(keyOriginBadge(mixedRoleNode, 'owner')).toEqual({ variant: 'accent', text: 'Wallet key' })
+    expect(keyOriginBadge(mixedRoleNode, 'voting')).toEqual({ variant: 'accent', text: 'Imported' })
+    expect(keyOriginBadge(mixedRoleNode, 'operator')).toEqual({ variant: 'muted', text: 'External' })
+  })
+
+  it('formats serviceAddress for null, blank, unassigned 0.0.0.0:0, and valid addresses', () => {
+    expect(formatServiceAddress(null)).toBe('Unassigned')
+    expect(formatServiceAddress('')).toBe('Unassigned')
+    expect(formatServiceAddress('   ')).toBe('Unassigned')
+    expect(formatServiceAddress('0.0.0.0:0')).toBe('Unassigned')
+    expect(formatServiceAddress('127.0.0.1:9999')).toBe('127.0.0.1:9999')
+  })
+})
+
+describe('emptyNodesDescription', () => {
+  it('shows P2P sync copy only while P2P discovery has not completed', () => {
+    expect(emptyNodesDescription('p2p', false)).toBe(NODES_TAB_COPY.p2pSyncing)
+    expect(emptyNodesDescription('p2p', true)).toBe(NODES_TAB_COPY.emptyDescription)
+  })
+
+  it('shows the RPC-specific empty description regardless of discovery state', () => {
+    expect(emptyNodesDescription('rpc', false)).toBe(NODES_TAB_COPY.rpcEmptyDescription)
+    expect(emptyNodesDescription('rpc', true)).toBe(NODES_TAB_COPY.rpcEmptyDescription)
+  })
+
+  it('keeps P2P syncing, P2P empty, and RPC empty copy distinct', () => {
+    expect(new Set([
+      NODES_TAB_COPY.p2pSyncing,
+      NODES_TAB_COPY.emptyDescription,
+      NODES_TAB_COPY.rpcEmptyDescription,
+    ]).size).toBe(3)
+  })
+})
+
+describe('importedKeyToastMessage', () => {
+  it('explains P2P switching only when an RPC owner key matches zero nodes', () => {
+    expect(importedKeyToastMessage([], 'rpc', 'owner')).toBe(MANAGE_KEYS_COPY.keySavedForP2PToast)
+    expect(MANAGE_KEYS_COPY.keySavedForP2PToast).not.toBe(MANAGE_KEYS_COPY.keyImportedToast)
+  })
+
+  it('reports matched node counts in RPC mode when owner matches nodes or for non-owner roles', () => {
+    expect(importedKeyToastMessage([regularNode], 'rpc', 'owner')).toBe(
+      'Masternode key imported (1 node matched)',
+    )
+    expect(importedKeyToastMessage([regularNode, otherNode], 'rpc', 'owner')).toBe(
+      'Masternode key imported (2 nodes matched)',
+    )
+    expect(importedKeyToastMessage([], 'rpc', 'voting')).toBe(
+      'Masternode key imported (0 nodes matched)',
+    )
+    expect(importedKeyToastMessage([], 'rpc', 'operator')).toBe(
+      'Masternode key imported (0 nodes matched)',
+    )
+    expect(importedKeyToastMessage([regularNode], 'rpc', 'voting')).toBe(
+      'Masternode key imported (1 node matched)',
+    )
+    expect(importedKeyToastMessage([regularNode, otherNode], 'rpc', 'operator')).toBe(
+      'Masternode key imported (2 nodes matched)',
+    )
+  })
+
+  it('reports matched node counts in P2P mode for all roles including zero matches', () => {
+    const roles: MasternodeKeyRole[] = ['owner', 'voting', 'operator']
+    for (const role of roles) {
+      expect(importedKeyToastMessage([], 'p2p', role)).toBe(
+        'Masternode key imported (0 nodes matched)',
+      )
+      expect(importedKeyToastMessage([regularNode], 'p2p', role)).toBe(
+        'Masternode key imported (1 node matched)',
+      )
+      expect(importedKeyToastMessage([regularNode, otherNode], 'p2p', role)).toBe(
+        'Masternode key imported (2 nodes matched)',
+      )
     }
-    expect(nodeRolesLabel(multiRole)).toBe('Owner · Operator')
-    expect(keyOriginBadge(multiRole, 'owner').text).toBe('Wallet key')
-    expect(keyOriginBadge(multiRole, 'operator').text).toBe('Imported')
-    expect(keyOriginBadge(multiRole, 'voting').text).toBe('External')
+  })
+
+  it('falls back to the generic import toast when matched nodes are null', () => {
+    const modes: ConnectionType[] = ['p2p', 'rpc']
+    const roles: MasternodeKeyRole[] = ['owner', 'voting', 'operator']
+    for (const mode of modes) {
+      for (const role of roles) {
+        expect(importedKeyToastMessage(null, mode, role)).toBe(MANAGE_KEYS_COPY.keyImportedToast)
+      }
+    }
+  })
+})
+
+describe('Masternode action guards', () => {
+  it('allows registrar updates and operator actions on solo nodes with derived key index 0', () => {
+    const soloDerived = makeNode({
+      isShared: false,
+      shares: [],
+      ownerKeyIndex: 0,
+      operatorKeyIndex: 0,
+    })
+
+    expect(canUpdateNodeRegistrar(soloDerived)).toBe(true)
+    expect(updateRegistrarDisabledReason(soloDerived)).toBeUndefined()
+    expect(canOperateNode(soloDerived)).toBe(true)
+    expect(operateNodeDisabledReason(soloDerived)).toBeUndefined()
+  })
+
+  it('blocks registrar updates and operator actions on shared nodes even when ownerKeyIndex and operatorKeyIndex are 0', () => {
+    const sharedWithKeys = makeNode({
+      isShared: true,
+      shares: [makeShare({ ownerAddress: 'Xshare1', keyIndex: 0 })],
+      ownerKeyIndex: 0,
+      operatorKeyIndex: 0,
+    })
+    const sharedViaSharesOnly = makeNode({
+      isShared: false,
+      shares: [makeShare({ ownerAddress: 'Xshare2', keyIndex: 0 })],
+      ownerKeyIndex: 0,
+      operatorKeyIndex: 0,
+    })
+    const sharedRpcWithoutKeys = makeNode({
+      isShared: true,
+      shares: null,
+      ownerKeyIndex: null,
+      operatorKeyIndex: null,
+    })
+
+    for (const node of [sharedWithKeys, sharedViaSharesOnly, sharedRpcWithoutKeys]) {
+      expect(canUpdateNodeRegistrar(node)).toBe(false)
+      expect(updateRegistrarDisabledReason(node)).toBe(NODE_DETAIL_COPY.sharedUpdateRegistrarUnsupported)
+      expect(canOperateNode(node)).toBe(false)
+      expect(operateNodeDisabledReason(node)).toBe(NODE_DETAIL_COPY.sharedOperatorUnsupported)
+    }
+  })
+
+  it('blocks registrar updates and operator actions on solo nodes missing derived keys, including imported-only roles', () => {
+    const soloNoKeys = makeNode({
+      isShared: false,
+      shares: null,
+      ownerKeyIndex: null,
+      operatorKeyIndex: null,
+      importedRoles: [],
+    })
+    const soloImportedOnly = makeNode({
+      isShared: false,
+      shares: [],
+      ownerKeyIndex: null,
+      operatorKeyIndex: null,
+      importedRoles: ['owner', 'operator'],
+    })
+
+    for (const node of [soloNoKeys, soloImportedOnly]) {
+      expect(canUpdateNodeRegistrar(node)).toBe(false)
+      expect(updateRegistrarDisabledReason(node)).toBe(NODE_DETAIL_COPY.ownerKeyRequired)
+      expect(canOperateNode(node)).toBe(false)
+      expect(operateNodeDisabledReason(node)).toBe(NODE_DETAIL_COPY.operatorKeyRequired)
+    }
+
+    const ownerOnly = makeNode({
+      isShared: false,
+      ownerKeyIndex: 0,
+      operatorKeyIndex: null,
+    })
+    expect(canUpdateNodeRegistrar(ownerOnly)).toBe(true)
+    expect(updateRegistrarDisabledReason(ownerOnly)).toBeUndefined()
+    expect(canOperateNode(ownerOnly)).toBe(false)
+    expect(operateNodeDisabledReason(ownerOnly)).toBe(NODE_DETAIL_COPY.operatorKeyRequired)
+
+    const operatorOnly = makeNode({
+      isShared: false,
+      ownerKeyIndex: null,
+      operatorKeyIndex: 0,
+    })
+    expect(canUpdateNodeRegistrar(operatorOnly)).toBe(false)
+    expect(updateRegistrarDisabledReason(operatorOnly)).toBe(NODE_DETAIL_COPY.ownerKeyRequired)
+    expect(canOperateNode(operatorOnly)).toBe(true)
+    expect(operateNodeDisabledReason(operatorOnly)).toBeUndefined()
   })
 })
 
@@ -98,10 +677,10 @@ describe('Masternode action builders', () => {
 
   it('filters confirmed unspent coins matching exact collateral duffs and not flagged as collateral', () => {
     const coins = [
-      { txid, vout: 0, address: 'X1', satoshis: 100_000_000_000n, height: 100, timestamp: null, confirmations: 6, collateral: false },
-      { txid, vout: 1, address: 'X2', satoshis: 100_000_000_000n, height: 100, timestamp: null, confirmations: 6, collateral: true },
-      { txid, vout: 2, address: 'X3', satoshis: 100_000_000_000n, height: 0, timestamp: null, confirmations: 0, collateral: false },
-      { txid, vout: 3, address: 'X4', satoshis: 400_000_000_000n, height: 100, timestamp: null, confirmations: 6, collateral: false },
+      { txid, vout: 0, address: 'X1', satoshis: 100_000_000_000n, height: 100, timestamp: null, confirmations: 6, isLocked: false, collateral: false },
+      { txid, vout: 1, address: 'X2', satoshis: 100_000_000_000n, height: 100, timestamp: null, confirmations: 6, isLocked: false, collateral: true },
+      { txid, vout: 2, address: 'X3', satoshis: 100_000_000_000n, height: 0, timestamp: null, confirmations: 0, isLocked: false, collateral: false },
+      { txid, vout: 3, address: 'X4', satoshis: 400_000_000_000n, height: 100, timestamp: null, confirmations: 6, isLocked: false, collateral: false },
     ]
     expect(eligibleCollateralUtxos(coins, 'Regular')).toHaveLength(1)
     expect(eligibleCollateralUtxos(coins, 'Evo')).toHaveLength(1)

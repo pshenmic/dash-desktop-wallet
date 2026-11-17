@@ -1,5 +1,6 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import { Button, KeyIcon, PlusIcon, Text } from '@renderer/components/dash-ui-kit-extended'
+import { Button, InfoCircleIcon, KeyIcon, PlusIcon, Text } from '@renderer/components/dash-ui-kit-extended'
+import Alert from '@renderer/components/ui/Alert'
 import ListSkeleton from '@renderer/components/ui/Skeleton'
 import NoResults from '@renderer/components/ui/NoResults'
 import RetryButton from '@renderer/components/ui/RetryButton'
@@ -10,12 +11,14 @@ import { NODE_SEGMENT_EMPTY, NODE_TABLE_COLUMNS, NODES_TAB_COPY } from '@rendere
 import { MASTERNODE_TABLE_GRID } from '@renderer/constants/masternodes'
 import { SECTION_TABLE_HEADER, SECTION_TABLE_WRAPPER } from '@renderer/constants/sectionTable'
 import { useConnectionModeContext } from '@renderer/contexts/ConnectionModeContext'
+import { AlertTone } from '@renderer/enums/AlertTone'
+import { NodeSegment } from '@renderer/enums/Masternodes'
 import { NoResultsTone } from '@renderer/enums/NoResultsTone'
 import { SegmentedControlAppearance } from '@renderer/enums/SegmentedControlAppearance'
 import { refreshMasternodes, useImportedMasternodeKeys, useMasternodes } from '@renderer/hooks/useMasternodes'
 import { useScrollEndSentinel } from '@renderer/hooks/useScrollEndSentinel'
 import { windowList } from '@renderer/utils/listWindow'
-import { filterNodes, nodeSegmentOptions } from '@renderer/utils/masternodeNodes'
+import { emptyNodesDescription, filterNodes, nodeSegmentOptions } from '@renderer/utils/masternodeNodes'
 import type { NodesTabProps } from '@renderer/types/MasternodeScreens'
 import ManageMasternodeKeysModal from './ManageMasternodeKeysModal'
 import NodeTableRow from './NodeTableRow'
@@ -31,8 +34,8 @@ export default function NodesTab({
   onShowMore,
   onOpenNode,
 }: NodesTabProps): React.JSX.Element {
-  const { desired } = useConnectionModeContext()
-  const { nodes, loading, err } = useMasternodes(walletId)
+  const { desired, setDesired } = useConnectionModeContext()
+  const { nodes, discovered, loading, err } = useMasternodes(walletId)
   const { importedKeys } = useImportedMasternodeKeys(walletId)
   const [registerOpen, setRegisterOpen] = useState(false)
   const [keysOpen, setKeysOpen] = useState(false)
@@ -41,7 +44,7 @@ export default function NodesTab({
   const filtered = useMemo(() => filterNodes(nodes, appliedQuery, segment), [nodes, appliedQuery, segment])
   const view = useMemo(() => windowList(filtered, visibleCount), [filtered, visibleCount])
   const hasNodes = nodes.length > 0
-  const showSkeleton = loading && !hasNodes
+  const showSkeleton = loading && !discovered && !hasNodes
   const sentinelRef = useScrollEndSentinel(view.hasMore && !showSkeleton, onShowMore, visibleCount)
 
   const actionButtons = (
@@ -86,8 +89,23 @@ export default function NodesTab({
     body = (
       <NoResults
         title={NODES_TAB_COPY.emptyTitle}
-        description={desired === 'p2p' ? NODES_TAB_COPY.p2pDiscovery : NODES_TAB_COPY.emptyDescription}
-        action={actionButtons}
+        description={emptyNodesDescription(desired, discovered)}
+        action={(
+          <div className={'flex flex-wrap items-center justify-center gap-2'}>
+            {actionButtons}
+            {desired === 'rpc' && (
+              <Button
+                type={'button'}
+                size={'compact'}
+                colorScheme={'lightBlue-mint'}
+                onClick={() => setDesired('p2p')}
+                className={'rounded-[.75rem]'}
+              >
+                {NODES_TAB_COPY.switchToP2P}
+              </Button>
+            )}
+          </div>
+        )}
       />
     )
   } else {
@@ -111,6 +129,24 @@ export default function NodesTab({
           onChange={onSegmentChange}
           className={'flex-wrap'}
         />
+        {desired === 'rpc' && segment === NodeSegment.Shared && (
+          <Alert
+            tone={AlertTone.Info}
+            icon={<InfoCircleIcon size={16} color={'currentColor'} />}
+            title={NODES_TAB_COPY.rpcSharedTitle}
+            description={NODES_TAB_COPY.rpcSharedDescription}
+            actions={(
+              <Button
+                type={'button'}
+                size={'compact'}
+                colorScheme={'lightBlue-mint'}
+                onClick={() => setDesired('p2p')}
+              >
+                {NODES_TAB_COPY.switchToP2P}
+              </Button>
+            )}
+          />
+        )}
         {filtered.length === 0 ? (
           appliedQuery.trim() === '' ? (
             <NoResults noResults={NODE_SEGMENT_EMPTY[segment]} />

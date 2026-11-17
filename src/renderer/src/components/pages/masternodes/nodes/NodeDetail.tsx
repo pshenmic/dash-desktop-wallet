@@ -1,13 +1,15 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Button, HighlightedIdentifier, Text } from '@renderer/components/dash-ui-kit-extended'
 import {
   BoxIcon,
   CalendarIconHighlighted,
   CheckIcon,
+  ContactsIcon,
   DocumentIcon,
   EditIcon,
   KeyIcon,
   ServerIcon,
+  SignIcon,
   TurnOffIcon,
   WalletIcon,
   WebIcon,
@@ -20,6 +22,7 @@ import NoResults from '@renderer/components/ui/NoResults'
 import PageHeader from '@renderer/components/ui/PageHeader'
 import RetryButton from '@renderer/components/ui/RetryButton'
 import StatusPill from '@renderer/components/ui/StatusPill'
+import { EVO_MASTERNODE_TYPE } from '@renderer/constants/masternodes'
 import { NODE_DETAIL_COPY, NODE_DETAIL_ICON_CLASS, NODE_DETAIL_ROW_CLASS } from '@renderer/constants/masternodeNodes'
 import { PAGE_HEADERS } from '@renderer/constants/pageHeaders'
 import { ICON_CHIP, SURFACE_PANEL } from '@renderer/constants/surfaces'
@@ -27,21 +30,28 @@ import { TRANSACTION_DETAIL_CARD_CLASS } from '@renderer/constants/transactionsP
 import { MasternodeDetailModal } from '@renderer/enums/Masternodes'
 import { NoResultsTone } from '@renderer/enums/NoResultsTone'
 import { refreshMasternodes, useMasternodes } from '@renderer/hooks/useMasternodes'
+import type { CustomBadgeProps } from '@renderer/types/CustomBadge'
+import type { NodeDetailProps } from '@renderer/types/MasternodeScreens'
 import {
+  canOperateNode,
+  canUpdateNodeRegistrar,
   formatBlockHeight,
   formatServiceAddress,
+  isSharedNode,
   keyOriginBadge,
   masternodeStatus,
   masternodeType,
   nodeVotingAccessLabel,
+  operateNodeDisabledReason,
+  updateRegistrarDisabledReason,
 } from '@renderer/utils/masternodeNodes'
-import type { NodeDetailProps } from '@renderer/types/MasternodeScreens'
+import NodeSharesCard from './NodeSharesCard'
 import RevokeMasternodeModal from './RevokeMasternodeModal'
 import UpdateRegistrarModal from './UpdateRegistrarModal'
 import UpdateServiceModal from './UpdateServiceModal'
 
 export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailProps): React.JSX.Element {
-  const { nodes, loading, err } = useMasternodes(walletId)
+  const { nodes, discovered, loading, err } = useMasternodes(walletId)
   const [activeModal, setActiveModal] = useState<MasternodeDetailModal | null>(null)
   const node = nodes.find(candidate => candidate.proTxHash === proTxHash) ?? null
 
@@ -49,7 +59,7 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
     return (
       <div className={'pt-2'}>
         <PageHeader title={NODE_DETAIL_COPY.typeTitle} onBack={onBack} backLabel={PAGE_HEADERS.masternodeDetail.back} />
-        {loading ? (
+        {loading && !discovered ? (
           <ListSkeleton rows={3} rowClassName={'h-[4.25rem] rounded-[.875rem]'} />
         ) : (
           <div className={SURFACE_PANEL}>
@@ -66,16 +76,69 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
     )
   }
 
+  const shared = isSharedNode(node)
   const status = masternodeStatus(node.status)
   const typeBadge = masternodeType(node.type)
-  const canUpdateRegistrar = node.ownerKeyIndex != null
-  const canOperate = node.operatorKeyIndex != null
-  const ownerBadge = keyOriginBadge(node, 'owner')
-  const votingBadge = keyOriginBadge(node, 'voting')
-  const operatorBadge = keyOriginBadge(node, 'operator')
+  const isEvo = node.type === EVO_MASTERNODE_TYPE
+  const serviceLabel = formatServiceAddress(node.serviceAddress)
+  const canUpdateRegistrar = canUpdateNodeRegistrar(node)
+  const registrarDisabledReason = updateRegistrarDisabledReason(node)
+  const canOperate = canOperateNode(node)
+  const operateDisabledReason = operateNodeDisabledReason(node)
 
-  const lastPaidText = node.lastPaidBlock == null
-    ? NODE_DETAIL_COPY.pendingIndex
+  const identifierRows: {
+    key: string
+    icon: ReactNode
+    label: string
+    badge?: Pick<CustomBadgeProps, 'variant' | 'text'>
+    value: string | null
+    fallback?: string
+  }[] = [
+    {
+      key: 'proTxHash',
+      icon: <DocumentIcon size={14} color={'currentColor'} />,
+      label: NODE_DETAIL_COPY.proTxHash,
+      value: node.proTxHash,
+    },
+    {
+      key: 'payout',
+      icon: <WalletIcon size={14} color={'currentColor'} />,
+      label: NODE_DETAIL_COPY.payoutAddress,
+      value: node.payeeAddress,
+      fallback: shared ? NODE_DETAIL_COPY.sharedPayoutValue : NODE_DETAIL_COPY.pendingIndex,
+    },
+    ...(!shared ? [{
+      key: 'owner',
+      icon: <ContactsIcon size={14} color={'currentColor'} />,
+      label: NODE_DETAIL_COPY.ownerAddress,
+      badge: keyOriginBadge(node, 'owner'),
+      value: node.ownerAddress,
+      fallback: NODE_DETAIL_COPY.pendingIndex,
+    }] : []),
+    {
+      key: 'voting',
+      icon: <SignIcon size={14} color={'currentColor'} />,
+      label: NODE_DETAIL_COPY.votingAddress,
+      badge: keyOriginBadge(node, 'voting'),
+      value: node.votingAddress,
+    },
+    {
+      key: 'operator',
+      icon: <KeyIcon size={14} color={'currentColor'} />,
+      label: NODE_DETAIL_COPY.operatorPublicKey,
+      badge: keyOriginBadge(node, 'operator'),
+      value: node.operatorPublicKey,
+    },
+    ...(isEvo && node.platformNodeId != null ? [{
+      key: 'platformNodeId',
+      icon: <ServerIcon size={14} color={'currentColor'} />,
+      label: NODE_DETAIL_COPY.platformNodeId,
+      value: node.platformNodeId,
+    }] : []),
+  ]
+
+  const lastPaidValue = node.lastPaidBlock == null
+    ? NODE_DETAIL_COPY.unavailable
     : node.lastPaidBlock <= 0
       ? NODE_DETAIL_COPY.neverPaid
       : formatBlockHeight(node.lastPaidBlock)
@@ -83,12 +146,13 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
   return (
     <>
       <PageHeader
-        title={formatServiceAddress(node.serviceAddress)}
+        title={serviceLabel}
         onBack={onBack}
         backLabel={PAGE_HEADERS.masternodeDetail.back}
         titleAddon={(
           <>
             <CustomBadge {...typeBadge} className={'shrink-0'} />
+            {shared && <CustomBadge variant={'default'} text={NODE_DETAIL_COPY.sharedBadge} className={'shrink-0'} />}
             <StatusPill tone={status.tone}>{status.label}</StatusPill>
           </>
         )}
@@ -99,7 +163,7 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
               size={'compact'}
               colorScheme={'primary-light'}
               disabled={!canUpdateRegistrar}
-              title={canUpdateRegistrar ? undefined : NODE_DETAIL_COPY.ownerKeyRequired}
+              title={registrarDisabledReason}
               onClick={() => setActiveModal(MasternodeDetailModal.UpdateRegistrar)}
               className={'inline-flex items-center gap-1.5 rounded-[.75rem]'}
             >
@@ -111,7 +175,7 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
               size={'compact'}
               colorScheme={'primary-light'}
               disabled={!canOperate}
-              title={canOperate ? undefined : NODE_DETAIL_COPY.operatorKeyRequired}
+              title={operateDisabledReason}
               onClick={() => setActiveModal(MasternodeDetailModal.UpdateService)}
               className={'inline-flex items-center gap-1.5 rounded-[.75rem]'}
             >
@@ -123,7 +187,7 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
               size={'compact'}
               colorScheme={'danger-light'}
               disabled={!canOperate}
-              title={canOperate ? undefined : NODE_DETAIL_COPY.operatorKeyRequired}
+              title={operateDisabledReason}
               onClick={() => setActiveModal(MasternodeDetailModal.Revoke)}
               className={'inline-flex items-center gap-1.5 rounded-[.75rem]'}
             >
@@ -137,65 +201,28 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
       <div className={'flex flex-col gap-4'}>
         <div className={TRANSACTION_DETAIL_CARD_CLASS}>
           <div className={'flex flex-col gap-3'}>
-            <div className={NODE_DETAIL_ROW_CLASS}>
-              <span className={ICON_CHIP}><DocumentIcon size={14} color={'currentColor'} /></span>
-              <Text size={14} weight={'medium'} color={'brand'} className={'shrink-0'}>{NODE_DETAIL_COPY.proTxHash}</Text>
-              <HighlightedIdentifier className={'min-w-0 font-medium!'}>{node.proTxHash}</HighlightedIdentifier>
-              <CopyButton text={node.proTxHash} className={'shrink-0'} />
-            </div>
-            <div className={NODE_DETAIL_ROW_CLASS}>
-              <span className={ICON_CHIP}><WalletIcon size={14} color={'currentColor'} /></span>
-              <Text size={14} weight={'medium'} color={'brand'} className={'shrink-0'}>{NODE_DETAIL_COPY.payoutAddress}</Text>
-              {node.payeeAddress != null ? (
-                <>
-                  <HighlightedIdentifier className={'min-w-0 font-medium!'}>{node.payeeAddress}</HighlightedIdentifier>
-                  <CopyButton text={node.payeeAddress} className={'shrink-0'} />
-                </>
-              ) : (
-                <Text size={14} weight={'medium'} color={'brand'} opacity={50}>{NODE_DETAIL_COPY.pendingIndex}</Text>
-              )}
-            </div>
-            <div className={NODE_DETAIL_ROW_CLASS}>
-              <span className={ICON_CHIP}><KeyIcon size={14} color={'currentColor'} /></span>
-              <Text size={14} weight={'medium'} color={'brand'} className={'shrink-0'}>{NODE_DETAIL_COPY.ownerAddress}</Text>
-              <CustomBadge {...ownerBadge} className={'shrink-0'} />
-              {node.ownerAddress != null ? (
-                <>
-                  <HighlightedIdentifier className={'min-w-0 font-medium!'}>{node.ownerAddress}</HighlightedIdentifier>
-                  <CopyButton text={node.ownerAddress} className={'shrink-0'} />
-                </>
-              ) : (
-                <Text size={14} weight={'medium'} color={'brand'} opacity={50}>{NODE_DETAIL_COPY.pendingIndex}</Text>
-              )}
-            </div>
-            <div className={NODE_DETAIL_ROW_CLASS}>
-              <span className={ICON_CHIP}><KeyIcon size={14} color={'currentColor'} /></span>
-              <Text size={14} weight={'medium'} color={'brand'} className={'shrink-0'}>{NODE_DETAIL_COPY.votingAddress}</Text>
-              <CustomBadge {...votingBadge} className={'shrink-0'} />
-              <HighlightedIdentifier className={'min-w-0 font-medium!'}>{node.votingAddress}</HighlightedIdentifier>
-              <CopyButton text={node.votingAddress} className={'shrink-0'} />
-            </div>
-            <div className={NODE_DETAIL_ROW_CLASS}>
-              <span className={ICON_CHIP}><KeyIcon size={14} color={'currentColor'} /></span>
-              <Text size={14} weight={'medium'} color={'brand'} className={'shrink-0'}>{NODE_DETAIL_COPY.operatorPublicKey}</Text>
-              <CustomBadge {...operatorBadge} className={'shrink-0'} />
-              <HighlightedIdentifier className={'min-w-0 font-medium!'}>{node.operatorPublicKey}</HighlightedIdentifier>
-              <CopyButton text={node.operatorPublicKey} className={'shrink-0'} />
-            </div>
-            {node.type === 'Evo' && node.platformNodeId != null && (
-              <div className={NODE_DETAIL_ROW_CLASS}>
-                <span className={ICON_CHIP}><ServerIcon size={14} color={'currentColor'} /></span>
-                <Text size={14} weight={'medium'} color={'brand'} className={'shrink-0'}>{NODE_DETAIL_COPY.platformNodeId}</Text>
-                <HighlightedIdentifier className={'min-w-0 font-medium!'}>{node.platformNodeId}</HighlightedIdentifier>
-                <CopyButton text={node.platformNodeId} className={'shrink-0'} />
+            {identifierRows.map(row => (
+              <div key={row.key} className={NODE_DETAIL_ROW_CLASS}>
+                <span className={ICON_CHIP}>{row.icon}</span>
+                <Text size={14} weight={'medium'} color={'brand'} className={'shrink-0'}>{row.label}</Text>
+                {row.badge && <CustomBadge {...row.badge} className={'shrink-0'} />}
+                {row.value != null ? (
+                  <>
+                    <HighlightedIdentifier className={'min-w-0 font-medium!'}>{row.value}</HighlightedIdentifier>
+                    <CopyButton text={row.value} className={'shrink-0'} />
+                  </>
+                ) : (
+                  <Text size={14} weight={'medium'} color={'brand'} opacity={50}>{row.fallback}</Text>
+                )}
               </div>
-            )}
+            ))}
           </div>
           <div className={'grid grid-cols-1 lg:grid-cols-2 gap-3'}>
             <DetailToken
               icon={<ServerIcon size={14} color={'currentColor'} className={NODE_DETAIL_ICON_CLASS} />}
               label={NODE_DETAIL_COPY.type}
               value={<Text size={14} weight={'extrabold'} color={'brand'}>{typeBadge.text}</Text>}
+              subValue={shared ? NODE_DETAIL_COPY.sharedRegistration : NODE_DETAIL_COPY.soloRegistration}
             />
             <DetailToken
               icon={<CheckIcon size={14} color={'currentColor'} className={NODE_DETAIL_ICON_CLASS} />}
@@ -206,7 +233,10 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
             <DetailToken
               icon={<WebIcon size={14} color={'currentColor'} className={NODE_DETAIL_ICON_CLASS} />}
               label={NODE_DETAIL_COPY.service}
-              value={<Text size={14} weight={'medium'} color={'brand'} className={'tabular-nums'}>{formatServiceAddress(node.serviceAddress)}</Text>}
+              value={<Text size={14} weight={'medium'} color={'brand'} className={'tabular-nums'}>{serviceLabel}</Text>}
+              subValue={isEvo && node.platformP2PPort != null && node.platformHttpPort != null
+                ? `${NODE_DETAIL_COPY.platformPorts} ${node.platformP2PPort} / ${node.platformHttpPort}`
+                : undefined}
             />
             <DetailToken
               icon={<KeyIcon size={14} color={'currentColor'} className={NODE_DETAIL_ICON_CLASS} />}
@@ -216,11 +246,9 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
             <DetailToken
               icon={<BoxIcon size={14} color={'currentColor'} className={NODE_DETAIL_ICON_CLASS} />}
               label={NODE_DETAIL_COPY.collateral}
-              value={node.collateralAddress != null ? (
-                <HighlightedIdentifier className={'min-w-0 font-medium!'}>{node.collateralAddress}</HighlightedIdentifier>
-              ) : (
-                <Text size={14} weight={'medium'} color={'brand'} opacity={50}>{NODE_DETAIL_COPY.pendingIndex}</Text>
-              )}
+              value={node.collateralAddress != null
+                ? <HighlightedIdentifier className={'min-w-0 font-medium!'}>{node.collateralAddress}</HighlightedIdentifier>
+                : <Text size={14} weight={'medium'} color={'brand'} opacity={50}>{NODE_DETAIL_COPY.pendingIndex}</Text>}
               subValue={node.collateralTxid != null && node.collateralVout != null
                 ? `${node.collateralTxid.slice(0, 10)}…:${node.collateralVout}`
                 : undefined}
@@ -230,26 +258,16 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
               label={NODE_DETAIL_COPY.lastPaid}
               value={(
                 <Text size={14} weight={'medium'} color={'brand'} className={'tabular-nums'}>
-                  {lastPaidText}
+                  {lastPaidValue}
                 </Text>
               )}
               subValue={node.registeredHeight != null
                 ? `${NODE_DETAIL_COPY.registeredHeight} ${formatBlockHeight(node.registeredHeight)}`
                 : undefined}
             />
-            {node.type === 'Evo' && node.platformP2PPort != null && node.platformHttpPort != null && (
-              <DetailToken
-                icon={<WebIcon size={14} color={'currentColor'} className={NODE_DETAIL_ICON_CLASS} />}
-                label={NODE_DETAIL_COPY.platformPorts}
-                value={(
-                  <Text size={14} weight={'medium'} color={'brand'} className={'tabular-nums'}>
-                    {`${node.platformP2PPort} / ${node.platformHttpPort}`}
-                  </Text>
-                )}
-              />
-            )}
           </div>
         </div>
+        {shared && <NodeSharesCard node={node} />}
       </div>
 
       {activeModal === MasternodeDetailModal.UpdateRegistrar && (

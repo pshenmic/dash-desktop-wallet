@@ -11,6 +11,7 @@ import {
   VOTE_OUTCOME_OPTIONS,
   VOTE_PROPOSAL_COPY,
 } from '@renderer/constants/governanceProposals'
+import { NODE_DETAIL_COPY } from '@renderer/constants/masternodeNodes'
 import { CHIP_ACTION, SURFACE_ROW, SURFACE_SECTION } from '@renderer/constants/surfaces'
 import { SegmentedControlAppearance } from '@renderer/enums/SegmentedControlAppearance'
 import { refreshProposalTally } from '@renderer/hooks/useGovernanceProposals'
@@ -21,7 +22,7 @@ import {
   masternodeVoteWeight,
   totalSelectedVoteWeight,
 } from '@renderer/utils/governanceProposals'
-import { formatServiceAddress, masternodeType } from '@renderer/utils/masternodeNodes'
+import { formatServiceAddress, isSharedNode, masternodeType } from '@renderer/utils/masternodeNodes'
 
 export default function VoteProposalModal({
   walletId,
@@ -118,6 +119,7 @@ export default function VoteProposalModal({
                       <div className={'flex items-center gap-2'}>
                         <Text size={12} weight={'bold'} color={'brand'} className={'truncate'}>{formatServiceAddress(node.serviceAddress)}</Text>
                         <CustomBadge {...masternodeType(node.type)} className={'shrink-0'} />
+                        {isSharedNode(node) && <CustomBadge variant={'default'} text={NODE_DETAIL_COPY.sharedBadge} className={'shrink-0'} />}
                       </div>
                       <HighlightedIdentifier className={'text-[.625rem]! opacity-70'}>{node.proTxHash}</HighlightedIdentifier>
                     </div>

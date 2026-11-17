@@ -25,7 +25,7 @@ export const MASTERNODE_LOAD_ERROR = 'Failed to load masternodes'
 export const MASTERNODE_IMPORTED_KEYS_ERROR = 'Failed to load imported masternode keys'
 export const MASTERNODE_REFRESH_MS = 15_000
 
-export const MASTERNODE_TABLE_GRID = 'grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)_minmax(0,1fr)_1rem]'
+export const MASTERNODE_TABLE_GRID = 'grid-cols-[minmax(0,1.7fr)_minmax(0,0.85fr)_minmax(0,1.25fr)_1rem]'
 
 export const MASTERNODE_STATUS_PILLS = new Map([
   ['ENABLED', { tone: StatusPillTone.Success, label: 'Active' }],
@@ -37,6 +37,9 @@ export const POSE_BANNED_MASTERNODE_STATUS = 'POSE_BANNED'
 export const REGULAR_MASTERNODE_TYPE = 'Regular'
 export const EVO_MASTERNODE_TYPE = 'Evo'
 export const UNASSIGNED_SERVICE_ADDRESS = '0.0.0.0:0'
+export const SHARE_BASIS_POINTS = 10_000n
+export const SHARE_BASIS_DIVISOR = 10_000
+export const SHARE_PERCENT_SCALE = 100
 
 export const MASTERNODE_COLLATERAL_DUFFS = {
   Regular: 100_000_000_000n,
@@ -58,6 +61,7 @@ export const TESTNET_DEFAULT_PLATFORM_HTTP_PORT = 1443
 
 export const NODE_SEGMENT_LABELS: Record<NodeSegment, string> = {
   [NodeSegment.All]: 'All',
+  [NodeSegment.Shared]: 'Shared',
   [NodeSegment.VotingKey]: 'Voting key in wallet',
   [NodeSegment.NoVotingKey]: 'No voting key in wallet',
   [NodeSegment.Issues]: 'Issues',

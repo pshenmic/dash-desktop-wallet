@@ -6,6 +6,7 @@ export enum MasternodesTab {
 
 export enum NodeSegment {
   All = 'all',
+  Shared = 'shared',
   VotingKey = 'voting-key',
   NoVotingKey = 'no-voting-key',
   Issues = 'issues',

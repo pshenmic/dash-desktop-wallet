@@ -55,6 +55,8 @@ function makeNode(overrides: Partial<MasternodeDto> = {}): MasternodeDto {
     lastPaidBlock: 100,
     lastPaidTime: 1000,
     registeredHeight: 50,
+    isShared: false,
+    shares: [],
     ...overrides,
   }
 }
@@ -104,5 +106,22 @@ describe('Governance proposal helpers', () => {
     expect(classified.eligible.map(n => n.proTxHash)).toEqual(['reg', 'evo'])
     expect(classified.ineligible).toHaveLength(3)
     expect(totalSelectedVoteWeight(classified.eligible, new Set(['reg', 'evo']))).toBe(5)
+  })
+
+  it('classifies an active shared masternode with a derived voting key as eligible', () => {
+    const shared = makeNode({
+      proTxHash: 'shared-voter',
+      isShared: true,
+      ownerAddress: null,
+      payeeAddress: null,
+      votingKeyIndex: 0,
+      collateralTxid: 'c'.repeat(64),
+      collateralVout: 3,
+    })
+
+    const classified = classifyVotingMasternodes([shared])
+    expect(classified.eligible).toEqual([shared])
+    expect(classified.ineligible).toEqual([])
+    expect(totalSelectedVoteWeight(classified.eligible, new Set(['shared-voter']))).toBe(1)
   })
 })
