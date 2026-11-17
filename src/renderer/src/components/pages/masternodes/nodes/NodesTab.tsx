@@ -22,7 +22,6 @@ import { emptyNodesDescription, filterNodes, nodeSegmentOptions } from '@rendere
 import type { NodesTabProps } from '@renderer/types/MasternodeScreens'
 import ManageMasternodeKeysModal from './ManageMasternodeKeysModal'
 import NodeTableRow from './NodeTableRow'
-import RegisterMasternodeModal from './RegisterMasternodeModal'
 
 export default function NodesTab({
   walletId,
@@ -33,11 +32,11 @@ export default function NodesTab({
   visibleCount,
   onShowMore,
   onOpenNode,
+  onRegister,
 }: NodesTabProps): React.JSX.Element {
   const { desired, setDesired } = useConnectionModeContext()
   const { nodes, discovered, loading, err } = useMasternodes(walletId)
   const { importedKeys } = useImportedMasternodeKeys(walletId)
-  const [registerOpen, setRegisterOpen] = useState(false)
   const [keysOpen, setKeysOpen] = useState(false)
   const appliedQuery = useDeferredValue(query)
   const options = useMemo(() => nodeSegmentOptions(nodes, appliedQuery), [nodes, appliedQuery])
@@ -65,7 +64,7 @@ export default function NodesTab({
         type={'button'}
         size={'compact'}
         colorScheme={'primary'}
-        onClick={() => setRegisterOpen(true)}
+        onClick={onRegister}
         className={'inline-flex items-center gap-1.5 rounded-[.75rem]'}
       >
         <PlusIcon size={12} color={'currentColor'} />
@@ -178,13 +177,6 @@ export default function NodesTab({
   return (
     <div className={'flex flex-col gap-4 pt-2'}>
       {body}
-      {registerOpen && (
-        <RegisterMasternodeModal
-          walletId={walletId}
-          open={registerOpen}
-          onClose={() => setRegisterOpen(false)}
-        />
-      )}
       {keysOpen && (
         <ManageMasternodeKeysModal
           walletId={walletId}

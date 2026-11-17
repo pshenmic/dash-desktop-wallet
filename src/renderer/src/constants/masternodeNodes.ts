@@ -80,6 +80,10 @@ export const NODE_DETAIL_COPY = {
   walletKeyBadge: 'Wallet key',
   importedKeyBadge: 'Imported',
   externalKeyBadge: 'External',
+  pendingRegistrationPrimary: 'Owner · Operator · Voting',
+  pendingRegistrationSecondary: 'Awaiting block confirmation',
+  pendingRegistrationNoticeTitle: 'Registration transaction broadcast',
+  pendingRegistrationNoticeDescription: 'This masternode is awaiting block confirmation and network list indexing. Derived key indices and registrar/operator actions unlock once confirmed on-chain.',
 } as const
 
 export const NODE_DETAIL_ROW_CLASS = 'flex min-w-0 items-center gap-[.625rem]'
@@ -171,11 +175,6 @@ export const REGISTER_MASTERNODE_COPY = {
   peersAcked: 'Peers acknowledged',
 } as const
 
-export const REGISTER_MASTERNODE_TYPE_OPTIONS: Array<{ value: 'Regular' | 'Evo'; label: string }> = [
-  { value: 'Regular', label: REGISTER_MASTERNODE_COPY.regularOption },
-  { value: 'Evo', label: REGISTER_MASTERNODE_COPY.evoOption },
-]
-
 export const REGISTRAR_KEY_CHOICE_OPTIONS: SegmentOption<RegistrarKeyChoiceKind>[] = [
   { value: RegistrarKeyChoiceKind.Keep, label: 'Keep current' },
   { value: RegistrarKeyChoiceKind.Wallet, label: 'Use wallet key' },
@@ -209,7 +208,7 @@ export const UPDATE_SERVICE_COPY = {
   title: 'Update service (ProUpServTx)',
   description: 'Signed with the masternode’s operator BLS key. Restates the IP:port and platform endpoints.',
   serviceLabel: 'Service address (IPv4:port)',
-  servicePlaceholder: 'e.g. 203.0.113.10:9999',
+  servicePlaceholder: 'e.g. 45.67.89.10:9999',
   operatorPayoutLabel: 'Operator payout address (optional)',
   operatorPayoutPlaceholder: 'Leave empty unless node has an operator reward',
   review: 'Review service update',

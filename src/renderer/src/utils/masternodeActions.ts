@@ -13,6 +13,8 @@ import {
   MAINNET_PLATFORM_P2P_PORT,
   MASTERNODE_COLLATERAL_DUFFS,
   MAX_OPERATOR_REWARD_BPS,
+  NON_ROUTABLE_IPV4_PREFIXES,
+  PUBLIC_IPV4_SAMPLE,
 } from '@renderer/constants/masternodes'
 import { PayoutChoiceKind, RegistrarKeyChoiceKind } from '@renderer/enums/Masternodes'
 import type {
@@ -20,6 +22,11 @@ import type {
   UpdateRegistrarFormInput,
   UpdateServiceFormInput,
 } from '@renderer/types/MasternodeNodes'
+import type {
+  RegisterWizardDraft,
+  RegisterWizardValidation,
+} from '@renderer/types/MasternodeRegistrationWizard'
+import { isValidDashAddress, isValidDashChangeAddress } from '@renderer/utils/address'
 
 const NODE_ID_PATTERN = /^[0-9a-fA-F]{40}$/
 const BLS_PUBKEY_PATTERN = /^[0-9a-fA-F]{96}$/
@@ -60,13 +67,36 @@ export function parseOperatorRewardBps(input: string): number | null {
   return bps
 }
 
+function ipv4ToNumber(ip: string): number {
+  return ip.split('.').reduce((value, octet) => value * 256 + Number(octet), 0)
+}
+
+export function isRoutableIpv4(ip: string): boolean {
+  const octets = ip.split('.').map(Number)
+  if (octets.length !== 4 || octets.some(octet => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
+    return false
+  }
+  const value = ipv4ToNumber(ip)
+  return !NON_ROUTABLE_IPV4_PREFIXES.some(([network, bits]) =>
+    Math.floor(value / 2 ** (32 - bits)) === Math.floor(ipv4ToNumber(network) / 2 ** (32 - bits)))
+}
+
+export function splitIpPortInput(raw: string): { ip: string; port: string | null } {
+  const match = IPV4_PORT_PATTERN.exec(raw.trim())
+  if (match == null) return { ip: raw, port: null }
+  return { ip: match[1], port: match[2] }
+}
+
 export function validateServiceEndpoint(serviceAddress: string, network: Network | null): { port: number; error: string | null } {
   const match = IPV4_PORT_PATTERN.exec(serviceAddress.trim())
-  if (match == null) return { port: 0, error: 'Enter an IPv4 address and port (e.g. 203.0.113.10:9999)' }
+  if (match == null) return { port: 0, error: `Enter an IPv4 address and port (e.g. ${PUBLIC_IPV4_SAMPLE}:9999)` }
   const octets = match[1].split('.').map(Number)
   const port = Number(match[2])
   if (octets.some(octet => octet > 255) || !Number.isInteger(port) || port < 1 || port > 65535) {
     return { port: 0, error: 'Enter a valid IPv4 address and port (1–65535)' }
+  }
+  if (!isRoutableIpv4(match[1])) {
+    return { port, error: `${match[1]} is not a public routable IPv4 address` }
   }
   if (network === 'mainnet' && port !== MAINNET_CORE_PORT) {
     return { port, error: `A mainnet masternode serves on port ${MAINNET_CORE_PORT}` }
@@ -245,5 +275,114 @@ export function buildServiceUpdate(form: UpdateServiceFormInput): {
       platformHttpPort: evo.httpPort,
     },
     error: null,
+  }
+}
+
+export function validateRegistrationWizard(
+  draft: RegisterWizardDraft,
+  collateralCoins: SelectableUtxo[],
+  walletUtxos: SelectableUtxo[],
+  network: Network | null,
+): RegisterWizardValidation {
+  const addressNetwork = network ?? undefined
+  let collateralOutpoint = ''
+  let selectedCoin: SelectableUtxo | null = null
+  let manualOutpointMissingFromWallet = false
+  let step1Error: string | null = null
+
+  if (draft.collateralSource === 'wallet') {
+    const active = collateralCoins.find(coin => `${coin.txid}:${coin.vout}` === draft.selectedCollateral) ?? collateralCoins[0] ?? null
+    if (active == null) {
+      step1Error = 'Select an eligible collateral UTXO or enter a manual outpoint'
+    } else {
+      selectedCoin = active
+      collateralOutpoint = `${active.txid}:${active.vout}`
+    }
+  } else {
+    const parsed = parseOutpoint(`${draft.manualTxid.trim()}:${draft.manualVout.trim()}`)
+    if (parsed == null) {
+      step1Error = 'Enter a 64-character collateral txid and non-negative output index'
+    } else {
+      collateralOutpoint = `${parsed.txid}:${parsed.vout}`
+      selectedCoin = walletUtxos.find(coin => coin.txid === parsed.txid && coin.vout === parsed.vout) ?? null
+      manualOutpointMissingFromWallet = selectedCoin == null
+    }
+  }
+
+  if (step1Error == null && draft.feeSourceMode === 'address') {
+    const feeAddr = draft.feeSourceAddress.trim()
+    if (feeAddr === '' || !isValidDashChangeAddress(feeAddr, addressNetwork)) {
+      step1Error = 'Enter a valid P2PKH fee source address or switch to automatic selection'
+    }
+  }
+
+  let step2Error: string | null = null
+  const payout = draft.payoutAddress.trim()
+  const owner = draft.ownerAddress.trim()
+  const voting = draft.votingAddress.trim()
+  const operatorKey = draft.operatorPublicKey.trim().toLowerCase()
+  const operatorPayout = draft.operatorPayoutAddress.trim()
+  const rewardBps = parseOperatorRewardBps(draft.operatorRewardPercent)
+
+  if (payout === '' || !isValidDashAddress(payout, addressNetwork)) {
+    step2Error = 'Enter a valid Dash Core owner payout address'
+  } else if (draft.ownerMode === 'external' && (owner === '' || !isValidDashChangeAddress(owner, addressNetwork))) {
+    step2Error = 'Enter a valid P2PKH owner key address'
+  } else if (draft.votingMode === 'external' && (voting === '' || !isValidDashChangeAddress(voting, addressNetwork))) {
+    step2Error = 'Enter a valid P2PKH voting key address'
+  } else if (draft.ownerMode === 'external' && payout === owner) {
+    step2Error = 'Payout address cannot be the same as the owner address'
+  } else if (draft.votingMode === 'external' && payout === voting) {
+    step2Error = 'Payout address cannot be the same as the voting address'
+  } else if (draft.operatorMode === 'external' && (!BLS_PUBKEY_PATTERN.test(operatorKey) || /^0+$/.test(operatorKey))) {
+    step2Error = 'Operator public key must be 96 hex characters (non-zero)'
+  } else if (rewardBps == null) {
+    step2Error = 'Operator reward must be between 0 and 100% (up to 2 decimal places)'
+  } else if (rewardBps > 0 && operatorPayout !== '' && !isValidDashAddress(operatorPayout, addressNetwork)) {
+    step2Error = 'Enter a valid Dash operator payout address or leave it empty'
+  }
+
+  const serviceAddress = draft.serviceMode === 'now'
+    ? `${draft.serviceIp.trim()}:${draft.servicePort.trim()}`
+    : ''
+  let step3Error: string | null = null
+  let corePort: number | null = null
+  if (draft.serviceMode === 'now') {
+    const endpoint = validateServiceEndpoint(serviceAddress, network)
+    if (endpoint.error != null) step3Error = endpoint.error
+    else corePort = endpoint.port
+  }
+  if (step3Error == null && draft.type === EVO_MASTERNODE_TYPE) {
+    const evo = validateEvoPlatformFields(draft.platformNodeId, draft.platformP2PPort, draft.platformHttpPort, corePort, network)
+    if (evo.error != null) step3Error = evo.error
+  }
+
+  const built = step1Error == null && step2Error == null && step3Error == null
+    ? buildMasternodeRegistration({
+        type: draft.type,
+        collateralOutpoint,
+        payoutAddress: payout,
+        serviceAddress,
+        operatorRewardPercent: draft.operatorRewardPercent,
+        platformNodeId: draft.platformNodeId,
+        platformP2PPort: draft.platformP2PPort,
+        platformHttpPort: draft.platformHttpPort,
+        network,
+      })
+    : { dto: null, error: null }
+
+  const customKeyRoles: string[] = []
+  if (draft.ownerMode === 'external') customKeyRoles.push('Owner')
+  if (draft.votingMode === 'external') customKeyRoles.push('Voting')
+  if (draft.operatorMode === 'external') customKeyRoles.push('Operator')
+
+  return {
+    step1Error,
+    step2Error,
+    step3Error,
+    dto: built.dto,
+    customKeyRoles,
+    selectedCoin,
+    manualOutpointMissingFromWallet,
   }
 }

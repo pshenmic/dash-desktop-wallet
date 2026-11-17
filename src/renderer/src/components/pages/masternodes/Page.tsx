@@ -30,6 +30,7 @@ import ContestDetail from './contested-resources/ContestDetail'
 import ContestsTab from './contested-resources/ContestsTab'
 import NodeDetail from './nodes/NodeDetail'
 import NodesTab from './nodes/NodesTab'
+import RegisterMasternodeWizard from './nodes/RegisterMasternodeWizard'
 import ProposalDetail from './proposals/ProposalDetail'
 import ProposalsTab from './proposals/ProposalsTab'
 
@@ -56,7 +57,8 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
       ? MASTERNODE_PARAMS.proposal
       : MASTERNODE_PARAMS.contest
   const detail = searchParams.get(detailParam)
-  const saveListScroll = useDetailScrollRestore(detail)
+  const registering = tab === MasternodesTab.Nodes && detail == null && searchParams.get(MASTERNODE_PARAMS.register) === '1'
+  const saveListScroll = useDetailScrollRestore(detail ?? (registering ? 'register' : null))
 
   useEffect(() => {
     prefetchAddresses(walletId).catch(() => {})
@@ -78,6 +80,7 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
       [MASTERNODE_PARAMS.node]: null,
       [MASTERNODE_PARAMS.proposal]: null,
       [MASTERNODE_PARAMS.contest]: null,
+      [MASTERNODE_PARAMS.register]: null,
     }), { replace: true })
   }
 
@@ -88,7 +91,7 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
   const openDetail = (value: string): void => {
     saveListScroll()
     const state: MasternodesNavigationState = { fromList: true }
-    setSearchParams(prev => withParams(prev, { [detailParam]: value }), { state })
+    setSearchParams(prev => withParams(prev, { [detailParam]: value, [MASTERNODE_PARAMS.register]: null }), { state })
   }
 
   const closeDetail = (): void => {
@@ -97,6 +100,32 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
       return
     }
     setSearchParams(prev => withParams(prev, { [detailParam]: null }), { replace: true })
+  }
+
+  const openRegister = (): void => {
+    saveListScroll()
+    const state: MasternodesNavigationState = { fromList: true }
+    setSearchParams(prev => withParams(prev, {
+      [MASTERNODE_PARAMS.tab]: null,
+      [MASTERNODE_PARAMS.node]: null,
+      [MASTERNODE_PARAMS.register]: '1',
+    }), { state })
+  }
+
+  const closeRegister = (): void => {
+    if ((location.state as MasternodesNavigationState | null)?.fromList === true) {
+      navigate(-1)
+      return
+    }
+    setSearchParams(prev => withParams(prev, { [MASTERNODE_PARAMS.register]: null }), { replace: true })
+  }
+
+  const openNodeFromRegister = (proTxHash: string): void => {
+    setSearchParams(prev => withParams(prev, {
+      [MASTERNODE_PARAMS.tab]: null,
+      [MASTERNODE_PARAMS.register]: null,
+      [MASTERNODE_PARAMS.node]: proTxHash,
+    }), { replace: true })
   }
 
   const items = [
@@ -113,6 +142,7 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
           visibleCount={nodeVisibleCount}
           onShowMore={() => setNodeVisibleCount(count => count + MASTERNODES_PAGE_SIZE)}
           onOpenNode={openDetail}
+          onRegister={openRegister}
         />
       ),
     },
@@ -167,6 +197,12 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
             : tab === MasternodesTab.Proposals
               ? <ProposalDetail key={detail} walletId={walletId} now={now} proposalHash={detail} onBack={closeDetail} />
               : <ContestDetail key={detail} walletId={walletId} now={now} normalizedLabel={detail} onBack={closeDetail} />
+        ) : registering ? (
+          <RegisterMasternodeWizard
+            walletId={walletId}
+            onBack={closeRegister}
+            onOpenNode={openNodeFromRegister}
+          />
         ) : (
           <>
             <PageHeader title={PAGE_HEADERS.masternodes.title} subtitle={PAGE_HEADERS.masternodes.subtitle} />

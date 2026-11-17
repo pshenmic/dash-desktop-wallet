@@ -15,6 +15,7 @@ import {
   EVO_MASTERNODE_TYPE,
   MASTERNODE_STATUS_PILLS,
   NODE_SEGMENT_LABELS,
+  REGISTERING_MASTERNODE_STATUS,
   REGULAR_MASTERNODE_TYPE,
   SHARE_BASIS_DIVISOR,
   SHARE_BASIS_POINTS,
@@ -119,6 +120,12 @@ export function formatOwnedShareStake(summary: MasternodeShareSummary): string {
 }
 
 export function nodeAccessDisplay(node: MasternodeDto): NodeAccessDisplay {
+  if (node.status === REGISTERING_MASTERNODE_STATUS) {
+    return {
+      primary: NODE_DETAIL_COPY.pendingRegistrationPrimary,
+      secondary: NODE_DETAIL_COPY.pendingRegistrationSecondary,
+    }
+  }
   if (isSharedNode(node)) {
     const summary = calculateShareSummary(node.shares)
     if (summary != null && summary.ownedDuffs > 0n) {
@@ -175,10 +182,15 @@ export function filterNodes(nodes: MasternodeDto[], query: string, segment: Node
       case NodeSegment.Shared: return isSharedNode(node)
       case NodeSegment.VotingKey: return hasVotingKey(node)
       case NodeSegment.NoVotingKey: return !hasVotingKey(node)
-      case NodeSegment.Issues: return node.status !== ENABLED_MASTERNODE_STATUS
+      case NodeSegment.Issues: return node.status !== ENABLED_MASTERNODE_STATUS && node.status !== REGISTERING_MASTERNODE_STATUS
       default: return true
     }
-  }).sort((a, b) => a.proTxHash.localeCompare(b.proTxHash))
+  }).sort((a, b) => {
+    const aPending = a.status === REGISTERING_MASTERNODE_STATUS ? 0 : 1
+    const bPending = b.status === REGISTERING_MASTERNODE_STATUS ? 0 : 1
+    if (aPending !== bPending) return aPending - bPending
+    return a.proTxHash.localeCompare(b.proTxHash)
+  })
 }
 
 export function masternodeStatus(status: string) {

@@ -7,6 +7,7 @@ import {
   ContactsIcon,
   DocumentIcon,
   EditIcon,
+  InfoCircleIcon,
   KeyIcon,
   ServerIcon,
   SignIcon,
@@ -15,6 +16,7 @@ import {
   WebIcon,
 } from '@renderer/components/dash-ui-kit-extended/icons'
 import DetailToken from '@renderer/components/pages/transactions/TransactionDetailToken'
+import Alert from '@renderer/components/ui/Alert'
 import CopyButton from '@renderer/components/ui/CopyButton'
 import CustomBadge from '@renderer/components/ui/CustomBadge'
 import ListSkeleton from '@renderer/components/ui/Skeleton'
@@ -22,11 +24,12 @@ import NoResults from '@renderer/components/ui/NoResults'
 import PageHeader from '@renderer/components/ui/PageHeader'
 import RetryButton from '@renderer/components/ui/RetryButton'
 import StatusPill from '@renderer/components/ui/StatusPill'
-import { EVO_MASTERNODE_TYPE } from '@renderer/constants/masternodes'
+import { EVO_MASTERNODE_TYPE, REGISTERING_MASTERNODE_STATUS } from '@renderer/constants/masternodes'
 import { NODE_DETAIL_COPY, NODE_DETAIL_ICON_CLASS, NODE_DETAIL_ROW_CLASS } from '@renderer/constants/masternodeNodes'
 import { PAGE_HEADERS } from '@renderer/constants/pageHeaders'
 import { ICON_CHIP, SURFACE_PANEL } from '@renderer/constants/surfaces'
 import { TRANSACTION_DETAIL_CARD_CLASS } from '@renderer/constants/transactionsPage'
+import { AlertTone } from '@renderer/enums/AlertTone'
 import { MasternodeDetailModal } from '@renderer/enums/Masternodes'
 import { NoResultsTone } from '@renderer/enums/NoResultsTone'
 import { refreshMasternodes, useMasternodes } from '@renderer/hooks/useMasternodes'
@@ -77,6 +80,7 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
   }
 
   const shared = isSharedNode(node)
+  const pendingRegistration = node.status === REGISTERING_MASTERNODE_STATUS
   const status = masternodeStatus(node.status)
   const typeBadge = masternodeType(node.type)
   const isEvo = node.type === EVO_MASTERNODE_TYPE
@@ -111,7 +115,7 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
       key: 'owner',
       icon: <ContactsIcon size={14} color={'currentColor'} />,
       label: NODE_DETAIL_COPY.ownerAddress,
-      badge: keyOriginBadge(node, 'owner'),
+      badge: pendingRegistration ? undefined : keyOriginBadge(node, 'owner'),
       value: node.ownerAddress,
       fallback: NODE_DETAIL_COPY.pendingIndex,
     }] : []),
@@ -119,15 +123,17 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
       key: 'voting',
       icon: <SignIcon size={14} color={'currentColor'} />,
       label: NODE_DETAIL_COPY.votingAddress,
-      badge: keyOriginBadge(node, 'voting'),
-      value: node.votingAddress,
+      badge: pendingRegistration ? undefined : keyOriginBadge(node, 'voting'),
+      value: node.votingAddress || null,
+      fallback: NODE_DETAIL_COPY.pendingIndex,
     },
     {
       key: 'operator',
       icon: <KeyIcon size={14} color={'currentColor'} />,
       label: NODE_DETAIL_COPY.operatorPublicKey,
-      badge: keyOriginBadge(node, 'operator'),
-      value: node.operatorPublicKey,
+      badge: pendingRegistration ? undefined : keyOriginBadge(node, 'operator'),
+      value: node.operatorPublicKey || null,
+      fallback: NODE_DETAIL_COPY.pendingIndex,
     },
     ...(isEvo && node.platformNodeId != null ? [{
       key: 'platformNodeId',
@@ -199,6 +205,14 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
       />
 
       <div className={'flex flex-col gap-4'}>
+        {pendingRegistration && (
+          <Alert
+            tone={AlertTone.Info}
+            icon={<InfoCircleIcon size={16} color={'currentColor'} />}
+            title={NODE_DETAIL_COPY.pendingRegistrationNoticeTitle}
+            description={NODE_DETAIL_COPY.pendingRegistrationNoticeDescription}
+          />
+        )}
         <div className={TRANSACTION_DETAIL_CARD_CLASS}>
           <div className={'flex flex-col gap-3'}>
             {identifierRows.map(row => (
@@ -241,7 +255,7 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
             <DetailToken
               icon={<KeyIcon size={14} color={'currentColor'} className={NODE_DETAIL_ICON_CLASS} />}
               label={NODE_DETAIL_COPY.votingKey}
-              value={<Text size={14} weight={'medium'} color={'brand'}>{nodeVotingAccessLabel(node)}</Text>}
+              value={<Text size={14} weight={'medium'} color={'brand'}>{pendingRegistration ? NODE_DETAIL_COPY.pendingIndex : nodeVotingAccessLabel(node)}</Text>}
             />
             <DetailToken
               icon={<BoxIcon size={14} color={'currentColor'} className={NODE_DETAIL_ICON_CLASS} />}

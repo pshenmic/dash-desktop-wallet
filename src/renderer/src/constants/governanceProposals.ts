@@ -114,6 +114,7 @@ export const VOTE_PROPOSAL_COPY = {
   totalWeightLabel: 'Total voting weight',
   ineligibleSection: 'Unavailable for voting',
   poseBannedReason: 'PoSe banned',
+  pendingRegistrationReason: 'Awaiting block confirmation',
   missingVotingKeyReason: 'Voting key outside wallet',
   missingCollateralReason: 'Collateral pending index',
   review: 'Review vote',

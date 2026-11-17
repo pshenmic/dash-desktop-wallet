@@ -1,16 +1,23 @@
 import { describe, expect, it } from 'vitest'
+import { PrivateKey } from 'dash-core-sdk'
 import type { ConnectionType, MasternodeDto, MasternodeKeyRole, OwnedMasternodeShareDto } from '@renderer/api/types'
 import { DUFFS_PER_DASH } from '@renderer/constants/balance'
 import { MANAGE_KEYS_COPY, NODES_TAB_COPY, NODE_DETAIL_COPY } from '@renderer/constants/masternodeNodes'
+import { REGISTERING_MASTERNODE_STATUS } from '@renderer/constants/masternodes'
 import { NodeSegment, PayoutChoiceKind, RegistrarKeyChoiceKind } from '@renderer/enums/Masternodes'
 import { StatusPillTone } from '@renderer/enums/StatusPillTone'
+import type { RegisterWizardDraft } from '@renderer/types/MasternodeRegistrationWizard'
+import { classifyVotingMasternodes } from '@renderer/utils/governanceProposals'
 import {
   buildMasternodeRegistration,
   buildRegistrarUpdate,
   buildServiceUpdate,
   eligibleCollateralUtxos,
   isConfirmingUtxo,
+  isRoutableIpv4,
   parseOperatorRewardBps,
+  splitIpPortInput,
+  validateRegistrationWizard,
   validateServiceEndpoint,
 } from '@renderer/utils/masternodeActions'
 import {
@@ -690,14 +697,22 @@ describe('Masternode action builders', () => {
     expect(eligibleCollateralUtxos(coins, 'Evo').map(coin => coin.vout)).toEqual([3])
   })
 
-  it('parses operator reward percentage into basis points and validates service endpoints', () => {
+  it('parses operator reward percentage into basis points and validates routable service endpoints', () => {
     expect(parseOperatorRewardBps('0')).toBe(0)
     expect(parseOperatorRewardBps('5.25')).toBe(525)
     expect(parseOperatorRewardBps('100')).toBe(10000)
     expect(parseOperatorRewardBps('100.01')).toBeNull()
-    expect(validateServiceEndpoint('203.0.113.10:9999', 'mainnet').error).toBeNull()
-    expect(validateServiceEndpoint('203.0.113.10:19999', 'mainnet').error).toContain('9999')
-    expect(validateServiceEndpoint('203.0.113.10:9999', 'testnet').error).toContain('9999')
+    expect(isRoutableIpv4('45.67.89.10')).toBe(true)
+    expect(isRoutableIpv4('127.0.0.1')).toBe(false)
+    expect(isRoutableIpv4('192.168.1.5')).toBe(false)
+    expect(isRoutableIpv4('203.0.113.10')).toBe(false)
+    expect(splitIpPortInput('45.67.89.10:19999')).toEqual({ ip: '45.67.89.10', port: '19999' })
+    expect(splitIpPortInput('45.67.89.10')).toEqual({ ip: '45.67.89.10', port: null })
+    expect(validateServiceEndpoint('45.67.89.10:9999', 'mainnet').error).toBeNull()
+    expect(validateServiceEndpoint('45.67.89.10:19999', 'mainnet').error).toContain('9999')
+    expect(validateServiceEndpoint('45.67.89.10:9999', 'testnet').error).toContain('9999')
+    expect(validateServiceEndpoint('127.0.0.1:9999', 'mainnet').error).toContain('routable')
+    expect(validateServiceEndpoint('203.0.113.10:9999', 'mainnet').error).toContain('routable')
   })
 
   it('builds Regular and Evo masternode registrations and registrar/service updates', () => {
@@ -738,7 +753,7 @@ describe('Masternode action builders', () => {
 
     const updSrv = buildServiceUpdate({
       type: 'Evo',
-      serviceAddress: '203.0.113.10:19999',
+      serviceAddress: '45.67.89.10:19999',
       operatorPayoutAddress: '',
       platformNodeId: 'b'.repeat(40),
       platformP2PPort: '26656',
@@ -747,5 +762,88 @@ describe('Masternode action builders', () => {
     })
     expect(updSrv.error).toBeNull()
     expect(updSrv.dto?.platformP2PPort).toBe(26656)
+  })
+
+  it('validates multi-step registration wizard fields, DIP-3 key collisions, and pending list status', () => {
+    const payoutAddr = PrivateKey.fromBytes(Uint8Array.from({ length: 32 }, (_, i) => i + 1), 'testnet', true).getAddress()
+    const ownerAddr = PrivateKey.fromBytes(Uint8Array.from({ length: 32 }, (_, i) => i + 2), 'testnet', true).getAddress()
+    const collateralCoin = {
+      txid,
+      vout: 0,
+      address: payoutAddr,
+      satoshis: 400_000_000_000n,
+      height: 0,
+      timestamp: null,
+      confirmations: 0,
+      isLocked: false,
+      collateral: false,
+    }
+    const baseDraft: RegisterWizardDraft = {
+      type: 'Evo',
+      collateralSource: 'wallet',
+      selectedCollateral: `${txid}:0`,
+      manualTxid: '',
+      manualVout: '0',
+      feeSourceMode: 'auto',
+      feeSourceAddress: '',
+      payoutAddress: payoutAddr,
+      ownerMode: 'wallet',
+      ownerAddress: '',
+      votingMode: 'wallet',
+      votingAddress: '',
+      operatorMode: 'wallet',
+      operatorPublicKey: '',
+      operatorRewardPercent: '5',
+      operatorPayoutAddress: '',
+      serviceMode: 'now',
+      serviceIp: '45.67.89.10',
+      servicePort: '19999',
+      platformNodeId: 'c'.repeat(40),
+      platformP2PPort: '36656',
+      platformHttpPort: '1443',
+    }
+
+    const ok = validateRegistrationWizard(baseDraft, [collateralCoin], [collateralCoin], 'testnet')
+    expect(ok.step1Error).toBeNull()
+    expect(ok.step2Error).toBeNull()
+    expect(ok.step3Error).toBeNull()
+    expect(ok.customKeyRoles).toEqual([])
+    expect(ok.dto?.type).toBe('Evo')
+    expect(ok.dto?.serviceAddress).toBe('45.67.89.10:19999')
+
+    const sameOwner = validateRegistrationWizard(
+      { ...baseDraft, ownerMode: 'external', ownerAddress: payoutAddr },
+      [collateralCoin],
+      [collateralCoin],
+      'testnet',
+    )
+    expect(sameOwner.step2Error).toContain('owner')
+    expect(sameOwner.customKeyRoles).toEqual(['Owner'])
+
+    const customOwnerDiff = validateRegistrationWizard(
+      { ...baseDraft, ownerMode: 'external', ownerAddress: ownerAddr },
+      [collateralCoin],
+      [collateralCoin],
+      'testnet',
+    )
+    expect(customOwnerDiff.step2Error).toBeNull()
+    expect(customOwnerDiff.customKeyRoles).toEqual(['Owner'])
+
+    const pendingNode = makeNode({
+      proTxHash: '00'.repeat(32),
+      status: REGISTERING_MASTERNODE_STATUS,
+      votingKeyIndex: null,
+    })
+    expect(masternodeStatus(REGISTERING_MASTERNODE_STATUS)).toEqual({ tone: StatusPillTone.Warning, label: 'Registering' })
+    expect(nodeAccessDisplay(pendingNode)).toEqual({
+      primary: NODE_DETAIL_COPY.pendingRegistrationPrimary,
+      secondary: NODE_DETAIL_COPY.pendingRegistrationSecondary,
+    })
+    expect(filterNodes([regularNode, pendingNode], '', NodeSegment.All).map(n => n.proTxHash)).toEqual([
+      pendingNode.proTxHash,
+      regularNode.proTxHash,
+    ])
+    expect(filterNodes([regularNode, pendingNode], '', NodeSegment.Issues)).toEqual([])
+    expect(classifyVotingMasternodes([pendingNode]).ineligible[0]?.reason).toBe('Awaiting block confirmation')
   })
 })

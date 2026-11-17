@@ -6,6 +6,7 @@ import {
 import {
   MASTERNODE_VOTE_WEIGHT,
   POSE_BANNED_MASTERNODE_STATUS,
+  REGISTERING_MASTERNODE_STATUS,
 } from '@renderer/constants/masternodes'
 import { ProposalSegment, ProposalSort, ProposalStatus } from '@renderer/enums/Masternodes'
 import type { ProposalFilterOptions, VotingNodeEligibility } from '@renderer/types/GovernanceProposals'
@@ -102,7 +103,9 @@ export function classifyVotingMasternodes(nodes: MasternodeDto[]): VotingNodeEli
   const eligible: MasternodeDto[] = []
   const ineligible: Array<{ node: MasternodeDto; reason: string }> = []
   for (const node of nodes) {
-    if (node.votingKeyIndex == null) {
+    if (node.status === REGISTERING_MASTERNODE_STATUS) {
+      ineligible.push({ node, reason: VOTE_PROPOSAL_COPY.pendingRegistrationReason })
+    } else if (node.votingKeyIndex == null) {
       ineligible.push({ node, reason: VOTE_PROPOSAL_COPY.missingVotingKeyReason })
     } else if (node.status === POSE_BANNED_MASTERNODE_STATUS) {
       ineligible.push({ node, reason: VOTE_PROPOSAL_COPY.poseBannedReason })

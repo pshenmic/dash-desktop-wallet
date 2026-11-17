@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react'
 import { API } from '@renderer/api'
 import type { ImportedMasternodeKeyDto, MasternodeDto } from '@renderer/api/types'
 import {
@@ -7,6 +8,12 @@ import {
   MASTERNODE_LOAD_ERROR,
   MASTERNODE_REFRESH_MS,
 } from '@renderer/constants/masternodes'
+import {
+  mergePendingMasternodes,
+  prunePendingMasternodes,
+  readPendingMasternodes,
+  subscribePendingMasternodes,
+} from '@renderer/utils/pendingMasternodes'
 import { invalidateAsyncCache, prefetchAsyncCache, useAsyncWithCache } from './useAsyncWithCache'
 
 export function useMasternodes(walletId: string) {
@@ -17,7 +24,20 @@ export function useMasternodes(walletId: string) {
     null,
     { errorMessage: MASTERNODE_LOAD_ERROR, refreshIntervalMs: MASTERNODE_REFRESH_MS }
   )
-  return { nodes: data ?? [], discovered: data !== null, loading, err }
+  const [pendingVersion, setPendingVersion] = useState(0)
+
+  useEffect(() => subscribePendingMasternodes(() => setPendingVersion(version => version + 1)), [])
+
+  useEffect(() => {
+    if (data != null) prunePendingMasternodes(walletId, data)
+  }, [walletId, data])
+
+  const nodes = useMemo(
+    () => mergePendingMasternodes(data, readPendingMasternodes(walletId)),
+    [walletId, data, pendingVersion],
+  )
+
+  return { nodes, discovered: data !== null || nodes.length > 0, loading, err }
 }
 
 export function refreshMasternodes(walletId: string): Promise<void> {

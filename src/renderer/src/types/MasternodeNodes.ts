@@ -39,12 +39,6 @@ export interface NodeAccessDisplay {
   secondary: string
 }
 
-export interface RegisterMasternodeModalProps {
-  walletId: string
-  open: boolean
-  onClose: () => void
-}
-
 export interface UpdateRegistrarModalProps {
   walletId: string
   node: MasternodeDto

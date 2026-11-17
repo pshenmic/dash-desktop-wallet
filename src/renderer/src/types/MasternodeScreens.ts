@@ -13,6 +13,7 @@ export interface NodesTabProps extends MasternodesPageProps {
   visibleCount: number
   onShowMore: () => void
   onOpenNode: (proTxHash: string) => void
+  onRegister: () => void
 }
 
 export interface NodeDetailProps extends MasternodesPageProps {
