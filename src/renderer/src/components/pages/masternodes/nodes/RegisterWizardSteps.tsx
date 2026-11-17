@@ -150,7 +150,7 @@ export function RegisterStepCollateral({
             />
           )
         ) : (
-          <div className={'grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_8rem] gap-3'}>
+          <div className={'grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-end gap-3'}>
             <div className={'flex flex-col gap-1.5'}>
               <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.manualTxidLabel}</Text>
               <div className={`w-full flex items-center ${FIELD_COMPACT}`}>
@@ -469,7 +469,7 @@ export function RegisterStepNetwork({
             {REGISTER_WIZARD_COPY.serviceLaterNote}
           </Text>
         ) : (
-          <div className={'grid grid-cols-1 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-3'}>
+          <div className={'grid grid-cols-1 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] sm:items-end gap-3'}>
             <div className={'flex flex-col gap-1.5'}>
               <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.serviceIpLabel}</Text>
               <div className={`w-full flex items-center ${FIELD_COMPACT}`}>
@@ -519,7 +519,7 @@ export function RegisterStepNetwork({
               />
             </div>
           </div>
-          <div className={'grid grid-cols-1 sm:grid-cols-2 gap-3'}>
+          <div className={'grid grid-cols-1 sm:grid-cols-2 sm:items-end gap-3'}>
             <div className={'flex flex-col gap-1.5'}>
               <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.platformP2PPortLabel}</Text>
               <div className={`w-full flex items-center ${FIELD_COMPACT}`}>
