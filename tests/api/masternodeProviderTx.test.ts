@@ -328,13 +328,29 @@ describe('MasternodeService provider transactions', () => {
       expect(broadcast).toEqual([])
     })
 
-    it('refuses a shared node: shared interactions are not supported yet', async () => {
+    // ProUpServTx is signed by the operator key alone, so a shared node's
+    // service update is the same transaction a solo node's is.
+    it('updates a shared node\'s service with its operator key', async () => {
       list = [operated({ownerAddress: null, isShared: true, shares: [
         {ownerAddress: 'Xother1', amountDuffs: 60000000000n},
         {ownerAddress: 'Xother2', amountDuffs: 40000000000n},
       ]})]
-      await expect(masternodes.updateService(walletId, PRO_TX_HASH, SERVICE, PASSWORD)).rejects.toThrow('not supported')
-      await expect(masternodes.revoke(walletId, PRO_TX_HASH, 'termination', PASSWORD)).rejects.toThrow('not supported')
+      await masternodes.updateService(walletId, PRO_TX_HASH, SERVICE, PASSWORD)
+      const tx = lastBroadcast()
+      const payload = tx.extraPayload as ProUpServTx
+
+      expect(tx.type).toBe(2)
+      expect([payload.version, payload.type, payload.proTxHash]).toEqual([2, 0, PRO_TX_HASH])
+      expect([payload.ipAddress, payload.port]).toEqual(['45.33.12.9', 19999])
+      expect(signedByOperator(payload)).toBe(true)
+    })
+
+    it('refuses to revoke a shared node, which every share owner would have to restore', async () => {
+      list = [operated({ownerAddress: null, isShared: true, shares: [
+        {ownerAddress: 'Xother1', amountDuffs: 60000000000n},
+        {ownerAddress: 'Xother2', amountDuffs: 40000000000n},
+      ]})]
+      await expect(masternodes.revoke(walletId, PRO_TX_HASH, 'termination', PASSWORD)).rejects.toThrow('every share owner')
       expect(broadcast).toEqual([])
     })
 

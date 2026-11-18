@@ -142,14 +142,23 @@ export function ownerNode(owned: Masternode[], proTxHash: string): Masternode & 
   return {...node, ownerKeyIndex}
 }
 
-// A node whose operator key the wallet derives, which is what lets it sign as operator.
+// A node whose operator key the wallet derives, which is what lets it sign as
+// operator. A shared node's service update is signed by that key alone, exactly
+// as a solo node's is.
 export function operatedNode(owned: Masternode[], proTxHash: string): Masternode & {operatorKeyIndex: number} {
   const node = owned.find(entry => entry.proTxHash === proTxHash)
   if (node == null) throw new Error('Not a masternode of this wallet')
   const {operatorKeyIndex} = node
   if (operatorKeyIndex == null) throw new Error("This wallet does not derive the masternode's operator key")
-  if (node.isShared) throw new Error('Shared masternode interactions are not supported yet')
   return {...node, operatorKeyIndex}
+}
+
+// A revoked shared node's registrar comes back only by every share owner
+// signing a ProUpSharedRegTx, which this wallet cannot do.
+export function revocableNode(owned: Masternode[], proTxHash: string): Masternode & {operatorKeyIndex: number} {
+  const node = operatedNode(owned, proTxHash)
+  if (node.isShared) throw new Error('Revoking a shared masternode needs every share owner to restore it')
+  return node
 }
 
 export function carriesKey(node: NetworkMasternode, {role, publicKey}: ImportedMasternodeKey): boolean {

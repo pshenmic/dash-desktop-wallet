@@ -40,6 +40,7 @@ import {
   ownerNode,
   requireCollateral,
   requirePayout,
+  revocableNode,
   unusedKeyIndex,
   withoutCollaterals,
 } from '../../utils/masternodes'
@@ -194,7 +195,8 @@ export class MasternodeService {
   }
 
   // The operator signs, so only a node whose operator key the wallet derives;
-  // one run by a hosting provider is updated by that provider.
+  // one run by a hosting provider is updated by that provider. A shared node's
+  // service update is the operator's alone, as a solo node's is.
   async updateService(walletId: string, proTxHash: string, update: MasternodeServiceUpdate, password: string): Promise<MasternodeUpdateResult> {
     requireProTxHash(proTxHash)
     const {network: walletNetwork} = await requireWallet(this.walletDAO, walletId)
@@ -220,7 +222,7 @@ export class MasternodeService {
     requireProTxHash(proTxHash)
     if (!(reason in REVOCATION_REASON_CODE)) throw new Error(`Unknown revocation reason: ${reason}`)
     return this.sendProviderTx(walletId, password, async ({owned, utxos}) => {
-      const {operatorKeyIndex} = operatedNode(owned, proTxHash)
+      const {operatorKeyIndex} = revocableNode(owned, proTxHash)
       log.info(`revoke ${proTxHash}: ${reason}, operator key #${operatorKeyIndex}`)
       return {
         payload: this.coreTransactionService.proUpRevPayload(proTxHash, reason),
