@@ -4,6 +4,7 @@ import {Transaction} from '../types/Transaction'
 import {TxLockStatus} from '../types/TxLockStatus'
 import {AddressUsage} from '../types/AddressDiscovery'
 import {ConnectionStatus} from '../types/ConnectionStatus'
+import {Masternode, MasternodeKeyFilter, NetworkMasternode} from '../types/Masternode'
 
 // Read side only: where a wallet's history, balances and UTXOs come from.
 // Putting a tx on the network and observing its lock belongs to
@@ -32,4 +33,11 @@ export interface WalletProvider {
   // Null means the source cannot run the gap walk itself, and the caller has to
   // widen the window round by round through getUsedAddresses.
   scanAddressUsage(gapLimit: number): Promise<AddressUsage[] | null>
+  // Every listed masternode carrying any of the values for that key. Null when
+  // the source has no masternode list.
+  getMasternodes(filter: MasternodeKeyFilter, values: string[]): Promise<NetworkMasternode[] | null>
+  // Keeps the source following the wallet's nodes for the updates its list
+  // does not carry; `fresh` are ones it has never followed. Answers the
+  // proTxHashes it now follows from their registration on.
+  watchMasternodes(owned: Masternode[], fresh: Masternode[]): Promise<string[]>
 }

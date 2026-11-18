@@ -114,6 +114,8 @@ describe('CFilterSyncWorker rewind', () => {
       seedUtxos: [utxo(1), utxo(2)],
       unconfirmedInputOutpoints: [],
       cfilterCursor: 19,
+      watchedProviders: [],
+      foreignBlock: () => false,
     })
 
     cursorResets = []

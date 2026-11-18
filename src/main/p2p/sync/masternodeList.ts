@@ -1,4 +1,5 @@
 import type {Message, MnListDiff, Peer} from 'dash-core-p2p'
+import {ProviderRegistry} from './providerRegistry'
 import {MNLIST_REFRESH_MS, MNLIST_REPLY_TIMEOUT_MS, PLATFORM_QUORUM_PEERS} from '../constants'
 import {wireToDisplayHex} from '../utils/byteOrder'
 import {committedQuorums, evonodeDapiUrls, quorumKey} from '../utils/masternodeList'
@@ -15,8 +16,12 @@ export class MasternodeList {
   private askedAt = 0
   private retry: ReturnType<typeof setTimeout> | null = null
   private quorums: QuorumSet | null = null
+  private registryAskedAt = 0
+  readonly registry: ProviderRegistry
 
-  constructor(private readonly opts: MasternodeListOptions) {}
+  constructor(private readonly opts: MasternodeListOptions) {
+    this.registry = new ProviderRegistry(opts)
+  }
 
   // A new lock pool may be on another network, so its list is fetched afresh.
   resetPool(): void {
@@ -24,6 +29,8 @@ export class MasternodeList {
     this.askedAt = 0
     if (this.retry) clearTimeout(this.retry)
     this.retry = null
+    this.registryAskedAt = 0
+    this.registry.resetPool()
   }
 
   // A peer is asked for a block it announced itself, so it always holds it; a reply
@@ -65,6 +72,7 @@ export class MasternodeList {
     const diff = msg.mnlistdiff
     if (!pool || diff == null) return
     this.applyQuorums(peer, diff).catch(err => log.warn(`quorums from ${peer.host}:${peer.port} failed:`, err))
+    this.registry.offer(diff).catch(err => log.warn(`masternode list from ${peer.host}:${peer.port} failed:`, err))
     // Only a full list carries every evonode, and a peer answering after the
     // list verified would only repeat it.
     if (/[^0]/.test(diff.baseBlockHash) || Date.now() - this.verifiedAt < MNLIST_REFRESH_MS) return
@@ -80,11 +88,17 @@ export class MasternodeList {
   }
 
   // A diff from the last verified quorum set, so following the tip costs a few KB a block.
+  // The registry's full list is asked at a block our chain already holds, so the
+  // answer can be proven against it.
   followTip(blockHash: string): void {
     const pool = this.opts.pool()
     if (!pool) return
     const request = pool.messages.GetMnListDiff({baseBlockHash: this.quorums?.blockHash, blockHash})
     const peers = [...pool.readyPeers]
+    if (this.registry.due && Date.now() - this.registryAskedAt >= MNLIST_REPLY_TIMEOUT_MS && peers.length > 0) {
+      this.registryAskedAt = Date.now()
+      peers[Math.floor(Math.random() * peers.length)]!.sendMessage(pool.messages.GetMnListDiff({blockHash}))
+    }
     for (let i = 0; i < PLATFORM_QUORUM_PEERS && peers.length > 0; i++) {
       peers.splice(Math.floor(Math.random() * peers.length), 1)[0]!.sendMessage(request)
     }
@@ -93,12 +107,14 @@ export class MasternodeList {
   // Core refuses, and scores, a diff based on a block off its active chain.
   rewound(height: number): void {
     if (this.quorums != null && this.quorums.height > height) this.quorums = null
+    this.registry.rewound(height).catch(err => log.warn('registration index rewind failed:', err))
   }
 
   closeChain(): void {
     const store = this.opts.chain()
     if (store && this.quorums) this.opts.events.platformQuorums(store.network, new Map())
     this.quorums = null
+    this.registry.closeChain()
   }
 
   // Quorums are trusted only at a block on our own header chain: its work vouches

@@ -4,6 +4,9 @@ export const DUFFS_PER_DASH = 100_000_000n
 
 export const DUST_THRESHOLD_DUFFS = 546n
 
+// Regular and Evo masternode collateral.
+export const MASTERNODE_COLLATERAL_DUFFS = [1_000n * DUFFS_PER_DASH, 4_000n * DUFFS_PER_DASH]
+
 // Not consensus: a standard transaction may not exceed 100 kB, and at 34 bytes
 // per output this keeps a send well inside what peers relay.
 export const MAX_CORE_RECIPIENTS = 1_000
