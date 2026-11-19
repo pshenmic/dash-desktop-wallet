@@ -120,13 +120,15 @@ export function RegisterStepCollateral({
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
           <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.collateralLabel}</Text>
           <div className={'flex flex-wrap items-center gap-2'}>
-            <button
-              type={'button'}
-              onClick={onOpenPrepareModal}
-              className={CHIP_ACTION}
-            >
-              {MASTERNODE_COLLATERAL_PREP_COPY.buttonLabel}
-            </button>
+            {draft.collateralSource === 'wallet' && !utxosLoading && utxosError == null && collateralOptions.length > 0 && (
+              <button
+                type={'button'}
+                onClick={onOpenPrepareModal}
+                className={CHIP_ACTION}
+              >
+                {MASTERNODE_COLLATERAL_PREP_COPY.buttonLabel}
+              </button>
+            )}
             <SegmentedControl
               appearance={SegmentedControlAppearance.Pill}
               ariaLabel={REGISTER_WIZARD_COPY.collateralSourceLabel}

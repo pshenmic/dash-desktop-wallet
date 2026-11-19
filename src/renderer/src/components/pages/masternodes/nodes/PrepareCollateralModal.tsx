@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { API } from '@renderer/api'
 import type { Outpoint } from '@renderer/api/types'
 import {
@@ -83,9 +83,11 @@ export default function PrepareCollateralModal({
   const [passwordInvalid, setPasswordInvalid] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
+    scrollAreaRef.current?.scrollTo({ top: 0 })
     const freshUnused = receiveCoreAddresses(receiving)[0]?.address ?? receiving[0]?.address ?? ''
     setTargetAddress(freshUnused)
     setLabel(
@@ -240,7 +242,7 @@ export default function PrepareCollateralModal({
       dismissible={!submitting}
     >
       <div className={'mt-4 flex flex-col gap-3.5'}>
-        <div className={'flex max-h-[calc(85vh-11rem)] flex-col gap-3.5 overflow-y-auto pr-1 scrollbar-custom'}>
+        <div ref={scrollAreaRef} className={'flex max-h-[calc(85vh-11rem)] flex-col gap-3.5 overflow-y-auto px-0.5 py-0.5 pr-1 scrollbar-custom'}>
           <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
           <div className={'flex items-center justify-between gap-2'}>
             <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
@@ -437,7 +439,7 @@ export default function PrepareCollateralModal({
 
         {submitError != null && <CopyableError message={submitError} />}
 
-        <div className={'flex flex-col gap-2'}>
+        <div className={`flex flex-col gap-2.5 ${SURFACE_SECTION}`}>
           <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
             {MASTERNODE_COLLATERAL_PREP_COPY.authorizeLabel}
           </Text>
@@ -452,6 +454,7 @@ export default function PrepareCollateralModal({
             onSubmit={() => { void handleSubmit() }}
             error={passwordInvalid ? INVALID_WALLET_PASSWORD_MESSAGE : null}
             disabled={submitting}
+            autoFocus={false}
           />
         </div>
         </div>
