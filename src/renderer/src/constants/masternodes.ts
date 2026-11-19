@@ -26,7 +26,7 @@ export const MASTERNODE_LOAD_ERROR = 'Failed to load masternodes'
 export const MASTERNODE_IMPORTED_KEYS_ERROR = 'Failed to load imported masternode keys'
 export const MASTERNODE_REFRESH_MS = 15_000
 
-export const MASTERNODE_TABLE_GRID = 'grid-cols-[minmax(0,1.8fr)_5.5rem_minmax(0,0.85fr)_minmax(0,1.2fr)_1rem]'
+export const MASTERNODE_TABLE_GRID = 'grid-cols-[minmax(0,2.15fr)_5.75rem_minmax(0,0.85fr)_minmax(0,1.15fr)_1rem]'
 
 export const MASTERNODE_STATUS_PILLS = new Map([
   ['ENABLED', { tone: StatusPillTone.Success, label: 'Active' }],

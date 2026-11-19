@@ -35,24 +35,27 @@ export default function NodeTableRow({ node, onOpen }: NodeTableRowProps): React
     >
       <button type={'button'} onClick={() => onOpen(node.proTxHash)} className={`${SECTION_TABLE_ROW} ${MASTERNODE_TABLE_GRID}`}>
         <div className={'flex min-w-0 flex-col gap-1'}>
-          <div className={'flex min-w-0 items-center gap-2'}>
+          <div className={'flex min-w-0 items-start gap-2'}>
             <Tooltip label={chainBadge.label}>
-              <span className={'inline-flex shrink-0'} title={''}>
+              <span className={'inline-flex shrink-0 mt-0.5'} title={''}>
                 <CustomBadge text={chainBadge.text} size={'s'} className={`w-11 shrink-0 ${chainBadge.className}`} />
               </span>
             </Tooltip>
-            <HighlightedIdentifier className={'min-w-0 truncate text-sm! font-medium!'}>{node.proTxHash}</HighlightedIdentifier>
+            <HighlightedIdentifier className={'min-w-0 max-w-[32ch] break-all font-mono text-xs! leading-[1.15rem]! font-medium!'}>
+              {node.proTxHash}
+            </HighlightedIdentifier>
           </div>
           <Text size={12} weight={'medium'} color={'brand'} opacity={50} className={'truncate tabular-nums'}>
             {formatServiceAddress(node.serviceAddress)}
           </Text>
         </div>
         <div className={'flex min-w-0 items-center'}>
-          {shared ? (
-            <CustomBadge variant={'default'} text={NODE_DETAIL_COPY.sharedBadge} className={'shrink-0'} />
-          ) : (
-            <Text size={12} weight={'medium'} color={'brand'} opacity={40}>{NODE_DETAIL_COPY.unavailable}</Text>
-          )}
+          <CustomBadge
+            variant={shared ? 'accent' : 'muted'}
+            size={'xs'}
+            text={shared ? NODE_DETAIL_COPY.sharedBadge : NODE_DETAIL_COPY.soloBadge}
+            className={'shrink-0'}
+          />
         </div>
         <div className={'flex min-w-0'}>
           <StatusPill tone={status.tone}>{status.label}</StatusPill>

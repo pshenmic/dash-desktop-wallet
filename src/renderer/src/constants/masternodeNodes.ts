@@ -38,7 +38,7 @@ export const ADD_MASTERNODE_MODAL_COPY = {
   importedCountSuffix: 'imported',
 } as const
 
-export const NODE_TABLE_COLUMNS = ['Node', 'Shared', 'Status', 'Roles & Stake'] as const
+export const NODE_TABLE_COLUMNS = ['Node', 'Collateral', 'Status', 'Roles & Stake'] as const
 
 export const MASTERNODE_CHAIN_BADGES: Record<string, TransactionKindBadge> = {
   [REGULAR_MASTERNODE_TYPE]: {
@@ -97,6 +97,7 @@ export const NODE_DETAIL_COPY = {
   unknownNode: 'This node hasn’t been discovered in this wallet',
   back: 'Back',
   sharedBadge: 'Shared',
+  soloBadge: 'Solo',
   sharedRegistration: 'Shared collateral',
   soloRegistration: 'Solo collateral',
   updateRegistrar: 'Update registrar',
