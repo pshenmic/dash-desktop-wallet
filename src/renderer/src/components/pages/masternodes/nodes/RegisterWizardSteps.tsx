@@ -36,6 +36,7 @@ import {
   REGISTER_WIZARD_COPY,
   REGISTER_WIZARD_OPERATOR_MODE_OPTIONS,
   REGISTER_WIZARD_OWNER_MODE_OPTIONS,
+  REGISTER_WIZARD_PAYOUT_MODE_OPTIONS,
   REGISTER_WIZARD_SERVICE_MODE_OPTIONS,
   REGISTER_WIZARD_VOTING_MODE_OPTIONS,
 } from '@renderer/constants/masternodeRegistration'
@@ -235,6 +236,7 @@ export function RegisterStepAddresses({
   draft,
   updateDraft,
   network,
+  defaultPayoutAddress,
   addressOptions,
   badgeFor,
   addressesLoading,
@@ -243,28 +245,58 @@ export function RegisterStepAddresses({
 }: RegisterStepSharedProps): React.JSX.Element {
   const addressNetwork = network ?? undefined
   const rewardBps = parseOperatorRewardBps(draft.operatorRewardPercent)
+  const walletPayoutBadge = defaultPayoutAddress != null ? badgeFor(defaultPayoutAddress) : undefined
 
   return (
     <div className={'flex flex-col gap-3'}>
       <div className={`flex flex-col gap-2 ${SURFACE_SECTION}`}>
-        <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.payoutLabel}</Text>
-        <RecipientInput
-          compact
-          value={draft.payoutAddress}
-          valueBadge={badgeFor(draft.payoutAddress)}
-          onChange={payoutAddress => updateDraft({ payoutAddress })}
-          data={MASTERNODE_PAYOUT_RECIPIENT_COPY}
-          ariaLabel={REGISTER_MASTERNODE_COPY.payoutLabel}
-          validate={addr => isValidDashAddress(addr, addressNetwork)}
-          ownOptions={addressOptions}
-          ownOptionsHeading={MASTERNODE_YOUR_ADDRESSES_HEADING}
-          ownOptionsLoading={addressesLoading}
-          ownOptionsError={addressesError}
-          onRetryOwnOptions={onRetryAddresses}
-        />
-        <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
-          {REGISTER_WIZARD_COPY.payoutHint}
-        </Text>
+        <div className={'flex flex-wrap items-center justify-between gap-2'}>
+          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.payoutKeyLabel}</Text>
+          <SegmentedControl
+            appearance={SegmentedControlAppearance.Pill}
+            ariaLabel={REGISTER_WIZARD_COPY.payoutKeyLabel}
+            options={REGISTER_WIZARD_PAYOUT_MODE_OPTIONS}
+            value={draft.payoutMode}
+            onChange={payoutMode => updateDraft({ payoutMode })}
+          />
+        </div>
+        {draft.payoutMode === 'wallet' ? (
+          defaultPayoutAddress != null ? (
+            <>
+              <div className={'flex flex-wrap items-center gap-2 rounded-[.875rem] dash-block px-3.5 py-2.5'}>
+                <HighlightedIdentifier className={'min-w-0 text-xs!'}>{defaultPayoutAddress}</HighlightedIdentifier>
+                {walletPayoutBadge && <CustomBadge text={walletPayoutBadge} variant={'accent'} size={'xs'} className={'shrink-0'} />}
+              </div>
+              <Text size={12} weight={'medium'} color={'brand'} opacity={60}>
+                {REGISTER_WIZARD_COPY.payoutWalletNote}
+              </Text>
+            </>
+          ) : (
+            <Text size={12} weight={'medium'} color={'brand'} opacity={60}>
+              {REGISTER_WIZARD_COPY.payoutWalletEmpty}
+            </Text>
+          )
+        ) : (
+          <>
+            <RecipientInput
+              compact
+              value={draft.payoutAddress}
+              valueBadge={badgeFor(draft.payoutAddress)}
+              onChange={payoutAddress => updateDraft({ payoutAddress })}
+              data={MASTERNODE_PAYOUT_RECIPIENT_COPY}
+              ariaLabel={REGISTER_MASTERNODE_COPY.payoutLabel}
+              validate={addr => isValidDashAddress(addr, addressNetwork)}
+              ownOptions={addressOptions}
+              ownOptionsHeading={MASTERNODE_YOUR_ADDRESSES_HEADING}
+              ownOptionsLoading={addressesLoading}
+              ownOptionsError={addressesError}
+              onRetryOwnOptions={onRetryAddresses}
+            />
+            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
+              {REGISTER_WIZARD_COPY.payoutHint}
+            </Text>
+          </>
+        )}
       </div>
 
       <div className={`flex flex-col gap-2 ${SURFACE_SECTION}`}>
@@ -525,6 +557,7 @@ export function RegisterStepReview({
   updateDraft,
   validation,
   network,
+  defaultPayoutAddress,
   addressOptions,
   fundedFeeOptions,
   badgeFor,
@@ -547,7 +580,9 @@ export function RegisterStepReview({
 }: RegisterStepReviewProps): React.JSX.Element {
   const addressNetwork = network ?? undefined
   const { dto } = validation
-  const payoutBadge = badgeFor(draft.payoutAddress)
+  const resolvedPayout = dto?.payoutAddress
+    ?? (draft.payoutMode === 'wallet' ? (defaultPayoutAddress ?? '') : draft.payoutAddress.trim())
+  const payoutBadge = resolvedPayout !== '' ? badgeFor(resolvedPayout) : undefined
   const collateralDisplay = draft.collateralSource === 'wallet'
     ? activeCollateral
     : `${draft.manualTxid.trim()}:${draft.manualVout.trim()}`
@@ -577,7 +612,7 @@ export function RegisterStepReview({
           <Text size={12} weight={'medium'} color={'brand'} opacity={60}>{REGISTER_MASTERNODE_COPY.payoutLabel}</Text>
           <div className={'flex min-w-0 items-center gap-2'}>
             {payoutBadge && <CustomBadge text={payoutBadge} variant={'accent'} size={'xs'} className={'shrink-0'} />}
-            <HighlightedIdentifier className={'min-w-0 text-xs!'}>{draft.payoutAddress.trim()}</HighlightedIdentifier>
+            <HighlightedIdentifier className={'min-w-0 text-xs!'}>{resolvedPayout || '—'}</HighlightedIdentifier>
           </div>
         </div>
         <div className={'flex items-center justify-between gap-4'}>

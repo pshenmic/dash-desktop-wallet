@@ -22,6 +22,7 @@ export interface RegisterWizardDraft {
   manualVout: string
   feeSourceMode: RegistrationFeeSource
   feeSourceAddress: string
+  payoutMode: RegistrationKeySource
   payoutAddress: string
   ownerMode: RegistrationKeySource
   ownerAddress: string
@@ -70,6 +71,7 @@ export interface RegisterStepSharedProps {
   updateDraft: (patch: Partial<RegisterWizardDraft>) => void
   validation: RegisterWizardValidation
   network: Network | null
+  defaultPayoutAddress: string | null
   addressOptions: DropdownFieldOption[]
   badgeFor: (address: string) => string | undefined
   addressesLoading: boolean

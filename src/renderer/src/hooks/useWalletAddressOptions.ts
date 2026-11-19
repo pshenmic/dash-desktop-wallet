@@ -4,6 +4,7 @@ import { refreshReceiveRequests, useReceiveRequests } from '@renderer/hooks/useR
 import type { WalletAddressOptionsResult } from '@renderer/types/WalletAddressOptions'
 import { masternodeWalletAddressOptions } from '@renderer/utils/masternodeAddressOptions'
 import { walletAddressLabels } from '@renderer/utils/ownRecipients'
+import { receiveCoreAddresses } from '@renderer/utils/receiveDefaults'
 
 export function useWalletAddressOptions(walletId: string | undefined): WalletAddressOptionsResult {
   const { receiving, change, loading: addressesLoading, err: addressesError } = useAdresses(walletId)
@@ -12,6 +13,14 @@ export function useWalletAddressOptions(walletId: string | undefined): WalletAdd
   const labelsByAddress = useMemo(
     () => walletAddressLabels(requests, receiving, change),
     [requests, receiving, change],
+  )
+
+  const defaultPayoutAddress = useMemo(
+    () => receiveCoreAddresses(receiving)[0]?.address
+      ?? receiving.find(address => !address.isLocked)?.address
+      ?? receiving[0]?.address
+      ?? null,
+    [receiving],
   )
 
   const options = useMemo(
@@ -32,7 +41,10 @@ export function useWalletAddressOptions(walletId: string | undefined): WalletAdd
 
   return {
     options,
+    receiving,
+    change,
     labelsByAddress,
+    defaultPayoutAddress,
     badgeFor,
     loading: addressesLoading || requestsLoading,
     err: addressesError ?? requestsError,

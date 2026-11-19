@@ -24,6 +24,7 @@ export function createInitialRegisterDraft(network: Network | null): RegisterWiz
     manualVout: '0',
     feeSourceMode: 'auto',
     feeSourceAddress: '',
+    payoutMode: 'wallet',
     payoutAddress: '',
     ownerMode: 'wallet',
     ownerAddress: '',
@@ -61,7 +62,18 @@ export function getOrCreateRegisterWizardState(
     return { active: false, step: 0, draft: createInitialRegisterDraft(network) }
   }
   const existing = registerWizardDrafts.get(walletId)
-  if (existing) return existing
+  if (existing) {
+    if (existing.draft.payoutMode != null) return existing
+    const migrated: PersistedRegisterWizardState = {
+      ...existing,
+      draft: {
+        ...existing.draft,
+        payoutMode: existing.draft.payoutAddress.trim() !== '' ? 'external' : 'wallet',
+      },
+    }
+    registerWizardDrafts.set(walletId, migrated)
+    return migrated
+  }
   const created: PersistedRegisterWizardState = {
     active: false,
     step: 0,

@@ -814,6 +814,7 @@ describe('Masternode action builders', () => {
       manualVout: '0',
       feeSourceMode: 'auto',
       feeSourceAddress: '',
+      payoutMode: 'external',
       payoutAddress: payoutAddr,
       ownerMode: 'wallet',
       ownerAddress: '',
@@ -848,6 +849,25 @@ describe('Masternode action builders', () => {
       'testnet',
     )
     expect(okWithCustomFeePending.step1Error).toBeNull()
+
+    const walletPayoutOk = validateRegistrationWizard(
+      { ...baseDraft, payoutMode: 'wallet', payoutAddress: '' },
+      [collateralCoin],
+      [collateralCoin],
+      'testnet',
+      payoutAddr,
+    )
+    expect(walletPayoutOk.step2Error).toBeNull()
+    expect(walletPayoutOk.dto?.payoutAddress).toBe(payoutAddr)
+
+    const walletPayoutMissing = validateRegistrationWizard(
+      { ...baseDraft, payoutMode: 'wallet', payoutAddress: '' },
+      [collateralCoin],
+      [collateralCoin],
+      'testnet',
+      null,
+    )
+    expect(walletPayoutMissing.step2Error).toContain('Payout address')
 
     const sameOwner = validateRegistrationWizard(
       { ...baseDraft, ownerMode: 'external', ownerAddress: payoutAddr },

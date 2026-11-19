@@ -19,6 +19,7 @@ describe('masternodeRegistrationDraft', () => {
     const initial = getOrCreateRegisterWizardState('wallet-a', 'testnet')
     expect(initial.active).toBe(false)
     expect(initial.step).toBe(0)
+    expect(initial.draft.payoutMode).toBe('wallet')
     expect(initial.draft.servicePort).toBe('19999')
     expect(hasCustomRegisterWizardDraft(initial, 'testnet')).toBe(false)
 

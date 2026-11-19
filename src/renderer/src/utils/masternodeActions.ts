@@ -304,6 +304,7 @@ export function validateRegistrationWizard(
   collateralCoins: SelectableUtxo[],
   walletUtxos: SelectableUtxo[],
   network: Network | null,
+  defaultPayoutAddress: string | null = null,
 ): RegisterWizardValidation {
   const addressNetwork = network ?? undefined
   let collateralOutpoint = ''
@@ -331,14 +332,18 @@ export function validateRegistrationWizard(
   }
 
   let step2Error: string | null = null
-  const payout = draft.payoutAddress.trim()
+  const payout = draft.payoutMode === 'wallet'
+    ? (defaultPayoutAddress ?? '').trim()
+    : draft.payoutAddress.trim()
   const owner = draft.ownerAddress.trim()
   const voting = draft.votingAddress.trim()
   const operatorKey = draft.operatorPublicKey.trim().toLowerCase()
   const operatorPayout = draft.operatorPayoutAddress.trim()
   const rewardBps = parseOperatorRewardBps(draft.operatorRewardPercent)
 
-  if (payout === '' || !isValidDashAddress(payout, addressNetwork)) {
+  if (draft.payoutMode === 'wallet' && payout === '') {
+    step2Error = 'No wallet receiving address available — switch Payout address to Custom address'
+  } else if (payout === '' || !isValidDashAddress(payout, addressNetwork)) {
     step2Error = 'Enter a valid Dash Core owner payout address'
   } else if (draft.ownerMode === 'external' && (owner === '' || !isValidDashChangeAddress(owner, addressNetwork))) {
     step2Error = 'Enter a valid P2PKH owner key address'

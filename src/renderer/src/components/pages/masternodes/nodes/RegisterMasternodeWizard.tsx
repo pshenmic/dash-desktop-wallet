@@ -58,6 +58,7 @@ export default function RegisterMasternodeWizard({
   const { utxos, loading: utxosLoading, error: utxosError, retry: retryUtxos } = useWalletUtxos()
   const {
     options: addressOptions,
+    defaultPayoutAddress,
     badgeFor,
     loading: addressesLoading,
     err: addressesError,
@@ -141,8 +142,8 @@ export default function RegisterMasternodeWizard({
     : (collateralOptions[0]?.value ?? '')
 
   const validation = useMemo(
-    () => validateRegistrationWizard({ ...draft, selectedCollateral: activeCollateral }, collateralCoins, effectiveUtxos, network),
-    [draft, activeCollateral, collateralCoins, effectiveUtxos, network],
+    () => validateRegistrationWizard({ ...draft, selectedCollateral: activeCollateral }, collateralCoins, effectiveUtxos, network, defaultPayoutAddress),
+    [draft, activeCollateral, collateralCoins, effectiveUtxos, network, defaultPayoutAddress],
   )
 
   const stepErrors = [validation.step1Error, validation.step2Error, validation.step3Error, null] as const
@@ -267,6 +268,7 @@ export default function RegisterMasternodeWizard({
     updateDraft,
     validation,
     network,
+    defaultPayoutAddress,
     addressOptions,
     badgeFor,
     addressesLoading,

@@ -25,6 +25,11 @@ export const REGISTER_WIZARD_OWNER_MODE_OPTIONS: SegmentOption<RegistrationKeySo
   { value: 'external', label: 'Custom P2PKH address' },
 ]
 
+export const REGISTER_WIZARD_PAYOUT_MODE_OPTIONS: SegmentOption<RegistrationKeySource>[] = [
+  { value: 'wallet', label: 'Wallet receiving address' },
+  { value: 'external', label: 'Custom address' },
+]
+
 export const REGISTER_WIZARD_VOTING_MODE_OPTIONS: SegmentOption<RegistrationKeySource>[] = [
   { value: 'wallet', label: 'Wallet DIP-9 key' },
   { value: 'external', label: 'External P2PKH address' },
@@ -70,6 +75,9 @@ export const REGISTER_WIZARD_COPY = {
   customFeesInvalidAddress: 'Enter a valid wallet P2PKH fee source address.',
   customFeesNoEligibleCoins: 'No confirmed unlocked non-collateral coins are available on this address.',
   customFeesInsufficient: 'Confirmed coins on this address do not cover the ProRegTx network fee.',
+  payoutKeyLabel: 'Payout address (payoutAddress)',
+  payoutWalletNote: 'Uses an unused receiving address from this wallet (m/44\'/coin\'/0\'/0/index) to receive masternode block rewards.',
+  payoutWalletEmpty: 'No wallet receiving address available yet. Switch to Custom address or create one in Receive.',
   payoutHint: 'Receives the owner share of masternode block rewards.',
   ownerKeyLabel: 'Owner key address (ownerKeyAddr)',
   ownerWalletNote: 'Auto-derived at m/9\'/coin\'/3\'/1\'/index from this wallet’s seed. Required to sign future ProUpRegTx updates.',
