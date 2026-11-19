@@ -3,14 +3,21 @@ import type {
   MasternodeRegistrationPreviewDto,
   Network,
   PreviewEntry,
+  WalletAddressDto,
 } from '@renderer/api/types'
 import { DASH_UNIT } from '@renderer/constants/balance'
+import {
+  MASTERNODE_CHANGE_ADDRESS_DESCRIPTION,
+  MASTERNODE_FEE_UTXO_FORMS,
+  MASTERNODE_RECEIVING_ADDRESS_DESCRIPTION,
+} from '@renderer/constants/masternodeAddresses'
 import { REGISTER_WIZARD_COPY } from '@renderer/constants/masternodeRegistration'
 import { PROREG_DUST_THRESHOLD_DUFFS, PROREG_SEQUENCE_FINAL } from '@renderer/constants/masternodes'
 import type { DropdownFieldOption } from '@renderer/types/DropdownField'
 import type { CustomFeeProRegPreviewResult, FeeSelectableUtxo } from '@renderer/types/MasternodeRegistrationWizard'
 import { isValidDashChangeAddress } from './address'
 import { davToDash } from './balance'
+import { countLabel } from './countLabel'
 
 const DUMMY_SIG_SCRIPT_ZEROS = 288
 const DUMMY_TXID_HEX = '0'.repeat(64)
@@ -62,24 +69,53 @@ export function eligibleCustomFeeUtxos(
 }
 
 export function fundedFeeAddressOptions(
-  addressOptions: DropdownFieldOption[],
+  receiving: WalletAddressDto[],
+  change: WalletAddressDto[],
+  labelsByAddress: ReadonlyMap<string, string>,
   utxos: FeeSelectableUtxo[],
   collateral: { txid: string; vout: number } | null,
 ): DropdownFieldOption[] {
-  const spendableByAddress = new Map<string, bigint>()
-  for (const utxo of utxos) {
-    if (!isEligibleFeeUtxo(utxo, collateral)) continue
-    spendableByAddress.set(utxo.address, (spendableByAddress.get(utxo.address) ?? 0n) + utxo.satoshis)
+  const walletByAddress = new Map<string, WalletAddressDto>()
+  for (const address of [...receiving, ...change]) {
+    if (!walletByAddress.has(address.address)) {
+      walletByAddress.set(address.address, address)
+    }
   }
 
-  return addressOptions.flatMap(option => {
-    const spendable = spendableByAddress.get(option.value)
-    if (spendable == null || spendable <= 0n) return []
-    return [{
-      ...option,
-      metadata: [...(option.metadata ?? []), `${davToDash(spendable)} ${DASH_UNIT}`],
-    }]
-  })
+  const spendableByAddress = new Map<string, { duffs: bigint; count: number }>()
+  for (const utxo of utxos) {
+    if (!isEligibleFeeUtxo(utxo, collateral)) continue
+    const walletEntry = walletByAddress.get(utxo.address)
+    if (walletEntry?.isLocked) continue
+    const current = spendableByAddress.get(utxo.address)
+    if (current == null) {
+      spendableByAddress.set(utxo.address, { duffs: utxo.satoshis, count: 1 })
+    } else {
+      current.duffs += utxo.satoshis
+      current.count += 1
+    }
+  }
+
+  return Array.from(spendableByAddress.entries())
+    .filter(([, entry]) => entry.duffs > 0n)
+    .sort(([, a], [, b]) => (a.duffs < b.duffs ? 1 : a.duffs > b.duffs ? -1 : 0))
+    .map(([address, entry]) => {
+      const walletEntry = walletByAddress.get(address)
+      const badge = labelsByAddress.get(address)?.trim() || walletEntry?.label?.trim() || undefined
+      const description = walletEntry?.isChange
+        ? MASTERNODE_CHANGE_ADDRESS_DESCRIPTION
+        : MASTERNODE_RECEIVING_ADDRESS_DESCRIPTION
+      return {
+        value: address,
+        label: address,
+        ...(badge ? { badge } : {}),
+        description,
+        metadata: [
+          `${davToDash(entry.duffs)} ${DASH_UNIT}`,
+          countLabel(entry.count, MASTERNODE_FEE_UTXO_FORMS),
+        ],
+      }
+    })
 }
 
 export function buildCustomFeeProRegPreview(params: {

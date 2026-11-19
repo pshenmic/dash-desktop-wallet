@@ -9,7 +9,15 @@ import {
   TransactionType,
   utils as sdkUtils,
 } from 'dash-core-sdk'
-import type { ListedUtxo, MasternodeRegistrationPreviewDto } from '@renderer/api/types'
+import type {
+  ListedUtxo,
+  MasternodeRegistrationPreviewDto,
+  WalletAddressDto,
+} from '@renderer/api/types'
+import {
+  MASTERNODE_CHANGE_ADDRESS_DESCRIPTION,
+  MASTERNODE_RECEIVING_ADDRESS_DESCRIPTION,
+} from '@renderer/constants/masternodeAddresses'
 import { REGISTER_WIZARD_COPY } from '@renderer/constants/masternodeRegistration'
 import { PROREG_SEQUENCE_FINAL } from '@renderer/constants/masternodes'
 import {
@@ -204,19 +212,46 @@ describe('proRegCustomFee', () => {
     }).error).toBe(REGISTER_WIZARD_COPY.customFeesInsufficient)
   })
 
-  it('filters address options down to addresses holding eligible fee coins', () => {
+  it('lists funded receiving and change addresses (including unlabeled used ones) sorted by spendable DASH', () => {
     const addrs = testAddresses()
-    const options = [
-      { value: addrs.feeAddr, label: 'Fee wallet' },
-      { value: addrs.otherAddr, label: 'Empty' },
+    const makeWalletAddr = (address: string, overrides: Partial<WalletAddressDto> = {}): WalletAddressDto => ({
+      walletId: 'w1',
+      accountId: 0,
+      address,
+      derivationPath: "m/44'/1'/0'/0/0",
+      index: 0,
+      isChange: 0,
+      isUsed: true,
+      isLocked: false,
+      balance: 0n,
+      txCount: 1,
+      label: null,
+      usdBalance: null,
+      ...overrides,
+    })
+
+    const receiving: WalletAddressDto[] = [
+      makeWalletAddr(addrs.feeAddr, { balance: 10_000_000n }),
+      makeWalletAddr(addrs.otherAddr, { balance: 10_000_000n, isLocked: true }),
+      makeWalletAddr(addrs.owner, { isUsed: false, balance: 0n, txCount: 0 }),
+    ]
+    const change: WalletAddressDto[] = [
+      makeWalletAddr(addrs.voting, { isChange: 1, balance: 50_000_000n }),
     ]
     const utxos = [
       makeUtxo({ txid: TXID_1, address: addrs.feeAddr, satoshis: 10_000_000n }),
-      makeUtxo({ txid: TXID_2, address: addrs.otherAddr, satoshis: 10_000_000n, height: 0 }),
+      makeUtxo({ txid: TXID_2, address: addrs.voting, satoshis: 50_000_000n }),
+      makeUtxo({ txid: TXID_3, address: addrs.otherAddr, satoshis: 10_000_000n }),
+      makeUtxo({ txid: TXID_4, address: addrs.payout, satoshis: 20_000_000n, height: 0 }),
     ]
-    const funded = fundedFeeAddressOptions(options, utxos, null)
-    expect(funded).toHaveLength(1)
-    expect(funded[0].value).toBe(addrs.feeAddr)
-    expect(funded[0].metadata).toContain('0.1 Dash')
+
+    const funded = fundedFeeAddressOptions(receiving, change, new Map([[addrs.feeAddr, 'Vault']]), utxos, null)
+    expect(funded.map(item => item.value)).toEqual([addrs.voting, addrs.feeAddr])
+    expect(funded[0].badge).toBeUndefined()
+    expect(funded[0].description).toBe(MASTERNODE_CHANGE_ADDRESS_DESCRIPTION)
+    expect(funded[0].metadata).toEqual(['0.5 Dash', '1 UTXO'])
+    expect(funded[1].badge).toBe('Vault')
+    expect(funded[1].description).toBe(MASTERNODE_RECEIVING_ADDRESS_DESCRIPTION)
+    expect(funded[1].metadata).toEqual(['0.1 Dash', '1 UTXO'])
   })
 })

@@ -21,6 +21,7 @@ import { INVALID_WALLET_PASSWORD_MESSAGE } from '@renderer/constants'
 import { DASH_UNIT } from '@renderer/constants/balance'
 import {
   MASTERNODE_FEE_SOURCE_RECIPIENT_COPY,
+  MASTERNODE_FUNDED_ADDRESSES_HEADING,
   MASTERNODE_OPERATOR_PAYOUT_RECIPIENT_COPY,
   MASTERNODE_OWNER_RECIPIENT_COPY,
   MASTERNODE_PAYOUT_RECIPIENT_COPY,
@@ -558,7 +559,6 @@ export function RegisterStepReview({
   validation,
   network,
   defaultPayoutAddress,
-  addressOptions,
   fundedFeeOptions,
   badgeFor,
   addressesLoading,
@@ -726,8 +726,8 @@ export function RegisterStepReview({
               data={MASTERNODE_FEE_SOURCE_RECIPIENT_COPY}
               ariaLabel={REGISTER_WIZARD_COPY.feeSourceLabel}
               validate={addr => isValidDashChangeAddress(addr, addressNetwork)}
-              ownOptions={fundedFeeOptions.length > 0 ? fundedFeeOptions : addressOptions}
-              ownOptionsHeading={MASTERNODE_YOUR_ADDRESSES_HEADING}
+              ownOptions={fundedFeeOptions}
+              ownOptionsHeading={MASTERNODE_FUNDED_ADDRESSES_HEADING}
               ownOptionsLoading={addressesLoading}
               ownOptionsError={addressesError}
               onRetryOwnOptions={onRetryAddresses}
@@ -735,11 +735,13 @@ export function RegisterStepReview({
             <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
               {REGISTER_WIZARD_COPY.customFeesHint}
             </Text>
-            {customFeeError != null && (
+            {customFeeError != null && (draft.feeSourceAddress.trim() !== '' || fundedFeeOptions.length === 0) && (
               <Alert
                 tone={AlertTone.Warning}
                 icon={<InfoCircleIcon size={16} color={'currentColor'} />}
-                title={customFeeError}
+                title={fundedFeeOptions.length === 0 && draft.feeSourceAddress.trim() === ''
+                  ? REGISTER_WIZARD_COPY.customFeesNoEligibleCoins
+                  : customFeeError}
               />
             )}
           </div>

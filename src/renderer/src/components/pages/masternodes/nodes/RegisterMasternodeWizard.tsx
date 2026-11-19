@@ -58,6 +58,9 @@ export default function RegisterMasternodeWizard({
   const { utxos, loading: utxosLoading, error: utxosError, retry: retryUtxos } = useWalletUtxos()
   const {
     options: addressOptions,
+    receiving,
+    change,
+    labelsByAddress,
     defaultPayoutAddress,
     badgeFor,
     loading: addressesLoading,
@@ -150,8 +153,8 @@ export default function RegisterMasternodeWizard({
   const activeStepError = stepErrors[step]
   const registrationDto = validation.dto
   const fundedFeeOptions = useMemo(
-    () => fundedFeeAddressOptions(addressOptions, effectiveUtxos, registrationDto?.collateral ?? null),
-    [addressOptions, effectiveUtxos, registrationDto],
+    () => fundedFeeAddressOptions(receiving, change, labelsByAddress, effectiveUtxos, registrationDto?.collateral ?? null),
+    [receiving, change, labelsByAddress, effectiveUtxos, registrationDto],
   )
   const customFeeResult = useMemo(() => {
     if (draft.feeSourceMode !== 'address' || preview == null || registrationDto == null) {
