@@ -1,0 +1,217 @@
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import PageHeader from '@renderer/components/ui/PageHeader'
+import PageTabs from '@renderer/components/ui/PageTabs'
+import { DASHPAY_REFRESH_MS } from '@renderer/constants/dashPay'
+import { PROPOSALS_PAGE_SIZE } from '@renderer/constants/governanceProposals'
+import { MASTERNODE_PARAMS, MASTERNODES_PAGE_SIZE, MASTERNODES_TAB_LABELS } from '@renderer/constants/masternodes'
+import { CONTESTS_PAGE_SIZE } from '@renderer/constants/nameContests'
+import { PAGE_HEADERS } from '@renderer/constants/pageHeaders'
+import { SURFACE_PANEL } from '@renderer/constants/surfaces'
+import { useAuth } from '@renderer/contexts/AuthContext'
+import {
+  ContestSegment,
+  ContestSort,
+  MasternodesTab,
+  NodeSegment,
+  ProposalSegment,
+  ProposalSort,
+} from '@renderer/enums/Masternodes'
+import { refreshDashPay } from '@renderer/hooks/useDashPayRefresh'
+import { useDetailScrollRestore } from '@renderer/hooks/useDetailScrollRestore'
+import { refreshGovernanceProposals } from '@renderer/hooks/useGovernanceProposals'
+import { prefetchAddresses } from '@renderer/hooks/useAdresses'
+import { prefetchReceiveRequests } from '@renderer/hooks/useReceiveRequests'
+import { useNow } from '@renderer/hooks/useNow'
+import type { MasternodesNavigationState } from '@renderer/types/MasternodeNodes'
+import type { MasternodesPageProps } from '@renderer/types/MasternodeScreens'
+import { enumParam, withParams } from '@renderer/utils/searchParams'
+import ContestDetail from './contested-resources/ContestDetail'
+import ContestsTab from './contested-resources/ContestsTab'
+import NodeDetail from './nodes/NodeDetail'
+import NodesTab from './nodes/NodesTab'
+import RegisterMasternodeWizard from './nodes/RegisterMasternodeWizard'
+import ProposalDetail from './proposals/ProposalDetail'
+import ProposalsTab from './proposals/ProposalsTab'
+
+export default function MasternodesPage({ walletId }: MasternodesPageProps): React.JSX.Element {
+  const { status } = useAuth()
+  const network = status?.network ?? undefined
+  const now = useNow()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [nodeQuery, setNodeQuery] = useState('')
+  const [nodeVisibleCount, setNodeVisibleCount] = useState(MASTERNODES_PAGE_SIZE)
+  const [proposalQuery, setProposalQuery] = useState('')
+  const [proposalVisibleCount, setProposalVisibleCount] = useState(PROPOSALS_PAGE_SIZE)
+  const [proposalSort, setProposalSort] = useState(ProposalSort.EndingSoon)
+  const [contestQuery, setContestQuery] = useState('')
+  const [contestVisibleCount, setContestVisibleCount] = useState(CONTESTS_PAGE_SIZE)
+  const [contestSort, setContestSort] = useState(ContestSort.EndingSoon)
+  const tab = enumParam(MasternodesTab, searchParams.get(MASTERNODE_PARAMS.tab), MasternodesTab.Nodes)
+  const segment = searchParams.get(MASTERNODE_PARAMS.segment)
+  const detailParam = tab === MasternodesTab.Nodes
+    ? MASTERNODE_PARAMS.node
+    : tab === MasternodesTab.Proposals
+      ? MASTERNODE_PARAMS.proposal
+      : MASTERNODE_PARAMS.contest
+  const detail = searchParams.get(detailParam)
+  const registering = tab === MasternodesTab.Nodes && detail == null && searchParams.get(MASTERNODE_PARAMS.register) === '1'
+  const saveListScroll = useDetailScrollRestore(detail ?? (registering ? 'register' : null))
+
+  useEffect(() => {
+    prefetchAddresses(walletId).catch(() => {})
+    prefetchReceiveRequests(walletId).catch(() => {})
+    const timer = setInterval(() => {
+      refreshDashPay(walletId).catch(() => {})
+      refreshGovernanceProposals(walletId).catch(() => {})
+    }, DASHPAY_REFRESH_MS)
+    return () => clearInterval(timer)
+  }, [walletId])
+
+  const selectTab = (next: MasternodesTab, nextSegment: NodeSegment | ProposalSegment | ContestSegment | null): void => {
+    setNodeVisibleCount(MASTERNODES_PAGE_SIZE)
+    setProposalVisibleCount(PROPOSALS_PAGE_SIZE)
+    setContestVisibleCount(CONTESTS_PAGE_SIZE)
+    setSearchParams(prev => withParams(prev, {
+      [MASTERNODE_PARAMS.tab]: next === MasternodesTab.Nodes ? null : next,
+      [MASTERNODE_PARAMS.segment]: nextSegment,
+      [MASTERNODE_PARAMS.node]: null,
+      [MASTERNODE_PARAMS.proposal]: null,
+      [MASTERNODE_PARAMS.contest]: null,
+      [MASTERNODE_PARAMS.register]: null,
+    }), { replace: true })
+  }
+
+  const selectNodes = (next: NodeSegment): void => selectTab(MasternodesTab.Nodes, next)
+  const selectProposals = (next: ProposalSegment): void => selectTab(MasternodesTab.Proposals, next)
+  const selectContests = (next: ContestSegment): void => selectTab(MasternodesTab.ContestedResources, next)
+
+  const openDetail = (value: string): void => {
+    saveListScroll()
+    const state: MasternodesNavigationState = { fromList: true }
+    setSearchParams(prev => withParams(prev, { [detailParam]: value, [MASTERNODE_PARAMS.register]: null }), { state })
+  }
+
+  const closeDetail = (): void => {
+    if ((location.state as MasternodesNavigationState | null)?.fromList === true) {
+      navigate(-1)
+      return
+    }
+    setSearchParams(prev => withParams(prev, { [detailParam]: null }), { replace: true })
+  }
+
+  const openRegister = (): void => {
+    saveListScroll()
+    const state: MasternodesNavigationState = { fromList: true }
+    setSearchParams(prev => withParams(prev, {
+      [MASTERNODE_PARAMS.tab]: null,
+      [MASTERNODE_PARAMS.node]: null,
+      [MASTERNODE_PARAMS.register]: '1',
+    }), { state })
+  }
+
+  const closeRegister = (): void => {
+    if ((location.state as MasternodesNavigationState | null)?.fromList === true) {
+      navigate(-1)
+      return
+    }
+    setSearchParams(prev => withParams(prev, { [MASTERNODE_PARAMS.register]: null }), { replace: true })
+  }
+
+  const openNodeFromRegister = (proTxHash: string): void => {
+    setSearchParams(prev => withParams(prev, {
+      [MASTERNODE_PARAMS.tab]: null,
+      [MASTERNODE_PARAMS.register]: null,
+      [MASTERNODE_PARAMS.node]: proTxHash,
+    }), { replace: true })
+  }
+
+  const items = [
+    {
+      value: MasternodesTab.Nodes,
+      label: MASTERNODES_TAB_LABELS[MasternodesTab.Nodes],
+      content: (
+        <NodesTab
+          walletId={walletId}
+          segment={enumParam(NodeSegment, segment, NodeSegment.All)}
+          onSegmentChange={selectNodes}
+          query={nodeQuery}
+          onQueryChange={query => { setNodeQuery(query); setNodeVisibleCount(MASTERNODES_PAGE_SIZE) }}
+          visibleCount={nodeVisibleCount}
+          onShowMore={() => setNodeVisibleCount(count => count + MASTERNODES_PAGE_SIZE)}
+          onOpenNode={openDetail}
+          onRegister={openRegister}
+        />
+      ),
+    },
+    {
+      value: MasternodesTab.Proposals,
+      label: MASTERNODES_TAB_LABELS[MasternodesTab.Proposals],
+      content: (
+        <ProposalsTab
+          walletId={walletId}
+          network={network}
+          now={now}
+          segment={enumParam(ProposalSegment, segment, ProposalSegment.Active)}
+          onSegmentChange={selectProposals}
+          query={proposalQuery}
+          onQueryChange={query => { setProposalQuery(query); setProposalVisibleCount(PROPOSALS_PAGE_SIZE) }}
+          sort={proposalSort}
+          onSortChange={sort => { setProposalSort(sort); setProposalVisibleCount(PROPOSALS_PAGE_SIZE) }}
+          visibleCount={proposalVisibleCount}
+          onShowMore={() => setProposalVisibleCount(count => count + PROPOSALS_PAGE_SIZE)}
+          onOpenProposal={openDetail}
+        />
+      ),
+    },
+    {
+      value: MasternodesTab.ContestedResources,
+      label: MASTERNODES_TAB_LABELS[MasternodesTab.ContestedResources],
+      content: (
+        <ContestsTab
+          walletId={walletId}
+          network={network}
+          now={now}
+          segment={enumParam(ContestSegment, segment, ContestSegment.Open)}
+          onSegmentChange={selectContests}
+          query={contestQuery}
+          onQueryChange={query => { setContestQuery(query); setContestVisibleCount(CONTESTS_PAGE_SIZE) }}
+          sort={contestSort}
+          onSortChange={sort => { setContestSort(sort); setContestVisibleCount(CONTESTS_PAGE_SIZE) }}
+          visibleCount={contestVisibleCount}
+          onShowMore={() => setContestVisibleCount(count => count + CONTESTS_PAGE_SIZE)}
+          onOpenContest={openDetail}
+        />
+      ),
+    },
+  ]
+
+  return (
+    <div className={'relative flex flex-col pb-12'}>
+      <div className={'px-12'}>
+        {detail != null ? (
+          tab === MasternodesTab.Nodes
+            ? <NodeDetail walletId={walletId} proTxHash={detail} onBack={closeDetail} />
+            : tab === MasternodesTab.Proposals
+              ? <ProposalDetail key={detail} walletId={walletId} now={now} proposalHash={detail} onBack={closeDetail} />
+              : <ContestDetail key={detail} walletId={walletId} now={now} normalizedLabel={detail} onBack={closeDetail} />
+        ) : registering ? (
+          <RegisterMasternodeWizard
+            walletId={walletId}
+            onBack={closeRegister}
+            onOpenNode={openNodeFromRegister}
+          />
+        ) : (
+          <>
+            <PageHeader title={PAGE_HEADERS.masternodes.title} subtitle={PAGE_HEADERS.masternodes.subtitle} />
+            <div className={`relative ${SURFACE_PANEL}`}>
+              <PageTabs items={items} value={tab} onValueChange={value => selectTab(enumParam(MasternodesTab, value, MasternodesTab.Nodes), null)} />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}

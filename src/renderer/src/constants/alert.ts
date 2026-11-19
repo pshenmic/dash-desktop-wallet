@@ -12,4 +12,9 @@ export const ALERT_TONE_STYLES: Record<AlertTone, AlertToneStyles> = {
     accent: 'text-dash-brand dark:text-dash-mint',
     title: '',
   },
+  [AlertTone.Success]: {
+    surface: 'border-dash-green/40 bg-dash-green-5 dark:bg-dash-green-15',
+    accent: 'text-dash-green',
+    title: 'text-dash-green!',
+  },
 }

@@ -111,6 +111,10 @@ const noopEvents = {
   evonodeDapiUrls: () => undefined,
   platformQuorums: () => undefined,
   masternodeList: () => undefined,
+  listedMasternodes: () => undefined,
+  proposals: () => undefined,
+  proposalVotes: () => undefined,
+  voteRelayed: () => undefined,
 }
 
 const start = (service: SyncService, peerOverrides: PeerOverrides): Promise<void> => service.start({

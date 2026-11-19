@@ -258,7 +258,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
   // Render with prefix
   if (hasPrefix) {
     return (
-      <div className='relative'>
+      <div className='relative w-full min-w-0'>
         <div
           ref={prefixRef}
           className={`absolute left-4 top-1/2 -translate-y-1/2 z-10 text-[0.875rem] opacity-60 pointer-events-none select-none ${prefixClassName}`}
@@ -296,7 +296,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
   // Render password input without prefix
   if (isPassword) {
     return (
-      <div className='relative'>
+      <div className='relative w-full min-w-0'>
         <input
           ref={ref}
           className={classes + (showPasswordToggle ? ' pr-12' : '')}

@@ -8,7 +8,7 @@ export const FIELD_COMPACT = 'min-h-[3.25rem] rounded-2xl border border-dash-pri
 
 export const FIELD_CONTROL_HEIGHT = 'h-12'
 
-export const POPOVER = 'p-[.375rem] rounded-[.875rem] bg-white dark:bg-white/12 dark:backdrop-blur-[2rem] shadow-[0_0_35px_0_rgba(0,0,0,0.15)]'
+export const POPOVER = 'p-[.375rem] rounded-[.875rem] bg-white dark:bg-[#1e2f46] border border-dash-primary-dark-blue/8 dark:border-white/15 shadow-[0_12px_35px_0_rgba(0,0,0,0.28)]'
 
 export const POPOVER_OPTION = 'rounded-[.625rem] p-[.625rem] cursor-pointer transition-colors duration-150 hover:dash-block-accent-10'
 

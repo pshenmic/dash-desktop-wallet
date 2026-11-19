@@ -1,4 +1,8 @@
 import {Script} from 'dash-core-sdk'
+import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
+import {ProUpRegTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRegTx.js'
+import {ProUpRevTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRevTx.js'
+import {ProUpServTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpServTx.js'
 import {Network} from './Network'
 
 export type RecipientType = 'p2pkh' | 'p2sh'
@@ -57,6 +61,27 @@ export interface BuildAssetLockParams {
 }
 
 export interface BuildSignedAssetLockParams extends BuildAssetLockParams {
+  seed: Uint8Array
+  network: Network
+}
+
+export type ProviderPayload = ProRegTX | ProUpRegTx | ProUpServTx | ProUpRevTx
+
+// The key a payload is signed with: a wallet address's — the collateral's for a
+// ProRegTx, the owner's for a ProUpRegTx — or the operator BLS key at an index.
+export type ProviderTxSigner =
+  | {kind: 'address'; derivationPath: string; address: string}
+  | {kind: 'operator'; index: number}
+
+// payload is completed here: its inputs hash and signature both depend on the
+// inputs chosen.
+export interface BuildSignedProviderTxParams {
+  payload: ProviderPayload
+  signer: ProviderTxSigner
+  inputs: TransferInput[]
+  changeAddress: string
+  inputTotal: bigint
+  feeDuffs: bigint
   seed: Uint8Array
   network: Network
 }
