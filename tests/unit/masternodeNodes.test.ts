@@ -36,6 +36,7 @@ import {
   isOwnedShare,
   isSharedNode,
   keyOriginBadge,
+  masternodeChainBadge,
   masternodeStatus,
   masternodeType,
   nodeAccessDisplay,
@@ -46,6 +47,7 @@ import {
   operateNodeDisabledReason,
   shareOriginBadge,
   shareRatio,
+  shortProTxHash,
   updateRegistrarDisabledReason,
 } from '@renderer/utils/masternodeNodes'
 
@@ -125,6 +127,10 @@ describe('Masternode display', () => {
     expect(masternodeStatus('POSE_BANNED')).toEqual({ tone: StatusPillTone.Danger, label: 'PoSe banned' })
     expect(masternodeType('Regular')).toEqual({ variant: 'muted', text: 'Masternode' })
     expect(masternodeType('Evo')).toEqual({ variant: 'accent', text: 'Evonode' })
+    expect(masternodeChainBadge('Regular').text).toBe('core')
+    expect(masternodeChainBadge('Evo').text).toBe('evo')
+    expect(shortProTxHash('0123456789abcdef0123456789abcdef')).toBe('0123456789…abcdef')
+    expect(shortProTxHash('short')).toBe('short')
     expect(formatBlockHeight(123456)).toBe('#123,456')
   })
 })

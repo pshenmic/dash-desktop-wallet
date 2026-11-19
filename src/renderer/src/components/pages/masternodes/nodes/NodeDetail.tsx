@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Button, HighlightedIdentifier, Text } from '@renderer/components/dash-ui-kit-extended'
+import { Button, HighlightedIdentifier, Text, Tooltip } from '@renderer/components/dash-ui-kit-extended'
 import {
   BoxIcon,
   CalendarIconHighlighted,
@@ -42,10 +42,12 @@ import {
   formatServiceAddress,
   isSharedNode,
   keyOriginBadge,
+  masternodeChainBadge,
   masternodeStatus,
   masternodeType,
   nodeVotingAccessLabel,
   operateNodeDisabledReason,
+  shortProTxHash,
   updateRegistrarDisabledReason,
 } from '@renderer/utils/masternodeNodes'
 import NodeSharesCard from './NodeSharesCard'
@@ -83,6 +85,7 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
   const pendingRegistration = node.status === REGISTERING_MASTERNODE_STATUS
   const status = masternodeStatus(node.status)
   const typeBadge = masternodeType(node.type)
+  const chainBadge = masternodeChainBadge(node.type)
   const isEvo = node.type === EVO_MASTERNODE_TYPE
   const serviceLabel = formatServiceAddress(node.serviceAddress)
   const canUpdateRegistrar = canUpdateNodeRegistrar(node)
@@ -152,12 +155,17 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
   return (
     <>
       <PageHeader
-        title={serviceLabel}
+        title={shortProTxHash(node.proTxHash)}
+        subtitle={serviceLabel}
         onBack={onBack}
         backLabel={PAGE_HEADERS.masternodeDetail.back}
         titleAddon={(
           <>
-            <CustomBadge {...typeBadge} className={'shrink-0'} />
+            <Tooltip label={chainBadge.label}>
+              <span className={'inline-flex shrink-0'} title={''}>
+                <CustomBadge text={chainBadge.text} size={'s'} className={`w-11 shrink-0 ${chainBadge.className}`} />
+              </span>
+            </Tooltip>
             {shared && <CustomBadge variant={'default'} text={NODE_DETAIL_COPY.sharedBadge} className={'shrink-0'} />}
             <StatusPill tone={status.tone}>{status.label}</StatusPill>
           </>

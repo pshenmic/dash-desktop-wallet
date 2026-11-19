@@ -2,6 +2,7 @@ import type { ConnectionType, MasternodeDto, MasternodeKeyRole, OwnedMasternodeS
 import { DASH_UNIT } from '@renderer/constants/balance'
 import {
   MANAGE_KEYS_COPY,
+  MASTERNODE_CHAIN_BADGES,
   MASTERNODE_KEY_ROLE_LABELS,
   MASTERNODE_META_SEPARATOR,
   NODES_TAB_COPY,
@@ -200,6 +201,14 @@ export function masternodeStatus(status: string) {
 export function masternodeType(type: string): Pick<CustomBadgeProps, 'variant' | 'text'> {
   if (type === EVO_MASTERNODE_TYPE) return { variant: 'accent', text: 'Evonode' }
   return { variant: 'muted', text: type === REGULAR_MASTERNODE_TYPE ? 'Masternode' : type }
+}
+
+export function masternodeChainBadge(type: string) {
+  return MASTERNODE_CHAIN_BADGES[type] ?? { text: type.toLowerCase(), label: type, className: '' }
+}
+
+export function shortProTxHash(proTxHash: string): string {
+  return proTxHash.length > 20 ? `${proTxHash.slice(0, 10)}…${proTxHash.slice(-6)}` : proTxHash
 }
 
 export function formatBlockHeight(height: number): string {

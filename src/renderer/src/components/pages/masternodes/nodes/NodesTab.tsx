@@ -157,7 +157,7 @@ export default function NodesTab({
           )
         ) : (
           <div className={SECTION_TABLE_WRAPPER}>
-            <div className={'min-w-[36rem]'}>
+            <div className={'min-w-[40rem]'}>
               <div className={`${SECTION_TABLE_HEADER} ${MASTERNODE_TABLE_GRID}`}>
                 {NODE_TABLE_COLUMNS.map(label => (
                   <Text key={label} size={12} weight={'normal'} color={'brand'} opacity={50}>{label}</Text>

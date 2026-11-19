@@ -1,6 +1,9 @@
 import type { MasternodeKeyRole, RevocationReason } from '@renderer/api/types'
+import { EVO_MASTERNODE_TYPE, REGULAR_MASTERNODE_TYPE } from '@renderer/constants/masternodes'
+import { TRANSACTION_KIND_BADGES } from '@renderer/constants/transactionKindBadges'
 import { NodeSegment, PayoutChoiceKind, RegistrarKeyChoiceKind } from '@renderer/enums/Masternodes'
 import type { SegmentOption } from '@renderer/types/SegmentedControl'
+import type { TransactionKindBadge } from '@renderer/types/TransactionKindBadge'
 
 export const MASTERNODE_META_SEPARATOR = ' · '
 
@@ -22,7 +25,20 @@ export const NODES_TAB_COPY = {
   importedKeysButton: 'Imported keys',
 } as const
 
-export const NODE_TABLE_COLUMNS = ['Node', 'Status', 'Roles & Stake'] as const
+export const NODE_TABLE_COLUMNS = ['Node', 'Shared', 'Status', 'Roles & Stake'] as const
+
+export const MASTERNODE_CHAIN_BADGES: Record<string, TransactionKindBadge> = {
+  [REGULAR_MASTERNODE_TYPE]: {
+    text: TRANSACTION_KIND_BADGES.core.text,
+    label: 'Dash Core Masternode',
+    className: TRANSACTION_KIND_BADGES.core.className,
+  },
+  [EVO_MASTERNODE_TYPE]: {
+    text: TRANSACTION_KIND_BADGES.platform.text,
+    label: 'Dash Evonode (Core + Platform)',
+    className: TRANSACTION_KIND_BADGES.platform.className,
+  },
+}
 
 export const NODE_SEGMENT_EMPTY: Record<NodeSegment, string> = {
   [NodeSegment.All]: 'No nodes',
