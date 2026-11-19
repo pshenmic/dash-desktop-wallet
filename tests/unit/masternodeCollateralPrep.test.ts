@@ -8,6 +8,7 @@ import {
   fallbackCollateralTargetAddress,
   nextCollateralLabelOnAddressChange,
   pickFreshCollateralTargetAddress,
+  planCollateralInvoiceSync,
   prepOutpointKey,
   requiredCollateralDuffs,
   resolveCreatedCollateralOutpoint,
@@ -134,7 +135,7 @@ describe('masternodeCollateralPrep', () => {
     expect(resolveCreatedCollateralOutpoint(txid, evoAmount, [])).toBe(`${txid}:0`)
   })
 
-  it('picks first clean unclaimed and unlabeled fresh receiving address or null when none remain', () => {
+  it('picks first clean unclaimed fresh receiving address ignoring raw address.label, or null when none remain', () => {
     const claimed = new Set(['yClaimed1'])
     const labels = new Map<string, string>([['yLabeledMap1', 'From request']])
     const receiving = [
@@ -142,18 +143,16 @@ describe('masternodeCollateralPrep', () => {
       addr('yUsed1', { isUsed: true, txCount: 1 }),
       addr('yClaimed1', { index: 1 }),
       addr('yLabeledMap1', { index: 2 }),
-      addr('yAddressLabel1', { index: 3, label: 'Manual label' }),
+      addr('yCleanWithRawLabel', { index: 3, label: 'Ignored legacy label' }),
       addr('yCleanUnused1', { index: 4 }),
-      addr('yCleanUnused2', { index: 5 }),
     ]
 
-    expect(pickFreshCollateralTargetAddress(receiving, claimed, labels)).toBe('yCleanUnused1')
+    expect(pickFreshCollateralTargetAddress(receiving, claimed, labels)).toBe('yCleanWithRawLabel')
     expect(
       pickFreshCollateralTargetAddress(
         [
           addr('yClaimed1'),
           addr('yLabeledMap1'),
-          addr('yAddressLabel1', { label: 'Saved' }),
         ],
         claimed,
         labels,
@@ -212,15 +211,18 @@ describe('masternodeCollateralPrep', () => {
     ).toBe(defaultCollateralLabel('Evo'))
   })
 
-  it('orders clean unclaimed unused receiving addresses before already-labeled ones', () => {
-    const claimed = new Set(['yInvoice1'])
-    const labels = new Map<string, string>([['yInvoice1', 'Freelance Invoice #104']])
+  it('orders clean unclaimed unused receiving addresses before invoice-labeled ones', () => {
+    const claimed = new Set(['yInvoice1', 'yInvoice2'])
+    const labels = new Map<string, string>([
+      ['yInvoice1', 'Freelance Invoice #104'],
+      ['yInvoice2', 'Coffee & Snacks'],
+    ])
     const receiving = [
       addr('yLocked1', { isLocked: true }),
       addr('yUsed1', { isUsed: true, txCount: 1, balance: 50_000_000n }),
       addr('yInvoice1', { index: 1 }),
-      addr('yAddressLabeled1', { index: 2, label: 'Coffee & Snacks' }),
-      addr('yClean1', { index: 3 }),
+      addr('yInvoice2', { index: 2 }),
+      addr('yClean1', { index: 3, label: 'Ignored legacy label' }),
       addr('yClean2', { index: 4 }),
     ]
 
@@ -229,11 +231,43 @@ describe('masternodeCollateralPrep', () => {
       'yClean1',
       'yClean2',
       'yInvoice1',
-      'yAddressLabeled1',
+      'yInvoice2',
     ])
     expect(options[0].badge).toBeUndefined()
     expect(options[1].badge).toBeUndefined()
     expect(options[2].badge).toBe('Freelance Invoice #104')
     expect(options[3].badge).toBe('Coffee & Snacks')
+  })
+
+  it('plans Receive invoice creation, rename replacement, and deletion without touching raw address labels', () => {
+    const required = requiredCollateralDuffs('Regular')
+    const existing = [
+      { id: 42, address: 'yExisting', label: 'Old Invoice', amountDuffs: 25_000_000n },
+    ]
+
+    expect(planCollateralInvoiceSync('yFresh', 'Node #1', required, existing)).toEqual({
+      deleteRequestId: null,
+      createRequest: { label: 'Node #1', amountDuffs: required },
+    })
+
+    expect(planCollateralInvoiceSync('yFresh', '   ', required, existing)).toEqual({
+      deleteRequestId: null,
+      createRequest: null,
+    })
+
+    expect(planCollateralInvoiceSync('yExisting', ' Old Invoice ', required, existing)).toEqual({
+      deleteRequestId: null,
+      createRequest: null,
+    })
+
+    expect(planCollateralInvoiceSync('yExisting', 'Renamed Collateral', required, existing)).toEqual({
+      deleteRequestId: 42,
+      createRequest: { label: 'Renamed Collateral', amountDuffs: 25_000_000n },
+    })
+
+    expect(planCollateralInvoiceSync('yExisting', '   ', required, existing)).toEqual({
+      deleteRequestId: 42,
+      createRequest: null,
+    })
   })
 })

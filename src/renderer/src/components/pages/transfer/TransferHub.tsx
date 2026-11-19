@@ -25,7 +25,7 @@ import { usePlatformAddresses, refreshPlatformAddresses } from "@renderer/hooks/
 import { useAdresses } from "@renderer/hooks/useAdresses";
 import { useReceiveRequests, refreshReceiveRequests } from "@renderer/hooks/useReceiveRequests";
 import { useSavedShieldedAddresses } from "@renderer/hooks/useSavedShieldedAddresses";
-import { matchingOptionsByLabel, ownRecipientOptions, walletAddressLabels } from "@renderer/utils/ownRecipients";
+import { matchingOptionsByLabel, ownRecipientOptions } from "@renderer/utils/ownRecipients";
 import { useIdentities, prefetchIdentities, refreshIdentities } from "@renderer/hooks/useIdentities";
 import { useShieldedStatus, useShieldedSyncState } from "@renderer/hooks/useShielded";
 import { useOperationFee } from "@renderer/hooks/useOperationFee";
@@ -202,15 +202,11 @@ function WalletTransferHub(): React.JSX.Element {
   const { format: formatFiat, rateReady } = useFiat()
   const { balance } = useWalletBalance(walletId ?? undefined)
   const { receiving, change, loading: coreAddressesLoading, err: coreAddressesError } = useAdresses(walletId ?? undefined)
-  const { allRequests: receiveRequests, loading: receiveRequestsLoading, err: receiveRequestsError } = useReceiveRequests(walletId ?? undefined)
+  const { allRequests: receiveRequests, labelsByAddress: walletLabels, loading: receiveRequestsLoading, err: receiveRequestsError } = useReceiveRequests(walletId ?? undefined)
   const { platformAddresses, loading: platformAddressesLoading, err: platformAddressesError } = usePlatformAddresses(walletId ?? undefined)
   const { identities, loading: identitiesLoading, err: identitiesError } = useIdentities(walletId ?? undefined)
   const shieldedSync = useShieldedSyncState(walletId, true)
   const savedShielded = useSavedShieldedAddresses(toKind === DestinationKind.Shielded, shieldedSync.phase)
-  const walletLabels = useMemo(
-    () => walletAddressLabels(receiveRequests, receiving, change),
-    [receiveRequests, receiving, change],
-  )
   const ownRecipients = useMemo(() => ownRecipientOptions(toKind, {
     receiving,
     change,

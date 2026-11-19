@@ -101,7 +101,7 @@ export function fundedFeeAddressOptions(
     .sort(([, a], [, b]) => (a.duffs < b.duffs ? 1 : a.duffs > b.duffs ? -1 : 0))
     .map(([address, entry]) => {
       const walletEntry = walletByAddress.get(address)
-      const badge = labelsByAddress.get(address)?.trim() || walletEntry?.label?.trim() || undefined
+      const badge = labelsByAddress.get(address)?.trim() || undefined
       const description = walletEntry?.isChange
         ? MASTERNODE_CHANGE_ADDRESS_DESCRIPTION
         : MASTERNODE_RECEIVING_ADDRESS_DESCRIPTION

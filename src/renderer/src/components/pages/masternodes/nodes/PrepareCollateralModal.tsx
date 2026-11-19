@@ -32,7 +32,7 @@ import { ModalSize } from '@renderer/enums/ModalSize'
 import { TransferOperation } from '@renderer/enums/TransferOperation'
 import { refreshAddresses } from '@renderer/hooks/useAdresses'
 import { invalidateAsyncCache } from '@renderer/hooks/useAsyncWithCache'
-import { addReceiveRequest, refreshReceiveRequests } from '@renderer/hooks/useReceiveRequests'
+import { addReceiveRequest, deleteReceiveRequest } from '@renderer/hooks/useReceiveRequests'
 import { refreshBalance } from '@renderer/hooks/useWalletBalance'
 import type { PrepareCollateralModalProps } from '@renderer/types/MasternodeCollateralPrep'
 import { isValidDashChangeAddress } from '@renderer/utils/address'
@@ -46,6 +46,7 @@ import {
   fallbackCollateralTargetAddress,
   nextCollateralLabelOnAddressChange,
   pickFreshCollateralTargetAddress,
+  planCollateralInvoiceSync,
   prepOutpointKey,
   requiredCollateralDuffs,
   resolveCreatedCollateralOutpoint,
@@ -61,6 +62,7 @@ export default function PrepareCollateralModal({
   network,
   utxos,
   receiving,
+  requests,
   claimedAddresses,
   labelsByAddress,
   badgeFor,
@@ -238,13 +240,17 @@ export default function PrepareCollateralModal({
         setSubmitting(false)
         return
       }
-      if (trimmedLabel !== '') {
-        await API.setAddressLabel(walletId, trimmedAddress, trimmedLabel)
-        if (!claimedAddresses.has(trimmedAddress)) {
-          await addReceiveRequest(walletId, trimmedAddress, trimmedLabel, requiredDuffs)
-        } else {
-          void refreshReceiveRequests(walletId)
-        }
+      const invoiceSync = planCollateralInvoiceSync(trimmedAddress, trimmedLabel, requiredDuffs, requests)
+      if (invoiceSync.deleteRequestId != null) {
+        await deleteReceiveRequest(walletId, invoiceSync.deleteRequestId)
+      }
+      if (invoiceSync.createRequest != null) {
+        await addReceiveRequest(
+          walletId,
+          trimmedAddress,
+          invoiceSync.createRequest.label,
+          invoiceSync.createRequest.amountDuffs,
+        )
       }
       const sent = await API.sendTransaction(
         walletId,

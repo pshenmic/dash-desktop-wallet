@@ -31,20 +31,23 @@ describe('masternodeWalletAddressOptions', () => {
       makeAddress({ address: 'yUsedLabeled', isUsed: true, txCount: 4, balance: 500_000_000n, label: 'Fallback label' }),
       makeAddress({ address: 'yUsedUnlabeled', isUsed: true, txCount: 2, balance: 0n, derivationPath: "m/44'/1'/0'/0/1" }),
       makeAddress({ address: 'yUnusedUnlabeled', balance: 0n, derivationPath: "m/44'/1'/0'/0/2" }),
-      makeAddress({ address: 'yUnusedWithAddressLabel', label: 'Operator pool', derivationPath: "m/44'/1'/0'/0/3" }),
+      makeAddress({ address: 'yUnusedWithRawLabel', balance: 0n, label: 'Ignored raw label', derivationPath: "m/44'/1'/0'/0/3" }),
+      makeAddress({ address: 'yFundedWithRequest', derivationPath: "m/44'/1'/0'/0/4" }),
     ]
     const change: WalletAddressDto[] = [
-      makeAddress({ address: 'yChangeLabeled', isChange: 1, label: 'Change Vault' }),
+      makeAddress({ address: 'yChangeLabeled', isChange: 1 }),
       makeAddress({ address: 'yChangeUnlabeledEmpty', isChange: 1, balance: 0n }),
       makeAddress({ address: 'yChangeUsedUnlabeled', isChange: 1, isUsed: true, txCount: 1, balance: 0n }),
     ]
     const requests = [
       { address: 'yUsedLabeled', label: 'Primary payout', kind: 'core' as const },
+      { address: 'yFundedWithRequest', label: 'Operator pool', kind: 'core' as const },
+      { address: 'yChangeLabeled', label: 'Change Vault', kind: 'core' as const },
       { address: 'yRequestOnlyCore', label: 'Cold storage payout', kind: 'core' as const },
       { address: '0xPlatformAddr', label: 'Ignore platform', kind: 'platform' as const },
     ]
 
-    const labels = walletAddressLabels(requests, receiving, change)
+    const labels = walletAddressLabels(requests)
     const options = masternodeWalletAddressOptions(receiving, change, requests, labels)
 
     expect(options).toEqual([
@@ -62,8 +65,14 @@ describe('masternodeWalletAddressOptions', () => {
         metadata: ['0 Dash', 'Tx count: 0'],
       },
       {
-        value: 'yUnusedWithAddressLabel',
-        label: 'yUnusedWithAddressLabel',
+        value: 'yUnusedWithRawLabel',
+        label: 'yUnusedWithRawLabel',
+        description: MASTERNODE_RECEIVING_ADDRESS_DESCRIPTION,
+        metadata: ['0 Dash', 'Tx count: 0'],
+      },
+      {
+        value: 'yFundedWithRequest',
+        label: 'yFundedWithRequest',
         badge: 'Operator pool',
         description: MASTERNODE_RECEIVING_ADDRESS_DESCRIPTION,
         metadata: ['1 Dash', 'Tx count: 0'],
@@ -100,7 +109,7 @@ describe('masternodeWalletAddressOptions', () => {
       makeAddress({ address: 'yDup', balance: 0n, txCount: 0 }),
       makeAddress({ address: 'yDup', label: 'Duplicate label', txCount: 3 }),
     ]
-    const labels = walletAddressLabels([], receiving, [])
+    const labels = walletAddressLabels([])
     const options = masternodeWalletAddressOptions(receiving, [], [], labels)
     expect(options).toHaveLength(1)
     expect(options[0]?.description).toBe(MASTERNODE_RECEIVING_ADDRESS_DESCRIPTION)

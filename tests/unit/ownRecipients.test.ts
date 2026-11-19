@@ -12,7 +12,7 @@ function inventory(): OwnRecipientInventory {
   const address = {walletId: 'wallet', accountId: 0, derivationPath: '', index: 0, isUsed: false, isLocked: false, balance: 0n, txCount: 0, label: null, usdBalance: null}
   return {
     receiving: [
-      {...address, address: 'receive-empty', isChange: 0, label: 'Savings'},
+      {...address, address: 'receive-empty', isChange: 0, label: 'LegacyIgnored'},
       {...address, address: 'receive-funded', isChange: 0, balance: 10n, txCount: 3},
       {...address, address: 'receive-spent', isChange: 0, txCount: 4},
       {...address, address: 'receive-used', isChange: 0, isUsed: true},
@@ -32,9 +32,9 @@ function inventory(): OwnRecipientInventory {
 }
 
 describe('own recipient options', () => {
-  it('only includes unused empty receiving and change addresses unless labeled, and attaches label badges', () => {
+  it('only includes unused empty receiving and change addresses unless labeled via Receive requests, ignoring raw address.label', () => {
     expect(ownRecipientOptions(DestinationKind.CoreAddress, inventory())).toEqual([
-      {value: 'receive-empty', label: 'receive-empty', badge: 'Savings', description: 'Your receiving address', metadata: ['0 Dash', 'Tx count: 0']},
+      {value: 'receive-empty', label: 'receive-empty', description: 'Your receiving address', metadata: ['0 Dash', 'Tx count: 0']},
       {value: 'change-empty', label: 'change-empty', description: 'Your change address', metadata: ['0 Dash', 'Tx count: 0']},
     ])
   })
@@ -132,15 +132,12 @@ describe('own recipient options', () => {
     expect(availableOwnRecipientOptions(undefined, recipients, 'r1')).toBeUndefined()
   })
 
-  it('combines Receive request labels with Core address labels and matches options by partial label', () => {
-    const data = inventory()
-    const labels = walletAddressLabels(
-      [{address: 'receive-used', label: '  Main Savings  '}],
-      data.receiving,
-      data.change,
-    )
+  it('derives walletAddressLabels from Receive requests only and matches options by partial label', () => {
+    const labels = walletAddressLabels([
+      {address: 'receive-used', label: '  Main Savings  '},
+    ])
     expect(labels.get('receive-used')).toBe('Main Savings')
-    expect(labels.get('receive-empty')).toBe('Savings')
+    expect(labels.has('receive-empty')).toBe(false)
 
     const options = [
       {value: 'addr-1', label: 'addr-1', badge: 'Main Savings'},

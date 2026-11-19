@@ -1,4 +1,3 @@
-import type { WalletAddressDto } from '../api/types'
 import { DestinationKind } from '../enums/DestinationKind'
 import type { DropdownFieldOption } from '../types/DropdownField'
 import type { ReceiveRequestDto, ReceiveRequestKind } from '../types/ReceiveRequest'
@@ -9,17 +8,8 @@ import { addressLabelsByAddress } from './receiveDefaults'
 
 export function walletAddressLabels(
   requests: ReadonlyArray<Pick<ReceiveRequestDto, 'address' | 'label'>> | undefined,
-  receiving: WalletAddressDto[],
-  change: WalletAddressDto[],
 ): Map<string, string> {
-  const labels = addressLabelsByAddress(requests ?? [])
-  for (const address of [...receiving, ...change]) {
-    const trimmed = address.label?.trim() ?? ''
-    if (trimmed !== '' && !labels.has(address.address)) {
-      labels.set(address.address, trimmed)
-    }
-  }
-  return labels
+  return addressLabelsByAddress(requests ?? [])
 }
 
 export function matchingOptionsByLabel(
@@ -91,11 +81,11 @@ export function ownRecipientOptions(kind: DestinationKind, inventory: OwnRecipie
       options = [
         ...[...inventory.receiving, ...inventory.change]
           .filter(address => {
-            const badge = labelForAddress(address.address, inventory.labelsByAddress, address.label)
+            const badge = labelForAddress(address.address, inventory.labelsByAddress)
             return badge != null || (!address.isUsed && address.balance === 0n && address.txCount === 0)
           })
           .map(address => {
-            const badge = labelForAddress(address.address, inventory.labelsByAddress, address.label)
+            const badge = labelForAddress(address.address, inventory.labelsByAddress)
             return {
               value: address.address,
               label: address.address,

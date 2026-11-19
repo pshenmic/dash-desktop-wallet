@@ -60,6 +60,7 @@ export default function RegisterMasternodeWizard({
     options: addressOptions,
     receiving,
     change,
+    requests,
     claimedAddresses,
     labelsByAddress,
     defaultPayoutAddress,
@@ -392,6 +393,7 @@ export default function RegisterMasternodeWizard({
         network={network}
         utxos={effectiveUtxos}
         receiving={receiving}
+        requests={requests}
         claimedAddresses={claimedAddresses}
         labelsByAddress={labelsByAddress}
         badgeFor={badgeFor}

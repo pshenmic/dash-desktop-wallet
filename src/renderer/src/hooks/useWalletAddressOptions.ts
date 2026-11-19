@@ -4,21 +4,15 @@ import { refreshReceiveRequests, useReceiveRequests } from '@renderer/hooks/useR
 import type { WalletAddressOptionsResult } from '@renderer/types/WalletAddressOptions'
 import { masternodeWalletAddressOptions } from '@renderer/utils/masternodeAddressOptions'
 import { pickFreshCollateralTargetAddress } from '@renderer/utils/masternodeCollateralPrep'
-import { walletAddressLabels } from '@renderer/utils/ownRecipients'
 import { claimedReceiveAddresses, receiveCoreAddresses } from '@renderer/utils/receiveDefaults'
 
 export function useWalletAddressOptions(walletId: string | undefined): WalletAddressOptionsResult {
   const { receiving, change, loading: addressesLoading, err: addressesError } = useAdresses(walletId)
-  const { requests, loading: requestsLoading, err: requestsError } = useReceiveRequests(walletId)
+  const { requests, labelsByAddress, loading: requestsLoading, err: requestsError } = useReceiveRequests(walletId)
 
   const claimedAddresses = useMemo(
     () => claimedReceiveAddresses(requests),
     [requests],
-  )
-
-  const labelsByAddress = useMemo(
-    () => walletAddressLabels(requests, receiving, change),
-    [requests, receiving, change],
   )
 
   const defaultPayoutAddress = useMemo(
@@ -50,6 +44,7 @@ export function useWalletAddressOptions(walletId: string | undefined): WalletAdd
     options,
     receiving,
     change,
+    requests,
     claimedAddresses,
     labelsByAddress,
     defaultPayoutAddress,

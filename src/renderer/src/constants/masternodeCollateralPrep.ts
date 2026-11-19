@@ -14,7 +14,7 @@ export const MASTERNODE_COLLATERAL_PREP_COPY = {
   modalDescription: 'Combine existing wallet coins into a single exact collateral output and label its receiving address without leaving registration.',
   emptyHintPrefix: 'No single exact collateral UTXO was found. Unlocked spendable coins total',
   targetAddressSection: 'Destination address',
-  labelField: 'Address label',
+  labelField: 'Label',
   labelPlaceholder: 'e.g. Evonode #1 collateral',
   defaultRegularLabel: 'Regular masternode collateral',
   defaultEvoLabel: 'Evonode collateral',
