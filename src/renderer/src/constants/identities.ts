@@ -21,6 +21,29 @@ export const IDENTITY_ROW_COPY = {
   explorer: 'Open in explorer',
 } as const
 
+export const IDENTITIES_TABS = {
+  param: 'tab',
+  sourceParam: 'source',
+  masternodeSource: 'masternode',
+  yourIdentities: 'your-identities',
+  masternodeIdentities: 'masternode-identities',
+  yourLabel: 'Your Identities',
+  masternodeLabel: 'Masternode Identities',
+} as const
+
+export const MASTERNODE_IDENTITIES_COPY = {
+  searchPlaceholder: 'Search name, identity ID, or ProTxHash',
+  loadFailed: 'Failed to load masternode identities',
+  emptyTitle: 'No masternode identities',
+  emptyDescription: 'Identities derived from your wallet-owned or imported masternode owner and voting keys appear here once registered.',
+  viewIdentity: 'View identity',
+  proTxHashLabel: 'Linked masternode ProTxHash',
+  roleLabels: {
+    owner: 'Owner',
+    voter: 'Voting',
+  } as Record<'owner' | 'voter', string>,
+} as const
+
 export const IDENTITY_DETAIL_COPY = {
   title: 'Identity',
   balance: 'Balance',

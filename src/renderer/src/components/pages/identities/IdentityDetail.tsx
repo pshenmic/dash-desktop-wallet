@@ -1,4 +1,5 @@
-import { useNavigate } from 'react-router-dom'
+import { useMemo } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AddIcon, Button, CreditsIcon, ExternalLinkIcon, HighlightedIdentifier, IdenticonIcon, KeyIcon, Text } from '@renderer/components/dash-ui-kit-extended'
 import TransactionDetailToken from '@renderer/components/pages/transactions/TransactionDetailToken'
 import CopyButton from '@renderer/components/ui/CopyButton'
@@ -13,13 +14,16 @@ import ListSkeleton from '@renderer/components/ui/Skeleton'
 import { ADDRESS_ROW_ICON_BUTTON_CLASS } from '@renderer/constants/addressRow'
 import {
   IDENTITIES_ROUTES,
+  IDENTITIES_TABS,
   IDENTITY_DETAIL_COPY,
   IDENTITY_DETAIL_ROOT_CLASS,
   IDENTITY_DETAIL_SKELETON_ROWS,
   IDENTITY_TOKEN_ICON_CLASS,
+  MASTERNODE_IDENTITIES_COPY,
 } from '@renderer/constants/identities'
 import { IDENTITY_KEYS_COPY } from '@renderer/constants/identityKeys'
 import { PAGE_HEADERS } from '@renderer/constants/pageHeaders'
+import { SURFACE_ROW } from '@renderer/constants/surfaces'
 import { TRANSACTION_DETAIL_CARD_CLASS, TRANSACTION_DETAIL_IDENTIFIER_CLASS } from '@renderer/constants/transactionsPage'
 import { useAuth } from '@renderer/contexts/AuthContext'
 import { IdentityAvatarSize } from '@renderer/enums/IdentityAvatarSize'
@@ -29,6 +33,7 @@ import { useFiat } from '@renderer/hooks/useFiat'
 import { useDashPayUsernames } from '@renderer/hooks/useDashPayUsernames'
 import { usePeriodicDashPayRefresh } from '@renderer/hooks/useDashPayRefresh'
 import { refreshIdentities, useIdentities } from '@renderer/hooks/useIdentities'
+import { refreshMasternodeIdentities, useMasternodeIdentities } from '@renderer/hooks/useMasternodeIdentities'
 import type { IdentityDetailProps } from '@renderer/types/Identities'
 import { formatApproxFiat } from '@renderer/utils/approxFiat'
 import { creditsToDuffs } from '@renderer/utils/balance'
@@ -36,30 +41,50 @@ import { identityUrl, openExternal } from '@renderer/utils/explorer'
 import { identityName } from '@renderer/utils/identifierFormat'
 import { activeKeysCount, identityAddKeysHref, identityVotingNames } from '@renderer/utils/identities'
 import { identityKeysCountLabel } from '@renderer/utils/identityKeySetup'
+import { groupMasternodeIdentities, masternodeIdentitiesTabHref } from '@renderer/utils/masternodeIdentityView'
 import IdentityKeysSection from './keys/IdentityKeysSection'
 import IdentityVotingName from './IdentityVotingName'
 
 export default function IdentityDetail({ walletId, identifier }: IdentityDetailProps): React.JSX.Element {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { status } = useAuth()
   const network = status?.network ?? null
   const { isBalanceVisible } = useBalanceVisibility()
   const { format: formatFiat, rateReady, currency } = useFiat()
   const { identities, loading, err } = useIdentities(walletId)
-  const identity = identities.find(entry => entry.identifier === identifier)
+  const { masternodeIdentities, loading: mnLoading, err: mnErr } = useMasternodeIdentities(walletId)
+
+  const fromMasternodeSource = searchParams.get(IDENTITIES_TABS.sourceParam) === IDENTITIES_TABS.masternodeSource
+  const regularIdentity = identities.find(entry => entry.identifier === identifier)
+  const masternodeView = useMemo(
+    () => groupMasternodeIdentities(masternodeIdentities).find(entry => entry.identity.identifier === identifier),
+    [masternodeIdentities, identifier],
+  )
+  const isMasternodeIdentity = masternodeView != null && (fromMasternodeSource || regularIdentity == null)
+  const identity = isMasternodeIdentity ? masternodeView.identity : regularIdentity
+
   const usernamesWalletId = identity == null ? undefined : walletId
   const { usernames } = useDashPayUsernames(usernamesWalletId)
   usePeriodicDashPayRefresh(usernamesWalletId)
   const back = (): void => {
-    navigate(IDENTITIES_ROUTES.root)
+    navigate(fromMasternodeSource || isMasternodeIdentity ? masternodeIdentitiesTabHref() : IDENTITIES_ROUTES.root)
   }
 
   if (identity == null) {
+    const isLoading = fromMasternodeSource ? mnLoading : loading || mnLoading
+    const loadErr = fromMasternodeSource ? mnErr : (err ?? mnErr)
+    const onRetry = fromMasternodeSource
+      ? () => refreshMasternodeIdentities(walletId)
+      : () => {
+          void refreshIdentities(walletId)
+          void refreshMasternodeIdentities(walletId)
+        }
     let body: React.JSX.Element
-    if (loading) {
+    if (isLoading) {
       body = <ListSkeleton rows={IDENTITY_DETAIL_SKELETON_ROWS} rowClassName={'h-12 rounded-[.875rem]'} />
-    } else if (err != null) {
-      body = <NoResults tone={NoResultsTone.Error} noResults={IDENTITY_DETAIL_COPY.loadFailed} action={<RetryButton onRetry={() => refreshIdentities(walletId)} />} />
+    } else if (loadErr != null) {
+      body = <NoResults tone={NoResultsTone.Error} noResults={IDENTITY_DETAIL_COPY.loadFailed} action={<RetryButton onRetry={onRetry} />} />
     } else {
       body = (
         <NoResults
@@ -85,16 +110,28 @@ export default function IdentityDetail({ walletId, identifier }: IdentityDetailP
     <div className={IDENTITY_DETAIL_ROOT_CLASS}>
       <PageHeader
         title={<span className={'[overflow-wrap:anywhere]'}>{name ?? IDENTITY_DETAIL_COPY.title}</span>}
-        titleAddon={extraNames > 0 && <CustomBadge variant={'muted'} text={`+${extraNames}`} className={'shrink-0'} />}
+        titleAddon={(
+          <>
+            {extraNames > 0 && <CustomBadge variant={'muted'} text={`+${extraNames}`} className={'shrink-0'} />}
+            {isMasternodeIdentity && masternodeView != null && masternodeView.bindings.map(binding => (
+              <CustomBadge
+                key={`${binding.proTxHash}:${binding.role}`}
+                variant={binding.role === 'owner' ? 'accent' : 'muted'}
+                text={MASTERNODE_IDENTITIES_COPY.roleLabels[binding.role]}
+                className={'shrink-0'}
+              />
+            ))}
+          </>
+        )}
         subtitle={PAGE_HEADERS.identity.subtitle}
         onBack={back}
         backLabel={PAGE_HEADERS.identity.back}
-        actions={
+        actions={isMasternodeIdentity ? undefined : (
           <Button type={'button'} size={'compact'} colorScheme={'primary'} className={'h-8! gap-2'} onClick={() => navigate(identityAddKeysHref(identity.identifier))}>
             <AddIcon size={12} color={'currentColor'} />
             {IDENTITY_KEYS_COPY.addKeys}
           </Button>
-        }
+        )}
       />
 
       <div className={'flex flex-col gap-4'}>
@@ -145,6 +182,30 @@ export default function IdentityDetail({ walletId, identifier }: IdentityDetailP
               subValue={`${activeKeysCount(identity.keys)} ${IDENTITY_DETAIL_COPY.active}`}
             />
           </div>
+          {isMasternodeIdentity && masternodeView != null && (
+            <div className={'flex flex-col gap-2'}>
+              <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
+                {MASTERNODE_IDENTITIES_COPY.proTxHashLabel}
+              </Text>
+              <div className={'flex flex-col gap-2'}>
+                {masternodeView.bindings.map(binding => (
+                  <div key={`${binding.proTxHash}:${binding.role}`} className={`flex items-center justify-between gap-3 ${SURFACE_ROW}`}>
+                    <CustomBadge
+                      variant={binding.role === 'owner' ? 'accent' : 'muted'}
+                      text={MASTERNODE_IDENTITIES_COPY.roleLabels[binding.role]}
+                      className={'shrink-0'}
+                    />
+                    <div className={'flex min-w-0 flex-1 items-center gap-[.3125rem]'}>
+                      <HighlightedIdentifier className={TRANSACTION_DETAIL_IDENTIFIER_CLASS}>
+                        {binding.proTxHash}
+                      </HighlightedIdentifier>
+                      <CopyButton text={binding.proTxHash} className={'shrink-0'} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {votingNames.length > 0 && (
             <ul aria-label={IDENTITY_DETAIL_COPY.votingUsernames} className={'flex min-w-0 flex-col gap-2'}>
               {votingNames.map(votingName => (
@@ -154,7 +215,7 @@ export default function IdentityDetail({ walletId, identifier }: IdentityDetailP
           )}
         </div>
 
-        <IdentityKeysSection walletId={walletId} identity={identity} />
+        <IdentityKeysSection walletId={walletId} identity={identity} readOnly={isMasternodeIdentity} />
       </div>
     </div>
   )
