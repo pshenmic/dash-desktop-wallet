@@ -18,6 +18,7 @@ import {
   operatedNode,
   requireCollateral,
   requirePayout,
+  revocableNode,
   collateralsToStore,
   withCollateralFlag,
   withoutCollaterals,
@@ -280,11 +281,36 @@ describe('ownerNode', () => {
 })
 
 describe('operatedNode', () => {
-  it('refuses a shared node: shared interactions are not supported yet', () => {
+  const operated = (proTxHash: string, operatorKeyIndex: number | null): Masternode =>
+    ({...node(proTxHash), ownerKeyIndex: null, votingKeyIndex: null, operatorKeyIndex, importedRoles: [], shares: []})
+  const shared = (): Masternode => {
     const shares = [{ownerAddress: 'Xother1', amountDuffs: 60000000000n}, {ownerAddress: 'Xother2', amountDuffs: 40000000000n}]
-    const shared = {...node('aa', {isShared: true, shares}), ownerKeyIndex: null, votingKeyIndex: null, operatorKeyIndex: 0, importedRoles: [],
-      shares: shares.map(share => ({...share, keyIndex: null, imported: false}))}
-    expect(() => operatedNode([shared], 'aa')).toThrow('not supported')
+    return {...operated('aa', 0), isShared: true, shares: shares.map(share => ({...share, keyIndex: null, imported: false}))}
+  }
+
+  it('answers the operator key of a solo or a shared node', () => {
+    expect(operatedNode([operated('aa', 0)], 'aa').operatorKeyIndex).toBe(0)
+    expect(operatedNode([shared()], 'aa').operatorKeyIndex).toBe(0)
+  })
+
+  it('refuses a node whose operator key the wallet does not derive', () => {
+    expect(() => operatedNode([operated('aa', null)], 'aa')).toThrow('does not derive')
+    expect(() => operatedNode([], 'aa')).toThrow('Not a masternode')
+  })
+})
+
+describe('revocableNode', () => {
+  const operated = (proTxHash: string, operatorKeyIndex: number): Masternode =>
+    ({...node(proTxHash), ownerKeyIndex: null, votingKeyIndex: null, operatorKeyIndex, importedRoles: [], shares: []})
+
+  it('answers a solo node', () => {
+    expect(revocableNode([operated('aa', 0)], 'aa').operatorKeyIndex).toBe(0)
+  })
+
+  it('refuses a shared node, which every share owner would have to restore', () => {
+    const shares = [{ownerAddress: 'Xother1', amountDuffs: 60000000000n}]
+    const shared = {...operated('aa', 0), isShared: true, shares: shares.map(share => ({...share, keyIndex: null, imported: false}))}
+    expect(() => revocableNode([shared], 'aa')).toThrow('every share owner')
   })
 })
 

@@ -1,6 +1,6 @@
 import { WalletTxDto } from '@renderer/types/WalletTransaction'
 import { TransferOperation } from '../enums/TransferOperation'
-import { AddressKeyInfoDto, UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PaymentRequestDto, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, ListedUtxo, MasternodeDto, MasternodeCollateralDto, ImportedMasternodeKeyDto, MasternodeKeyRole, MasternodeRegistrationDto, MasternodeRegistrationResult, MasternodeRegistrarUpdateDto, MasternodeServiceUpdateDto, MasternodeUpdateResult, RevocationReason, ProposalDto, ProposalTally, VoteOutcome, VoteResult} from './types'
+import { AddressKeyInfoDto, UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PaymentRequestDto, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, ListedUtxo, MasternodeDto, MasternodeCollateralDto, MasternodeIdentityInfoDto, ImportedMasternodeKeyDto, MasternodeKeyRole, MasternodeRegistrationDto, MasternodeRegistrationPreviewDto, MasternodeRegistrationResult, MasternodeRegistrarUpdateDto, MasternodeServiceUpdateDto, MasternodeUpdateResult, RevocationReason, ProposalDto, ProposalTally, VoteOutcome, VoteResult} from './types'
 
 export class API {
   private static get api() {
@@ -147,6 +147,10 @@ export class API {
     return this.api.setAddressLabel(walletId, address, label)
   }
 
+  static async setAddressLocked(walletId: string, address: string, locked: boolean): Promise<void> {
+    return this.api.setAddressLocked(walletId, address, locked)
+  }
+
   static async getTransactions(walletId: string): Promise<WalletHistory> {
     return this.api.getTransactions(walletId) as Promise<WalletHistory>
   }
@@ -175,6 +179,10 @@ export class API {
     return this.api.getMasternodeCollaterals(walletId)
   }
 
+  static async getMasternodeIdentities(walletId: string): Promise<MasternodeIdentityInfoDto[]> {
+    return this.api.getMasternodeIdentities(walletId)
+  }
+
   static async getImportedMasternodeKeys(walletId: string): Promise<ImportedMasternodeKeyDto[]> {
     return this.api.getImportedMasternodeKeys(walletId)
   }
@@ -190,8 +198,12 @@ export class API {
     return this.api.removeMasternodeKey(walletId, key)
   }
 
-  static async registerMasternode(walletId: string, registration: MasternodeRegistrationDto, password: string): Promise<MasternodeRegistrationResult> {
-    return this.api.registerMasternode(walletId, registration, password)
+  static async signAndBroadcastMasternodeRegistration(walletId: string, unsignedHex: string, password: string): Promise<MasternodeRegistrationResult> {
+    return this.api.signAndBroadcastMasternodeRegistration(walletId, unsignedHex, password)
+  }
+
+  static async previewMasternodeRegistration(walletId: string, registration: MasternodeRegistrationDto): Promise<MasternodeRegistrationPreviewDto> {
+    return this.api.previewMasternodeRegistration(walletId, registration)
   }
 
   static async updateMasternodeRegistrar(walletId: string, proTxHash: string, update: MasternodeRegistrarUpdateDto, password: string): Promise<MasternodeUpdateResult> {

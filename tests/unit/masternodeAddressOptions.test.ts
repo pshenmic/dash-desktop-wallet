@@ -15,6 +15,7 @@ function makeAddress(overrides: Partial<WalletAddressDto> = {}): WalletAddressDt
     isChange: 0,
     txCount: 0,
     isUsed: false,
+    isLocked: false,
     label: null,
     usdBalance: null,
     ...overrides,

@@ -734,6 +734,9 @@ describe('Masternode action builders', () => {
       serviceAddress: null,
       payoutAddress: 'Xpayee',
       operatorReward: 250,
+      ownerAddress: null,
+      votingAddress: null,
+      operatorPublicKey: null,
       platformNodeId: null,
       platformP2PPort: null,
       platformHttpPort: null,
@@ -828,6 +831,7 @@ describe('Masternode action builders', () => {
     )
     expect(customOwnerDiff.step2Error).toBeNull()
     expect(customOwnerDiff.customKeyRoles).toEqual(['Owner'])
+    expect(customOwnerDiff.dto?.ownerAddress).toBe(ownerAddr)
 
     const pendingNode = makeNode({
       proTxHash: '00'.repeat(32),

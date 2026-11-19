@@ -165,7 +165,8 @@ export default function RegisterMasternodeWizard({
         setSubmitting(false)
         return
       }
-      const res = await API.registerMasternode(walletId, validation.dto, password)
+      const preview = await API.previewMasternodeRegistration(walletId, validation.dto)
+      const res = await API.signAndBroadcastMasternodeRegistration(walletId, preview.unsignedHex, password)
       setPassword('')
       recordPendingMasternode(walletId, {
         proTxHash: res.proTxHash,
@@ -175,9 +176,9 @@ export default function RegisterMasternodeWizard({
         collateralAddress: validation.selectedCoin?.address ?? null,
         serviceAddress: validation.dto.serviceAddress,
         payeeAddress: validation.dto.payoutAddress,
-        ownerAddress: draft.ownerMode === 'external' ? draft.ownerAddress.trim() : null,
-        votingAddress: draft.votingMode === 'external' ? draft.votingAddress.trim() : null,
-        operatorPublicKey: draft.operatorMode === 'external' ? draft.operatorPublicKey.trim().toLowerCase() : null,
+        ownerAddress: preview.ownerAddress,
+        votingAddress: preview.votingAddress,
+        operatorPublicKey: preview.operatorPublicKey,
         platformNodeId: validation.dto.platformNodeId,
         platformP2PPort: validation.dto.platformP2PPort,
         platformHttpPort: validation.dto.platformHttpPort,

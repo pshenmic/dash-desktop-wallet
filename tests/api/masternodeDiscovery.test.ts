@@ -1,6 +1,7 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {PrivateKey, Script} from 'dash-core-sdk'
 import {MasternodeDAO} from '../../src/main/src/database/MasternodeDAO'
+import {MasternodeIdentityDAO} from '../../src/main/src/database/MasternodeIdentityDAO'
 import {Preferences} from '../../src/main/src/preferences'
 import {WalletProviderFactory} from '../../src/main/src/providers/WalletProviderFactory'
 import {CoreTransactionService} from '../../src/main/src/services/core/CoreTransactionService'
@@ -9,6 +10,7 @@ import {WalletSyncService} from '../../src/main/src/services/core/WalletSyncServ
 import {ListedMasternodes, Masternode, MasternodeKeyFilter, MasternodeKeys, NetworkMasternode} from '../../src/main/src/types/Masternode'
 import {UTXO} from '../../src/main/src/types/UTXO'
 import {masternodeKeyDeriver} from '../../src/main/src/utils/masternodeKeys'
+import {masternodeIdentityIds} from '../../src/main/src/utils/masternodeIdentities'
 import {nodeKeyValues} from '../../src/main/src/utils/masternodes'
 import {Harness, harness, PASSWORD, VALID_SEEDPHRASE} from './harness'
 
@@ -49,6 +51,7 @@ describe('MasternodeService.discover', () => {
   let keys: MasternodeKeys
   let current: WalletProviderFactory
   let masternodes: MasternodeService
+  let masternodeIdentities: MasternodeIdentityDAO
   // The lock pool's list; null until one arrives.
   let network: ListedMasternodes | null
   let refreshes: ReturnType<typeof vi.fn>
@@ -62,9 +65,10 @@ describe('MasternodeService.discover', () => {
     refreshes = vi.fn()
     const walletSync = {getListedMasternodes: () => network, refreshListedMasternodes: refreshes} as unknown as WalletSyncService
     masternodes = new MasternodeService(
-      wired.walletDAO, wired.masternodeKeyDAO, new MasternodeDAO(wired.knex), providers,
+      wired.walletDAO, wired.masternodeKeyDAO, new MasternodeDAO(wired.knex), new MasternodeIdentityDAO(wired.knex), providers,
       wired.addressDAO, new CoreTransactionService(), walletSync, Preferences.default(),
     )
+    masternodeIdentities = new MasternodeIdentityDAO(wired.knex)
     watched = []
   })
 
@@ -116,6 +120,31 @@ describe('MasternodeService.discover', () => {
 
     expect((await owned()).find(({proTxHash}) => proTxHash === 'a')?.operatorKeyIndex).toBe(0)
     expect(await storedCollaterals()).toEqual(['a:aa:0', 'e:ee:0'])
+  })
+
+  it('stores the owner and voter identities Platform creates for a discovered evonode', async () => {
+    const proTxHash = 'ab'.repeat(32)
+    const votingAddress = key('voting', 0)
+    await discover(source([node(proTxHash, {type: 'Evo', votingAddress, ownerAddress: key('owner', 0)})]))
+
+    expect(await masternodeIdentities.getByWalletId(walletId)).toEqual(
+      masternodeIdentityIds(proTxHash, votingAddress).map(({role, identifier}) => ({walletId, proTxHash, role, identifier})),
+    )
+  })
+
+  it('stores no identities for a discovered regular node', async () => {
+    await discover(source([node('cd'.repeat(32), {ownerAddress: key('owner', 0)})]))
+    expect(await masternodeIdentities.getByWalletId(walletId)).toEqual([])
+  })
+
+  it('drops the identities of a node the wallet no longer owns', async () => {
+    const proTxHash = 'ab'.repeat(32)
+    await discover(source([node(proTxHash, {type: 'Evo', votingAddress: key('voting', 0), ownerAddress: key('owner', 0)})]))
+    expect(await masternodeIdentities.getByWalletId(walletId)).toHaveLength(2)
+
+    await discover(source([]))
+
+    expect(await masternodeIdentities.getByWalletId(walletId)).toEqual([])
   })
 
   // DashSync pays a collateral its ProRegTx creates to the reserved 3'/0' chain.

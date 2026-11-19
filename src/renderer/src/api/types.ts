@@ -30,6 +30,7 @@ export type WalletAddressDto = {
   index: number
   isChange: number
   isUsed: boolean
+  isLocked: boolean
   balance: bigint
   txCount: number
   label: string | null
@@ -275,6 +276,18 @@ export interface MasternodeDto {
   shares: OwnedMasternodeShareDto[] | null
 }
 
+export type MasternodeIdentityRole = 'owner' | 'voter'
+
+// Not seed-derived, so no index or derivation path; empty until Platform indexes the registration.
+export interface MasternodeIdentityInfoDto {
+  proTxHash: string
+  role: MasternodeIdentityRole
+  identifier: string
+  usernames: string[]
+  keys: IdentityKeyDto[]
+  balance: { amount: bigint; usdAmount: string }
+}
+
 // The platform fields are an Evo's alone, null on a Regular node.
 export interface MasternodePlatformFieldsDto {
   platformNodeId: string | null
@@ -283,13 +296,38 @@ export interface MasternodePlatformFieldsDto {
 }
 
 // operatorReward is in hundredths of a percent. A null serviceAddress registers
-// without one, left to the operator's service update.
+// without one; a null key takes the wallet's next unused key on its chain.
 export interface MasternodeRegistrationDto extends MasternodePlatformFieldsDto {
   type: 'Regular' | 'Evo'
   collateral: { txid: string; vout: number }
   serviceAddress: string | null
   payoutAddress: string
   operatorReward: number
+  ownerAddress: string | null
+  votingAddress: string | null
+  operatorPublicKey: string | null
+}
+
+// A null key index is a caller-supplied key.
+export interface MasternodeRegistrationPreviewDto {
+  type: 'Regular' | 'Evo'
+  collateral: { txid: string; vout: number }
+  ownerAddress: string
+  votingAddress: string
+  operatorPublicKey: string
+  serviceAddress: string | null
+  payoutAddress: string
+  operatorReward: number
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+  ownerKeyIndex: number | null
+  votingKeyIndex: number | null
+  operatorKeyIndex: number | null
+  inputs: PreviewEntry[]
+  outputs: PreviewEntry[]
+  feeDuffs: bigint
+  unsignedHex: string
 }
 
 // keep is the node's current key, wallet the lowest unused wallet key. A new operator

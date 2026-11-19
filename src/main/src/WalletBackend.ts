@@ -33,7 +33,9 @@ import { GetMasternodeCollateralsHandler } from './api/masternodes/getMasternode
 import { GetImportedMasternodeKeysHandler } from './api/masternodes/getImportedMasternodeKeys'
 import { ImportMasternodeKeyHandler } from './api/masternodes/importMasternodeKey'
 import { RemoveMasternodeKeyHandler } from './api/masternodes/removeMasternodeKey'
-import { RegisterMasternodeHandler } from './api/masternodes/registerMasternode'
+import { SignAndBroadcastMasternodeRegistrationHandler } from './api/masternodes/signAndBroadcastMasternodeRegistration'
+import { PreviewMasternodeRegistrationHandler } from './api/masternodes/previewMasternodeRegistration'
+import { GetMasternodeIdentitiesHandler } from './api/masternodes/getMasternodeIdentities'
 import { UpdateMasternodeRegistrarHandler } from './api/masternodes/updateMasternodeRegistrar'
 import { UpdateMasternodeServiceHandler } from './api/masternodes/updateMasternodeService'
 import { RevokeMasternodeHandler } from './api/masternodes/revokeMasternode'
@@ -61,6 +63,7 @@ import {GetBalance} from "./api/wallet/getBalance";
 import {DeleteWalletHandler} from "./api/wallet/deleteWallet";
 import {GetWalletBalance} from "./api/wallet/getWalletBalance";
 import {SetAddressLabel} from "./api/wallet/setAddressLabel";
+import {SetAddressLockedHandler} from './api/wallet/setAddressLocked'
 import {SetWalletLabel} from "./api/wallet/setWalletLabel";
 import {SendTransactionHandler} from "./api/wallet/sendTransaction";
 import {GetTxLockStatusHandler} from "./api/wallet/getTxLockStatus";
@@ -152,6 +155,7 @@ import {CoreDiscoveryService} from './services/core/CoreDiscoveryService'
 import {MasternodeService} from './services/core/MasternodeService'
 import {GovernanceService} from './services/core/GovernanceService'
 import {MasternodeDAO} from './database/MasternodeDAO'
+import {MasternodeIdentityDAO} from './database/MasternodeIdentityDAO'
 import {CorePrevOutService} from './services/core/CorePrevOutService'
 import {WalletCredentialsService} from './services/wallet/WalletCredentialsService'
 import {IdentityService} from './services/platform/IdentityService'
@@ -224,7 +228,9 @@ export class WalletBackend {
     registerHandler('getImportedMasternodeKeys', new GetImportedMasternodeKeysHandler(this.masternodeService).handle)
     registerHandler('importMasternodeKey', new ImportMasternodeKeyHandler(this.masternodeService).handle)
     registerHandler('removeMasternodeKey', new RemoveMasternodeKeyHandler(this.masternodeService).handle)
-    registerHandler('registerMasternode', new RegisterMasternodeHandler(this.masternodeService).handle)
+    registerHandler('previewMasternodeRegistration', new PreviewMasternodeRegistrationHandler(this.masternodeService).handle)
+    registerHandler('signAndBroadcastMasternodeRegistration', new SignAndBroadcastMasternodeRegistrationHandler(this.masternodeService).handle)
+    registerHandler('getMasternodeIdentities', new GetMasternodeIdentitiesHandler(this.identityService).handle)
     registerHandler('updateMasternodeRegistrar', new UpdateMasternodeRegistrarHandler(this.masternodeService).handle)
     registerHandler('updateMasternodeService', new UpdateMasternodeServiceHandler(this.masternodeService).handle)
     registerHandler('revokeMasternode', new RevokeMasternodeHandler(this.masternodeService).handle)
@@ -247,6 +253,7 @@ export class WalletBackend {
     registerHandler('getPlatformAddresses', new GetPlatformAddressesHandler(this.platformAddressService).handle)
     registerHandler('addPlatformAddress', new AddPlatformAddressHandler(this.platformAddressService).handle)
     registerHandler('setAddressLabel', new SetAddressLabel(this.walletService).handle)
+    registerHandler('setAddressLocked', new SetAddressLockedHandler(this.walletService).handle)
     registerHandler('setWalletLabel', new SetWalletLabel(this.walletService).handle)
     registerHandler('sendTransaction', new SendTransactionHandler(this.walletService).handle)
     registerHandler('getTxLockStatus', new GetTxLockStatusHandler(this.coreLockService).handle)
@@ -370,17 +377,18 @@ export class WalletBackend {
     // and each consumer settles that proof into its own transition.
     const prevOuts = new CorePrevOutService(walletDAO, transactionDAO)
     const masternodeDAO = new MasternodeDAO(knex)
+    const masternodeIdentityDAO = new MasternodeIdentityDAO(knex)
     const providers = new WalletProviderFactory(walletDAO, addressDAO, transactionDAO, this.applicationService, this.walletSyncService, prevOuts, masternodeDAO)
     const coreTransactionService = new CoreTransactionService()
     this.coreDiscoveryService = new CoreDiscoveryService(walletDAO, addressDAO, identityDAO, dashPayCache, transactionDAO, this.walletSyncService, providers)
     this.coreLockService = new CoreLockService(walletDAO, addressDAO, this.walletSyncService, coreTransactionService, providers, preferences)
     const masternodeKeyDAO = new MasternodeKeyDAO(knex)
-    this.masternodeService = new MasternodeService(walletDAO, masternodeKeyDAO, masternodeDAO, providers, addressDAO, coreTransactionService, this.walletSyncService, preferences)
+    this.masternodeService = new MasternodeService(walletDAO, masternodeKeyDAO, masternodeDAO, masternodeIdentityDAO, providers, addressDAO, coreTransactionService, this.walletSyncService, preferences)
     this.governanceService = new GovernanceService(walletDAO, providers, this.masternodeService, this.walletSyncService)
     this.walletSyncService.watchedProvidersOf = masternodeDAO.getFollowedProTxHashes
     const platformAddressDAO = new PlatformAddressDAO(knex)
     this.walletCredentialsService = new WalletCredentialsService(walletDAO, addressDAO, masternodeKeyDAO, platformAddressDAO, calibratedIterations)
-    this.identityService = new IdentityService(walletDAO, identityDAO, dashPayCache, this.platformWorkerService)
+    this.identityService = new IdentityService(walletDAO, identityDAO, masternodeIdentityDAO, dashPayCache, this.platformWorkerService)
     const shieldedNoteDAO = new ShieldedNoteDAO(knex)
     const platformTransactionDAO = new PlatformTransactionDAO(knex)
     const shieldedPoolDAO = new ShieldedPoolDAO(knex)

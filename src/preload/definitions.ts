@@ -12,6 +12,9 @@ type MasternodeRegistration = {
   serviceAddress: string | null
   payoutAddress: string
   operatorReward: number
+  ownerAddress: string | null
+  votingAddress: string | null
+  operatorPublicKey: string | null
   platformNodeId: string | null
   platformP2PPort: number | null
   platformHttpPort: number | null
@@ -90,11 +93,13 @@ export const apiDefinitions = (ipcRenderer) => ({
   getWalletBalance: (walletId: string) => ipcRenderer.invoke('getWalletBalance', walletId),
   getIdentities: (walletId: string) => ipcRenderer.invoke('getIdentities', walletId),
   getMasternodes: (walletId: string) => ipcRenderer.invoke('getMasternodes', walletId),
+  getMasternodeIdentities: (walletId: string) => ipcRenderer.invoke('getMasternodeIdentities', walletId),
   getMasternodeCollaterals: (walletId: string) => ipcRenderer.invoke('getMasternodeCollaterals', walletId),
   getImportedMasternodeKeys: (walletId: string) => ipcRenderer.invoke('getImportedMasternodeKeys', walletId),
   importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => ipcRenderer.invoke('importMasternodeKey', walletId, role, privateKey),
   removeMasternodeKey: (walletId: string, key: ImportedMasternodeKey) => ipcRenderer.invoke('removeMasternodeKey', walletId, key),
-  registerMasternode: (walletId: string, registration: MasternodeRegistration, password: string) => ipcRenderer.invoke('registerMasternode', walletId, registration, password),
+  signAndBroadcastMasternodeRegistration: (walletId: string, unsignedHex: string, password: string) => ipcRenderer.invoke('signAndBroadcastMasternodeRegistration', walletId, unsignedHex, password),
+  previewMasternodeRegistration: (walletId: string, registration: MasternodeRegistration) => ipcRenderer.invoke('previewMasternodeRegistration', walletId, registration),
   updateMasternodeRegistrar: (walletId: string, proTxHash: string, update: MasternodeRegistrarUpdate, password: string) => ipcRenderer.invoke('updateMasternodeRegistrar', walletId, proTxHash, update, password),
   updateMasternodeService: (walletId: string, proTxHash: string, update: MasternodeServiceUpdate, password: string) => ipcRenderer.invoke('updateMasternodeService', walletId, proTxHash, update, password),
   revokeMasternode: (walletId: string, proTxHash: string, reason: RevocationReason, password: string) => ipcRenderer.invoke('revokeMasternode', walletId, proTxHash, reason, password),
@@ -117,6 +122,7 @@ export const apiDefinitions = (ipcRenderer) => ({
   getPlatformAddresses: (walletId: string) => ipcRenderer.invoke('getPlatformAddresses', walletId),
   addPlatformAddress: (walletId: string) => ipcRenderer.invoke('addPlatformAddress', walletId),
   setAddressLabel: (walletId: string, address: string, label: string) => ipcRenderer.invoke('setAddressLabel', walletId, address, label),
+  setAddressLocked: (walletId: string, address: string, locked: boolean) => ipcRenderer.invoke('setAddressLocked', walletId, address, locked),
   setWalletLabel: (walletId: string, label: string | null) => ipcRenderer.invoke('setWalletLabel', walletId, label),
   sendTransaction: (walletId: string, recipients: CoreRecipient[], password: string, source?: CoreSpendSource, changeTo?: string) => ipcRenderer.invoke('sendTransaction', walletId, recipients, password, source, changeTo),
   getTxLockStatus: (walletId: string, txid: string) => ipcRenderer.invoke('getTxLockStatus', walletId, txid),

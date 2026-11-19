@@ -64,6 +64,9 @@ export interface RegisterMasternodeFormInput {
   type: 'Regular' | 'Evo'
   collateralOutpoint: string
   payoutAddress: string
+  ownerAddress?: string | null
+  votingAddress?: string | null
+  operatorPublicKey?: string | null
   serviceAddress: string
   operatorRewardPercent: string
   platformNodeId: string

@@ -24,10 +24,12 @@ const OTHER_COIN = 'b'.repeat(64)
 
 let knex: Knex
 let transactionDAO: TransactionDAO
+let lockedAddresses: Set<string>
 
 const walletDAO = {getWalletById: async () => ({coreXpub: XPUB})} as unknown as WalletDAO
 const addressDAO = {
   getAddressesByWalletId: async () => ({receiving: [{address: OURS}], change: []}),
+  getLockedAddresses: async () => lockedAddresses,
 } as unknown as AddressDAO
 
 const coin = (txid: string) => ({
@@ -50,6 +52,7 @@ beforeEach(async () => {
   await knex('wallet').insert({wallet_id: WALLET, network: 'testnet', encrypted_mnemonic: 'm'})
   transactionDAO = new TransactionDAO(knex)
   fetches.body = dashscanUtxoPage
+  lockedAddresses = new Set()
 })
 
 afterEach(async () => {
@@ -78,5 +81,11 @@ describe('locks on coins Dashscan lists', () => {
     await transactionDAO.setUtxoLocked(WALLET, 'c'.repeat(64), 0, true)
 
     expect(await list()).toHaveLength(2)
+  })
+
+  it('locks every coin on a locked address', async () => {
+    lockedAddresses.add(OURS)
+
+    expect((await list()).every(u => u.isLocked)).toBe(true)
   })
 })

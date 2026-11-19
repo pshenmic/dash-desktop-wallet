@@ -1,7 +1,9 @@
+import type {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
 import type {WalletProvider} from '../providers/WalletProvider'
 import type {ProviderPayload, ProviderTxSigner} from './CoreTransaction'
 import type {GroupedAddresses} from './GroupedAddresses'
 import type {Network} from './Network'
+import type {PreviewEntry} from './TransactionPreview'
 import type {UTXO} from './UTXO'
 
 export type MasternodeKeyRole = 'collateral' | 'voting' | 'owner' | 'operator' | 'platformNode'
@@ -20,12 +22,17 @@ export interface MasternodePlatformFields {
 
 // operatorReward is in hundredths of a percent, as ProRegTx carries it. A null
 // serviceAddress registers without one, left to the operator's ProUpServTx.
+// A null owner, voting or operator key takes the wallet's next unused key; owner
+// and voting are P2PKH addresses, operator is a BLS basic public key.
 export interface MasternodeRegistration extends MasternodePlatformFields {
   type: MasternodeType
   collateral: {txid: string; vout: number}
   serviceAddress: string | null
   payoutAddress: string
   operatorReward: number
+  ownerAddress: string | null
+  votingAddress: string | null
+  operatorPublicKey: string | null
 }
 
 // A ProUpServTx restates the whole service, so every field is the new value.
@@ -75,6 +82,18 @@ export interface ProviderTxPlan {
   spendable: UTXO[]
 }
 
+// A registration plan plus the keys it resolved: null indexes are keys the
+// caller supplied rather than ones the wallet derives.
+export interface MasternodeRegistrationPlan extends ProviderTxPlan {
+  payload: ProRegTX
+  ownerAddress: string
+  votingAddress: string
+  operatorPublicKey: string
+  ownerKeyIndex: number | null
+  votingKeyIndex: number | null
+  operatorKeyIndex: number | null
+}
+
 // The network's own list, which carries a node exactly while its collateral is
 // unspent; askedAt is when the lock pool asked for it, 0 for one it did not ask for.
 export interface ListedMasternodes {
@@ -93,6 +112,35 @@ export interface MasternodeRegistrationResult {
   proTxHash: string
   fee: bigint
   peersAcked: number
+}
+
+// A registration read back from a ProRegTx: the payload always carries all three
+// keys, unlike the caller's request where a null one means "the wallet's next".
+export interface ParsedMasternodeRegistration extends MasternodeRegistration {
+  ownerAddress: string
+  votingAddress: string
+  operatorPublicKey: string
+}
+
+export interface MasternodeRegistrationPreview {
+  type: MasternodeType
+  collateral: {txid: string; vout: number}
+  ownerAddress: string
+  votingAddress: string
+  operatorPublicKey: string
+  serviceAddress: string | null
+  payoutAddress: string
+  operatorReward: number
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+  ownerKeyIndex: number | null
+  votingKeyIndex: number | null
+  operatorKeyIndex: number | null
+  inputs: PreviewEntry[]
+  outputs: PreviewEntry[]
+  feeDuffs: bigint
+  unsignedHex: string
 }
 
 // One entry of the network's masternode list. Times are unix seconds, 0 = never.
