@@ -63,6 +63,7 @@ import {GetBalance} from "./api/wallet/getBalance";
 import {DeleteWalletHandler} from "./api/wallet/deleteWallet";
 import {GetWalletBalance} from "./api/wallet/getWalletBalance";
 import {SetAddressLabel} from "./api/wallet/setAddressLabel";
+import {SetAddressLockedHandler} from './api/wallet/setAddressLocked'
 import {SetWalletLabel} from "./api/wallet/setWalletLabel";
 import {SendTransactionHandler} from "./api/wallet/sendTransaction";
 import {GetTxLockStatusHandler} from "./api/wallet/getTxLockStatus";
@@ -252,6 +253,7 @@ export class WalletBackend {
     registerHandler('getPlatformAddresses', new GetPlatformAddressesHandler(this.platformAddressService).handle)
     registerHandler('addPlatformAddress', new AddPlatformAddressHandler(this.platformAddressService).handle)
     registerHandler('setAddressLabel', new SetAddressLabel(this.walletService).handle)
+    registerHandler('setAddressLocked', new SetAddressLockedHandler(this.walletService).handle)
     registerHandler('setWalletLabel', new SetWalletLabel(this.walletService).handle)
     registerHandler('sendTransaction', new SendTransactionHandler(this.walletService).handle)
     registerHandler('getTxLockStatus', new GetTxLockStatusHandler(this.coreLockService).handle)

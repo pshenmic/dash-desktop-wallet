@@ -377,6 +377,7 @@ declare global {
       selectWallet: (walletId: string) => Promise<void>
       getWalletBalance: (walletId: string) => Promise<unknown>
       setAddressLabel: (walletId: string, address: string, label: string) => Promise<void>
+      setAddressLocked: (walletId: string, address: string, locked: boolean) => Promise<void>
       setWalletLabel: (walletId: string, label: string | null) => Promise<void>
       sendTransaction: (walletId: string, recipients: CoreRecipient[], password: string, source?: CoreSpendSource, changeTo?: string) => Promise<unknown>
       getTxLockStatus: (walletId: string, txid: string) => Promise<unknown>

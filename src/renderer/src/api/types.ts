@@ -30,6 +30,7 @@ export type WalletAddressDto = {
   index: number
   isChange: number
   isUsed: boolean
+  isLocked: boolean
   balance: bigint
   txCount: number
   label: string | null

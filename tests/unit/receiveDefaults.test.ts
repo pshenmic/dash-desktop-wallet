@@ -18,7 +18,7 @@ import {
 import type { WalletAddressDto } from '../../src/renderer/src/api/types'
 
 const addr = (address: string, balance: bigint, isUsed = false, txCount = 0): WalletAddressDto =>
-  ({ walletId: 'wallet', accountId: 0, address, derivationPath: '', index: 0, isChange: 0, isUsed, balance, txCount, label: null, usdBalance: null })
+  ({ walletId: 'wallet', accountId: 0, address, derivationPath: '', index: 0, isChange: 0, isUsed, isLocked: false, balance, txCount, label: null, usdBalance: null })
 
 const platformAddr = (platformAddress: string, balanceCredits: bigint, nonce: number) =>
   ({ platformAddress, balanceCredits, nonce })
@@ -80,6 +80,12 @@ describe('receiveCoreAddresses', () => {
   it('returns an empty list when no fresh addresses remain', () => {
     expect(receiveCoreAddresses([addr('funded', 100n), addr('used', 0n, true)])).toEqual([])
     expect(receiveCoreAddresses([])).toEqual([])
+  })
+
+  it('leaves locked addresses out', () => {
+    const list = [{...addr('locked', 0n), isLocked: true}, addr('open', 0n)]
+
+    expect(receiveCoreAddresses(list).map(address => address.address)).toEqual(['open'])
   })
 })
 

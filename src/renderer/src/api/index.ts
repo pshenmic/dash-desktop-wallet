@@ -147,6 +147,10 @@ export class API {
     return this.api.setAddressLabel(walletId, address, label)
   }
 
+  static async setAddressLocked(walletId: string, address: string, locked: boolean): Promise<void> {
+    return this.api.setAddressLocked(walletId, address, locked)
+  }
+
   static async getTransactions(walletId: string): Promise<WalletHistory> {
     return this.api.getTransactions(walletId) as Promise<WalletHistory>
   }

@@ -6,6 +6,8 @@ export interface Address {
   index: number
   isChange: boolean
   isUsed: boolean
+  // Locked by the user: no coin on this address may be spent until unlocked.
+  isLocked: boolean
   label: string | null
   balance?: bigint | null
   usdBalance?: string | null

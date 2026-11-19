@@ -122,6 +122,7 @@ export const apiDefinitions = (ipcRenderer) => ({
   getPlatformAddresses: (walletId: string) => ipcRenderer.invoke('getPlatformAddresses', walletId),
   addPlatformAddress: (walletId: string) => ipcRenderer.invoke('addPlatformAddress', walletId),
   setAddressLabel: (walletId: string, address: string, label: string) => ipcRenderer.invoke('setAddressLabel', walletId, address, label),
+  setAddressLocked: (walletId: string, address: string, locked: boolean) => ipcRenderer.invoke('setAddressLocked', walletId, address, locked),
   setWalletLabel: (walletId: string, label: string | null) => ipcRenderer.invoke('setWalletLabel', walletId, label),
   sendTransaction: (walletId: string, recipients: CoreRecipient[], password: string, source?: CoreSpendSource, changeTo?: string) => ipcRenderer.invoke('sendTransaction', walletId, recipients, password, source, changeTo),
   getTxLockStatus: (walletId: string, txid: string) => ipcRenderer.invoke('getTxLockStatus', walletId, txid),

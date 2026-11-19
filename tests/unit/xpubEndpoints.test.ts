@@ -53,6 +53,7 @@ const daos = (): {addressDAO: AddressDAO; walletDAO: WalletDAO; transactionDAO: 
     getAddressesByWalletId: async () => ({
       receiving: [{address: OURS}], change: [],
     }),
+    getLockedAddresses: async () => new Set<string>(),
   } as unknown as AddressDAO,
   walletDAO: {
     getWalletById: async () => ({coreXpub: XPUB}),
@@ -336,6 +337,7 @@ describe('DashPay addresses beside the xpub', () => {
     const {walletDAO, transactionDAO} = daos()
     const addressDAO = {
       getAddressesByWalletId: async () => ({receiving: [{address: OURS}], change: [], dashPay: [{address: DASHPAY}]}),
+      getLockedAddresses: async () => new Set<string>(),
     } as unknown as AddressDAO
     return new DashscanWalletProvider('testnet', 'w1', addressDAO, walletDAO, transactionDAO)
   }
