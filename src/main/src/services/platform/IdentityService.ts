@@ -43,11 +43,7 @@ export class IdentityService {
     const wallet = await requireWallet(this.walletDAO, walletId)
 
     const stored = await this.identityDAO.getIdentitiesByWalletId(walletId)
-    const {infos} = await this.platform.request('identityInfos', wallet.network, {
-      identifiers: stored.map(entry => entry.identifier),
-      skipDPNS: false,
-    })
-    const byIdentifier = new Map(infos.map(info => [info.identifier, info]))
+    const byIdentifier = await this.platformIdentityInfos(wallet.network, stored.map(entry => entry.identifier))
 
     // An identity the worker could not resolve is not registered yet — skipped.
     return stored.flatMap(entry => {
@@ -77,11 +73,7 @@ export class IdentityService {
     const stored = await this.masternodeIdentityDAO.getByWalletId(walletId)
     if (stored.length === 0) return []
 
-    const {infos} = await this.platform.request('identityInfos', wallet.network, {
-      identifiers: stored.map(entry => entry.identifier),
-      skipDPNS: false,
-    })
-    const byIdentifier = new Map(infos.map(info => [info.identifier, info]))
+    const byIdentifier = await this.platformIdentityInfos(wallet.network, stored.map(entry => entry.identifier))
 
     return stored.flatMap(entry => {
       const info = byIdentifier.get(entry.identifier)
@@ -99,6 +91,11 @@ export class IdentityService {
         },
       }]
     })
+  }
+
+  private async platformIdentityInfos(network: Network, identifiers: string[]) {
+    const {infos} = await this.platform.request('identityInfos', network, {identifiers, skipDPNS: false})
+    return new Map(infos.map(info => [info.identifier, info]))
   }
 
   private async requireIdentity(walletId: string, identifier: string): Promise<Identity> {
