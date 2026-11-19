@@ -82,6 +82,9 @@ export interface RegisterStepCollateralProps extends RegisterStepSharedProps {
   activeCollateral: string
   utxosLoading: boolean
   utxosError: string | null
+  spendablePrepTotalDuffs: bigint
+  preparedOutpoint: string | null
+  onOpenPrepareModal: () => void
   onRetryUtxos: () => void
 }
 

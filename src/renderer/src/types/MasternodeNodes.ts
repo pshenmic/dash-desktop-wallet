@@ -39,6 +39,7 @@ export interface MasternodeFieldInputProps {
   onChange: (value: string) => void
   ariaLabel: string
   placeholder?: string
+  maxLength?: number
   invalid?: boolean
   tabular?: boolean
   disabled?: boolean

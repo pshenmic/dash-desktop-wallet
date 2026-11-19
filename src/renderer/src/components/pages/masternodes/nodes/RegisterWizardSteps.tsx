@@ -28,6 +28,7 @@ import {
   MASTERNODE_YOUR_ADDRESSES_HEADING,
 } from '@renderer/constants/masternodeAddresses'
 import { REGISTER_MASTERNODE_COPY } from '@renderer/constants/masternodeNodes'
+import { MASTERNODE_COLLATERAL_PREP_COPY } from '@renderer/constants/masternodeCollateralPrep'
 import {
   MASTERNODE_TYPE_CARDS,
   OPERATOR_REWARD_PRESETS,
@@ -77,6 +78,9 @@ export function RegisterStepCollateral({
   activeCollateral,
   utxosLoading,
   utxosError,
+  spendablePrepTotalDuffs,
+  preparedOutpoint,
+  onOpenPrepareModal,
   onRetryUtxos,
 }: RegisterStepCollateralProps): React.JSX.Element {
   const confirming = validation.selectedCoin != null && isConfirmingUtxo(validation.selectedCoin)
@@ -115,13 +119,22 @@ export function RegisterStepCollateral({
       <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
           <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.collateralLabel}</Text>
-          <SegmentedControl
-            appearance={SegmentedControlAppearance.Pill}
-            ariaLabel={REGISTER_WIZARD_COPY.collateralSourceLabel}
-            options={REGISTER_WIZARD_COLLATERAL_SOURCE_OPTIONS}
-            value={draft.collateralSource}
-            onChange={collateralSource => updateDraft({ collateralSource })}
-          />
+          <div className={'flex flex-wrap items-center gap-2'}>
+            <button
+              type={'button'}
+              onClick={onOpenPrepareModal}
+              className={CHIP_ACTION}
+            >
+              {MASTERNODE_COLLATERAL_PREP_COPY.buttonLabel}
+            </button>
+            <SegmentedControl
+              appearance={SegmentedControlAppearance.Pill}
+              ariaLabel={REGISTER_WIZARD_COPY.collateralSourceLabel}
+              options={REGISTER_WIZARD_COLLATERAL_SOURCE_OPTIONS}
+              value={draft.collateralSource}
+              onChange={collateralSource => updateDraft({ collateralSource })}
+            />
+          </div>
         </div>
 
         {draft.collateralSource === 'wallet' ? (
@@ -139,9 +152,17 @@ export function RegisterStepCollateral({
               )}
             />
           ) : collateralOptions.length === 0 ? (
-            <Text size={12} weight={'medium'} color={'brand'} opacity={60}>
-              {REGISTER_MASTERNODE_COPY.noCollateralUtxos}
-            </Text>
+            <Alert
+              tone={AlertTone.Info}
+              icon={<InfoCircleIcon size={14} />}
+              title={REGISTER_MASTERNODE_COPY.noCollateralUtxos}
+              description={`${MASTERNODE_COLLATERAL_PREP_COPY.emptyHintPrefix} ${davToDash(spendablePrepTotalDuffs)} ${DASH_UNIT}.`}
+              actions={(
+                <Button type={'button'} size={'compact'} colorScheme={'primary'} onClick={onOpenPrepareModal}>
+                  {MASTERNODE_COLLATERAL_PREP_COPY.buttonLabel}
+                </Button>
+              )}
+            />
           ) : (
             <DropdownField
               options={collateralOptions}
@@ -175,6 +196,15 @@ export function RegisterStepCollateral({
               />
             </div>
           </div>
+        )}
+
+        {preparedOutpoint != null && draft.collateralSource === 'wallet' && activeCollateral === preparedOutpoint && (
+          <Alert
+            tone={AlertTone.Success}
+            icon={<InfoCircleIcon size={14} />}
+            title={MASTERNODE_COLLATERAL_PREP_COPY.preparedTitle}
+            description={MASTERNODE_COLLATERAL_PREP_COPY.preparedDescription}
+          />
         )}
 
         {confirming && (

@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { API } from '@renderer/api'
-import type { MasternodeRegistrationPreviewDto, MasternodeRegistrationResult } from '@renderer/api/types'
+import type {
+  MasternodeRegistrationPreviewDto,
+  MasternodeRegistrationResult,
+  SelectableUtxo,
+} from '@renderer/api/types'
 import { Text } from '@renderer/components/dash-ui-kit-extended'
 import TransferWizard from '@renderer/components/pages/transfer/TransferWizard'
 import PageHeader from '@renderer/components/ui/PageHeader'
@@ -33,7 +37,9 @@ import {
   saveRegisterWizardState,
 } from '@renderer/utils/masternodeRegistrationDraft'
 import { recordPendingMasternode } from '@renderer/utils/pendingMasternodes'
+import { spendablePrepTotal } from '@renderer/utils/masternodeCollateralPrep'
 import { buildCustomFeeProRegPreview, fundedFeeAddressOptions } from '@renderer/utils/proRegCustomFee'
+import PrepareCollateralModal from './PrepareCollateralModal'
 import {
   RegisterStepAddresses,
   RegisterStepCollateral,
@@ -74,6 +80,16 @@ export default function RegisterMasternodeWizard({
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [previewNonce, setPreviewNonce] = useState(0)
   const [coreFeeMultiplier, setCoreFeeMultiplier] = useState(1)
+  const [prepareModalOpen, setPrepareModalOpen] = useState(false)
+  const [preparedOutpoint, setPreparedOutpoint] = useState<string | null>(null)
+  const [prepUtxoSnapshot, setPrepUtxoSnapshot] = useState<SelectableUtxo[] | null>(null)
+
+  useEffect(() => {
+    setPrepUtxoSnapshot(null)
+  }, [utxos])
+
+  const effectiveUtxos = prepUtxoSnapshot ?? utxos
+  const spendablePrepTotalDuffs = useMemo(() => spendablePrepTotal(effectiveUtxos), [effectiveUtxos])
 
   const updateWizardState = (
     updater: (current: PersistedRegisterWizardState) => PersistedRegisterWizardState,
@@ -93,8 +109,8 @@ export default function RegisterMasternodeWizard({
   }
 
   const collateralCoins = useMemo(
-    () => eligibleCollateralUtxos(utxos, draft.type),
-    [utxos, draft.type],
+    () => eligibleCollateralUtxos(effectiveUtxos, draft.type),
+    [effectiveUtxos, draft.type],
   )
   const collateralOptions = useMemo(
     () => collateralCoins.map(coin => {
@@ -125,16 +141,16 @@ export default function RegisterMasternodeWizard({
     : (collateralOptions[0]?.value ?? '')
 
   const validation = useMemo(
-    () => validateRegistrationWizard({ ...draft, selectedCollateral: activeCollateral }, collateralCoins, utxos, network),
-    [draft, activeCollateral, collateralCoins, utxos, network],
+    () => validateRegistrationWizard({ ...draft, selectedCollateral: activeCollateral }, collateralCoins, effectiveUtxos, network),
+    [draft, activeCollateral, collateralCoins, effectiveUtxos, network],
   )
 
   const stepErrors = [validation.step1Error, validation.step2Error, validation.step3Error, null] as const
   const activeStepError = stepErrors[step]
   const registrationDto = validation.dto
   const fundedFeeOptions = useMemo(
-    () => fundedFeeAddressOptions(addressOptions, utxos, registrationDto?.collateral ?? null),
-    [addressOptions, utxos, registrationDto],
+    () => fundedFeeAddressOptions(addressOptions, effectiveUtxos, registrationDto?.collateral ?? null),
+    [addressOptions, effectiveUtxos, registrationDto],
   )
   const customFeeResult = useMemo(() => {
     if (draft.feeSourceMode !== 'address' || preview == null || registrationDto == null) {
@@ -143,12 +159,12 @@ export default function RegisterMasternodeWizard({
     return buildCustomFeeProRegPreview({
       basePreview: preview,
       feeAddress: draft.feeSourceAddress,
-      utxos,
+      utxos: effectiveUtxos,
       collateral: registrationDto.collateral,
       coreFeeMultiplier,
       network,
     })
-  }, [draft.feeSourceMode, draft.feeSourceAddress, preview, registrationDto, utxos, coreFeeMultiplier, network])
+  }, [draft.feeSourceMode, draft.feeSourceAddress, preview, registrationDto, effectiveUtxos, coreFeeMultiplier, network])
   const effectivePreview = draft.feeSourceMode === 'address' ? customFeeResult.preview : preview
   const customFeeError = draft.feeSourceMode === 'address' ? customFeeResult.error : null
   const canBroadcast = registrationDto != null && effectivePreview != null && customFeeError == null && !previewLoading && previewError == null
@@ -185,7 +201,7 @@ export default function RegisterMasternodeWizard({
     return () => {
       cancelled = true
     }
-  }, [walletId, step, registrationDto, utxos, result, previewNonce])
+  }, [walletId, step, registrationDto, effectiveUtxos, result, previewNonce])
 
   const handleStepSelect = (nextStep: number): void => {
     if (submitting) return
@@ -199,6 +215,7 @@ export default function RegisterMasternodeWizard({
     setPassword('')
     setPasswordInvalid(false)
     setBroadcastError(null)
+    setPreparedOutpoint(null)
     const fresh = resetRegisterWizardDraft(walletId, network, true)
     wizardStateRef.current = fresh
     setWizardState(fresh)
@@ -268,6 +285,9 @@ export default function RegisterMasternodeWizard({
           activeCollateral={activeCollateral}
           utxosLoading={utxosLoading}
           utxosError={utxosError}
+          spendablePrepTotalDuffs={spendablePrepTotalDuffs}
+          preparedOutpoint={preparedOutpoint}
+          onOpenPrepareModal={() => setPrepareModalOpen(true)}
           onRetryUtxos={retryUtxos}
         />
       ),
@@ -358,6 +378,27 @@ export default function RegisterMasternodeWizard({
           onSubmit={() => { void handleBroadcast() }}
         />
       )}
+
+      <PrepareCollateralModal
+        open={prepareModalOpen}
+        walletId={walletId}
+        type={draft.type}
+        network={network}
+        utxos={effectiveUtxos}
+        addressOptions={addressOptions}
+        badgeFor={badgeFor}
+        addressesLoading={addressesLoading}
+        addressesError={addressesError}
+        onRetryAddresses={retryAddresses}
+        onPrepared={(outpoint, refreshedUtxos) => {
+          if (refreshedUtxos.length > 0) setPrepUtxoSnapshot(refreshedUtxos)
+          setPreparedOutpoint(outpoint)
+          updateDraft({ collateralSource: 'wallet', selectedCollateral: outpoint })
+          retryUtxos()
+          retryAddresses()
+        }}
+        onClose={() => setPrepareModalOpen(false)}
+      />
     </div>
   )
 }

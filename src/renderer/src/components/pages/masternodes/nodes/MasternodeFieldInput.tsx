@@ -8,6 +8,7 @@ export default function MasternodeFieldInput({
   onChange,
   ariaLabel,
   placeholder,
+  maxLength,
   invalid = false,
   tabular = false,
   disabled = false,
@@ -20,6 +21,7 @@ export default function MasternodeFieldInput({
           type={'text'}
           aria-label={ariaLabel}
           aria-invalid={invalid || undefined}
+          maxLength={maxLength}
           value={value}
           disabled={disabled}
           onChange={e => onChange(e.target.value)}
