@@ -26,6 +26,7 @@ export interface DropdownFieldProps {
   highlightValue?: boolean
   valueAvatar?: boolean
   valueBadge?: string
+  hideValueBadge?: boolean
   hasExtraMatches?: (query: string) => boolean
   toggleIcon?: (open: boolean) => ReactNode
   onOpenChange?: (open: boolean) => void

@@ -1,5 +1,4 @@
-import type { Network, SelectableUtxo } from '@renderer/api/types'
-import type { DropdownFieldOption } from './DropdownField'
+import type { Network, SelectableUtxo, WalletAddressDto } from '@renderer/api/types'
 import type { FeeSelectableUtxo, MasternodeType } from './MasternodeRegistrationWizard'
 
 export interface CollateralPrepSummary {
@@ -18,7 +17,9 @@ export interface PrepareCollateralModalProps {
   type: MasternodeType
   network: Network | null
   utxos: FeeSelectableUtxo[]
-  addressOptions: DropdownFieldOption[]
+  receiving: WalletAddressDto[]
+  claimedAddresses: ReadonlySet<string>
+  labelsByAddress: ReadonlyMap<string, string>
   badgeFor: (address: string) => string | undefined
   addressesLoading: boolean
   addressesError: string | null

@@ -5,6 +5,7 @@ export interface WalletAddressOptionsResult {
   options: DropdownFieldOption[]
   receiving: WalletAddressDto[]
   change: WalletAddressDto[]
+  claimedAddresses: ReadonlySet<string>
   labelsByAddress: ReadonlyMap<string, string>
   defaultPayoutAddress: string | null
   badgeFor: (address: string) => string | undefined

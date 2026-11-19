@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import type { WalletAddressDto } from '@renderer/api/types'
 import type { FeeSelectableUtxo } from '@renderer/types/MasternodeRegistrationWizard'
 import {
   autoSelectCollateralPrepUtxos,
+  collateralTargetAddressOptions,
+  defaultCollateralLabel,
+  fallbackCollateralTargetAddress,
+  nextCollateralLabelOnAddressChange,
+  pickFreshCollateralTargetAddress,
   prepOutpointKey,
   requiredCollateralDuffs,
   resolveCreatedCollateralOutpoint,
@@ -9,6 +15,24 @@ import {
   spendablePrepUtxos,
   summarizeCollateralPrepSelection,
 } from '@renderer/utils/masternodeCollateralPrep'
+
+function addr(address: string, overrides: Partial<WalletAddressDto> = {}): WalletAddressDto {
+  return {
+    walletId: 'w1',
+    accountId: 0,
+    address,
+    derivationPath: "m/44'/1'/0'/0/0",
+    index: 0,
+    isChange: 0,
+    isUsed: false,
+    isLocked: false,
+    balance: 0n,
+    txCount: 0,
+    label: null,
+    usdBalance: null,
+    ...overrides,
+  }
+}
 
 function coin(
   txid: string,
@@ -108,5 +132,108 @@ describe('masternodeCollateralPrep', () => {
     ).toBe(`${txid}:1`)
 
     expect(resolveCreatedCollateralOutpoint(txid, evoAmount, [])).toBe(`${txid}:0`)
+  })
+
+  it('picks first clean unclaimed and unlabeled fresh receiving address or null when none remain', () => {
+    const claimed = new Set(['yClaimed1'])
+    const labels = new Map<string, string>([['yLabeledMap1', 'From request']])
+    const receiving = [
+      addr('yLocked1', { isLocked: true }),
+      addr('yUsed1', { isUsed: true, txCount: 1 }),
+      addr('yClaimed1', { index: 1 }),
+      addr('yLabeledMap1', { index: 2 }),
+      addr('yAddressLabel1', { index: 3, label: 'Manual label' }),
+      addr('yCleanUnused1', { index: 4 }),
+      addr('yCleanUnused2', { index: 5 }),
+    ]
+
+    expect(pickFreshCollateralTargetAddress(receiving, claimed, labels)).toBe('yCleanUnused1')
+    expect(
+      pickFreshCollateralTargetAddress(
+        [
+          addr('yClaimed1'),
+          addr('yLabeledMap1'),
+          addr('yAddressLabel1', { label: 'Saved' }),
+        ],
+        claimed,
+        labels,
+      ),
+    ).toBeNull()
+    expect(fallbackCollateralTargetAddress([
+      addr('yLocked1', { isLocked: true }),
+      addr('yClaimed1', { index: 1 }),
+    ])).toBe('yClaimed1')
+  })
+
+  it('syncs collateral label across labeled and unlabeled address switches', () => {
+    const badges = new Map<string, string>([
+      ['yInvoiceAddr', 'Freelance Invoice #104'],
+    ])
+    const badgeFor = (address: string) => badges.get(address.trim())
+
+    expect(
+      nextCollateralLabelOnAddressChange(
+        'yClean1',
+        'yInvoiceAddr',
+        'Regular masternode collateral',
+        badgeFor,
+        'Regular',
+      ),
+    ).toBe('Freelance Invoice #104')
+
+    expect(
+      nextCollateralLabelOnAddressChange(
+        'yInvoiceAddr',
+        'yClean2',
+        'Freelance Invoice #104',
+        badgeFor,
+        'Regular',
+      ),
+    ).toBe(defaultCollateralLabel('Regular'))
+
+    expect(
+      nextCollateralLabelOnAddressChange(
+        'yClean1',
+        'yClean2',
+        'My Node #2',
+        badgeFor,
+        'Regular',
+      ),
+    ).toBe('My Node #2')
+
+    expect(
+      nextCollateralLabelOnAddressChange(
+        'yClean1',
+        'yClean2',
+        '   ',
+        badgeFor,
+        'Evo',
+      ),
+    ).toBe(defaultCollateralLabel('Evo'))
+  })
+
+  it('orders clean unclaimed unused receiving addresses before already-labeled ones', () => {
+    const claimed = new Set(['yInvoice1'])
+    const labels = new Map<string, string>([['yInvoice1', 'Freelance Invoice #104']])
+    const receiving = [
+      addr('yLocked1', { isLocked: true }),
+      addr('yUsed1', { isUsed: true, txCount: 1, balance: 50_000_000n }),
+      addr('yInvoice1', { index: 1 }),
+      addr('yAddressLabeled1', { index: 2, label: 'Coffee & Snacks' }),
+      addr('yClean1', { index: 3 }),
+      addr('yClean2', { index: 4 }),
+    ]
+
+    const options = collateralTargetAddressOptions(receiving, claimed, labels)
+    expect(options.map(option => option.value)).toEqual([
+      'yClean1',
+      'yClean2',
+      'yInvoice1',
+      'yAddressLabeled1',
+    ])
+    expect(options[0].badge).toBeUndefined()
+    expect(options[1].badge).toBeUndefined()
+    expect(options[2].badge).toBe('Freelance Invoice #104')
+    expect(options[3].badge).toBe('Coffee & Snacks')
   })
 })

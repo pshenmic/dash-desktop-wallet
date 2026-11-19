@@ -30,6 +30,7 @@ export interface RecipientFieldStyle {
 export interface RecipientInputProps {
   value: string
   valueBadge?: string
+  hideValueBadge?: boolean
   onChange: (value: string) => void
   data: TransferPageType['recipient']
   compact?: boolean

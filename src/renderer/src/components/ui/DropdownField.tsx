@@ -30,6 +30,7 @@ export default function DropdownField({
   highlightValue = false,
   valueAvatar = false,
   valueBadge,
+  hideValueBadge = false,
   hasExtraMatches,
   toggleIcon,
   onOpenChange,
@@ -45,7 +46,7 @@ export default function DropdownField({
   const exactMatch = editable && trimmedValue !== '' && options.some((option) => option.value === trimmedValue)
   const labelMatches = editable && !exactMatch ? matchingOptionsByLabel(options, trimmedValue) : []
   const extraMatches = editable && trimmedValue !== '' && !exactMatch && Boolean(hasExtraMatches?.(value))
-  const activeBadge = !inputInvalid
+  const activeBadge = !inputInvalid && !hideValueBadge
     ? (valueBadge?.trim() || selected?.badge?.trim() || undefined)
     : undefined
   const showValue = highlightValue && !focused && trimmedValue !== ''

@@ -3,12 +3,18 @@ import { refreshAddresses, useAdresses } from '@renderer/hooks/useAdresses'
 import { refreshReceiveRequests, useReceiveRequests } from '@renderer/hooks/useReceiveRequests'
 import type { WalletAddressOptionsResult } from '@renderer/types/WalletAddressOptions'
 import { masternodeWalletAddressOptions } from '@renderer/utils/masternodeAddressOptions'
+import { pickFreshCollateralTargetAddress } from '@renderer/utils/masternodeCollateralPrep'
 import { walletAddressLabels } from '@renderer/utils/ownRecipients'
-import { receiveCoreAddresses } from '@renderer/utils/receiveDefaults'
+import { claimedReceiveAddresses, receiveCoreAddresses } from '@renderer/utils/receiveDefaults'
 
 export function useWalletAddressOptions(walletId: string | undefined): WalletAddressOptionsResult {
   const { receiving, change, loading: addressesLoading, err: addressesError } = useAdresses(walletId)
   const { requests, loading: requestsLoading, err: requestsError } = useReceiveRequests(walletId)
+
+  const claimedAddresses = useMemo(
+    () => claimedReceiveAddresses(requests),
+    [requests],
+  )
 
   const labelsByAddress = useMemo(
     () => walletAddressLabels(requests, receiving, change),
@@ -16,11 +22,12 @@ export function useWalletAddressOptions(walletId: string | undefined): WalletAdd
   )
 
   const defaultPayoutAddress = useMemo(
-    () => receiveCoreAddresses(receiving)[0]?.address
+    () => pickFreshCollateralTargetAddress(receiving, claimedAddresses, labelsByAddress)
+      ?? receiveCoreAddresses(receiving)[0]?.address
       ?? receiving.find(address => !address.isLocked)?.address
       ?? receiving[0]?.address
       ?? null,
-    [receiving],
+    [receiving, claimedAddresses, labelsByAddress],
   )
 
   const options = useMemo(
@@ -43,6 +50,7 @@ export function useWalletAddressOptions(walletId: string | undefined): WalletAdd
     options,
     receiving,
     change,
+    claimedAddresses,
     labelsByAddress,
     defaultPayoutAddress,
     badgeFor,

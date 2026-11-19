@@ -25,15 +25,14 @@ import {
   MASTERNODE_COLLATERAL_PREP_COPY,
   MASTERNODE_PREP_COLLATERAL_RECIPIENT_COPY,
 } from '@renderer/constants/masternodeCollateralPrep'
-import { EVO_MASTERNODE_TYPE } from '@renderer/constants/masternodes'
 import { RECEIVE_LABEL_MAX_LENGTH } from '@renderer/constants/receivePage'
 import { CHIP_ACTION, SURFACE_SECTION } from '@renderer/constants/surfaces'
 import { AlertTone } from '@renderer/enums/AlertTone'
 import { ModalSize } from '@renderer/enums/ModalSize'
 import { TransferOperation } from '@renderer/enums/TransferOperation'
-import { refreshAddresses, useAdresses } from '@renderer/hooks/useAdresses'
+import { refreshAddresses } from '@renderer/hooks/useAdresses'
 import { invalidateAsyncCache } from '@renderer/hooks/useAsyncWithCache'
-import { addReceiveRequest } from '@renderer/hooks/useReceiveRequests'
+import { addReceiveRequest, refreshReceiveRequests } from '@renderer/hooks/useReceiveRequests'
 import { refreshBalance } from '@renderer/hooks/useWalletBalance'
 import type { PrepareCollateralModalProps } from '@renderer/types/MasternodeCollateralPrep'
 import { isValidDashChangeAddress } from '@renderer/utils/address'
@@ -42,13 +41,17 @@ import { getErrorMessage } from '@renderer/utils/error'
 import { isConfirmingUtxo } from '@renderer/utils/masternodeActions'
 import {
   autoSelectCollateralPrepUtxos,
+  collateralTargetAddressOptions,
+  defaultCollateralLabel,
+  fallbackCollateralTargetAddress,
+  nextCollateralLabelOnAddressChange,
+  pickFreshCollateralTargetAddress,
   prepOutpointKey,
   requiredCollateralDuffs,
   resolveCreatedCollateralOutpoint,
   spendablePrepUtxos,
   summarizeCollateralPrepSelection,
 } from '@renderer/utils/masternodeCollateralPrep'
-import { receiveCoreAddresses } from '@renderer/utils/receiveDefaults'
 import MasternodeFieldInput from './MasternodeFieldInput'
 
 export default function PrepareCollateralModal({
@@ -57,7 +60,9 @@ export default function PrepareCollateralModal({
   type,
   network,
   utxos,
-  addressOptions,
+  receiving,
+  claimedAddresses,
+  labelsByAddress,
   badgeFor,
   addressesLoading,
   addressesError,
@@ -68,9 +73,12 @@ export default function PrepareCollateralModal({
   const addressNetwork = network ?? undefined
   const requiredDuffs = requiredCollateralDuffs(type)
   const requiredDashText = `${davToDash(requiredDuffs)} ${DASH_UNIT}`
-  const { receiving } = useAdresses(open ? walletId : undefined)
   const coins = useMemo(() => spendablePrepUtxos(utxos), [utxos])
   const coinByKey = useMemo(() => new Map(coins.map(coin => [prepOutpointKey(coin), coin])), [coins])
+  const targetOptions = useMemo(
+    () => collateralTargetAddressOptions(receiving, claimedAddresses, labelsByAddress),
+    [receiving, claimedAddresses, labelsByAddress],
+  )
 
   const [targetAddress, setTargetAddress] = useState('')
   const [label, setLabel] = useState('')
@@ -84,30 +92,69 @@ export default function PrepareCollateralModal({
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const wasOpenRef = useRef(false)
+  const autoDerivedOnOpenRef = useRef(false)
+
+  const deriveFreshTargetAddress = async (): Promise<void> => {
+    setCreatingAddress(true)
+    try {
+      const created = await API.addWalletAddress(walletId, false)
+      setTargetAddress(created)
+      setLabel(current => nextCollateralLabelOnAddressChange('', created, current, badgeFor, type))
+      invalidateAsyncCache('receiveAddress', walletId)
+      void refreshAddresses(walletId)
+    } catch {
+      const fallback = fallbackCollateralTargetAddress(receiving)
+      if (fallback !== '') {
+        setTargetAddress(fallback)
+        setLabel(nextCollateralLabelOnAddressChange('', fallback, '', badgeFor, type))
+      }
+    } finally {
+      setCreatingAddress(false)
+    }
+  }
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      wasOpenRef.current = false
+      autoDerivedOnOpenRef.current = false
+      return
+    }
+    if (wasOpenRef.current) return
+    wasOpenRef.current = true
     scrollAreaRef.current?.scrollTo({ top: 0 })
-    const freshUnused = receiveCoreAddresses(receiving)[0]?.address ?? receiving[0]?.address ?? ''
-    setTargetAddress(freshUnused)
-    setLabel(
-      type === EVO_MASTERNODE_TYPE
-        ? MASTERNODE_COLLATERAL_PREP_COPY.defaultEvoLabel
-        : MASTERNODE_COLLATERAL_PREP_COPY.defaultRegularLabel,
-    )
     setSelectedKeys(autoSelectCollateralPrepUtxos(coins, requiredDuffs))
     setFeeDuffs(null)
     setFeeError(null)
     setPassword('')
     setPasswordInvalid(false)
     setSubmitError(null)
-  }, [open, type])
+    setLabel(defaultCollateralLabel(type))
+
+    const freshClean = pickFreshCollateralTargetAddress(receiving, claimedAddresses, labelsByAddress)
+    if (freshClean != null) {
+      setTargetAddress(freshClean)
+      return
+    }
+    setTargetAddress('')
+    if (!addressesLoading && receiving.length > 0 && !autoDerivedOnOpenRef.current) {
+      autoDerivedOnOpenRef.current = true
+      void deriveFreshTargetAddress()
+    }
+  }, [open, type, coins, requiredDuffs, receiving, claimedAddresses, labelsByAddress, addressesLoading])
 
   useEffect(() => {
-    if (!open || targetAddress !== '' || receiving.length === 0) return
-    const nextAddress = receiveCoreAddresses(receiving)[0]?.address ?? receiving[0]?.address ?? ''
-    if (nextAddress !== '') setTargetAddress(nextAddress)
-  }, [open, targetAddress, receiving])
+    if (!open || addressesLoading || targetAddress !== '' || creatingAddress) return
+    const freshClean = pickFreshCollateralTargetAddress(receiving, claimedAddresses, labelsByAddress)
+    if (freshClean != null) {
+      setTargetAddress(freshClean)
+      return
+    }
+    if (!autoDerivedOnOpenRef.current && receiving.length > 0) {
+      autoDerivedOnOpenRef.current = true
+      void deriveFreshTargetAddress()
+    }
+  }, [open, addressesLoading, targetAddress, creatingAddress, receiving, claimedAddresses, labelsByAddress])
 
   const selectedKeySet = useMemo(() => new Set(selectedKeys), [selectedKeys])
   const selectedOutpoints = useMemo<Outpoint[]>(
@@ -161,22 +208,6 @@ export default function PrepareCollateralModal({
     [coins, selectedKeySet, requiredDuffs, feeDuffs],
   )
 
-  const handleCreateAddress = async (): Promise<void> => {
-    if (creatingAddress || submitting) return
-    setCreatingAddress(true)
-    setSubmitError(null)
-    try {
-      const created = await API.addWalletAddress(walletId, false)
-      setTargetAddress(created)
-      invalidateAsyncCache('receiveAddress', walletId)
-      void refreshAddresses(walletId)
-    } catch (err) {
-      setSubmitError(getErrorMessage(err))
-    } finally {
-      setCreatingAddress(false)
-    }
-  }
-
   const toggleCoin = (key: string, checked: boolean): void => {
     setSubmitError(null)
     setSelectedKeys(prev => {
@@ -209,7 +240,11 @@ export default function PrepareCollateralModal({
       }
       if (trimmedLabel !== '') {
         await API.setAddressLabel(walletId, trimmedAddress, trimmedLabel)
-        await addReceiveRequest(walletId, trimmedAddress, trimmedLabel, requiredDuffs)
+        if (!claimedAddresses.has(trimmedAddress)) {
+          await addReceiveRequest(walletId, trimmedAddress, trimmedLabel, requiredDuffs)
+        } else {
+          void refreshReceiveRequests(walletId)
+        }
       }
       const sent = await API.sendTransaction(
         walletId,
@@ -244,40 +279,31 @@ export default function PrepareCollateralModal({
       <div className={'mt-4 flex flex-col gap-3.5'}>
         <div ref={scrollAreaRef} className={'flex max-h-[calc(85vh-11rem)] flex-col gap-3.5 overflow-y-auto px-0.5 py-0.5 pr-1 scrollbar-custom'}>
           <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
-          <div className={'flex items-center justify-between gap-2'}>
+          <div className={'flex flex-col gap-1.5'}>
             <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
               {MASTERNODE_COLLATERAL_PREP_COPY.targetAddressSection}
             </Text>
-            <button
-              type={'button'}
-              disabled={creatingAddress || submitting}
-              onClick={() => { void handleCreateAddress() }}
-              className={CHIP_ACTION}
-            >
-              {creatingAddress
-                ? MASTERNODE_COLLATERAL_PREP_COPY.creatingAddress
-                : MASTERNODE_COLLATERAL_PREP_COPY.newAddressButton}
-            </button>
-          </div>
 
-          <RecipientInput
-            compact
-            hideAddressBook
-            value={targetAddress}
-            valueBadge={badgeFor(targetAddress)}
-            onChange={value => {
-              setSubmitError(null)
-              setTargetAddress(value)
-            }}
-            data={MASTERNODE_PREP_COLLATERAL_RECIPIENT_COPY}
-            ariaLabel={MASTERNODE_PREP_COLLATERAL_RECIPIENT_COPY.label}
-            validate={addr => isValidDashChangeAddress(addr, addressNetwork)}
-            ownOptions={addressOptions}
-            ownOptionsHeading={MASTERNODE_YOUR_ADDRESSES_HEADING}
-            ownOptionsLoading={addressesLoading}
-            ownOptionsError={addressesError}
-            onRetryOwnOptions={onRetryAddresses}
-          />
+            <RecipientInput
+              compact
+              hideAddressBook
+              hideValueBadge
+              value={targetAddress}
+              onChange={value => {
+                setSubmitError(null)
+                setLabel(current => nextCollateralLabelOnAddressChange(targetAddress, value, current, badgeFor, type))
+                setTargetAddress(value)
+              }}
+              data={MASTERNODE_PREP_COLLATERAL_RECIPIENT_COPY}
+              ariaLabel={MASTERNODE_PREP_COLLATERAL_RECIPIENT_COPY.label}
+              validate={addr => isValidDashChangeAddress(addr, addressNetwork)}
+              ownOptions={targetOptions}
+              ownOptionsHeading={MASTERNODE_YOUR_ADDRESSES_HEADING}
+              ownOptionsLoading={addressesLoading}
+              ownOptionsError={addressesError}
+              onRetryOwnOptions={onRetryAddresses}
+            />
+          </div>
 
           <div className={'flex flex-col gap-1.5'}>
             <Text size={12} weight={'medium'} color={'brand'} opacity={50}>

@@ -16,6 +16,7 @@ import Spinner from '@renderer/components/ui/Spinner'
 export default function RecipientInput({
   value,
   valueBadge,
+  hideValueBadge = false,
   onChange,
   data,
   compact = false,
@@ -104,6 +105,7 @@ export default function RecipientInput({
         highlightValue
         valueAvatar={valueAvatar}
         valueBadge={valueBadge}
+        hideValueBadge={hideValueBadge}
         hasExtraMatches={query => {
           const trimmedQuery = query.trim()
           return !hideAddressBook && trimmedQuery !== '' && !isValid(trimmedQuery) && matchingContacts(contacts, query, isValid).length > 0
