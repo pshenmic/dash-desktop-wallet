@@ -36,8 +36,9 @@ import { refreshMasternodes, useMasternodes } from '@renderer/hooks/useMasternod
 import type { CustomBadgeProps } from '@renderer/types/CustomBadge'
 import type { NodeDetailProps } from '@renderer/types/MasternodeScreens'
 import {
-  canOperateNode,
+  canRevokeNode,
   canUpdateNodeRegistrar,
+  canUpdateNodeService,
   formatBlockHeight,
   formatServiceAddress,
   isSharedNode,
@@ -46,9 +47,10 @@ import {
   masternodeStatus,
   masternodeType,
   nodeVotingAccessLabel,
-  operateNodeDisabledReason,
+  revokeNodeDisabledReason,
   shortProTxHash,
   updateRegistrarDisabledReason,
+  updateServiceDisabledReason,
 } from '@renderer/utils/masternodeNodes'
 import NodeSharesCard from './NodeSharesCard'
 import RevokeMasternodeModal from './RevokeMasternodeModal'
@@ -90,8 +92,10 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
   const serviceLabel = formatServiceAddress(node.serviceAddress)
   const canUpdateRegistrar = canUpdateNodeRegistrar(node)
   const registrarDisabledReason = updateRegistrarDisabledReason(node)
-  const canOperate = canOperateNode(node)
-  const operateDisabledReason = operateNodeDisabledReason(node)
+  const canUpdateService = canUpdateNodeService(node)
+  const serviceDisabledReason = updateServiceDisabledReason(node)
+  const canRevoke = canRevokeNode(node)
+  const revokeDisabledReason = revokeNodeDisabledReason(node)
 
   const identifierRows: {
     key: string
@@ -188,8 +192,8 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
               type={'button'}
               size={'compact'}
               colorScheme={'primary-light'}
-              disabled={!canOperate}
-              title={operateDisabledReason}
+              disabled={!canUpdateService}
+              title={serviceDisabledReason}
               onClick={() => setActiveModal(MasternodeDetailModal.UpdateService)}
               className={'inline-flex items-center gap-1.5 rounded-[.75rem]'}
             >
@@ -200,8 +204,8 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
               type={'button'}
               size={'compact'}
               colorScheme={'danger-light'}
-              disabled={!canOperate}
-              title={operateDisabledReason}
+              disabled={!canRevoke}
+              title={revokeDisabledReason}
               onClick={() => setActiveModal(MasternodeDetailModal.Revoke)}
               className={'inline-flex items-center gap-1.5 rounded-[.75rem]'}
             >

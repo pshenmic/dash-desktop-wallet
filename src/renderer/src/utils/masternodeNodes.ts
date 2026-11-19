@@ -236,11 +236,19 @@ export function updateRegistrarDisabledReason(node: MasternodeDto): string | und
   return isSharedNode(node) ? NODE_DETAIL_COPY.sharedUpdateRegistrarUnsupported : NODE_DETAIL_COPY.ownerKeyRequired
 }
 
-export function canOperateNode(node: MasternodeDto): boolean {
+export function canUpdateNodeService(node: MasternodeDto): boolean {
+  return node.operatorKeyIndex != null
+}
+
+export function updateServiceDisabledReason(node: MasternodeDto): string | undefined {
+  return canUpdateNodeService(node) ? undefined : NODE_DETAIL_COPY.operatorKeyRequired
+}
+
+export function canRevokeNode(node: MasternodeDto): boolean {
   return !isSharedNode(node) && node.operatorKeyIndex != null
 }
 
-export function operateNodeDisabledReason(node: MasternodeDto): string | undefined {
-  if (canOperateNode(node)) return undefined
-  return isSharedNode(node) ? NODE_DETAIL_COPY.sharedOperatorUnsupported : NODE_DETAIL_COPY.operatorKeyRequired
+export function revokeNodeDisabledReason(node: MasternodeDto): string | undefined {
+  if (canRevokeNode(node)) return undefined
+  return isSharedNode(node) ? NODE_DETAIL_COPY.sharedRevokeUnsupported : NODE_DETAIL_COPY.operatorKeyRequired
 }

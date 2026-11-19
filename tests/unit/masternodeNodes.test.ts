@@ -22,8 +22,9 @@ import {
 } from '@renderer/utils/masternodeActions'
 import {
   calculateShareSummary,
-  canOperateNode,
+  canRevokeNode,
   canUpdateNodeRegistrar,
+  canUpdateNodeService,
   emptyNodesDescription,
   filterNodes,
   formatBlockHeight,
@@ -44,11 +45,12 @@ import {
   nodeSegmentOptions,
   nodeVotingAccessLabel,
   nodeWalletRoles,
-  operateNodeDisabledReason,
+  revokeNodeDisabledReason,
   shareOriginBadge,
   shareRatio,
   shortProTxHash,
   updateRegistrarDisabledReason,
+  updateServiceDisabledReason,
 } from '@renderer/utils/masternodeNodes'
 
 function dash(amount: number): bigint {
@@ -609,11 +611,13 @@ describe('Masternode action guards', () => {
 
     expect(canUpdateNodeRegistrar(soloDerived)).toBe(true)
     expect(updateRegistrarDisabledReason(soloDerived)).toBeUndefined()
-    expect(canOperateNode(soloDerived)).toBe(true)
-    expect(operateNodeDisabledReason(soloDerived)).toBeUndefined()
+    expect(canUpdateNodeService(soloDerived)).toBe(true)
+    expect(updateServiceDisabledReason(soloDerived)).toBeUndefined()
+    expect(canRevokeNode(soloDerived)).toBe(true)
+    expect(revokeNodeDisabledReason(soloDerived)).toBeUndefined()
   })
 
-  it('blocks registrar updates and operator actions on shared nodes even when ownerKeyIndex and operatorKeyIndex are 0', () => {
+  it('allows Update Service on shared nodes with operatorKeyIndex while blocking Registrar updates and Revoke', () => {
     const sharedWithKeys = makeNode({
       isShared: true,
       shares: [makeShare({ ownerAddress: 'Xshare1', keyIndex: 0 })],
@@ -633,12 +637,21 @@ describe('Masternode action guards', () => {
       operatorKeyIndex: null,
     })
 
-    for (const node of [sharedWithKeys, sharedViaSharesOnly, sharedRpcWithoutKeys]) {
+    for (const node of [sharedWithKeys, sharedViaSharesOnly]) {
       expect(canUpdateNodeRegistrar(node)).toBe(false)
       expect(updateRegistrarDisabledReason(node)).toBe(NODE_DETAIL_COPY.sharedUpdateRegistrarUnsupported)
-      expect(canOperateNode(node)).toBe(false)
-      expect(operateNodeDisabledReason(node)).toBe(NODE_DETAIL_COPY.sharedOperatorUnsupported)
+      expect(canUpdateNodeService(node)).toBe(true)
+      expect(updateServiceDisabledReason(node)).toBeUndefined()
+      expect(canRevokeNode(node)).toBe(false)
+      expect(revokeNodeDisabledReason(node)).toBe(NODE_DETAIL_COPY.sharedRevokeUnsupported)
     }
+
+    expect(canUpdateNodeRegistrar(sharedRpcWithoutKeys)).toBe(false)
+    expect(updateRegistrarDisabledReason(sharedRpcWithoutKeys)).toBe(NODE_DETAIL_COPY.sharedUpdateRegistrarUnsupported)
+    expect(canUpdateNodeService(sharedRpcWithoutKeys)).toBe(false)
+    expect(updateServiceDisabledReason(sharedRpcWithoutKeys)).toBe(NODE_DETAIL_COPY.operatorKeyRequired)
+    expect(canRevokeNode(sharedRpcWithoutKeys)).toBe(false)
+    expect(revokeNodeDisabledReason(sharedRpcWithoutKeys)).toBe(NODE_DETAIL_COPY.sharedRevokeUnsupported)
   })
 
   it('blocks registrar updates and operator actions on solo nodes missing derived keys, including imported-only roles', () => {
@@ -660,8 +673,10 @@ describe('Masternode action guards', () => {
     for (const node of [soloNoKeys, soloImportedOnly]) {
       expect(canUpdateNodeRegistrar(node)).toBe(false)
       expect(updateRegistrarDisabledReason(node)).toBe(NODE_DETAIL_COPY.ownerKeyRequired)
-      expect(canOperateNode(node)).toBe(false)
-      expect(operateNodeDisabledReason(node)).toBe(NODE_DETAIL_COPY.operatorKeyRequired)
+      expect(canUpdateNodeService(node)).toBe(false)
+      expect(updateServiceDisabledReason(node)).toBe(NODE_DETAIL_COPY.operatorKeyRequired)
+      expect(canRevokeNode(node)).toBe(false)
+      expect(revokeNodeDisabledReason(node)).toBe(NODE_DETAIL_COPY.operatorKeyRequired)
     }
 
     const ownerOnly = makeNode({
@@ -671,8 +686,10 @@ describe('Masternode action guards', () => {
     })
     expect(canUpdateNodeRegistrar(ownerOnly)).toBe(true)
     expect(updateRegistrarDisabledReason(ownerOnly)).toBeUndefined()
-    expect(canOperateNode(ownerOnly)).toBe(false)
-    expect(operateNodeDisabledReason(ownerOnly)).toBe(NODE_DETAIL_COPY.operatorKeyRequired)
+    expect(canUpdateNodeService(ownerOnly)).toBe(false)
+    expect(updateServiceDisabledReason(ownerOnly)).toBe(NODE_DETAIL_COPY.operatorKeyRequired)
+    expect(canRevokeNode(ownerOnly)).toBe(false)
+    expect(revokeNodeDisabledReason(ownerOnly)).toBe(NODE_DETAIL_COPY.operatorKeyRequired)
 
     const operatorOnly = makeNode({
       isShared: false,
@@ -681,8 +698,10 @@ describe('Masternode action guards', () => {
     })
     expect(canUpdateNodeRegistrar(operatorOnly)).toBe(false)
     expect(updateRegistrarDisabledReason(operatorOnly)).toBe(NODE_DETAIL_COPY.ownerKeyRequired)
-    expect(canOperateNode(operatorOnly)).toBe(true)
-    expect(operateNodeDisabledReason(operatorOnly)).toBeUndefined()
+    expect(canUpdateNodeService(operatorOnly)).toBe(true)
+    expect(updateServiceDisabledReason(operatorOnly)).toBeUndefined()
+    expect(canRevokeNode(operatorOnly)).toBe(true)
+    expect(revokeNodeDisabledReason(operatorOnly)).toBeUndefined()
   })
 })
 

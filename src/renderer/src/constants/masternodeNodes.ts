@@ -105,7 +105,7 @@ export const NODE_DETAIL_COPY = {
   ownerKeyRequired: 'Owner key is not derived by this wallet',
   operatorKeyRequired: 'Operator key is not derived by this wallet',
   sharedUpdateRegistrarUnsupported: 'Registrar updates on a shared masternode require every share owner to sign',
-  sharedOperatorUnsupported: 'Operator actions are not supported for shared masternodes yet',
+  sharedRevokeUnsupported: 'Revoking a shared masternode is not supported from this wallet',
   walletKeyBadge: 'Wallet key',
   importedKeyBadge: 'Imported',
   externalKeyBadge: 'External',
