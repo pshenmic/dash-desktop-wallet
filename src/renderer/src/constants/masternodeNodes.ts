@@ -26,6 +26,8 @@ export const NODES_TAB_COPY = {
   importedKeysButton: 'Imported keys',
 } as const
 
+export const ADD_MASTERNODE_OPTION_CARD_CLASS = 'w-full flex items-center justify-between gap-3 rounded-[.9375rem] border border-dash-primary-dark-blue/10 dark:border-white/10 dash-block-5 hover:dash-block-accent-5 hover:border-dash-brand dark:hover:border-dash-mint p-4 text-left transition-colors cursor-pointer'
+
 export const ADD_MASTERNODE_MODAL_COPY = {
   title: 'Add masternode',
   description: 'Register a new masternode on-chain or import existing masternode keys to track and manage nodes.',

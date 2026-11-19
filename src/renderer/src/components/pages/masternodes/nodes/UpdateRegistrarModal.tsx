@@ -6,7 +6,6 @@ import SignedActionModal from '@renderer/components/modal/SignedActionModal'
 import RecipientInput from '@renderer/components/pages/transfer/RecipientInput'
 import Alert from '@renderer/components/ui/Alert'
 import SegmentedControl from '@renderer/components/ui/SegmentedControl'
-import { ADDRESS_INPUT, ADDRESS_INPUT_TEXT_SIZES } from '@renderer/constants/addressField'
 import { DASH_UNIT } from '@renderer/constants/balance'
 import {
   MASTERNODE_PAYOUT_RECIPIENT_COPY,
@@ -19,7 +18,7 @@ import {
   REGISTRAR_KEY_CHOICE_OPTIONS,
   UPDATE_REGISTRAR_COPY,
 } from '@renderer/constants/masternodeNodes'
-import { FIELD_COMPACT, SURFACE_SECTION } from '@renderer/constants/surfaces'
+import { SURFACE_SECTION } from '@renderer/constants/surfaces'
 import { useAuth } from '@renderer/contexts/AuthContext'
 import { AlertTone } from '@renderer/enums/AlertTone'
 import { PayoutChoiceKind, RegistrarKeyChoiceKind } from '@renderer/enums/Masternodes'
@@ -28,10 +27,11 @@ import { refreshMasternodes } from '@renderer/hooks/useMasternodes'
 import { useWalletAddressOptions } from '@renderer/hooks/useWalletAddressOptions'
 import { refreshBalance } from '@renderer/hooks/useWalletBalance'
 import type { UpdateRegistrarModalProps } from '@renderer/types/MasternodeNodes'
-import { isValidDashChangeAddress } from '@renderer/utils/address'
+import { isValidDashAddress, isValidDashChangeAddress } from '@renderer/utils/address'
 import { davToDash } from '@renderer/utils/balance'
 import { transactionUrl } from '@renderer/utils/explorer'
-import { buildRegistrarUpdate } from '@renderer/utils/masternodeActions'
+import { buildRegistrarUpdate, isValidBlsPublicKey } from '@renderer/utils/masternodeActions'
+import MasternodeFieldInput from './MasternodeFieldInput'
 
 export default function UpdateRegistrarModal({
   walletId,
@@ -101,6 +101,7 @@ export default function UpdateRegistrarModal({
             onChange={setPayoutAddress}
             data={MASTERNODE_PAYOUT_RECIPIENT_COPY}
             ariaLabel={UPDATE_REGISTRAR_COPY.payoutSection}
+            validate={addr => isValidDashAddress(addr, network ?? undefined)}
             ownOptions={addressOptions}
             ownOptionsHeading={MASTERNODE_YOUR_ADDRESSES_HEADING}
             ownOptionsLoading={addressesLoading}
@@ -125,16 +126,13 @@ export default function UpdateRegistrarModal({
           <HighlightedIdentifier className={'min-w-0 text-xs!'}>{node.operatorPublicKey}</HighlightedIdentifier>
         )}
         {operatorChoice === RegistrarKeyChoiceKind.External && (
-          <div className={`w-full flex items-center ${FIELD_COMPACT}`}>
-            <input
-              type={'text'}
-              aria-label={UPDATE_REGISTRAR_COPY.operatorSection}
-              value={operatorPublicKey}
-              onChange={e => setOperatorPublicKey(e.target.value)}
-              placeholder={UPDATE_REGISTRAR_COPY.operatorPlaceholder}
-              className={`${ADDRESS_INPUT} ${ADDRESS_INPUT_TEXT_SIZES[14]}`}
-            />
-          </div>
+          <MasternodeFieldInput
+            value={operatorPublicKey}
+            onChange={setOperatorPublicKey}
+            ariaLabel={UPDATE_REGISTRAR_COPY.operatorSection}
+            placeholder={UPDATE_REGISTRAR_COPY.operatorPlaceholder}
+            invalid={operatorPublicKey.trim() !== '' && !isValidBlsPublicKey(operatorPublicKey)}
+          />
         )}
         {operatorChoice !== RegistrarKeyChoiceKind.Keep && (
           <Alert

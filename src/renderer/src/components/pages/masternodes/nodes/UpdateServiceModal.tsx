@@ -4,7 +4,6 @@ import type { MasternodeUpdateResult } from '@renderer/api/types'
 import { HighlightedIdentifier, Text } from '@renderer/components/dash-ui-kit-extended'
 import SignedActionModal from '@renderer/components/modal/SignedActionModal'
 import RecipientInput from '@renderer/components/pages/transfer/RecipientInput'
-import { ADDRESS_INPUT, ADDRESS_INPUT_TEXT_SIZES } from '@renderer/constants/addressField'
 import { DASH_UNIT } from '@renderer/constants/balance'
 import {
   MASTERNODE_OPERATOR_PAYOUT_RECIPIENT_COPY,
@@ -18,15 +17,17 @@ import {
   TESTNET_DEFAULT_PLATFORM_P2P_PORT,
   UNASSIGNED_SERVICE_ADDRESS,
 } from '@renderer/constants/masternodes'
-import { FIELD_COMPACT, SURFACE_SECTION } from '@renderer/constants/surfaces'
+import { SURFACE_SECTION } from '@renderer/constants/surfaces'
 import { useAuth } from '@renderer/contexts/AuthContext'
 import { refreshMasternodes } from '@renderer/hooks/useMasternodes'
 import { useWalletAddressOptions } from '@renderer/hooks/useWalletAddressOptions'
 import { refreshBalance } from '@renderer/hooks/useWalletBalance'
 import type { UpdateServiceModalProps } from '@renderer/types/MasternodeNodes'
+import { isValidDashAddress } from '@renderer/utils/address'
 import { davToDash } from '@renderer/utils/balance'
 import { transactionUrl } from '@renderer/utils/explorer'
-import { buildServiceUpdate } from '@renderer/utils/masternodeActions'
+import { buildServiceUpdate, isValidPlatformNodeId, isValidPortText, validateServiceEndpoint } from '@renderer/utils/masternodeActions'
+import MasternodeFieldInput from './MasternodeFieldInput'
 
 export default function UpdateServiceModal({
   walletId,
@@ -79,16 +80,13 @@ export default function UpdateServiceModal({
     <div className={'mt-4 flex flex-col gap-3'}>
       <div className={'flex flex-col gap-1.5'}>
         <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{UPDATE_SERVICE_COPY.serviceLabel}</Text>
-        <div className={`w-full flex items-center ${FIELD_COMPACT}`}>
-          <input
-            type={'text'}
-            aria-label={UPDATE_SERVICE_COPY.serviceLabel}
-            value={serviceAddress}
-            onChange={e => setServiceAddress(e.target.value)}
-            placeholder={UPDATE_SERVICE_COPY.servicePlaceholder}
-            className={`${ADDRESS_INPUT} ${ADDRESS_INPUT_TEXT_SIZES[14]}`}
-          />
-        </div>
+        <MasternodeFieldInput
+          value={serviceAddress}
+          onChange={setServiceAddress}
+          ariaLabel={UPDATE_SERVICE_COPY.serviceLabel}
+          placeholder={UPDATE_SERVICE_COPY.servicePlaceholder}
+          invalid={serviceAddress.trim() !== '' && validateServiceEndpoint(serviceAddress, network).error != null}
+        />
       </div>
 
       <div className={'flex flex-col gap-1.5'}>
@@ -100,6 +98,7 @@ export default function UpdateServiceModal({
           onChange={setOperatorPayoutAddress}
           data={MASTERNODE_OPERATOR_PAYOUT_RECIPIENT_COPY}
           ariaLabel={UPDATE_SERVICE_COPY.operatorPayoutLabel}
+          validate={addr => isValidDashAddress(addr, network ?? undefined)}
           ownOptions={addressOptions}
           ownOptionsHeading={MASTERNODE_YOUR_ADDRESSES_HEADING}
           ownOptionsLoading={addressesLoading}
@@ -112,41 +111,34 @@ export default function UpdateServiceModal({
         <div className={'flex flex-col gap-3'}>
           <div className={'flex flex-col gap-1.5'}>
             <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.platformNodeIdLabel}</Text>
-            <div className={`w-full flex items-center ${FIELD_COMPACT}`}>
-              <input
-                type={'text'}
-                aria-label={REGISTER_MASTERNODE_COPY.platformNodeIdLabel}
-                value={platformNodeId}
-                onChange={e => setPlatformNodeId(e.target.value)}
-                placeholder={REGISTER_MASTERNODE_COPY.platformNodeIdPlaceholder}
-                className={`${ADDRESS_INPUT} ${ADDRESS_INPUT_TEXT_SIZES[14]}`}
-              />
-            </div>
+            <MasternodeFieldInput
+              value={platformNodeId}
+              onChange={setPlatformNodeId}
+              ariaLabel={REGISTER_MASTERNODE_COPY.platformNodeIdLabel}
+              placeholder={REGISTER_MASTERNODE_COPY.platformNodeIdPlaceholder}
+              invalid={platformNodeId.trim() !== '' && !isValidPlatformNodeId(platformNodeId)}
+            />
           </div>
           <div className={'grid grid-cols-2 items-end gap-3'}>
             <div className={'flex flex-col gap-1.5'}>
               <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.platformP2PPortLabel}</Text>
-              <div className={`w-full flex items-center ${FIELD_COMPACT}`}>
-                <input
-                  type={'text'}
-                  aria-label={REGISTER_MASTERNODE_COPY.platformP2PPortLabel}
-                  value={platformP2PPort}
-                  onChange={e => setPlatformP2PPort(e.target.value)}
-                  className={`${ADDRESS_INPUT} ${ADDRESS_INPUT_TEXT_SIZES[14]}`}
-                />
-              </div>
+              <MasternodeFieldInput
+                value={platformP2PPort}
+                onChange={setPlatformP2PPort}
+                ariaLabel={REGISTER_MASTERNODE_COPY.platformP2PPortLabel}
+                tabular
+                invalid={platformP2PPort.trim() !== '' && !isValidPortText(platformP2PPort)}
+              />
             </div>
             <div className={'flex flex-col gap-1.5'}>
               <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.platformHttpPortLabel}</Text>
-              <div className={`w-full flex items-center ${FIELD_COMPACT}`}>
-                <input
-                  type={'text'}
-                  aria-label={REGISTER_MASTERNODE_COPY.platformHttpPortLabel}
-                  value={platformHttpPort}
-                  onChange={e => setPlatformHttpPort(e.target.value)}
-                  className={`${ADDRESS_INPUT} ${ADDRESS_INPUT_TEXT_SIZES[14]}`}
-                />
-              </div>
+              <MasternodeFieldInput
+                value={platformHttpPort}
+                onChange={setPlatformHttpPort}
+                ariaLabel={REGISTER_MASTERNODE_COPY.platformHttpPortLabel}
+                tabular
+                invalid={platformHttpPort.trim() !== '' && !isValidPortText(platformHttpPort)}
+              />
             </div>
           </div>
         </div>

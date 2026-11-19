@@ -28,9 +28,24 @@ import type {
 } from '@renderer/types/MasternodeRegistrationWizard'
 import { isValidDashAddress, isValidDashChangeAddress } from '@renderer/utils/address'
 
-const NODE_ID_PATTERN = /^[0-9a-fA-F]{40}$/
-const BLS_PUBKEY_PATTERN = /^[0-9a-fA-F]{96}$/
+export const NODE_ID_PATTERN = /^[0-9a-fA-F]{40}$/
+export const BLS_PUBKEY_PATTERN = /^[0-9a-fA-F]{96}$/
 const IPV4_PORT_PATTERN = /^(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})$/
+
+export function isValidBlsPublicKey(value: string): boolean {
+  const trimmed = value.trim()
+  return BLS_PUBKEY_PATTERN.test(trimmed) && !/^0+$/.test(trimmed)
+}
+
+export function isValidPlatformNodeId(value: string): boolean {
+  const trimmed = value.trim()
+  return NODE_ID_PATTERN.test(trimmed) && !/^0+$/.test(trimmed)
+}
+
+export function isValidPortText(value: string): boolean {
+  const port = Number(value.trim())
+  return Number.isInteger(port) && port >= 1 && port <= 65535
+}
 
 function isCollateralFlagged(utxo: SelectableUtxo): boolean {
   return 'collateral' in utxo && (utxo as ListedUtxo).collateral

@@ -2,12 +2,10 @@ import { KeyIcon, PlusIcon, Text } from '@renderer/components/dash-ui-kit-extend
 import { ChevronIcon } from '@renderer/components/dash-ui-kit-extended/icons'
 import CustomBadge from '@renderer/components/ui/CustomBadge'
 import Modal from '@renderer/components/ui/Modal'
-import { ADD_MASTERNODE_MODAL_COPY } from '@renderer/constants/masternodeNodes'
+import { ADD_MASTERNODE_MODAL_COPY, ADD_MASTERNODE_OPTION_CARD_CLASS } from '@renderer/constants/masternodeNodes'
 import { ICON_CHIP } from '@renderer/constants/surfaces'
 import { ModalSize } from '@renderer/enums/ModalSize'
 import type { AddMasternodeModalProps } from '@renderer/types/MasternodeNodes'
-
-const OPTION_CARD_CLASS = 'w-full flex items-center justify-between gap-3 rounded-[.9375rem] border border-dash-primary-dark-blue/10 dark:border-white/10 dash-block-5 hover:dash-block-accent-5 hover:border-dash-brand dark:hover:border-dash-mint p-4 text-left transition-colors cursor-pointer'
 
 export default function AddMasternodeModal({
   open,
@@ -31,7 +29,7 @@ export default function AddMasternodeModal({
             onClose()
             onSelectRegister()
           }}
-          className={OPTION_CARD_CLASS}
+          className={ADD_MASTERNODE_OPTION_CARD_CLASS}
         >
           <div className={'flex min-w-0 items-start gap-3'}>
             <span className={ICON_CHIP}>
@@ -53,7 +51,7 @@ export default function AddMasternodeModal({
             onClose()
             onSelectImport()
           }}
-          className={OPTION_CARD_CLASS}
+          className={ADD_MASTERNODE_OPTION_CARD_CLASS}
         >
           <div className={'flex min-w-0 items-start gap-3'}>
             <span className={ICON_CHIP}>

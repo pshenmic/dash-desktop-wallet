@@ -15,7 +15,6 @@ import PasswordField from '@renderer/components/ui/PasswordField'
 import SegmentedControl from '@renderer/components/ui/SegmentedControl'
 import ListSkeleton from '@renderer/components/ui/Skeleton'
 import { INVALID_WALLET_PASSWORD_MESSAGE } from '@renderer/constants'
-import { ADDRESS_INPUT, ADDRESS_INPUT_TEXT_SIZES } from '@renderer/constants/addressField'
 import { DASH_UNIT } from '@renderer/constants/balance'
 import {
   MASTERNODE_FEE_SOURCE_RECIPIENT_COPY,
@@ -51,14 +50,23 @@ import type {
   RegisterStepSharedProps,
   RegisterWizardDoneProps,
 } from '@renderer/types/MasternodeRegistrationWizard'
-import { isValidDashChangeAddress } from '@renderer/utils/address'
+import {
+  isValidDashAddress,
+  isValidDashChangeAddress,
+} from '@renderer/utils/address'
 import { davToDash } from '@renderer/utils/balance'
 import { transactionUrl } from '@renderer/utils/explorer'
 import {
   isConfirmingUtxo,
+  isValidBlsPublicKey,
+  isValidPlatformNodeId,
+  isValidPortText,
   parseOperatorRewardBps,
+  parseOutpoint,
   splitIpPortInput,
+  validateServiceEndpoint,
 } from '@renderer/utils/masternodeActions'
+import MasternodeFieldInput from './MasternodeFieldInput'
 
 export function RegisterStepCollateral({
   draft,
@@ -153,29 +161,24 @@ export function RegisterStepCollateral({
           <div className={'grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-end gap-3'}>
             <div className={'flex flex-col gap-1.5'}>
               <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.manualTxidLabel}</Text>
-              <div className={`w-full flex items-center ${FIELD_COMPACT}`}>
-                <input
-                  type={'text'}
-                  aria-label={REGISTER_WIZARD_COPY.manualTxidLabel}
-                  value={draft.manualTxid}
-                  onChange={e => updateDraft({ manualTxid: e.target.value })}
-                  placeholder={REGISTER_WIZARD_COPY.manualTxidPlaceholder}
-                  className={`${ADDRESS_INPUT} ${ADDRESS_INPUT_TEXT_SIZES[14]}`}
-                />
-              </div>
+              <MasternodeFieldInput
+                value={draft.manualTxid}
+                onChange={manualTxid => updateDraft({ manualTxid })}
+                ariaLabel={REGISTER_WIZARD_COPY.manualTxidLabel}
+                placeholder={REGISTER_WIZARD_COPY.manualTxidPlaceholder}
+                invalid={draft.manualTxid.trim() !== '' && parseOutpoint(`${draft.manualTxid.trim()}:0`) == null}
+              />
             </div>
             <div className={'flex flex-col gap-1.5'}>
               <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.manualVoutLabel}</Text>
-              <div className={`w-full flex items-center ${FIELD_COMPACT}`}>
-                <input
-                  type={'text'}
-                  aria-label={REGISTER_WIZARD_COPY.manualVoutLabel}
-                  value={draft.manualVout}
-                  onChange={e => updateDraft({ manualVout: e.target.value })}
-                  placeholder={REGISTER_WIZARD_COPY.manualVoutPlaceholder}
-                  className={`${ADDRESS_INPUT} ${ADDRESS_INPUT_TEXT_SIZES[14]} tabular-nums`}
-                />
-              </div>
+              <MasternodeFieldInput
+                value={draft.manualVout}
+                onChange={manualVout => updateDraft({ manualVout })}
+                ariaLabel={REGISTER_WIZARD_COPY.manualVoutLabel}
+                placeholder={REGISTER_WIZARD_COPY.manualVoutPlaceholder}
+                tabular
+                invalid={draft.manualVout.trim() !== '' && parseOutpoint(`${'0'.repeat(64)}:${draft.manualVout.trim()}`) == null}
+              />
             </div>
           </div>
         )}
@@ -266,6 +269,7 @@ export function RegisterStepAddresses({
           onChange={payoutAddress => updateDraft({ payoutAddress })}
           data={MASTERNODE_PAYOUT_RECIPIENT_COPY}
           ariaLabel={REGISTER_MASTERNODE_COPY.payoutLabel}
+          validate={addr => isValidDashAddress(addr, addressNetwork)}
           ownOptions={addressOptions}
           ownOptionsHeading={MASTERNODE_YOUR_ADDRESSES_HEADING}
           ownOptionsLoading={addressesLoading}
@@ -359,16 +363,13 @@ export function RegisterStepAddresses({
             {REGISTER_WIZARD_COPY.operatorWalletNote}
           </Text>
         ) : (
-          <div className={`w-full flex items-center ${FIELD_COMPACT}`}>
-            <input
-              type={'text'}
-              aria-label={REGISTER_WIZARD_COPY.operatorKeyLabel}
-              value={draft.operatorPublicKey}
-              onChange={e => updateDraft({ operatorPublicKey: e.target.value })}
-              placeholder={REGISTER_WIZARD_COPY.operatorExternalPlaceholder}
-              className={`${ADDRESS_INPUT} ${ADDRESS_INPUT_TEXT_SIZES[14]}`}
-            />
-          </div>
+          <MasternodeFieldInput
+            value={draft.operatorPublicKey}
+            onChange={operatorPublicKey => updateDraft({ operatorPublicKey })}
+            ariaLabel={REGISTER_WIZARD_COPY.operatorKeyLabel}
+            placeholder={REGISTER_WIZARD_COPY.operatorExternalPlaceholder}
+            invalid={draft.operatorPublicKey.trim() !== '' && !isValidBlsPublicKey(draft.operatorPublicKey)}
+          />
         )}
       </div>
 
@@ -389,16 +390,15 @@ export function RegisterStepAddresses({
             ))}
           </div>
         </div>
-        <div className={`w-full flex items-center ${FIELD_COMPACT}`}>
-          <input
-            type={'text'}
-            aria-label={REGISTER_MASTERNODE_COPY.operatorRewardLabel}
-            value={draft.operatorRewardPercent}
-            onChange={e => updateDraft({ operatorRewardPercent: e.target.value })}
-            placeholder={REGISTER_MASTERNODE_COPY.operatorRewardPlaceholder}
-            className={`${ADDRESS_INPUT} ${ADDRESS_INPUT_TEXT_SIZES[14]} tabular-nums`}
-          />
-        </div>
+        <MasternodeFieldInput
+          value={draft.operatorRewardPercent}
+          onChange={operatorRewardPercent => updateDraft({ operatorRewardPercent })}
+          ariaLabel={REGISTER_MASTERNODE_COPY.operatorRewardLabel}
+          placeholder={REGISTER_MASTERNODE_COPY.operatorRewardPlaceholder}
+          tabular
+          suffix={'%'}
+          invalid={draft.operatorRewardPercent.trim() !== '' && rewardBps == null}
+        />
         <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
           {REGISTER_WIZARD_COPY.operatorRewardHint}
         </Text>
@@ -415,6 +415,7 @@ export function RegisterStepAddresses({
               onChange={operatorPayoutAddress => updateDraft({ operatorPayoutAddress })}
               data={MASTERNODE_OPERATOR_PAYOUT_RECIPIENT_COPY}
               ariaLabel={MASTERNODE_OPERATOR_PAYOUT_RECIPIENT_COPY.label}
+              validate={addr => addr.trim() === '' || isValidDashAddress(addr, addressNetwork)}
               ownOptions={addressOptions}
               ownOptionsHeading={MASTERNODE_YOUR_ADDRESSES_HEADING}
               ownOptionsLoading={addressesLoading}
@@ -472,33 +473,28 @@ export function RegisterStepNetwork({
           <div className={'grid grid-cols-1 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] sm:items-end gap-3'}>
             <div className={'flex flex-col gap-1.5'}>
               <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.serviceIpLabel}</Text>
-              <div className={`w-full flex items-center ${FIELD_COMPACT}`}>
-                <input
-                  type={'text'}
-                  aria-label={REGISTER_WIZARD_COPY.serviceIpLabel}
-                  value={draft.serviceIp}
-                  onChange={e => {
-                    const parsed = splitIpPortInput(e.target.value)
-                    updateDraft(parsed.port != null
-                      ? { serviceIp: parsed.ip, servicePort: parsed.port }
-                      : { serviceIp: parsed.ip })
-                  }}
-                  placeholder={REGISTER_WIZARD_COPY.serviceIpPlaceholder}
-                  className={`${ADDRESS_INPUT} ${ADDRESS_INPUT_TEXT_SIZES[14]}`}
-                />
-              </div>
+              <MasternodeFieldInput
+                value={draft.serviceIp}
+                onChange={value => {
+                  const parsed = splitIpPortInput(value)
+                  updateDraft(parsed.port != null
+                    ? { serviceIp: parsed.ip, servicePort: parsed.port }
+                    : { serviceIp: parsed.ip })
+                }}
+                ariaLabel={REGISTER_WIZARD_COPY.serviceIpLabel}
+                placeholder={REGISTER_WIZARD_COPY.serviceIpPlaceholder}
+                invalid={draft.serviceIp.trim() !== '' && validateServiceEndpoint(`${draft.serviceIp.trim()}:${draft.servicePort.trim() || '1'}`, network).error != null && isValidPortText(draft.servicePort)}
+              />
             </div>
             <div className={'flex flex-col gap-1.5'}>
               <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.servicePortLabel}</Text>
-              <div className={`w-full flex items-center ${FIELD_COMPACT}`}>
-                <input
-                  type={'text'}
-                  aria-label={REGISTER_WIZARD_COPY.servicePortLabel}
-                  value={draft.servicePort}
-                  onChange={e => updateDraft({ servicePort: e.target.value })}
-                  className={`${ADDRESS_INPUT} ${ADDRESS_INPUT_TEXT_SIZES[14]} tabular-nums`}
-                />
-              </div>
+              <MasternodeFieldInput
+                value={draft.servicePort}
+                onChange={servicePort => updateDraft({ servicePort })}
+                ariaLabel={REGISTER_WIZARD_COPY.servicePortLabel}
+                tabular
+                invalid={draft.servicePort.trim() !== '' && !isValidPortText(draft.servicePort)}
+              />
             </div>
           </div>
         )}
@@ -508,41 +504,34 @@ export function RegisterStepNetwork({
         <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
           <div className={'flex flex-col gap-1.5'}>
             <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.platformNodeIdLabel}</Text>
-            <div className={`w-full flex items-center ${FIELD_COMPACT}`}>
-              <input
-                type={'text'}
-                aria-label={REGISTER_MASTERNODE_COPY.platformNodeIdLabel}
-                value={draft.platformNodeId}
-                onChange={e => updateDraft({ platformNodeId: e.target.value })}
-                placeholder={REGISTER_MASTERNODE_COPY.platformNodeIdPlaceholder}
-                className={`${ADDRESS_INPUT} ${ADDRESS_INPUT_TEXT_SIZES[14]}`}
-              />
-            </div>
+            <MasternodeFieldInput
+              value={draft.platformNodeId}
+              onChange={platformNodeId => updateDraft({ platformNodeId })}
+              ariaLabel={REGISTER_MASTERNODE_COPY.platformNodeIdLabel}
+              placeholder={REGISTER_MASTERNODE_COPY.platformNodeIdPlaceholder}
+              invalid={draft.platformNodeId.trim() !== '' && !isValidPlatformNodeId(draft.platformNodeId)}
+            />
           </div>
           <div className={'grid grid-cols-1 sm:grid-cols-2 sm:items-end gap-3'}>
             <div className={'flex flex-col gap-1.5'}>
               <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.platformP2PPortLabel}</Text>
-              <div className={`w-full flex items-center ${FIELD_COMPACT}`}>
-                <input
-                  type={'text'}
-                  aria-label={REGISTER_MASTERNODE_COPY.platformP2PPortLabel}
-                  value={draft.platformP2PPort}
-                  onChange={e => updateDraft({ platformP2PPort: e.target.value })}
-                  className={`${ADDRESS_INPUT} ${ADDRESS_INPUT_TEXT_SIZES[14]} tabular-nums`}
-                />
-              </div>
+              <MasternodeFieldInput
+                value={draft.platformP2PPort}
+                onChange={platformP2PPort => updateDraft({ platformP2PPort })}
+                ariaLabel={REGISTER_MASTERNODE_COPY.platformP2PPortLabel}
+                tabular
+                invalid={draft.platformP2PPort.trim() !== '' && !isValidPortText(draft.platformP2PPort)}
+              />
             </div>
             <div className={'flex flex-col gap-1.5'}>
               <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.platformHttpPortLabel}</Text>
-              <div className={`w-full flex items-center ${FIELD_COMPACT}`}>
-                <input
-                  type={'text'}
-                  aria-label={REGISTER_MASTERNODE_COPY.platformHttpPortLabel}
-                  value={draft.platformHttpPort}
-                  onChange={e => updateDraft({ platformHttpPort: e.target.value })}
-                  className={`${ADDRESS_INPUT} ${ADDRESS_INPUT_TEXT_SIZES[14]} tabular-nums`}
-                />
-              </div>
+              <MasternodeFieldInput
+                value={draft.platformHttpPort}
+                onChange={platformHttpPort => updateDraft({ platformHttpPort })}
+                ariaLabel={REGISTER_MASTERNODE_COPY.platformHttpPortLabel}
+                tabular
+                invalid={draft.platformHttpPort.trim() !== '' && !isValidPortText(draft.platformHttpPort)}
+              />
             </div>
           </div>
         </div>

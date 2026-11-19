@@ -34,6 +34,17 @@ export interface AddMasternodeModalProps {
   onSelectImport: () => void
 }
 
+export interface MasternodeFieldInputProps {
+  value: string
+  onChange: (value: string) => void
+  ariaLabel: string
+  placeholder?: string
+  invalid?: boolean
+  tabular?: boolean
+  disabled?: boolean
+  suffix?: string
+}
+
 export interface MasternodeShareSummary {
   totalDuffs: bigint
   ownedDuffs: bigint
