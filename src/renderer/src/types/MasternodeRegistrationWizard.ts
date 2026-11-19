@@ -38,6 +38,12 @@ export interface RegisterWizardDraft {
   platformHttpPort: string
 }
 
+export interface PersistedRegisterWizardState {
+  active: boolean
+  step: number
+  draft: RegisterWizardDraft
+}
+
 export interface RegisterWizardProps {
   walletId: string
   onBack: () => void

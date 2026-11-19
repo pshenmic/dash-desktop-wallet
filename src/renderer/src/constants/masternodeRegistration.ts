@@ -104,6 +104,7 @@ export const REGISTER_WIZARD_COPY = {
   backToMasternodes: 'Back to Masternodes',
   authorizeLabel: 'Authorize with wallet password',
   retryButton: 'Retry',
+  resetForm: 'Reset form',
 } as const
 
 export const MASTERNODE_TYPE_CARDS: ReadonlyArray<{

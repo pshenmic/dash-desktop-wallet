@@ -25,6 +25,7 @@ import { prefetchReceiveRequests } from '@renderer/hooks/useReceiveRequests'
 import { useNow } from '@renderer/hooks/useNow'
 import type { MasternodesNavigationState } from '@renderer/types/MasternodeNodes'
 import type { MasternodesPageProps } from '@renderer/types/MasternodeScreens'
+import { getOrCreateRegisterWizardState, setRegisterWizardActive } from '@renderer/utils/masternodeRegistrationDraft'
 import { enumParam, withParams } from '@renderer/utils/searchParams'
 import ContestDetail from './contested-resources/ContestDetail'
 import ContestsTab from './contested-resources/ContestsTab'
@@ -57,7 +58,11 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
       ? MASTERNODE_PARAMS.proposal
       : MASTERNODE_PARAMS.contest
   const detail = searchParams.get(detailParam)
-  const registering = tab === MasternodesTab.Nodes && detail == null && searchParams.get(MASTERNODE_PARAMS.register) === '1'
+  const persistedWizard = getOrCreateRegisterWizardState(walletId, network ?? null)
+  const registering = tab === MasternodesTab.Nodes
+    && detail == null
+    && (searchParams.get(MASTERNODE_PARAMS.register) === '1'
+      || (searchParams.get(MASTERNODE_PARAMS.tab) == null && persistedWizard.active))
   const saveListScroll = useDetailScrollRestore(detail ?? (registering ? 'register' : null))
 
   useEffect(() => {
@@ -104,6 +109,7 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
 
   const openRegister = (): void => {
     saveListScroll()
+    setRegisterWizardActive(walletId, network ?? null, true)
     const state: MasternodesNavigationState = { fromList: true }
     setSearchParams(prev => withParams(prev, {
       [MASTERNODE_PARAMS.tab]: null,
@@ -113,6 +119,7 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
   }
 
   const closeRegister = (): void => {
+    setRegisterWizardActive(walletId, network ?? null, false)
     if ((location.state as MasternodesNavigationState | null)?.fromList === true) {
       navigate(-1)
       return
@@ -121,6 +128,7 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
   }
 
   const openNodeFromRegister = (proTxHash: string): void => {
+    setRegisterWizardActive(walletId, network ?? null, false)
     setSearchParams(prev => withParams(prev, {
       [MASTERNODE_PARAMS.tab]: null,
       [MASTERNODE_PARAMS.register]: null,
@@ -199,6 +207,7 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
               : <ContestDetail key={detail} walletId={walletId} now={now} normalizedLabel={detail} onBack={closeDetail} />
         ) : registering ? (
           <RegisterMasternodeWizard
+            key={walletId}
             walletId={walletId}
             onBack={closeRegister}
             onOpenNode={openNodeFromRegister}

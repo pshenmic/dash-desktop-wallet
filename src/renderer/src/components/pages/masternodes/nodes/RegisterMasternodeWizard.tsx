@@ -1,27 +1,20 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { API } from '@renderer/api'
-import type { MasternodeRegistrationResult, Network } from '@renderer/api/types'
+import type { MasternodeRegistrationResult } from '@renderer/api/types'
 import { Text } from '@renderer/components/dash-ui-kit-extended'
 import TransferWizard from '@renderer/components/pages/transfer/TransferWizard'
 import PageHeader from '@renderer/components/ui/PageHeader'
 import { DASH_UNIT } from '@renderer/constants/balance'
 import { REGISTER_MASTERNODE_COPY } from '@renderer/constants/masternodeNodes'
 import { REGISTER_WIZARD_COPY, REGISTER_WIZARD_STEPS } from '@renderer/constants/masternodeRegistration'
-import {
-  MAINNET_CORE_PORT,
-  MAINNET_PLATFORM_HTTP_PORT,
-  MAINNET_PLATFORM_P2P_PORT,
-  TESTNET_DEFAULT_CORE_PORT,
-  TESTNET_DEFAULT_PLATFORM_HTTP_PORT,
-  TESTNET_DEFAULT_PLATFORM_P2P_PORT,
-} from '@renderer/constants/masternodes'
-import { SURFACE_PANEL } from '@renderer/constants/surfaces'
+import { CHIP_ACTION, SURFACE_PANEL } from '@renderer/constants/surfaces'
 import { useAuth } from '@renderer/contexts/AuthContext'
 import { refreshMasternodes } from '@renderer/hooks/useMasternodes'
 import { useWalletAddressOptions } from '@renderer/hooks/useWalletAddressOptions'
 import { refreshBalance } from '@renderer/hooks/useWalletBalance'
 import { useWalletUtxos } from '@renderer/hooks/useWalletUtxos'
 import type {
+  PersistedRegisterWizardState,
   RegisterWizardDraft,
   RegisterWizardProps,
 } from '@renderer/types/MasternodeRegistrationWizard'
@@ -32,6 +25,13 @@ import {
   isConfirmingUtxo,
   validateRegistrationWizard,
 } from '@renderer/utils/masternodeActions'
+import {
+  clearRegisterWizardDraft,
+  getOrCreateRegisterWizardState,
+  hasCustomRegisterWizardDraft,
+  resetRegisterWizardDraft,
+  saveRegisterWizardState,
+} from '@renderer/utils/masternodeRegistrationDraft'
 import { recordPendingMasternode } from '@renderer/utils/pendingMasternodes'
 import {
   RegisterStepAddresses,
@@ -40,34 +40,6 @@ import {
   RegisterStepReview,
   RegisterWizardDone,
 } from './RegisterWizardSteps'
-
-function createInitialDraft(network: Network | null): RegisterWizardDraft {
-  const isTestnet = network === 'testnet'
-  return {
-    type: 'Regular',
-    collateralSource: 'wallet',
-    selectedCollateral: '',
-    manualTxid: '',
-    manualVout: '0',
-    feeSourceMode: 'auto',
-    feeSourceAddress: '',
-    payoutAddress: '',
-    ownerMode: 'wallet',
-    ownerAddress: '',
-    votingMode: 'wallet',
-    votingAddress: '',
-    operatorMode: 'wallet',
-    operatorPublicKey: '',
-    operatorRewardPercent: '0',
-    operatorPayoutAddress: '',
-    serviceMode: 'later',
-    serviceIp: '',
-    servicePort: String(isTestnet ? TESTNET_DEFAULT_CORE_PORT : MAINNET_CORE_PORT),
-    platformNodeId: '',
-    platformP2PPort: String(isTestnet ? TESTNET_DEFAULT_PLATFORM_P2P_PORT : MAINNET_PLATFORM_P2P_PORT),
-    platformHttpPort: String(isTestnet ? TESTNET_DEFAULT_PLATFORM_HTTP_PORT : MAINNET_PLATFORM_HTTP_PORT),
-  }
-}
 
 export default function RegisterMasternodeWizard({
   walletId,
@@ -85,16 +57,33 @@ export default function RegisterMasternodeWizard({
     retry: retryAddresses,
   } = useWalletAddressOptions(walletId)
 
-  const [step, setStep] = useState(0)
-  const [draft, setDraft] = useState<RegisterWizardDraft>(() => createInitialDraft(network))
+  const [wizardState, setWizardState] = useState<PersistedRegisterWizardState>(
+    () => getOrCreateRegisterWizardState(walletId, network),
+  )
+  const wizardStateRef = useRef(wizardState)
+  wizardStateRef.current = wizardState
+  const { step, draft } = wizardState
   const [password, setPassword] = useState('')
   const [passwordInvalid, setPasswordInvalid] = useState(false)
   const [broadcastError, setBroadcastError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<MasternodeRegistrationResult | null>(null)
 
+  const updateWizardState = (
+    updater: (current: PersistedRegisterWizardState) => PersistedRegisterWizardState,
+  ): void => {
+    const next = updater(wizardStateRef.current)
+    wizardStateRef.current = next
+    setWizardState(next)
+    saveRegisterWizardState(walletId, next)
+  }
+
   const updateDraft = (patch: Partial<RegisterWizardDraft>): void => {
-    setDraft(current => ({ ...current, ...patch }))
+    updateWizardState(current => ({
+      ...current,
+      active: true,
+      draft: { ...current.draft, ...patch },
+    }))
   }
 
   const collateralCoins = useMemo(
@@ -146,7 +135,17 @@ export default function RegisterMasternodeWizard({
     if (submitting) return
     setBroadcastError(null)
     setPasswordInvalid(false)
-    setStep(nextStep)
+    updateWizardState(current => ({ ...current, active: true, step: nextStep }))
+  }
+
+  const handleResetForm = (): void => {
+    if (submitting) return
+    setPassword('')
+    setPasswordInvalid(false)
+    setBroadcastError(null)
+    const fresh = resetRegisterWizardDraft(walletId, network, true)
+    wizardStateRef.current = fresh
+    setWizardState(fresh)
   }
 
   const handleBroadcast = async (): Promise<void> => {
@@ -182,6 +181,7 @@ export default function RegisterMasternodeWizard({
       })
       void refreshMasternodes(walletId)
       void refreshBalance(walletId)
+      clearRegisterWizardDraft(walletId)
       setResult(res)
     } catch (err) {
       setBroadcastError(getErrorMessage(err))
@@ -255,6 +255,8 @@ export default function RegisterMasternodeWizard({
     },
   ]
 
+  const showResetAction = result == null && hasCustomRegisterWizardDraft(wizardState, network)
+
   return (
     <div className={'flex flex-col'}>
       <PageHeader
@@ -262,6 +264,16 @@ export default function RegisterMasternodeWizard({
         subtitle={REGISTER_WIZARD_COPY.pageSubtitle}
         onBack={() => { if (!submitting) onBack() }}
         backLabel={REGISTER_WIZARD_COPY.backLabel}
+        actions={showResetAction ? (
+          <button
+            type={'button'}
+            disabled={submitting}
+            onClick={handleResetForm}
+            className={CHIP_ACTION}
+          >
+            {REGISTER_WIZARD_COPY.resetForm}
+          </button>
+        ) : undefined}
       />
 
       {result != null ? (
