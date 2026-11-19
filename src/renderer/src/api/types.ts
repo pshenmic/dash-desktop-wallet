@@ -264,13 +264,19 @@ export interface MasternodePlatformFieldsDto {
 }
 
 // operatorReward is in hundredths of a percent. A null serviceAddress registers
-// without one, left to the operator's service update.
+// without one, left to the operator's service update. A null ownerAddress,
+// votingAddress or operatorPublicKey takes the wallet's next unused key on that
+// chain; an owner or voting key is a P2PKH address and an operator key is a BLS
+// basic public key.
 export interface MasternodeRegistrationDto extends MasternodePlatformFieldsDto {
   type: 'Regular' | 'Evo'
   collateral: { txid: string; vout: number }
   serviceAddress: string | null
   payoutAddress: string
   operatorReward: number
+  ownerAddress: string | null
+  votingAddress: string | null
+  operatorPublicKey: string | null
 }
 
 // keep is the node's current key, wallet the lowest unused wallet key. A new operator

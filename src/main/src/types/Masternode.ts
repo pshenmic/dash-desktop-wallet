@@ -20,12 +20,18 @@ export interface MasternodePlatformFields {
 
 // operatorReward is in hundredths of a percent, as ProRegTx carries it. A null
 // serviceAddress registers without one, left to the operator's ProUpServTx.
+// A null ownerAddress, votingAddress or operatorPublicKey takes the wallet's
+// next unused key on that chain; an owner or voting key is a P2PKH address and
+// an operator key is a BLS basic public key.
 export interface MasternodeRegistration extends MasternodePlatformFields {
   type: MasternodeType
   collateral: {txid: string; vout: number}
   serviceAddress: string | null
   payoutAddress: string
   operatorReward: number
+  ownerAddress: string | null
+  votingAddress: string | null
+  operatorPublicKey: string | null
 }
 
 // A ProUpServTx restates the whole service, so every field is the new value.

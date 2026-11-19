@@ -74,6 +74,13 @@ export class CoreTransactionService {
     }
   }
 
+  // A provider key travels as its hash160, so only P2PKH addresses fit.
+  requireP2pkhAddress(address: string, network: Network, role: 'owner' | 'voting'): void {
+    if (this.classifyAddress(address, network) !== 'p2pkh') {
+      throw new Error(`The ${role} key must be a P2PKH address`)
+    }
+  }
+
   // An input carries the script of the output it spends, which is what sighash
   // reads; signing replaces each one with the signature script. So an unsigned
   // transaction is these bytes with that substitution still to come.

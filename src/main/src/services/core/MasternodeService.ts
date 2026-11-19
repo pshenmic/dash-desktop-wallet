@@ -3,6 +3,7 @@ import {AddressDAO} from '../../database/AddressDAO'
 import {WalletDAO} from '../../database/WalletDAO'
 import {MasternodeDAO} from '../../database/MasternodeDAO'
 import {MasternodeKeyDAO} from '../../database/MasternodeKeyDAO'
+import {WalletProvider} from '../../providers/WalletProvider'
 import {WalletProviderFactory} from '../../providers/WalletProviderFactory'
 import {MASTERNODE_KEY_CHAINS, MASTERNODE_KEY_WINDOW, MASTERNODE_WALKED_CHAINS} from '../../constants/addresses'
 import {DUST_THRESHOLD_DUFFS, REVOCATION_REASON_CODE} from '../../constants/chain'
@@ -136,7 +137,10 @@ export class MasternodeService {
     const {network: walletNetwork} = await requireWallet(this.walletDAO, walletId)
     requireRegistrationFields(registration, walletNetwork)
     this.coreTransactionService.classifyAddress(registration.payoutAddress, walletNetwork)
-    const {txid, fee, peersAcked} = await this.sendProviderTx(walletId, password, async ({network, keys, owned, grouped, utxos, collaterals}) => {
+    if (registration.ownerAddress != null) this.coreTransactionService.requireP2pkhAddress(registration.ownerAddress, walletNetwork, 'owner')
+    if (registration.votingAddress != null) this.coreTransactionService.requireP2pkhAddress(registration.votingAddress, walletNetwork, 'voting')
+    const providedOperator = registration.operatorPublicKey == null ? null : requireBasicOperatorKey(registration.operatorPublicKey)
+    const {txid, fee, peersAcked} = await this.sendProviderTx(walletId, password, async ({network, keys, owned, provider, grouped, utxos, collaterals}) => {
       const {txid, vout} = registration.collateral
       const coin = requireCollateral(utxos, collaterals, registration)
       const collateralPath = addressPaths(grouped).get(coin.address)
@@ -146,14 +150,18 @@ export class MasternodeService {
       // the owner chain alone would hand out the index that node already took.
       const index = unusedKeyIndex(owned, ...MASTERNODE_KEY_CHAINS)
       const derived = (chain: MasternodeKeyChain): string => masternodeKeyDeriver(keys, network, chain).derive(index).address
-      const keyId = (chain: MasternodeKeyChain): string => bytesToHex(sdkUtils.addressToPublicKeyHash(derived(chain)))
-      requirePayout(registration.payoutAddress, derived('owner'), derived('voting'))
-      log.info(`register ${registration.type} on ${txid}:${vout}: wallet keys #${index}, service ${registration.serviceAddress ?? 'none'}`)
+      const ownerAddress = registration.ownerAddress ?? derived('owner')
+      const votingAddress = registration.votingAddress ?? derived('voting')
+      const operatorPublicKey = providedOperator ?? derived('operator')
+      if (providedOperator != null) await this.requireFreeOperatorKey(providedOperator, provider)
+      requirePayout(registration.payoutAddress, ownerAddress, votingAddress)
+      log.info(`register ${registration.type} on ${txid}:${vout}: service ${registration.serviceAddress ?? 'none'}, ` +
+        `keys ${[registration.ownerAddress, registration.votingAddress, providedOperator].filter(key => key != null).length}/3 given`)
       return {
         payload: this.coreTransactionService.proRegPayload(registration, {
-          ownerKeyId: keyId('owner'),
-          votingKeyId: keyId('voting'),
-          operatorPublicKey: derived('operator'),
+          ownerKeyId: bytesToHex(sdkUtils.addressToPublicKeyHash(ownerAddress)),
+          votingKeyId: bytesToHex(sdkUtils.addressToPublicKeyHash(votingAddress)),
+          operatorPublicKey,
         }, network),
         signer: {kind: 'address', derivationPath: collateralPath, address: coin.address},
         spendable: utxos.filter(utxo => utxo !== coin),
@@ -167,9 +175,7 @@ export class MasternodeService {
     requireProTxHash(proTxHash)
     const {network: walletNetwork} = await requireWallet(this.walletDAO, walletId)
     if (update.operator.kind === 'external') requireBasicOperatorKey(update.operator.publicKey)
-    if (update.voting.kind === 'external' && this.coreTransactionService.classifyAddress(update.voting.address, walletNetwork) !== 'p2pkh') {
-      throw new Error('A voting key is a P2PKH address')
-    }
+    if (update.voting.kind === 'external') this.coreTransactionService.requireP2pkhAddress(update.voting.address, walletNetwork, 'voting')
     if (update.payoutAddress != null) this.coreTransactionService.classifyAddress(update.payoutAddress, walletNetwork)
     return this.sendProviderTx(walletId, password, async context => {
       const {network, keys, owned, utxos} = context
@@ -179,7 +185,7 @@ export class MasternodeService {
       const votingAddress = update.voting.kind === 'keep' ? node.votingAddress
         : update.voting.kind === 'wallet' ? masternodeKeyDeriver(keys, network, 'voting').derive(unusedKeyIndex(owned, 'voting')).address
         : update.voting.address
-      if (this.coreTransactionService.classifyAddress(votingAddress, network) !== 'p2pkh') throw new Error('A voting key is a P2PKH address')
+      this.coreTransactionService.requireP2pkhAddress(votingAddress, network, 'voting')
       if (votingAddress === node.collateralAddress) throw new Error('The voting key may not be the collateral address')
 
       const payoutAddress = requirePayout(update.payoutAddress ?? node.payeeAddress, owner.address, votingAddress)
@@ -243,10 +249,16 @@ export class MasternodeService {
         ?? bytesToHex(bls.toBasicPublicKey(hexToBytes(node.operatorPublicKey)))
     }
     const publicKey = requireBasicOperatorKey(choice.publicKey)
+    await this.requireFreeOperatorKey(publicKey, provider, node.proTxHash)
+    return publicKey
+  }
+
+  // Core refuses a second node on one operator key. `except` is the node being
+  // updated, which already carries it.
+  private async requireFreeOperatorKey(publicKey: string, provider: WalletProvider, except?: string): Promise<void> {
     const listed = await provider.getMasternodes('operator', masternodeFilterValues('operator', publicKey))
     if (listed == null) throw new Error('The masternode list has not arrived yet')
-    if (listed.some(entry => entry.proTxHash !== node.proTxHash)) throw new Error('Another masternode already uses this operator key')
-    return publicKey
+    if (listed.some(entry => entry.proTxHash !== except)) throw new Error('Another masternode already uses this operator key')
   }
 
   // The change is the only output, so it is what has to clear dust. `target` is

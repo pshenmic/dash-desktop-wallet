@@ -201,7 +201,8 @@ describe('provider tx field checks', () => {
   it('refuses a registration with a malformed collateral or reward', () => {
     const registration = {
       type: 'Regular' as const, collateral: {txid: 'cc'.repeat(32), vout: 0}, serviceAddress: null, payoutAddress: 'y',
-      operatorReward: 0, platformNodeId: null, platformP2PPort: null, platformHttpPort: null,
+      operatorReward: 0, ownerAddress: null, votingAddress: null, operatorPublicKey: null,
+      platformNodeId: null, platformP2PPort: null, platformHttpPort: null,
     }
     expect(() => requireRegistrationFields(registration, 'testnet')).not.toThrow()
     expect(() => requireRegistrationFields({...registration, collateral: {txid: 'cc', vout: 0}}, 'testnet')).toThrow('txid and an output index')

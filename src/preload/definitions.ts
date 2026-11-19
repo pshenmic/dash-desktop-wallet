@@ -12,6 +12,9 @@ type MasternodeRegistration = {
   serviceAddress: string | null
   payoutAddress: string
   operatorReward: number
+  ownerAddress: string | null
+  votingAddress: string | null
+  operatorPublicKey: string | null
   platformNodeId: string | null
   platformP2PPort: number | null
   platformHttpPort: number | null

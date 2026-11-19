@@ -7,6 +7,8 @@ import {ProUpRevTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRevTx.js'
 import {ProUpServTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpServTx.js'
 import {bls12_381} from '@noble/curves/bls12-381.js'
 import {bytesToHex} from '@noble/hashes/utils.js'
+import {Base58Check} from 'dash-core-sdk/src/base58check.js'
+import {ADDRESS_PREFIX} from '../../src/main/src/constants/addresses'
 import {MasternodeDAO} from '../../src/main/src/database/MasternodeDAO'
 import {Preferences} from '../../src/main/src/preferences'
 import {WalletProviderFactory} from '../../src/main/src/providers/WalletProviderFactory'
@@ -87,6 +89,9 @@ describe('MasternodeService provider transactions', () => {
     serviceAddress: '45.33.12.7:19999',
     payoutAddress: owned[2],
     operatorReward: 0,
+    ownerAddress: null,
+    votingAddress: null,
+    operatorPublicKey: null,
     platformNodeId: null,
     platformP2PPort: null,
     platformHttpPort: null,
@@ -157,6 +162,32 @@ describe('MasternodeService provider transactions', () => {
     expect(payload.getOwnerAddress('testnet')).toBe(key('owner', 1))
     expect(payload.pubKeyOperator).toBe(key('operator', 1))
     expect(payload.getVotingAddress('testnet')).toBe(key('voting', 1))
+  })
+
+  it('registers with the owner, voting and operator keys the caller supplies', async () => {
+    const {payload} = await register({
+      ownerAddress: key('owner', 7), votingAddress: key('voting', 7), operatorPublicKey: key('operator', 7).toUpperCase(),
+    })
+
+    expect(payload.getOwnerAddress('testnet')).toBe(key('owner', 7))
+    expect(payload.getVotingAddress('testnet')).toBe(key('voting', 7))
+    expect(payload.pubKeyOperator).toBe(key('operator', 7))
+  })
+
+  it('refuses a P2SH owner or voting key, a malformed operator key and one another node carries', async () => {
+    const p2sh = Base58Check.encode(new Uint8Array([ADDRESS_PREFIX.testnet.p2sh, ...sdkUtils.addressToPublicKeyHash(owned[1])]))
+    await expect(masternodes.register(walletId, registration({ownerAddress: p2sh}), PASSWORD))
+      .rejects.toThrow('owner key must be a P2PKH address')
+    await expect(masternodes.register(walletId, registration({votingAddress: p2sh}), PASSWORD))
+      .rejects.toThrow('voting key must be a P2PKH address')
+    await expect(masternodes.register(walletId, registration({operatorPublicKey: 'ff'.repeat(48)}), PASSWORD))
+      .rejects.toThrow('Not a BLS public key')
+
+    const taken = key('operator', 3)
+    list = [node('22'.repeat(32), {operatorPublicKey: taken})]
+    await expect(masternodes.register(walletId, registration({operatorPublicKey: taken}), PASSWORD))
+      .rejects.toThrow('already uses this operator key')
+    expect(broadcast).toEqual([])
   })
 
   it('carries the platform node id and ports an Evo is given', async () => {
