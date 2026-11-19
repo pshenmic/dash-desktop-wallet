@@ -4,14 +4,16 @@ import {
   keysAddedLabel,
   keySelectionLabel,
   keysOnIdentityLabel,
+  keyVariantCaption,
   keyVariantTitle,
   presetKeyVariants,
   projectedKeyLabel,
   sortedIdentityKeys,
   toggleKeyVariant,
+  updateKeyBoundsDraft,
 } from '../../src/renderer/src/utils/identityKeySetup'
 import { IdentityKeyVariant } from '../../src/renderer/src/enums/IdentityKeys'
-import { DASHPAY_KEY_BOUNDS } from '../../src/renderer/src/constants/dashPay'
+import { DASHPAY_CONTRACT_ID, DASHPAY_KEY_BOUNDS } from '../../src/renderer/src/constants/dashPay'
 import { IDENTITY_KEY_VARIANTS, KEY_VARIANT_GROUPS } from '../../src/renderer/src/constants/identityKeys'
 import type { IdentityKeyDto } from '../../src/renderer/src/api/types'
 
@@ -97,6 +99,27 @@ describe('key variant selection', () => {
   it('titles a variant by purpose and level only', () => {
     expect(keyVariantTitle(IDENTITY_KEY_VARIANTS[IdentityKeyVariant.EncDashPay])).toBe('Encryption · Medium')
     expect(keyVariantTitle(IDENTITY_KEY_VARIANTS[IdentityKeyVariant.Transfer])).toBe('Transfer · Critical')
+  })
+
+  it('formats dynamic captions and updates bounds drafts immutably', () => {
+    const customContract = 'GWRSAVFMjXx8HpQFaNJMqBV7MBgMK4br5UESsB4S31Ec'
+    const authHigh = IDENTITY_KEY_VARIANTS[IdentityKeyVariant.AuthHigh]
+    expect(keyVariantCaption(authHigh, false, { contractId: customContract, documentType: 'domain' })).toEqual({ text: 'Not bound', mono: false })
+    expect(keyVariantCaption(authHigh, true, { contractId: '', documentType: '' })).toEqual({ text: 'Not bound', mono: false })
+    expect(keyVariantCaption(authHigh, true, { contractId: 'invalid', documentType: '' })).toEqual({ text: 'Not bound', mono: false })
+    expect(keyVariantCaption(authHigh, true, { contractId: customContract, documentType: 'domain' })).toEqual({
+      text: `${customContract} · domain`,
+      mono: true,
+    })
+    expect(keyVariantCaption(authHigh, true, { contractId: DASHPAY_CONTRACT_ID, documentType: 'profile' })).toEqual({
+      text: 'Bound to DashPay · profile',
+      mono: false,
+    })
+
+    const added = updateKeyBoundsDraft({}, IdentityKeyVariant.Enc, { contractId: customContract })
+    expect(added).toEqual({ [IdentityKeyVariant.Enc]: { contractId: customContract, documentType: '' } })
+    const pruned = updateKeyBoundsDraft(added, IdentityKeyVariant.Enc, { contractId: '' })
+    expect(pruned).toEqual({})
   })
 })
 

@@ -1,4 +1,4 @@
-import type { IdentityKeyDto, IdentityKeyRequestDto } from '@renderer/api/types'
+import type { IdentityKeyBoundsDto, IdentityKeyDto, IdentityKeyRequestDto } from '@renderer/api/types'
 import type { IdentityKeyAction, IdentityKeyPurpose, IdentityKeySecurityLevel, IdentityKeyVariant } from '@renderer/enums/IdentityKeys'
 import type { IdentityApiDto } from '@renderer/hooks/useIdentities'
 
@@ -7,6 +7,7 @@ export interface IdentityKeyVariantDefinition {
   purpose: IdentityKeyPurpose
   securityLevel: IdentityKeySecurityLevel
   dashPayBound: boolean
+  canBind: boolean
   caption: string | null
 }
 
@@ -76,12 +77,40 @@ export interface KeyVariantGroup {
   definitions: IdentityKeyVariantDefinition[]
 }
 
+export interface KeyContractBoundsDraft {
+  contractId: string
+  documentType: string
+}
+
+export type KeyBoundsDraftMap = Partial<Record<IdentityKeyVariant, KeyContractBoundsDraft>>
+
+export interface KeyContractBoundsValidation {
+  bounds: IdentityKeyBoundsDto | null
+  contractIdError: string | null
+  documentTypeError: string | null
+  valid: boolean
+}
+
+export interface KeyVariantCaption {
+  text: string | null
+  mono: boolean
+}
+
+export interface KeyBoundsFieldsProps {
+  variantLabel: string
+  draft: KeyContractBoundsDraft
+  validation: KeyContractBoundsValidation
+  onChange: (patch: Partial<KeyContractBoundsDraft>) => void
+}
+
 export interface KeyVariantListProps {
   existing: IdentityKeyDto[]
   selected: IdentityKeyVariant[]
   recommended: IdentityKeyVariant[]
+  boundsDrafts: KeyBoundsDraftMap
   check: KeySelectionCheck
   onToggle: (variant: IdentityKeyVariant, checked: boolean) => void
+  onChangeBounds: (variant: IdentityKeyVariant, patch: Partial<KeyContractBoundsDraft>) => void
 }
 
 export interface AddKeysConfirmStepProps {

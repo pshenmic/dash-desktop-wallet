@@ -1,16 +1,23 @@
 import type { IdentityKeyDto } from '@renderer/api/types'
 import {
+  EMPTY_KEY_BOUNDS_DRAFT,
   IDENTITY_KEY_LABEL_SEPARATOR,
   IDENTITY_KEY_LEVEL_LABELS,
   IDENTITY_KEY_PURPOSE_LABELS,
   IDENTITY_KEYS_PER_TRANSITION,
+  KEY_BOUNDS_COPY,
   KEY_COUNT_COPY,
   KEY_VARIANT_ORDER,
 } from '@renderer/constants/identityKeys'
 import { IdentityKeyVariant } from '@renderer/enums/IdentityKeys'
-import type { IdentityKeyVariantDefinition } from '@renderer/types/IdentityKeys'
+import type {
+  IdentityKeyVariantDefinition,
+  KeyBoundsDraftMap,
+  KeyContractBoundsDraft,
+  KeyVariantCaption,
+} from '@renderer/types/IdentityKeys'
 import { dashPayMissingKeys } from './dashPayReadiness'
-import { keyLabel, variantOfRequest } from './identityKeyRequests'
+import { keyBoundsLabel, keyLabel, validateKeyContractBounds, variantOfRequest } from './identityKeyRequests'
 
 export function sortedIdentityKeys(keys: IdentityKeyDto[]): IdentityKeyDto[] {
   return [...keys].sort((a, b) => a.keyId - b.keyId)
@@ -18,6 +25,19 @@ export function sortedIdentityKeys(keys: IdentityKeyDto[]): IdentityKeyDto[] {
 
 export function toggleKeyVariant(selected: IdentityKeyVariant[], variant: IdentityKeyVariant, checked: boolean): IdentityKeyVariant[] {
   return KEY_VARIANT_ORDER.filter(entry => (entry === variant ? checked : selected.includes(entry)))
+}
+
+export function updateKeyBoundsDraft(
+  current: KeyBoundsDraftMap,
+  variant: IdentityKeyVariant,
+  patch: Partial<KeyContractBoundsDraft>,
+): KeyBoundsDraftMap {
+  const next = { ...(current[variant] ?? EMPTY_KEY_BOUNDS_DRAFT), ...patch }
+  if (next.contractId === '' && next.documentType === '') {
+    const { [variant]: _, ...rest } = current
+    return rest
+  }
+  return { ...current, [variant]: next }
 }
 
 export function presetKeyVariants(keys: IdentityKeyDto[]): IdentityKeyVariant[] {
@@ -28,6 +48,21 @@ export function presetKeyVariants(keys: IdentityKeyDto[]): IdentityKeyVariant[] 
 export function keyVariantTitle(definition: IdentityKeyVariantDefinition): string {
   return [keyLabel(definition.purpose, IDENTITY_KEY_PURPOSE_LABELS), keyLabel(definition.securityLevel, IDENTITY_KEY_LEVEL_LABELS)]
     .join(IDENTITY_KEY_LABEL_SEPARATOR)
+}
+
+export function keyVariantCaption(
+  definition: IdentityKeyVariantDefinition,
+  checked: boolean,
+  draft?: KeyContractBoundsDraft,
+): KeyVariantCaption {
+  if (!checked || !definition.canBind) return { text: definition.caption, mono: false }
+  const validation = validateKeyContractBounds(draft)
+  if (validation.bounds == null) return { text: definition.caption, mono: false }
+  const label = keyBoundsLabel(validation.bounds)!
+  return {
+    text: label.isDashPay ? `${KEY_BOUNDS_COPY.boundPrefix} ${label.text}` : label.text,
+    mono: !label.isDashPay,
+  }
 }
 
 export function keySelectionLabel(count: number): string {

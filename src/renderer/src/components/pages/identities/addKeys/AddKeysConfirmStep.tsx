@@ -21,7 +21,7 @@ export default function AddKeysConfirmStep({ identity, requests, feeCredits }: A
         <Text size={12} weight={"medium"} color={"brand"} opacity={50}>{ADD_KEYS_COPY.keys}</Text>
         <div className={"flex min-w-0 flex-col items-end gap-1"}>
           {requests.map((request, index) => (
-            <Text key={ids[index]} size={14} weight={"medium"} color={"brand"} className={"text-right"}>
+            <Text key={ids[index]} size={14} weight={"medium"} color={"brand"} className={"min-w-0 wrap-anywhere text-right"}>
               {projectedKeyLabel(ids[index], keyRequestLabel(request))}
             </Text>
           ))}

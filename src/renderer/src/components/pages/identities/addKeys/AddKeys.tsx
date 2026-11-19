@@ -26,13 +26,13 @@ import { TxEndpointKind } from '@renderer/enums/TxEndpointKind'
 import { refreshIdentities, useIdentities } from '@renderer/hooks/useIdentities'
 import { useOperationFee } from '@renderer/hooks/useOperationFee'
 import type { DashPayNavigationState } from '@renderer/types/DashPay'
-import type { AddKeysProps, AddKeysWizardProps, KeysAddedResult } from '@renderer/types/IdentityKeys'
+import type { AddKeysProps, AddKeysWizardProps, KeyBoundsDraftMap, KeysAddedResult } from '@renderer/types/IdentityKeys'
 import { feeShortfall } from '@renderer/utils/dashPayShortfall'
 import { platformTransactionUrl } from '@renderer/utils/explorer'
 import { identityLabel } from '@renderer/utils/identifierFormat'
 import { identityAddKeysHref, identityHref } from '@renderer/utils/identities'
-import { keyRequestLabel, validateKeySelection, variantRequest } from '@renderer/utils/identityKeyRequests'
-import { identityKeysCountLabel, keysAddedLabel, keySelectionLabel, presetKeyVariants, toggleKeyVariant } from '@renderer/utils/identityKeySetup'
+import { buildKeyRequests, keyRequestLabel, validateKeySelection } from '@renderer/utils/identityKeyRequests'
+import { identityKeysCountLabel, keysAddedLabel, keySelectionLabel, presetKeyVariants, toggleKeyVariant, updateKeyBoundsDraft } from '@renderer/utils/identityKeySetup'
 import AddKeysConfirmStep from './AddKeysConfirmStep'
 import KeyVariantList from './KeyVariantList'
 
@@ -50,8 +50,9 @@ function AddKeysWizard({
   const network = status?.network ?? null
   const recommended = useMemo(() => presetKeyVariants(identity.keys), [identity.keys])
   const [selected, setSelected] = useState<IdentityKeyVariant[]>([])
+  const [boundsDrafts, setBoundsDrafts] = useState<KeyBoundsDraftMap>({})
   const [submitOpen, setSubmitOpen] = useState(false)
-  const requests = useMemo(() => selected.map(variantRequest), [selected])
+  const { requests, valid: boundsValid } = useMemo(() => buildKeyRequests(selected, boundsDrafts), [selected, boundsDrafts])
   const check = validateKeySelection(selected)
   const balance = identity.balance.amount
 
@@ -60,11 +61,11 @@ function AddKeysWizard({
     recipient: '',
     identityId: identity.identifier,
     keys: requests,
-    destinationValid: requests.length > 0,
+    destinationValid: requests.length > 0 && boundsValid,
   })
-  const feeCredits = fee.loading || fee.err != null ? null : fee.feeCredits
-  const shortfall = check.empty ? null : feeShortfall(fee.err != null, balance, feeCredits)
-  const ready = !check.empty && !check.overLimit && feeCredits != null && shortfall == null
+  const feeCredits = !boundsValid || fee.loading || fee.err != null ? null : fee.feeCredits
+  const shortfall = check.empty || !boundsValid ? null : feeShortfall(fee.err != null, balance, feeCredits)
+  const ready = !check.empty && !check.overLimit && boundsValid && feeCredits != null && shortfall == null
   const name = identityLabel(identity)
 
   const run = async (password: string): Promise<KeysAddedResult> => {
@@ -97,8 +98,10 @@ function AddKeysWizard({
         existing={identity.keys}
         selected={selected}
         recommended={recommended}
+        boundsDrafts={boundsDrafts}
         check={check}
         onToggle={(variant, checked) => setSelected(current => toggleKeyVariant(current, variant, checked))}
+        onChangeBounds={(variant, patch) => setBoundsDrafts(current => updateKeyBoundsDraft(current, variant, patch))}
       />
       {!check.empty && (
         <div className={`flex flex-col gap-2 ${SURFACE_SECTION}`}>
