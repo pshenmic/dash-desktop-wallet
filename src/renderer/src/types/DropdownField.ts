@@ -5,6 +5,7 @@ export type DropdownTextSize = 12 | 14
 export interface DropdownFieldOption {
   value: string
   label: string
+  badge?: string
   description?: string
   metadata?: string[]
 }
@@ -24,6 +25,8 @@ export interface DropdownFieldProps {
   menuHeading?: string
   highlightValue?: boolean
   valueAvatar?: boolean
+  valueBadge?: string
+  hasExtraMatches?: (query: string) => boolean
   toggleIcon?: (open: boolean) => ReactNode
   onOpenChange?: (open: boolean) => void
   children?: ReactNode

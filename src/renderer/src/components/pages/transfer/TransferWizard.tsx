@@ -15,8 +15,8 @@ export default function TransferWizard({steps, onSubmit, submitLabel = TRANSFER_
   }
 
   return (
-    <div className={"flex-1 min-h-0 flex"}>
-      <div className={"w-full min-w-0 flex flex-col"}>
+    <div className={"flex-1 min-h-0 flex justify-center"}>
+      <div className={"w-full max-w-170 min-w-0 flex flex-col"}>
         <ol className={"flex items-center"}>
           {steps.map((s, i) => {
             const done = i < current
@@ -37,11 +37,11 @@ export default function TransferWizard({steps, onSubmit, submitLabel = TRANSFER_
           })}
         </ol>
 
-        <div className={"mt-14 flex flex-col gap-4"}>
+        <div className={"mt-8 flex flex-col gap-4"}>
           {step.content}
         </div>
 
-        <div className={"mt-auto pt-8 flex gap-2"}>
+        <div className={"mt-8 flex gap-2"}>
           {current > 0 && (
             <Button
               type={"button"}
