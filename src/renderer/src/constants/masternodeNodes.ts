@@ -29,7 +29,7 @@ export const NODE_SEGMENT_EMPTY: Record<NodeSegment, string> = {
   [NodeSegment.Shared]: 'No shared masternodes in this wallet',
   [NodeSegment.VotingKey]: 'No nodes with a voting key in this wallet',
   [NodeSegment.NoVotingKey]: 'All discovered nodes have a voting key in this wallet',
-  [NodeSegment.Issues]: 'No issues',
+  [NodeSegment.Banned]: 'No banned masternodes',
 }
 
 export const NODE_ROW_COPY = {

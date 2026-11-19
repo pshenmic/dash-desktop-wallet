@@ -182,7 +182,7 @@ export function filterNodes(nodes: MasternodeDto[], query: string, segment: Node
       case NodeSegment.Shared: return isSharedNode(node)
       case NodeSegment.VotingKey: return hasVotingKey(node)
       case NodeSegment.NoVotingKey: return !hasVotingKey(node)
-      case NodeSegment.Issues: return node.status !== ENABLED_MASTERNODE_STATUS && node.status !== REGISTERING_MASTERNODE_STATUS
+      case NodeSegment.Banned: return node.status !== ENABLED_MASTERNODE_STATUS && node.status !== REGISTERING_MASTERNODE_STATUS
       default: return true
     }
   }).sort((a, b) => {

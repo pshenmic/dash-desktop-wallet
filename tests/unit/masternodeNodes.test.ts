@@ -114,7 +114,7 @@ describe('Masternode display', () => {
   })
 
   it('searches the backend service address and ProTxHash', () => {
-    expect(filterNodes(nodes, '192.0.2.1', NodeSegment.Issues)).toEqual([otherNode])
+    expect(filterNodes(nodes, '192.0.2.1', NodeSegment.Banned)).toEqual([otherNode])
     expect(filterNodes(nodes, ' FIRST ', NodeSegment.All)).toEqual([regularNode])
   })
 
@@ -184,14 +184,14 @@ describe('Shared masternode detection and filtering', () => {
       { value: NodeSegment.Shared, label: 'Shared · 2' },
       { value: NodeSegment.VotingKey, label: 'Voting key in wallet · 2' },
       { value: NodeSegment.NoVotingKey, label: 'No voting key in wallet · 2' },
-      { value: NodeSegment.Issues, label: 'Issues · 1' },
+      { value: NodeSegment.Banned, label: 'Banned · 1' },
     ])
     expect(nodeSegmentOptions(list, 'shared-rpc')).toEqual([
       { value: NodeSegment.All, label: 'All · 1' },
       { value: NodeSegment.Shared, label: 'Shared · 1' },
       { value: NodeSegment.VotingKey, label: 'Voting key in wallet · 0' },
       { value: NodeSegment.NoVotingKey, label: 'No voting key in wallet · 1' },
-      { value: NodeSegment.Issues, label: 'Issues · 0' },
+      { value: NodeSegment.Banned, label: 'Banned · 0' },
     ])
   })
 
@@ -847,7 +847,7 @@ describe('Masternode action builders', () => {
       pendingNode.proTxHash,
       regularNode.proTxHash,
     ])
-    expect(filterNodes([regularNode, pendingNode], '', NodeSegment.Issues)).toEqual([])
+    expect(filterNodes([regularNode, pendingNode], '', NodeSegment.Banned)).toEqual([])
     expect(classifyVotingMasternodes([pendingNode]).ineligible[0]?.reason).toBe('Awaiting block confirmation')
   })
 })

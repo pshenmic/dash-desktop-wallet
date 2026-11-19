@@ -75,5 +75,5 @@ export const NODE_SEGMENT_LABELS: Record<NodeSegment, string> = {
   [NodeSegment.Shared]: 'Shared',
   [NodeSegment.VotingKey]: 'Voting key in wallet',
   [NodeSegment.NoVotingKey]: 'No voting key in wallet',
-  [NodeSegment.Issues]: 'Issues',
+  [NodeSegment.Banned]: 'Banned',
 }

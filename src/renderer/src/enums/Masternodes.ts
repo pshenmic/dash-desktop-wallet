@@ -9,7 +9,7 @@ export enum NodeSegment {
   Shared = 'shared',
   VotingKey = 'voting-key',
   NoVotingKey = 'no-voting-key',
-  Issues = 'issues',
+  Banned = 'banned',
 }
 
 export enum MasternodeDetailModal {
