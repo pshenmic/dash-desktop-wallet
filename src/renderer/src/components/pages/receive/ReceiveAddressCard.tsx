@@ -1,15 +1,12 @@
 import { useMemo, useState } from 'react'
 import { API } from '@renderer/api'
-import { LockIcon, Tooltip } from '@renderer/components/dash-ui-kit-extended'
+import { InfoTooltip, Text } from '@renderer/components/dash-ui-kit-extended'
+import Checkbox from '@renderer/components/ui/Checkbox'
 import NoResults from '@renderer/components/ui/NoResults'
 import { toast } from '@renderer/components/ui/Toast'
-import {
-  ADDRESS_LOCK_TOGGLE_FAILED,
-  ADDRESS_ROW_LOCK_LABEL,
-} from '@renderer/constants/addressRow'
+import { ADDRESS_LOCK_TOGGLE_FAILED } from '@renderer/constants/addressRow'
 import { RECEIVE_EMPTY_TEXTS } from '@renderer/constants/receiveCard'
-import { RECEIVE_HISTORY_COPY } from '@renderer/constants/receivePage'
-import { CHIP_ACTION } from '@renderer/constants/surfaces'
+import { RECEIVE_FORM_COPY, RECEIVE_HISTORY_COPY } from '@renderer/constants/receivePage'
 import { refreshAddresses } from '@renderer/hooks/useAdresses'
 import { invalidateAsyncCache } from '@renderer/hooks/useAsyncWithCache'
 import {
@@ -44,6 +41,7 @@ export default function ReceiveAddressCard({
   const [formError, setFormError] = useState<string | null>(null)
   const [derivedAddress, setDerivedAddress] = useState<string | null>(null)
   const [lockingAddress, setLockingAddress] = useState<string | null>(null)
+  const [lockIncoming, setLockIncoming] = useState(false)
   const [selectedRequest, setSelectedRequest] = useState<ReceiveRequestDto | null>(null)
 
   const { requests, loading, err } = useReceiveRequests(walletId, 'core')
@@ -61,6 +59,7 @@ export default function ReceiveAddressCard({
   const handleClear = (): void => {
     setLabel('')
     setAmount('')
+    setLockIncoming(false)
     setFormError(null)
   }
 
@@ -102,9 +101,16 @@ export default function ReceiveAddressCard({
         label,
         receiveAmountDuffs(amount),
       )
+      if (lockIncoming) {
+        await API.setAddressLocked(walletId, currentAddress, true)
+      }
       const nextClaimed = new Set(claimed)
       nextClaimed.add(currentAddress)
-      const nextUnused = nextReceiveCoreAddress(addresses, nextClaimed, defaultAddress)
+      const nextAddresses = lockIncoming
+        ? addresses.map(entry => (entry.address === currentAddress ? { ...entry, isLocked: true } : entry))
+        : addresses
+      const nextDefault = lockIncoming && currentAddress === defaultAddress ? null : defaultAddress
+      const nextUnused = nextReceiveCoreAddress(nextAddresses, nextClaimed, nextDefault)
       if (!nextUnused) {
         const fresh = await API.addWalletAddress(walletId, false)
         setDerivedAddress(fresh)
@@ -113,6 +119,7 @@ export default function ReceiveAddressCard({
       await refreshAddresses(walletId)
       setLabel('')
       setAmount('')
+      setLockIncoming(false)
       toast.success(RECEIVE_HISTORY_COPY.requestCreated)
     } catch (error) {
       const message = error instanceof Error ? error.message : RECEIVE_HISTORY_COPY.requestFailed
@@ -146,19 +153,30 @@ export default function ReceiveAddressCard({
         busy={busy}
         error={formError}
         submitDisabled={!walletId}
-        headerExtra={walletId != null ? (
-          <Tooltip label={ADDRESS_ROW_LOCK_LABEL}>
-            <button
-              type={'button'}
-              disabled={busy || lockingAddress === currentAddress}
-              aria-label={`${ADDRESS_ROW_LOCK_LABEL} ${currentAddress}`}
-              onClick={() => { void handleToggleAddressLock(currentAddress, true) }}
-              className={`ml-auto inline-flex items-center gap-1 ${CHIP_ACTION}`}
-            >
-              <LockIcon size={10} color={'currentColor'} />
-              {ADDRESS_ROW_LOCK_LABEL}
-            </button>
-          </Tooltip>
+        hasExtraValues={lockIncoming}
+        extraFields={walletId != null ? (
+          <div className={'flex items-center gap-1.5'}>
+            <Checkbox
+              appearance={'subtle'}
+              checked={lockIncoming}
+              disabled={busy}
+              onChange={(checked) => {
+                setFormError(null)
+                setLockIncoming(checked)
+              }}
+              label={(
+                <Text size={12} weight={'medium'} color={'brand'}>
+                  {RECEIVE_FORM_COPY.lockIncomingLabel}
+                </Text>
+              )}
+            />
+            <InfoTooltip
+              content={RECEIVE_FORM_COPY.lockIncomingTooltip}
+              ariaLabel={RECEIVE_FORM_COPY.lockIncomingTooltipAria}
+              side={'right'}
+              className={'size-4! [&_svg]:size-3.5'}
+            />
+          </div>
         ) : undefined}
         onLabelChange={(val) => {
           setFormError(null)

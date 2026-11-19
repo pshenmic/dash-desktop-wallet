@@ -22,6 +22,7 @@ export interface ReceiveRequestFormProps {
   error?: string | null
   headerExtra?: ReactNode
   extraFields?: ReactNode
+  hasExtraValues?: boolean
   note?: ReactNode
   submitDisabled?: boolean
   submitLabel?: string
