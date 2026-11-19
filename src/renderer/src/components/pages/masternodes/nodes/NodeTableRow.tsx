@@ -1,6 +1,7 @@
 import { HighlightedIdentifier, Text, Tooltip } from '@renderer/components/dash-ui-kit-extended'
 import { ChevronIcon, CopyIcon2, ExternalLinkIcon } from '@renderer/components/dash-ui-kit-extended/icons'
 import ContextMenu from '@renderer/components/ui/ContextMenu'
+import CopyButton from '@renderer/components/ui/CopyButton'
 import CustomBadge from '@renderer/components/ui/CustomBadge'
 import StatusPill from '@renderer/components/ui/StatusPill'
 import { NODE_DETAIL_COPY, NODE_ROW_COPY } from '@renderer/constants/masternodeNodes'
@@ -33,23 +34,36 @@ export default function NodeTableRow({ node, onOpen }: NodeTableRowProps): React
         },
       ]}
     >
-      <button type={'button'} onClick={() => onOpen(node.proTxHash)} className={`${SECTION_TABLE_ROW} ${MASTERNODE_TABLE_GRID}`}>
-        <div className={'flex min-w-0 flex-col gap-1'}>
+      <div className={`relative ${SECTION_TABLE_ROW} ${MASTERNODE_TABLE_GRID}`}>
+        <button
+          type={'button'}
+          onClick={() => onOpen(node.proTxHash)}
+          aria-label={`${NODE_ROW_COPY.open} ${node.proTxHash}`}
+          className={'absolute inset-0 cursor-pointer outline-none focus-visible:bg-dash-primary-dark-blue/4 dark:focus-visible:bg-white/5'}
+        />
+        <div className={'pointer-events-none flex min-w-0 flex-col gap-1'}>
           <div className={'flex min-w-0 items-start gap-2'}>
             <Tooltip label={chainBadge.label}>
-              <span className={'inline-flex shrink-0 mt-0.5'} title={''}>
+              <span
+                className={'pointer-events-auto relative z-10 inline-flex shrink-0 mt-0.5 cursor-pointer'}
+                title={''}
+                onClick={() => onOpen(node.proTxHash)}
+              >
                 <CustomBadge text={chainBadge.text} size={'s'} className={`w-11 shrink-0 ${chainBadge.className}`} />
               </span>
             </Tooltip>
             <HighlightedIdentifier className={'min-w-0 max-w-[32ch] break-all font-mono text-xs! leading-[1.15rem]! font-medium!'}>
               {node.proTxHash}
             </HighlightedIdentifier>
+            <span className={'pointer-events-auto relative z-10 mt-0.5 shrink-0'}>
+              <CopyButton text={node.proTxHash} label={NODE_ROW_COPY.copy} />
+            </span>
           </div>
           <Text size={12} weight={'medium'} color={'brand'} opacity={50} className={'truncate tabular-nums'}>
             {formatServiceAddress(node.serviceAddress)}
           </Text>
         </div>
-        <div className={'flex min-w-0 items-center'}>
+        <div className={'pointer-events-none flex min-w-0 items-center'}>
           <CustomBadge
             variant={shared ? 'accent' : 'muted'}
             size={'xs'}
@@ -57,15 +71,15 @@ export default function NodeTableRow({ node, onOpen }: NodeTableRowProps): React
             className={'shrink-0'}
           />
         </div>
-        <div className={'flex min-w-0'}>
+        <div className={'pointer-events-none flex min-w-0'}>
           <StatusPill tone={status.tone}>{status.label}</StatusPill>
         </div>
-        <div className={'flex min-w-0 flex-col gap-0.5'}>
+        <div className={'pointer-events-none flex min-w-0 flex-col gap-0.5'}>
           <Text size={14} weight={'medium'} color={'brand'} className={'truncate'}>{access.primary}</Text>
           <Text size={12} weight={'medium'} color={'brand'} opacity={50} className={'truncate'}>{access.secondary}</Text>
         </div>
-        <ChevronIcon size={12} color={'currentColor'} className={'-rotate-90 justify-self-end dash-text-default opacity-50'} />
-      </button>
+        <ChevronIcon size={12} color={'currentColor'} className={'pointer-events-none -rotate-90 justify-self-end dash-text-default opacity-50'} />
+      </div>
     </ContextMenu>
   )
 }
