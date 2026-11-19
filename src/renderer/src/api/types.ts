@@ -256,6 +256,21 @@ export interface MasternodeDto {
   registeredHeight: number | null
 }
 
+// getMasternodeIdentities — the owner and voter identities Platform created
+// from an evonode's registration. They are not seed-derived, so they carry no
+// identity index or derivation path. An empty list means no registration has
+// been indexed yet.
+export type MasternodeIdentityRole = 'owner' | 'voter'
+
+export interface MasternodeIdentityInfoDto {
+  proTxHash: string
+  role: MasternodeIdentityRole
+  identifier: string
+  usernames: string[]
+  keys: IdentityKeyDto[]
+  balance: { amount: bigint; usdAmount: string }
+}
+
 // The platform fields are an Evo's alone, null on a Regular node.
 export interface MasternodePlatformFieldsDto {
   platformNodeId: string | null

@@ -27,6 +27,7 @@ import * as migration0022 from '../../migrations/0022_dashpay_xpub'
 import * as migration0023 from '../../migrations/0023_locked_utxos'
 import * as migration0024 from '../../migrations/0024_payment_requests'
 import * as migration0025 from '../../migrations/0025_masternode_keys'
+import * as migration0026 from '../../migrations/0026_masternode_identities'
 
 const migrations = [
   { name: '0000_init.ts', migration: migration0000 },
@@ -55,6 +56,7 @@ const migrations = [
   { name: '0023_locked_utxos.ts', migration: migration0023 },
   { name: '0024_payment_requests.ts', migration: migration0024 },
   { name: '0025_masternode_keys.ts', migration: migration0025 },
+  { name: '0026_masternode_identities.ts', migration: migration0026 },
 ]
 
 const inlineMigrationSource = {

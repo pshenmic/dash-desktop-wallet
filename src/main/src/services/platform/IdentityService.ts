@@ -4,10 +4,12 @@ import {HD_VERSIONS} from '../../constants/addresses'
 import {MAX_KEYS_PER_TRANSITION, MAX_KEYS_TO_DISABLE} from '../../constants/credits'
 import {DashPayCache} from '../../database/DashPayCache'
 import {IdentityDAO} from '../../database/IdentityDAO'
+import {MasternodeIdentityDAO} from '../../database/MasternodeIdentityDAO'
 import {WalletDAO} from '../../database/WalletDAO'
 import {Username, UsernameSearchResult} from '../../types/Username'
 import {DashPayContact} from '../../types/DashPay'
 import {Identity, IdentityInfo} from '../../types/Identity'
+import {MasternodeIdentityInfo} from '../../types/MasternodeIdentity'
 import {IdentityKeysUpdate, IdentityPrivateKey} from '../../types/IdentityKeys'
 import {Network} from '../../types/Network'
 import {dashPayContacts} from '../../utils/dashPayContacts'
@@ -24,13 +26,15 @@ const log = new Logger('identities')
 export class IdentityService {
   private walletDAO: WalletDAO
   private identityDAO: IdentityDAO
+  private masternodeIdentityDAO: MasternodeIdentityDAO
   private dashPayCache: DashPayCache
   private platform: PlatformWorkerService
   private dashPayRefreshes = new Map<string, Promise<void>>()
 
-  constructor(walletDAO: WalletDAO, identityDAO: IdentityDAO, dashPayCache: DashPayCache, platform: PlatformWorkerService) {
+  constructor(walletDAO: WalletDAO, identityDAO: IdentityDAO, masternodeIdentityDAO: MasternodeIdentityDAO, dashPayCache: DashPayCache, platform: PlatformWorkerService) {
     this.walletDAO = walletDAO
     this.identityDAO = identityDAO
+    this.masternodeIdentityDAO = masternodeIdentityDAO
     this.dashPayCache = dashPayCache
     this.platform = platform
   }
@@ -61,6 +65,38 @@ export class IdentityService {
         },
         derivationPath: entry.derivationPath,
         assetLockTxid: entry.assetLockTxid ?? null
+      }]
+    })
+  }
+
+  // The identities Platform created from an evonode's registration. They are
+  // not seed-derived, so they stay out of getIdentities and carry no index or
+  // derivation path; one the network does not serve is still pending.
+  async getMasternodeIdentities(walletId: string): Promise<MasternodeIdentityInfo[]> {
+    const wallet = await requireWallet(this.walletDAO, walletId)
+    const stored = await this.masternodeIdentityDAO.getByWalletId(walletId)
+    if (stored.length === 0) return []
+
+    const {infos} = await this.platform.request('identityInfos', wallet.network, {
+      identifiers: stored.map(entry => entry.identifier),
+      skipDPNS: false,
+    })
+    const byIdentifier = new Map(infos.map(info => [info.identifier, info]))
+
+    return stored.flatMap(entry => {
+      const info = byIdentifier.get(entry.identifier)
+      if (info == null) return []
+      // TODO: Implement read usd amount
+      return [{
+        proTxHash: entry.proTxHash,
+        role: entry.role,
+        identifier: info.identifier,
+        usernames: info.usernames,
+        keys: info.keys,
+        balance: {
+          amount: info.balance,
+          usdAmount: '0.0'
+        },
       }]
     })
   }

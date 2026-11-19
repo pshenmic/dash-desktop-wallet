@@ -10,6 +10,7 @@ import {bytesToHex} from '@noble/hashes/utils.js'
 import {Base58Check} from 'dash-core-sdk/src/base58check.js'
 import {ADDRESS_PREFIX} from '../../src/main/src/constants/addresses'
 import {MasternodeDAO} from '../../src/main/src/database/MasternodeDAO'
+import {MasternodeIdentityDAO} from '../../src/main/src/database/MasternodeIdentityDAO'
 import {Preferences} from '../../src/main/src/preferences'
 import {WalletProviderFactory} from '../../src/main/src/providers/WalletProviderFactory'
 import {CoreTransactionService} from '../../src/main/src/services/core/CoreTransactionService'
@@ -26,6 +27,7 @@ import {
 } from '../../src/main/src/types/Masternode'
 import {UTXO} from '../../src/main/src/types/UTXO'
 import {masternodeKeyDeriver} from '../../src/main/src/utils/masternodeKeys'
+import {masternodeIdentityIds} from '../../src/main/src/utils/masternodeIdentities'
 import {nodeKeyValues} from '../../src/main/src/utils/masternodes'
 import {harness, Harness, PASSWORD, VALID_SEEDPHRASE} from './harness'
 
@@ -79,6 +81,7 @@ describe('MasternodeService provider transactions', () => {
   let gone: Set<string>
   let v24Active: boolean
   let masternodes: MasternodeService
+  let masternodeIdentities: MasternodeIdentityDAO
 
   const key = (chain: MasternodeKeyChain, index: number): string =>
     masternodeKeyDeriver(keys, 'testnet', chain).derive(index).address
@@ -133,9 +136,11 @@ describe('MasternodeService provider transactions', () => {
       },
     } as unknown as WalletSyncService
     masternodes = new MasternodeService(
-      wired.walletDAO, wired.masternodeKeyDAO, new MasternodeDAO(wired.knex), {forWallet: () => provider} as unknown as WalletProviderFactory,
+      wired.walletDAO, wired.masternodeKeyDAO, new MasternodeDAO(wired.knex), new MasternodeIdentityDAO(wired.knex),
+      {forWallet: () => provider} as unknown as WalletProviderFactory,
       wired.addressDAO, new CoreTransactionService(), walletSync, Preferences.default(),
     )
+    masternodeIdentities = new MasternodeIdentityDAO(wired.knex)
   })
 
   it('references the collateral, signs with its key and pays the fee from other coins', async () => {
@@ -194,6 +199,22 @@ describe('MasternodeService provider transactions', () => {
     expect(payload.type).toBe(1)
     expect(payload.platformNodeID).toBe(EVO_FIELDS.platformNodeId)
     expect([payload.platformP2PPort, payload.platformHTTPPort]).toEqual([36656, 1443])
+  })
+
+  it('stores the owner and voter identities Platform creates for an Evo', async () => {
+    utxos[0] = utxo(owned[0], 4_000n * DASH, 'cc'.repeat(32))
+    const {tx} = await register({type: 'Evo', ...EVO_FIELDS})
+
+    expect(await masternodeIdentities.getByWalletId(walletId)).toEqual(
+      masternodeIdentityIds(tx.hash(), key('voting', 0)).map(({role, identifier}) => ({
+        walletId, proTxHash: tx.hash(), role, identifier,
+      })),
+    )
+  })
+
+  it('stores no identities for a Regular registration', async () => {
+    await register()
+    expect(await masternodeIdentities.getByWalletId(walletId)).toEqual([])
   })
 
   // Core reads a collateral from the UTXO set only, so peers drop the tx silently.

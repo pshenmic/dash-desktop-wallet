@@ -4,6 +4,7 @@ import {AddressDAO} from '../../database/AddressDAO'
 import {WalletDAO} from '../../database/WalletDAO'
 import {MasternodeDAO} from '../../database/MasternodeDAO'
 import {MasternodeKeyDAO} from '../../database/MasternodeKeyDAO'
+import {MasternodeIdentityDAO} from '../../database/MasternodeIdentityDAO'
 import {WalletProvider} from '../../providers/WalletProvider'
 import {WalletProviderFactory} from '../../providers/WalletProviderFactory'
 import {MASTERNODE_KEY_CHAINS, MASTERNODE_KEY_WINDOW, MASTERNODE_WALKED_CHAINS} from '../../constants/addresses'
@@ -32,6 +33,7 @@ import {ProviderTxSigner, TransferInput} from '../../types/CoreTransaction'
 import {memoryWindowStore, runAddressWindow} from '../../utils/addressWindow'
 import {coreFeeDuffsFor} from '../../utils/coreFeeRate'
 import {masternodeKeyDeriver, masternodePublicKey, requireBasicOperatorKey} from '../../utils/masternodeKeys'
+import {masternodeIdentityIds} from '../../utils/masternodeIdentities'
 import {
   carriesKey,
   collateralsToStore,
@@ -73,6 +75,7 @@ export class MasternodeService {
   private walletDAO: WalletDAO
   private masternodeKeyDAO: MasternodeKeyDAO
   private masternodeDAO: MasternodeDAO
+  private masternodeIdentityDAO: MasternodeIdentityDAO
   private providers: WalletProviderFactory
   private addressDAO: AddressDAO
   private coreTransactionService: CoreTransactionService
@@ -87,6 +90,7 @@ export class MasternodeService {
     walletDAO: WalletDAO,
     masternodeKeyDAO: MasternodeKeyDAO,
     masternodeDAO: MasternodeDAO,
+    masternodeIdentityDAO: MasternodeIdentityDAO,
     providers: WalletProviderFactory,
     addressDAO: AddressDAO,
     coreTransactionService: CoreTransactionService,
@@ -96,6 +100,7 @@ export class MasternodeService {
     this.walletDAO = walletDAO
     this.masternodeKeyDAO = masternodeKeyDAO
     this.masternodeDAO = masternodeDAO
+    this.masternodeIdentityDAO = masternodeIdentityDAO
     this.providers = providers
     this.addressDAO = addressDAO
     this.coreTransactionService = coreTransactionService
@@ -159,6 +164,11 @@ export class MasternodeService {
       return {tx, inputTotal: plan.inputTotal}
     })
     const {txid, fee, peersAcked} = await this.broadcastProviderTx(tx, inputTotal)
+    if (plan.payload.type === MASTERNODE_TYPE_CODE.Evo) {
+      await this.rememberMasternodeIdentities(walletId, [{
+        proTxHash: txid, type: 'Evo', votingAddress: plan.payload.getVotingAddress(context.network),
+      }]).catch(err => log.warn(`wallet ${walletId}: node identities not stored:`, err))
+    }
     return {proTxHash: txid, fee, peersAcked}
   }
 
@@ -595,7 +605,20 @@ export class MasternodeService {
     const followedNow = await provider.watchMasternodes(owned, owned.filter(({proTxHash}) => !followed.has(proTxHash)))
     await this.masternodeDAO.replaceCollaterals(walletId, collateralsToStore(owned, stored, followedNow))
     this.listed.set(walletId, owned)
+    await this.rememberMasternodeIdentities(walletId, owned).catch(err =>
+      log.warn(`wallet ${walletId}: node identities not stored:`, err))
     log.debug(`wallet ${walletId}: ${owned.length} masternode(s)`)
+  }
+
+  // Platform creates the owner identity at the proTxHash and the voter one from
+  // it and the voting key. Only an evonode's are tracked.
+  private async rememberMasternodeIdentities(
+    walletId: string,
+    nodes: Array<Pick<Masternode, 'proTxHash' | 'type' | 'votingAddress'>>,
+  ): Promise<void> {
+    const rows = nodes.filter(({type}) => type === 'Evo').flatMap(({proTxHash, votingAddress}) =>
+      masternodeIdentityIds(proTxHash, votingAddress).map(({role, identifier}) => ({proTxHash, role, identifier})))
+    await this.masternodeIdentityDAO.save(walletId, rows)
   }
 
   // A list without PoSe scores (p2p) leaves an evonode to report its own over

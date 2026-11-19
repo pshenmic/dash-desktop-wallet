@@ -92,6 +92,27 @@ interface ImportedMasternodeKeyDTO {
   publicKey: string
 }
 
+// Mirrors MasternodeIdentityInfo and MasternodeIdentityRole in
+// src/main/src/types/MasternodeIdentity. Empty for a registration Platform has
+// not indexed yet.
+interface MasternodeIdentityInfoDTO {
+  proTxHash: string
+  role: 'owner' | 'voter'
+  identifier: string
+  usernames: string[]
+  keys: Array<{
+    keyId: number
+    purpose: string
+    securityLevel: string
+    keyType: string
+    data: string
+    readOnly: boolean
+    disabledAt: number | null
+    contractBounds: { contractId: string; documentType: string | null } | null
+  }>
+  balance: { amount: bigint; usdAmount: string }
+}
+
 interface MasternodeDTO {
   proTxHash: string
   type: string
@@ -324,6 +345,7 @@ declare global {
       getBalance: (address: string | string[], network: Network) => Promise<unknown>
       getIdentities: (walletId: string) => Promise<unknown>
       getMasternodes: (walletId: string) => Promise<MasternodeDTO[] | null>
+      getMasternodeIdentities: (walletId: string) => Promise<MasternodeIdentityInfoDTO[]>
       getMasternodeCollaterals: (walletId: string) => Promise<MasternodeCollateralDTO[]>
       getImportedMasternodeKeys: (walletId: string) => Promise<ImportedMasternodeKeyDTO[]>
       importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => Promise<MasternodeDTO[] | null>
