@@ -19,6 +19,9 @@ export default function AddressCard({
   balance,
   txCount,
   isUsed,
+  isLocked,
+  lockBusy = false,
+  onToggleLock,
   onExportKey,
 }: AddressCardProps): React.JSX.Element {
   const [isQrOpen, setIsQrOpen] = useState(false)
@@ -31,6 +34,9 @@ export default function AddressCard({
       <AddressRow
         address={address}
         label={label}
+        isLocked={isLocked}
+        lockBusy={lockBusy}
+        onToggleLock={onToggleLock}
         meta={
           <div className={"flex items-center gap-[.3125rem]"}>
             <Text size={10} weight={"medium"} color={"brand"} opacity={50}>

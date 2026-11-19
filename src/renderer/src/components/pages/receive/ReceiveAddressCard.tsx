@@ -1,9 +1,15 @@
 import { useMemo, useState } from 'react'
 import { API } from '@renderer/api'
+import { LockIcon, Tooltip } from '@renderer/components/dash-ui-kit-extended'
 import NoResults from '@renderer/components/ui/NoResults'
 import { toast } from '@renderer/components/ui/Toast'
+import {
+  ADDRESS_LOCK_TOGGLE_FAILED,
+  ADDRESS_ROW_LOCK_LABEL,
+} from '@renderer/constants/addressRow'
 import { RECEIVE_EMPTY_TEXTS } from '@renderer/constants/receiveCard'
 import { RECEIVE_HISTORY_COPY } from '@renderer/constants/receivePage'
+import { CHIP_ACTION } from '@renderer/constants/surfaces'
 import { refreshAddresses } from '@renderer/hooks/useAdresses'
 import { invalidateAsyncCache } from '@renderer/hooks/useAsyncWithCache'
 import {
@@ -14,9 +20,13 @@ import {
 } from '@renderer/hooks/useReceiveRequests'
 import type { ReceiveAddressCardProps, ReceiveRequestDto } from '@renderer/types/ReceiveRequest'
 import {
+  lockedAddressSet,
+  resolveActiveReceiveCoreAddress,
+  toggleWalletAddressLock,
+} from '@renderer/utils/addressLock'
+import {
   claimedReceiveAddresses,
   nextReceiveCoreAddress,
-  receiveCoreAddresses,
 } from '@renderer/utils/receiveDefaults'
 import { receiveAmountDuffs } from '@renderer/utils/receiveInvoice'
 import ReceiveRequestForm from './ReceiveRequestForm'
@@ -33,19 +43,16 @@ export default function ReceiveAddressCard({
   const [busy, setBusy] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [derivedAddress, setDerivedAddress] = useState<string | null>(null)
+  const [lockingAddress, setLockingAddress] = useState<string | null>(null)
   const [selectedRequest, setSelectedRequest] = useState<ReceiveRequestDto | null>(null)
 
   const { requests, loading, err } = useReceiveRequests(walletId, 'core')
   const claimed = useMemo(() => claimedReceiveAddresses(requests), [requests])
-  const current = useMemo(
-    () => nextReceiveCoreAddress(addresses, claimed, defaultAddress),
-    [addresses, claimed, defaultAddress],
+  const lockedAddresses = useMemo(() => lockedAddressSet(addresses), [addresses])
+  const currentAddress = useMemo(
+    () => resolveActiveReceiveCoreAddress({ addresses, claimed, defaultAddress, derivedAddress }),
+    [addresses, claimed, defaultAddress, derivedAddress],
   )
-  const currentAddress = current?.address
-    ?? (derivedAddress && !claimed.has(derivedAddress) ? derivedAddress : null)
-    ?? (defaultAddress && !claimed.has(defaultAddress) ? defaultAddress : null)
-    ?? receiveCoreAddresses(addresses)[0]?.address
-    ?? defaultAddress
 
   if (!currentAddress) {
     return <NoResults noResults={RECEIVE_EMPTY_TEXTS.noCoreAddresses} />
@@ -55,6 +62,33 @@ export default function ReceiveAddressCard({
     setLabel('')
     setAmount('')
     setFormError(null)
+  }
+
+  const handleToggleAddressLock = async (address: string, nextLocked: boolean): Promise<void> => {
+    if (!walletId || lockingAddress != null) return
+    setLockingAddress(address)
+    try {
+      await toggleWalletAddressLock(walletId, address, nextLocked)
+      if (nextLocked) {
+        const afterLock = addresses.map(entry => (entry.address === address ? { ...entry, isLocked: true } : entry))
+        const nextAvailable = resolveActiveReceiveCoreAddress({
+          addresses: afterLock,
+          claimed,
+          defaultAddress: address === defaultAddress ? null : defaultAddress,
+          derivedAddress: address === derivedAddress ? null : derivedAddress,
+        })
+        if (nextAvailable == null) {
+          const fresh = await API.addWalletAddress(walletId, false)
+          setDerivedAddress(fresh)
+          invalidateAsyncCache('receiveAddress', walletId)
+          await refreshAddresses(walletId)
+        }
+      }
+    } catch {
+      toast.error(ADDRESS_LOCK_TOGGLE_FAILED)
+    } finally {
+      setLockingAddress(null)
+    }
   }
 
   const handleSave = async (): Promise<void> => {
@@ -112,6 +146,20 @@ export default function ReceiveAddressCard({
         busy={busy}
         error={formError}
         submitDisabled={!walletId}
+        headerExtra={walletId != null ? (
+          <Tooltip label={ADDRESS_ROW_LOCK_LABEL}>
+            <button
+              type={'button'}
+              disabled={busy || lockingAddress === currentAddress}
+              aria-label={`${ADDRESS_ROW_LOCK_LABEL} ${currentAddress}`}
+              onClick={() => { void handleToggleAddressLock(currentAddress, true) }}
+              className={`ml-auto inline-flex items-center gap-1 ${CHIP_ACTION}`}
+            >
+              <LockIcon size={10} color={'currentColor'} />
+              {ADDRESS_ROW_LOCK_LABEL}
+            </button>
+          </Tooltip>
+        ) : undefined}
         onLabelChange={(val) => {
           setFormError(null)
           setLabel(val)
@@ -128,6 +176,9 @@ export default function ReceiveAddressCard({
         requests={requests}
         loading={loading}
         error={err}
+        lockedAddresses={lockedAddresses}
+        lockingAddress={lockingAddress}
+        onToggleAddressLock={walletId == null ? undefined : (addr, nextLocked) => { void handleToggleAddressLock(addr, nextLocked) }}
         onSelect={setSelectedRequest}
         onDelete={handleDelete}
         onRetry={walletId ? () => refreshReceiveRequests(walletId) : undefined}
@@ -135,6 +186,9 @@ export default function ReceiveAddressCard({
 
       <ReceiveRequestModal
         request={selectedRequest}
+        lockedAddresses={lockedAddresses}
+        lockingAddress={lockingAddress}
+        onToggleAddressLock={walletId == null ? undefined : (addr, nextLocked) => { void handleToggleAddressLock(addr, nextLocked) }}
         onClose={() => setSelectedRequest(null)}
       />
     </div>
