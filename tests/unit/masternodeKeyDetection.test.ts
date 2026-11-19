@@ -5,6 +5,8 @@ import { MANAGE_KEYS_COPY } from '@renderer/constants/masternodeNodes'
 import {
   detectedNetworkMismatchMessage,
   detectMasternodePrivateKey,
+  detectMasternodePrivateKeys,
+  extractPastedKeyTokens,
   importRoleButtonLabel,
   normalizePastedMasternodeKey,
 } from '@renderer/utils/masternodeKeyDetection'
@@ -147,5 +149,24 @@ describe('detectMasternodePrivateKey', () => {
     expect(importRoleButtonLabel('owner')).toBe('Import Owner key')
     expect(importRoleButtonLabel('voting')).toBe('Import Voting key')
     expect(importRoleButtonLabel('operator')).toBe('Import Operator key')
+  })
+
+  it('extracts and auto-detects multiple mixed WIF and BLS keys from textarea paste', () => {
+    const pasted = [
+      `masternodeblsprivkey=${sampleBlsHex.toUpperCase()}`,
+      `owner: ${testnetWif}`,
+      `${sampleBlsHex}, garbage-token`,
+    ].join('\n')
+    expect(extractPastedKeyTokens(pasted)).toEqual([sampleBlsHex.toUpperCase(), testnetWif, 'garbage-token'])
+
+    const ownerNode = makeNode({ ownerAddress: testnetAddress })
+    const items = detectMasternodePrivateKeys(pasted, 'testnet', [ownerNode], [])
+    expect(items).toHaveLength(3)
+    expect(items[0].detection.kind).toBe('bls')
+    expect(items[1].detection.kind).toBe('wif')
+    if (items[1].detection.kind === 'wif') {
+      expect(items[1].detection.matchedRole).toBe('owner')
+    }
+    expect(items[2].detection.kind).toBe('invalid')
   })
 })

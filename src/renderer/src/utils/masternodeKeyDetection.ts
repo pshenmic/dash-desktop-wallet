@@ -12,6 +12,9 @@ import {
   BLS_LEGACY_SIGN_SHIFT,
   BLS_SECRET_KEY_HEX_PATTERN,
   DASH_CONF_BLS_PREFIX_PATTERN,
+  KEY_LINE_PREFIX_PATTERN,
+  KEY_TOKEN_SPLIT_PATTERN,
+  KEY_WRAPPER_QUOTES_PATTERN,
   P2PKH_VERSION_BYTES,
   WIF_COMPRESSED_FLAG,
   WIF_COMPRESSED_LEN,
@@ -19,13 +22,31 @@ import {
   WIF_UNCOMPRESSED_LEN,
 } from '@renderer/constants/masternodeKeys'
 import { MANAGE_KEYS_COPY, MASTERNODE_KEY_ROLE_LABELS } from '@renderer/constants/masternodeNodes'
-import type { DetectedMasternodeKey } from '@renderer/types/MasternodeKeyDetection'
+import type { DetectedMasternodeKey, DetectedMasternodeKeyItem } from '@renderer/types/MasternodeKeyDetection'
 import { formatServiceAddress } from './masternodeNodes'
 
 const base58check = createBase58check(sha256)
 
 export function normalizePastedMasternodeKey(raw: string): string {
-  return raw.trim().replace(DASH_CONF_BLS_PREFIX_PATTERN, '').trim()
+  return raw.trim().replace(DASH_CONF_BLS_PREFIX_PATTERN, '').trim().replace(KEY_WRAPPER_QUOTES_PATTERN, '').trim()
+}
+
+export function extractPastedKeyTokens(raw: string): string[] {
+  const seen = new Set<string>()
+  const tokens: string[] = []
+  for (const rawLine of raw.split(/\r?\n/)) {
+    const strippedLine = rawLine.trim().replace(KEY_LINE_PREFIX_PATTERN, '').trim()
+    if (strippedLine === '') continue
+    for (const part of strippedLine.split(KEY_TOKEN_SPLIT_PATTERN)) {
+      const cleaned = normalizePastedMasternodeKey(part)
+      if (cleaned === '') continue
+      const dedupeKey = BLS_SECRET_KEY_HEX_PATTERN.test(cleaned) ? cleaned.toLowerCase() : cleaned
+      if (seen.has(dedupeKey)) continue
+      seen.add(dedupeKey)
+      tokens.push(cleaned)
+    }
+  }
+  return tokens
 }
 
 function blsLegacyPublicKeyHex(basicBytes: Uint8Array): string {
@@ -148,4 +169,18 @@ export function detectedNetworkMismatchMessage(keyNetwork: Network, walletNetwor
 
 export function importRoleButtonLabel(role: MasternodeKeyRole): string {
   return MANAGE_KEYS_COPY.importRoleButton.replace('{role}', MASTERNODE_KEY_ROLE_LABELS[role])
+}
+
+export function detectMasternodePrivateKeys(
+  raw: string,
+  walletNetwork: Network | null,
+  nodes: MasternodeDto[],
+  importedKeys: ImportedMasternodeKeyDto[],
+): DetectedMasternodeKeyItem[] {
+  return extractPastedKeyTokens(raw).flatMap((token, index) => {
+    const detection = detectMasternodePrivateKey(token, walletNetwork, nodes, importedKeys)
+    if (detection.kind === 'empty') return []
+    const keyId = detection.kind === 'invalid' ? `invalid:${index}:${token}` : `${detection.kind}:${detection.normalizedKey}`
+    return [{ id: keyId, rawToken: token, detection }]
+  })
 }

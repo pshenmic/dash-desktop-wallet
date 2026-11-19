@@ -14,6 +14,9 @@ export const P2PKH_VERSION_BYTES: Readonly<Record<Network, number>> = {
 
 export const BLS_SECRET_KEY_HEX_PATTERN = /^[0-9a-fA-F]{64}$/
 export const DASH_CONF_BLS_PREFIX_PATTERN = /^masternodeblsprivkey\s*=\s*/i
+export const KEY_LINE_PREFIX_PATTERN = /^(?:masternodeblsprivkey|operator|owner|voting|privkey|key)\s*[:=]\s*/i
+export const KEY_TOKEN_SPLIT_PATTERN = /[\r\n,;]+|\s+/
+export const KEY_WRAPPER_QUOTES_PATTERN = /^['"]+|['"]+$/g
 export const WIF_UNCOMPRESSED_LEN = 33
 export const WIF_COMPRESSED_LEN = 34
 export const WIF_COMPRESSED_FLAG = 0x01

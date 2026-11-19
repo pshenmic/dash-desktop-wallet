@@ -21,3 +21,9 @@ export type DetectedMasternodeKey =
       alreadyImportedRoles: MasternodeKeyRole[]
     }
   | { kind: 'invalid'; message: string }
+
+export interface DetectedMasternodeKeyItem {
+  id: string
+  rawToken: string
+  detection: Exclude<DetectedMasternodeKey, { kind: 'empty' }>
+}
