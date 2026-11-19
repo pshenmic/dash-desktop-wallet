@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Button, CheckIcon, DeleteIcon, EyeClosedIcon, EyeOpenIcon, HighlightedIdentifier, InfoCircleIcon, Text } from '@renderer/components/dash-ui-kit-extended'
 import Alert from '@renderer/components/ui/Alert'
 import CopyableError from '@renderer/components/ui/CopyableError'
@@ -244,7 +244,8 @@ export default function ManageMasternodeKeysModal({
               aria-invalid={importError || hasInvalidItem ? true : undefined}
               disabled={busy}
               autoFocus
-              className={`min-h-[4.5rem] w-full resize-y bg-transparent p-0 font-mono text-xs leading-relaxed outline-none dash-text-default placeholder:font-sans placeholder:text-sm placeholder:text-current placeholder:opacity-40 ${masked ? '[[-webkit-text-security:disc]]' : ''}`}
+              style={masked && privateKeysInput.length > 0 ? ({ WebkitTextSecurity: 'disc' } as CSSProperties) : undefined}
+              className={'min-h-[4.5rem] w-full resize-y bg-transparent p-0 font-mono text-xs leading-relaxed outline-none dash-text-default placeholder:font-sans placeholder:text-sm placeholder:text-current placeholder:opacity-40'}
             />
           </div>
           {!hasDraft && (

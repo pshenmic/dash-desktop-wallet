@@ -239,8 +239,9 @@ export default function PrepareCollateralModal({
       size={ModalSize.Lg}
       dismissible={!submitting}
     >
-      <div className={'mt-4 flex flex-col gap-4'}>
-        <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
+      <div className={'mt-4 flex flex-col gap-3.5'}>
+        <div className={'flex max-h-[calc(85vh-11rem)] flex-col gap-3.5 overflow-y-auto pr-1 scrollbar-custom'}>
+          <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
           <div className={'flex items-center justify-between gap-2'}>
             <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
               {MASTERNODE_COLLATERAL_PREP_COPY.targetAddressSection}
@@ -330,7 +331,7 @@ export default function PrepareCollateralModal({
               {MASTERNODE_COLLATERAL_PREP_COPY.noSpendableCoins}
             </Text>
           ) : (
-            <FadingScrollArea enabled className={'max-h-52 overflow-y-auto scrollbar-hide'}>
+            <FadingScrollArea enabled className={'max-h-40 overflow-y-auto scrollbar-hide'}>
               <div className={'flex flex-col gap-2 pr-0.5'}>
                 {coins.map(coin => {
                   const key = prepOutpointKey(coin)
@@ -452,6 +453,7 @@ export default function PrepareCollateralModal({
             error={passwordInvalid ? INVALID_WALLET_PASSWORD_MESSAGE : null}
             disabled={submitting}
           />
+        </div>
         </div>
 
         <div className={'flex gap-3 pt-1'}>
