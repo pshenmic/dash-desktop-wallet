@@ -7,7 +7,7 @@ import { walletAddressLabels } from '@renderer/utils/ownRecipients'
 
 export function useWalletAddressOptions(walletId: string | undefined): WalletAddressOptionsResult {
   const { receiving, change, loading: addressesLoading, err: addressesError } = useAdresses(walletId)
-  const { requests, loading: requestsLoading, err: requestsError } = useReceiveRequests(walletId, 'core')
+  const { requests, loading: requestsLoading, err: requestsError } = useReceiveRequests(walletId)
 
   const labelsByAddress = useMemo(
     () => walletAddressLabels(requests, receiving, change),
