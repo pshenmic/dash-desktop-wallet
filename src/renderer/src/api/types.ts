@@ -218,6 +218,23 @@ export interface ListedUtxo extends SelectableUtxo {
 
 export type MasternodeKeyRole = 'owner' | 'voting' | 'operator'
 
+export interface MasternodeShareDto {
+  ownerAddress: string
+  amountDuffs: bigint
+}
+
+export interface OwnedMasternodeShareDto extends MasternodeShareDto {
+  keyIndex: number | null
+  imported: boolean
+}
+
+export interface MasternodeCollateralDto {
+  proTxHash: string
+  txid: string
+  vout: number
+  address: string | null
+}
+
 // publicKey is what the list carries for the role: the address for owner and
 // voting, the hex public key for operator.
 export interface ImportedMasternodeKeyDto {
@@ -254,6 +271,8 @@ export interface MasternodeDto {
   lastPaidBlock: number | null
   lastPaidTime: number | null
   registeredHeight: number | null
+  isShared: boolean | null
+  shares: OwnedMasternodeShareDto[] | null
 }
 
 // the backend's business; this carries only what the user chose.

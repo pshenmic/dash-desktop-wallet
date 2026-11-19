@@ -69,6 +69,16 @@ export const PAGE_HEADERS = {
   dashpayContact: {
     back: CONTACTS_BACK_LABEL,
   },
+  masternodes: {
+    title: 'Masternodes',
+    subtitle: 'View your masternodes and contested resources.',
+  },
+  masternodeDetail: {
+    back: 'Back to masternodes',
+  },
+  nameContest: {
+    back: 'Back to Contested Resources',
+  },
   registerUsername: {
     title: 'Register username',
     subtitle: 'Claim a .dash name for this identity.',
