@@ -1,8 +1,7 @@
 import type {Knex} from 'knex'
 
-// The owner and voter identities Platform derives from an evonode's ProRegTx,
-// kept per node so discovery can attach them to the wallet. They are not
-// seed-derived, so they live apart from the `identities` table.
+// Platform derives these from a ProRegTx; they are not seed-derived, so they
+// live apart from the `identities` table.
 export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('masternode_identities', table => {
     table.text('wallet_id').notNullable().references('wallet_id').inTable('wallet')

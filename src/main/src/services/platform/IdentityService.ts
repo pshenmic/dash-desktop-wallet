@@ -65,9 +65,8 @@ export class IdentityService {
     })
   }
 
-  // The identities Platform created from an evonode's registration. They are
-  // not seed-derived, so they stay out of getIdentities and carry no index or
-  // derivation path; one the network does not serve is still pending.
+  // Not seed-derived, so it is not in getIdentities; an identity Platform does
+  // not serve yet is still pending.
   async getMasternodeIdentities(walletId: string): Promise<MasternodeIdentityInfo[]> {
     const wallet = await requireWallet(this.walletDAO, walletId)
     const stored = await this.masternodeIdentityDAO.getByWalletId(walletId)

@@ -142,9 +142,8 @@ export function ownerNode(owned: Masternode[], proTxHash: string): Masternode & 
   return {...node, ownerKeyIndex}
 }
 
-// A node whose operator key the wallet derives, which is what lets it sign as
-// operator. A shared node's service update is signed by that key alone, exactly
-// as a solo node's is.
+// A node whose operator key the wallet derives, which lets it sign as operator.
+// A shared node's service update is signed by that key alone, as a solo node's is.
 export function operatedNode(owned: Masternode[], proTxHash: string): Masternode & {operatorKeyIndex: number} {
   const node = owned.find(entry => entry.proTxHash === proTxHash)
   if (node == null) throw new Error('Not a masternode of this wallet')

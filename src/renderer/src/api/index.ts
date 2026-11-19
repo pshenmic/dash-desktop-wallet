@@ -194,7 +194,6 @@ export class API {
     return this.api.removeMasternodeKey(walletId, key)
   }
 
-  // The transaction previewMasternodeRegistration returned, signed and broadcast.
   static async signAndBroadcastMasternodeRegistration(walletId: string, unsignedHex: string, password: string): Promise<MasternodeRegistrationResult> {
     return this.api.signAndBroadcastMasternodeRegistration(walletId, unsignedHex, password)
   }

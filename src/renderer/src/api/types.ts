@@ -257,12 +257,9 @@ export interface MasternodeDto {
   registeredHeight: number | null
 }
 
-// getMasternodeIdentities — the owner and voter identities Platform created
-// from an evonode's registration. They are not seed-derived, so they carry no
-// identity index or derivation path. An empty list means no registration has
-// been indexed yet.
 export type MasternodeIdentityRole = 'owner' | 'voter'
 
+// Not seed-derived, so no index or derivation path; empty until Platform indexes the registration.
 export interface MasternodeIdentityInfoDto {
   proTxHash: string
   role: MasternodeIdentityRole
@@ -280,10 +277,7 @@ export interface MasternodePlatformFieldsDto {
 }
 
 // operatorReward is in hundredths of a percent. A null serviceAddress registers
-// without one, left to the operator's service update. A null ownerAddress,
-// votingAddress or operatorPublicKey takes the wallet's next unused key on that
-// chain; an owner or voting key is a P2PKH address and an operator key is a BLS
-// basic public key.
+// without one; a null key takes the wallet's next unused key on its chain.
 export interface MasternodeRegistrationDto extends MasternodePlatformFieldsDto {
   type: 'Regular' | 'Evo'
   collateral: { txid: string; vout: number }
@@ -295,9 +289,7 @@ export interface MasternodeRegistrationDto extends MasternodePlatformFieldsDto {
   operatorPublicKey: string | null
 }
 
-// A registration stopped one step short of signing: every ProRegTx field
-// resolved, the fee priced, and the transaction the wallet would sign. A null
-// key index is a key the caller supplied rather than one the wallet derives.
+// A null key index is a caller-supplied key.
 export interface MasternodeRegistrationPreviewDto {
   type: 'Regular' | 'Evo'
   collateral: { txid: string; vout: number }

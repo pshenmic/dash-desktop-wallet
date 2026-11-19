@@ -92,9 +92,7 @@ interface ImportedMasternodeKeyDTO {
   publicKey: string
 }
 
-// Mirrors MasternodeIdentityInfo and MasternodeIdentityRole in
-// src/main/src/types/MasternodeIdentity. Empty for a registration Platform has
-// not indexed yet.
+// Mirrors MasternodeIdentityInfo; empty until Platform indexes the registration.
 interface MasternodeIdentityInfoDTO {
   proTxHash: string
   role: 'owner' | 'voter'
@@ -172,9 +170,7 @@ interface MasternodeRegistrationResultDTO {
   peersAcked: number
 }
 
-// Mirrors MasternodeRegistrationPreview in src/main/src/types/Masternode: the
-// registration priced and built, with nothing signed. A null key index is a key
-// the caller supplied rather than one the wallet derives.
+// Mirrors MasternodeRegistrationPreview; a null key index is a caller-supplied key.
 interface MasternodeRegistrationPreviewDTO {
   type: 'Regular' | 'Evo'
   collateral: { txid: string; vout: number }

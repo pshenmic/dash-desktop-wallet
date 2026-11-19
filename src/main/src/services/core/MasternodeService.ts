@@ -147,10 +147,8 @@ export class MasternodeService {
     await this.discover(walletId)
   }
 
-  // The transaction previewRegistration returned, signed and broadcast. Main
-  // rebuilds it from its own coin set and refuses anything that does not
-  // reproduce the submitted bytes, so the renderer cannot add an output or swap
-  // an input for one the signature would not cover.
+  // Rebuilds the registration from this wallet's own coins and refuses unless it
+  // reproduces the submitted bytes, so no output or input can hide behind a signature.
   async signAndBroadcastRegistration(walletId: string, unsignedHex: string, password: string): Promise<MasternodeRegistrationResult> {
     const context = await this.providerTxContext(walletId)
     const plan = await this.registrationTxParams(unsignedHex, context)
@@ -181,9 +179,8 @@ export class MasternodeService {
     return {proTxHash: txid, fee, peersAcked}
   }
 
-  // The registration the wallet would sign, priced and built but unsigned: the
-  // provider keys are the stored xpubs and the coins are read over the provider,
-  // so no password is asked for.
+  // The registration the wallet would sign, priced and built but unsigned: its
+  // keys are stored xpubs, so no password is asked for.
   async previewRegistration(walletId: string, registration: MasternodeRegistration): Promise<MasternodeRegistrationPreview> {
     const wallet = await requireWallet(this.walletDAO, walletId)
     requireRegistrationFields(registration, wallet.network)
@@ -212,8 +209,6 @@ export class MasternodeService {
     }
   }
 
-  // The provider keys as the caller gave them: validated and normalised, or null
-  // for the wallet's next unused key on that chain.
   private providedKeys(
     registration: MasternodeRegistration,
     network: Network,
@@ -228,10 +223,8 @@ export class MasternodeService {
     }
   }
 
-  // What the transaction previewRegistration returned must be before main signs
-  // it: a v2 ProRegTx whose inputs are this wallet's coins and whose only
-  // output is its change. The rebuild must reproduce the submitted bytes, so a
-  // foreign input, an extra output or a burn cannot hide behind a signature.
+  // What the previewed hex must be: a v2 ProRegTx over this wallet's coins whose
+  // only output is its change, reproduced byte for byte before it is signed.
   private async registrationTxParams(
     unsignedHex: string,
     {network, grouped, utxos, collaterals, provider}: ProviderTxContext,

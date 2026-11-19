@@ -10,9 +10,8 @@ export interface MasternodeIdentityId {
   identifier: string
 }
 
-// Platform's create_owner_identifier and create_voter_identifier: the owner
-// identity is the proTxHash itself, the voter one sha256(proTxHash ‖ voting key
-// hash160). Identifiers are stored in the base58 form Platform serves.
+// Platform's owner identity is the proTxHash, the voter one
+// sha256(proTxHash ‖ voting key hash160), both base58 as Platform serves them.
 export function masternodeIdentityIds(proTxHash: string, votingAddress: string): MasternodeIdentityId[] {
   const transactionHash = hexToBytes(proTxHash)
   const votingHash = sdkUtils.addressToPublicKeyHash(votingAddress)
