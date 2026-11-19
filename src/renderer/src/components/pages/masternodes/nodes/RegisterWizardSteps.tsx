@@ -7,6 +7,7 @@ import {
 } from '@renderer/components/dash-ui-kit-extended'
 import RecipientInput from '@renderer/components/pages/transfer/RecipientInput'
 import Alert from '@renderer/components/ui/Alert'
+import CopyButton from '@renderer/components/ui/CopyButton'
 import CopyableError from '@renderer/components/ui/CopyableError'
 import CustomBadge from '@renderer/components/ui/CustomBadge'
 import DropdownField from '@renderer/components/ui/DropdownField'
@@ -14,6 +15,7 @@ import HashField from '@renderer/components/ui/HashField'
 import PasswordField from '@renderer/components/ui/PasswordField'
 import SegmentedControl from '@renderer/components/ui/SegmentedControl'
 import ListSkeleton from '@renderer/components/ui/Skeleton'
+import Spinner from '@renderer/components/ui/Spinner'
 import { INVALID_WALLET_PASSWORD_MESSAGE } from '@renderer/constants'
 import { DASH_UNIT } from '@renderer/constants/balance'
 import {
@@ -40,11 +42,10 @@ import {
   EVO_MASTERNODE_TYPE,
   UNASSIGNED_SERVICE_ADDRESS,
 } from '@renderer/constants/masternodes'
-import { CHIP_ACTION, FIELD_COMPACT, SURFACE_SECTION } from '@renderer/constants/surfaces'
+import { CHIP_ACTION, FIELD_COMPACT, SURFACE_ROW, SURFACE_SECTION } from '@renderer/constants/surfaces'
 import { AlertTone } from '@renderer/enums/AlertTone'
 import { SegmentedControlAppearance } from '@renderer/enums/SegmentedControlAppearance'
 import type {
-  RegisterStepAddressesProps,
   RegisterStepCollateralProps,
   RegisterStepReviewProps,
   RegisterStepSharedProps,
@@ -246,15 +247,13 @@ export function RegisterStepCollateral({
 export function RegisterStepAddresses({
   draft,
   updateDraft,
-  validation,
   network,
   addressOptions,
   badgeFor,
   addressesLoading,
   addressesError,
   onRetryAddresses,
-  onResetWalletKeys,
-}: RegisterStepAddressesProps): React.JSX.Element {
+}: RegisterStepSharedProps): React.JSX.Element {
   const addressNetwork = network ?? undefined
   const rewardBps = parseOperatorRewardBps(draft.operatorRewardPercent)
 
@@ -428,20 +427,6 @@ export function RegisterStepAddresses({
           </div>
         )}
       </div>
-
-      {validation.customKeyRoles.length > 0 && (
-        <Alert
-          tone={AlertTone.Info}
-          icon={<InfoCircleIcon size={16} color={'currentColor'} />}
-          title={REGISTER_WIZARD_COPY.customKeysNoticeTitle}
-          description={REGISTER_WIZARD_COPY.customKeysNoticeDescription}
-          actions={(
-            <Button type={'button'} size={'compact'} colorScheme={'lightBlue-mint'} onClick={onResetWalletKeys}>
-              {REGISTER_WIZARD_COPY.useWalletKeys}
-            </Button>
-          )}
-        />
-      )}
     </div>
   )
 }
@@ -553,16 +538,19 @@ export function RegisterStepReview({
   validation,
   badgeFor,
   activeCollateral,
+  preview,
+  previewLoading,
+  previewError,
+  onRetryPreview,
   password,
   onPasswordChange,
   passwordInvalid,
   broadcastError,
   busy,
   canBroadcast,
-  onResetWalletKeys,
   onSubmit,
 }: RegisterStepReviewProps): React.JSX.Element {
-  const { dto, customKeyRoles } = validation
+  const { dto } = validation
   const payoutBadge = badgeFor(draft.payoutAddress)
   const collateralDisplay = draft.collateralSource === 'wallet'
     ? activeCollateral
@@ -571,6 +559,7 @@ export function RegisterStepReview({
     ? UNASSIGNED_SERVICE_ADDRESS
     : dto.serviceAddress
   const rewardBps = dto?.operatorReward ?? (parseOperatorRewardBps(draft.operatorRewardPercent) ?? 0)
+  const changeTotal = preview?.outputs.reduce((sum, entry) => sum + entry.amount, 0n) ?? 0n
 
   return (
     <div className={'flex flex-col gap-3'}>
@@ -605,21 +594,60 @@ export function RegisterStepReview({
         </div>
         <div className={'flex items-center justify-between gap-4'}>
           <Text size={12} weight={'medium'} color={'brand'} opacity={60}>{REGISTER_WIZARD_COPY.ownerKeyLabel}</Text>
-          {draft.ownerMode === 'wallet'
-            ? <Text size={12} weight={'medium'} color={'brand'}>{REGISTER_WIZARD_COPY.walletDerivedValue}</Text>
-            : <HighlightedIdentifier className={'min-w-0 text-xs!'}>{draft.ownerAddress.trim()}</HighlightedIdentifier>}
+          <div className={'flex min-w-0 items-center gap-2'}>
+            {preview != null ? (
+              <>
+                <CustomBadge
+                  variant={preview.ownerKeyIndex != null ? 'accent' : 'muted'}
+                  text={preview.ownerKeyIndex != null ? `${REGISTER_WIZARD_COPY.walletKeyIndexPrefix}${preview.ownerKeyIndex}` : REGISTER_WIZARD_COPY.customKeyBadge}
+                  className={'shrink-0'}
+                />
+                <HighlightedIdentifier className={'min-w-0 text-xs!'}>{preview.ownerAddress}</HighlightedIdentifier>
+              </>
+            ) : draft.ownerMode === 'wallet' ? (
+              <Text size={12} weight={'medium'} color={'brand'}>{REGISTER_WIZARD_COPY.walletDerivedValue}</Text>
+            ) : (
+              <HighlightedIdentifier className={'min-w-0 text-xs!'}>{draft.ownerAddress.trim()}</HighlightedIdentifier>
+            )}
+          </div>
         </div>
         <div className={'flex items-center justify-between gap-4'}>
           <Text size={12} weight={'medium'} color={'brand'} opacity={60}>{REGISTER_WIZARD_COPY.votingKeyLabel}</Text>
-          {draft.votingMode === 'wallet'
-            ? <Text size={12} weight={'medium'} color={'brand'}>{REGISTER_WIZARD_COPY.walletDerivedValue}</Text>
-            : <HighlightedIdentifier className={'min-w-0 text-xs!'}>{draft.votingAddress.trim()}</HighlightedIdentifier>}
+          <div className={'flex min-w-0 items-center gap-2'}>
+            {preview != null ? (
+              <>
+                <CustomBadge
+                  variant={preview.votingKeyIndex != null ? 'accent' : 'muted'}
+                  text={preview.votingKeyIndex != null ? `${REGISTER_WIZARD_COPY.walletKeyIndexPrefix}${preview.votingKeyIndex}` : REGISTER_WIZARD_COPY.customKeyBadge}
+                  className={'shrink-0'}
+                />
+                <HighlightedIdentifier className={'min-w-0 text-xs!'}>{preview.votingAddress}</HighlightedIdentifier>
+              </>
+            ) : draft.votingMode === 'wallet' ? (
+              <Text size={12} weight={'medium'} color={'brand'}>{REGISTER_WIZARD_COPY.walletDerivedValue}</Text>
+            ) : (
+              <HighlightedIdentifier className={'min-w-0 text-xs!'}>{draft.votingAddress.trim()}</HighlightedIdentifier>
+            )}
+          </div>
         </div>
         <div className={'flex items-center justify-between gap-4'}>
           <Text size={12} weight={'medium'} color={'brand'} opacity={60}>{REGISTER_WIZARD_COPY.operatorKeyLabel}</Text>
-          {draft.operatorMode === 'wallet'
-            ? <Text size={12} weight={'medium'} color={'brand'}>{REGISTER_WIZARD_COPY.walletDerivedValue}</Text>
-            : <HighlightedIdentifier className={'min-w-0 text-xs!'}>{draft.operatorPublicKey.trim().toLowerCase()}</HighlightedIdentifier>}
+          <div className={'flex min-w-0 items-center gap-2'}>
+            {preview != null ? (
+              <>
+                <CustomBadge
+                  variant={preview.operatorKeyIndex != null ? 'accent' : 'muted'}
+                  text={preview.operatorKeyIndex != null ? `${REGISTER_WIZARD_COPY.walletKeyIndexPrefix}${preview.operatorKeyIndex}` : REGISTER_WIZARD_COPY.customKeyBadge}
+                  className={'shrink-0'}
+                />
+                <HighlightedIdentifier className={'min-w-0 text-xs!'}>{preview.operatorPublicKey}</HighlightedIdentifier>
+              </>
+            ) : draft.operatorMode === 'wallet' ? (
+              <Text size={12} weight={'medium'} color={'brand'}>{REGISTER_WIZARD_COPY.walletDerivedValue}</Text>
+            ) : (
+              <HighlightedIdentifier className={'min-w-0 text-xs!'}>{draft.operatorPublicKey.trim().toLowerCase()}</HighlightedIdentifier>
+            )}
+          </div>
         </div>
         <div className={'flex items-center justify-between gap-4'}>
           <Text size={12} weight={'medium'} color={'brand'} opacity={60}>{REGISTER_MASTERNODE_COPY.operatorRewardLabel}</Text>
@@ -653,18 +681,71 @@ export function RegisterStepReview({
         )}
       </div>
 
-      {customKeyRoles.length > 0 && (
+      {previewLoading && (
+        <div className={`flex items-center gap-2.5 ${SURFACE_SECTION}`} role={'status'}>
+          <Spinner size={16} className={'dash-text-primary'} />
+          <Text size={12} weight={'medium'} color={'brand'} opacity={70}>{REGISTER_WIZARD_COPY.previewLoadingLabel}</Text>
+        </div>
+      )}
+
+      {!previewLoading && previewError != null && (
         <Alert
           tone={AlertTone.Warning}
           icon={<InfoCircleIcon size={16} color={'currentColor'} />}
-          title={REGISTER_WIZARD_COPY.customKeysNoticeTitle}
-          description={REGISTER_WIZARD_COPY.customKeysNoticeDescription}
+          title={REGISTER_WIZARD_COPY.previewErrorTitle}
+          description={previewError}
           actions={(
-            <Button type={'button'} size={'compact'} colorScheme={'lightBlue-mint'} onClick={onResetWalletKeys}>
-              {REGISTER_WIZARD_COPY.useWalletKeys}
+            <Button type={'button'} size={'compact'} colorScheme={'primary-light'} onClick={onRetryPreview}>
+              {REGISTER_WIZARD_COPY.retryButton}
             </Button>
           )}
         />
+      )}
+
+      {preview != null && (
+        <>
+          <div className={`flex flex-col gap-2.5 ${SURFACE_SECTION}`}>
+            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.previewTransactionSection}</Text>
+            <div className={'flex items-center justify-between gap-4'}>
+              <Text size={12} weight={'medium'} color={'brand'} opacity={60}>{REGISTER_MASTERNODE_COPY.networkFee}</Text>
+              <Text size={12} weight={'extrabold'} color={'brand'} className={'tabular-nums'}>{`${davToDash(preview.feeDuffs)} ${DASH_UNIT}`}</Text>
+            </div>
+            <div className={'flex items-center justify-between gap-4'}>
+              <Text size={12} weight={'medium'} color={'brand'} opacity={60}>{REGISTER_WIZARD_COPY.feeInputsLabel}</Text>
+              <Text size={12} weight={'medium'} color={'brand'} className={'tabular-nums'}>
+                {`${preview.inputs.length} · ${davToDash(preview.inputs.reduce((sum, entry) => sum + entry.amount, 0n))} ${DASH_UNIT}`}
+              </Text>
+            </div>
+            {preview.outputs.length > 0 && (
+              <div className={'flex items-center justify-between gap-4'}>
+                <Text size={12} weight={'medium'} color={'brand'} opacity={60}>{REGISTER_WIZARD_COPY.changeOutputLabel}</Text>
+                <div className={'flex min-w-0 items-center gap-2'}>
+                  <HighlightedIdentifier className={'min-w-0 text-xs!'}>{preview.outputs[0].address}</HighlightedIdentifier>
+                  <Text size={12} weight={'medium'} color={'brand'} className={'shrink-0 tabular-nums'}>{`${davToDash(changeTotal)} ${DASH_UNIT}`}</Text>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <details className={SURFACE_SECTION}>
+            <summary className={'cursor-pointer text-xs font-medium dash-text-default'}>
+              {REGISTER_WIZARD_COPY.unsignedHexSummary}
+            </summary>
+            <div className={'mt-3 flex flex-col gap-2'}>
+              <div className={'flex items-center justify-between gap-2'}>
+                <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.unsignedHexLabel}</Text>
+                <CopyButton text={preview.unsignedHex} />
+              </div>
+              <textarea
+                readOnly
+                value={preview.unsignedHex}
+                aria-label={REGISTER_WIZARD_COPY.unsignedHexSummary}
+                rows={4}
+                className={`w-full resize-y ${SURFACE_ROW} dash-text-default font-mono text-xs break-all outline-none focus-visible:ring-2 focus-visible:ring-dash-brand/40 dark:focus-visible:ring-white/40`}
+              />
+            </div>
+          </details>
+        </>
       )}
 
       {canBroadcast && (

@@ -395,17 +395,11 @@ export function validateRegistrationWizard(
       })
     : { dto: null, error: null }
 
-  const customKeyRoles: string[] = []
-  if (draft.ownerMode === 'external') customKeyRoles.push('Owner')
-  if (draft.votingMode === 'external') customKeyRoles.push('Voting')
-  if (draft.operatorMode === 'external') customKeyRoles.push('Operator')
-
   return {
     step1Error,
     step2Error,
     step3Error,
     dto: built.dto,
-    customKeyRoles,
     selectedCoin,
     manualOutpointMissingFromWallet,
   }

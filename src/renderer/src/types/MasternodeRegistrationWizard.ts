@@ -1,5 +1,6 @@
 import type {
   MasternodeRegistrationDto,
+  MasternodeRegistrationPreviewDto,
   MasternodeRegistrationResult,
   Network,
   SelectableUtxo,
@@ -60,7 +61,6 @@ export interface RegisterWizardValidation {
   step2Error: string | null
   step3Error: string | null
   dto: MasternodeRegistrationDto | null
-  customKeyRoles: string[]
   selectedCoin: SelectableUtxo | null
   manualOutpointMissingFromWallet: boolean
 }
@@ -85,19 +85,18 @@ export interface RegisterStepCollateralProps extends RegisterStepSharedProps {
   onRetryUtxos: () => void
 }
 
-export interface RegisterStepAddressesProps extends RegisterStepSharedProps {
-  onResetWalletKeys: () => void
-}
-
 export interface RegisterStepReviewProps extends RegisterStepSharedProps {
   activeCollateral: string
+  preview: MasternodeRegistrationPreviewDto | null
+  previewLoading: boolean
+  previewError: string | null
+  onRetryPreview: () => void
   password: string
   onPasswordChange: (value: string) => void
   passwordInvalid: boolean
   broadcastError: string | null
   busy: boolean
   canBroadcast: boolean
-  onResetWalletKeys: () => void
   onSubmit: () => void
 }
 

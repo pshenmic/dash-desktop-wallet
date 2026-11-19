@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { API } from '@renderer/api'
-import type { MasternodeRegistrationResult } from '@renderer/api/types'
+import type { MasternodeRegistrationPreviewDto, MasternodeRegistrationResult } from '@renderer/api/types'
 import { Text } from '@renderer/components/dash-ui-kit-extended'
 import TransferWizard from '@renderer/components/pages/transfer/TransferWizard'
 import PageHeader from '@renderer/components/ui/PageHeader'
@@ -68,6 +68,10 @@ export default function RegisterMasternodeWizard({
   const [broadcastError, setBroadcastError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<MasternodeRegistrationResult | null>(null)
+  const [preview, setPreview] = useState<MasternodeRegistrationPreviewDto | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const [previewNonce, setPreviewNonce] = useState(0)
 
   const updateWizardState = (
     updater: (current: PersistedRegisterWizardState) => PersistedRegisterWizardState,
@@ -125,11 +129,36 @@ export default function RegisterMasternodeWizard({
 
   const stepErrors = [validation.step1Error, validation.step2Error, validation.step3Error, null] as const
   const activeStepError = stepErrors[step]
-  const canBroadcast = validation.dto != null && validation.customKeyRoles.length === 0
+  const registrationDto = validation.dto
+  const canBroadcast = registrationDto != null && preview != null && !previewLoading && previewError == null
 
-  const resetWalletKeys = (): void => {
-    updateDraft({ ownerMode: 'wallet', votingMode: 'wallet', operatorMode: 'wallet' })
-  }
+  useEffect(() => {
+    if (step !== 3 || registrationDto == null || result != null) {
+      setPreview(null)
+      setPreviewLoading(false)
+      setPreviewError(null)
+      return
+    }
+    let cancelled = false
+    setPreviewLoading(true)
+    setPreviewError(null)
+    void API.previewMasternodeRegistration(walletId, registrationDto)
+      .then(res => {
+        if (!cancelled) setPreview(res)
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setPreview(null)
+          setPreviewError(getErrorMessage(err))
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [walletId, step, registrationDto, utxos, result, previewNonce])
 
   const handleStepSelect = (nextStep: number): void => {
     if (submitting) return
@@ -149,7 +178,7 @@ export default function RegisterMasternodeWizard({
   }
 
   const handleBroadcast = async (): Promise<void> => {
-    if (submitting || !canBroadcast || validation.dto == null || password.length === 0) return
+    if (submitting || !canBroadcast || registrationDto == null || preview == null || password.length === 0) return
     setSubmitting(true)
     setPasswordInvalid(false)
     setBroadcastError(null)
@@ -160,23 +189,22 @@ export default function RegisterMasternodeWizard({
         setSubmitting(false)
         return
       }
-      const preview = await API.previewMasternodeRegistration(walletId, validation.dto)
       const res = await API.signAndBroadcastMasternodeRegistration(walletId, preview.unsignedHex, password)
       setPassword('')
       recordPendingMasternode(walletId, {
         proTxHash: res.proTxHash,
-        type: validation.dto.type,
-        collateralTxid: validation.dto.collateral.txid,
-        collateralVout: validation.dto.collateral.vout,
+        type: registrationDto.type,
+        collateralTxid: registrationDto.collateral.txid,
+        collateralVout: registrationDto.collateral.vout,
         collateralAddress: validation.selectedCoin?.address ?? null,
-        serviceAddress: validation.dto.serviceAddress,
-        payeeAddress: validation.dto.payoutAddress,
+        serviceAddress: registrationDto.serviceAddress,
+        payeeAddress: registrationDto.payoutAddress,
         ownerAddress: preview.ownerAddress,
         votingAddress: preview.votingAddress,
         operatorPublicKey: preview.operatorPublicKey,
-        platformNodeId: validation.dto.platformNodeId,
-        platformP2PPort: validation.dto.platformP2PPort,
-        platformHttpPort: validation.dto.platformHttpPort,
+        platformNodeId: registrationDto.platformNodeId,
+        platformP2PPort: registrationDto.platformP2PPort,
+        platformHttpPort: registrationDto.platformHttpPort,
         createdAt: Date.now(),
       })
       void refreshMasternodes(walletId)
@@ -220,12 +248,7 @@ export default function RegisterMasternodeWizard({
     {
       label: REGISTER_WIZARD_STEPS[1].label,
       canAdvance: validation.step2Error == null,
-      content: (
-        <RegisterStepAddresses
-          {...sharedStepProps}
-          onResetWalletKeys={resetWalletKeys}
-        />
-      ),
+      content: <RegisterStepAddresses {...sharedStepProps} />,
     },
     {
       label: REGISTER_WIZARD_STEPS[2].label,
@@ -238,6 +261,10 @@ export default function RegisterMasternodeWizard({
         <RegisterStepReview
           {...sharedStepProps}
           activeCollateral={activeCollateral}
+          preview={preview}
+          previewLoading={previewLoading}
+          previewError={previewError}
+          onRetryPreview={() => setPreviewNonce(n => n + 1)}
           password={password}
           onPasswordChange={value => {
             setPasswordInvalid(false)
@@ -248,7 +275,6 @@ export default function RegisterMasternodeWizard({
           broadcastError={broadcastError}
           busy={submitting}
           canBroadcast={canBroadcast}
-          onResetWalletKeys={resetWalletKeys}
           onSubmit={() => { void handleBroadcast() }}
         />
       ),

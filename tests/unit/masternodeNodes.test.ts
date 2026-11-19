@@ -816,9 +816,11 @@ describe('Masternode action builders', () => {
     expect(ok.step1Error).toBeNull()
     expect(ok.step2Error).toBeNull()
     expect(ok.step3Error).toBeNull()
-    expect(ok.customKeyRoles).toEqual([])
     expect(ok.dto?.type).toBe('Evo')
     expect(ok.dto?.serviceAddress).toBe('45.67.89.10:19999')
+    expect(ok.dto?.ownerAddress).toBeNull()
+    expect(ok.dto?.votingAddress).toBeNull()
+    expect(ok.dto?.operatorPublicKey).toBeNull()
 
     const sameOwner = validateRegistrationWizard(
       { ...baseDraft, ownerMode: 'external', ownerAddress: payoutAddr },
@@ -827,17 +829,25 @@ describe('Masternode action builders', () => {
       'testnet',
     )
     expect(sameOwner.step2Error).toContain('owner')
-    expect(sameOwner.customKeyRoles).toEqual(['Owner'])
 
     const customOwnerDiff = validateRegistrationWizard(
-      { ...baseDraft, ownerMode: 'external', ownerAddress: ownerAddr },
+      {
+        ...baseDraft,
+        ownerMode: 'external',
+        ownerAddress: ownerAddr,
+        votingMode: 'external',
+        votingAddress: ownerAddr,
+        operatorMode: 'external',
+        operatorPublicKey: 'ab'.repeat(48),
+      },
       [collateralCoin],
       [collateralCoin],
       'testnet',
     )
     expect(customOwnerDiff.step2Error).toBeNull()
-    expect(customOwnerDiff.customKeyRoles).toEqual(['Owner'])
     expect(customOwnerDiff.dto?.ownerAddress).toBe(ownerAddr)
+    expect(customOwnerDiff.dto?.votingAddress).toBe(ownerAddr)
+    expect(customOwnerDiff.dto?.operatorPublicKey).toBe('ab'.repeat(48))
 
     const pendingNode = makeNode({
       proTxHash: '00'.repeat(32),
