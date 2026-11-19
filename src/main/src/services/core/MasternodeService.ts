@@ -1,4 +1,5 @@
-import {bls, utils as sdkUtils} from 'dash-core-sdk'
+import {bls, Transaction, TransactionType, utils as sdkUtils} from 'dash-core-sdk'
+import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
 import {AddressDAO} from '../../database/AddressDAO'
 import {WalletDAO} from '../../database/WalletDAO'
 import {MasternodeDAO} from '../../database/MasternodeDAO'
@@ -6,7 +7,7 @@ import {MasternodeKeyDAO} from '../../database/MasternodeKeyDAO'
 import {WalletProvider} from '../../providers/WalletProvider'
 import {WalletProviderFactory} from '../../providers/WalletProviderFactory'
 import {MASTERNODE_KEY_CHAINS, MASTERNODE_KEY_WINDOW, MASTERNODE_WALKED_CHAINS} from '../../constants/addresses'
-import {DUST_THRESHOLD_DUFFS, REVOCATION_REASON_CODE} from '../../constants/chain'
+import {DUST_THRESHOLD_DUFFS, MASTERNODE_TYPE_CODE, PROTX_VERSION, REVOCATION_REASON_CODE} from '../../constants/chain'
 import {Preferences} from '../../preferences'
 import {
   ImportedMasternodeKey,
@@ -15,6 +16,8 @@ import {
   MasternodeKeyFilter,
   MasternodeRegistrarUpdate,
   MasternodeRegistration,
+  MasternodeRegistrationPlan,
+  MasternodeRegistrationPreview,
   MasternodeRegistrationResult,
   MasternodeServiceUpdate,
   MasternodeUpdateResult,
@@ -25,6 +28,7 @@ import {
   ProviderTxPlan,
   RevocationReason,
 } from '../../types/Masternode'
+import {ProviderTxSigner, TransferInput} from '../../types/CoreTransaction'
 import {memoryWindowStore, runAddressWindow} from '../../utils/addressWindow'
 import {coreFeeDuffsFor} from '../../utils/coreFeeRate'
 import {masternodeKeyDeriver, masternodePublicKey, requireBasicOperatorKey} from '../../utils/masternodeKeys'
@@ -52,6 +56,7 @@ import {
   serviceAddressParts,
 } from '../../utils/providerTx'
 import {addressPaths, selectTransferInputs} from '../../utils/transferInputs'
+import {coreChangeAndFee, coreInputEntries} from '../../utils/transactionPreview'
 import {withUnlockedWallet} from '../../utils/walletSeed'
 import {CoreTransactionService} from './CoreTransactionService'
 import {WalletSyncService} from './WalletSyncService'
@@ -131,43 +136,253 @@ export class MasternodeService {
     await this.discover(walletId)
   }
 
-  // A registration still unmined is in no list, so one made before it is mined
-  // takes the same keys and is refused by consensus as a duplicate.
-  async register(walletId: string, registration: MasternodeRegistration, password: string): Promise<MasternodeRegistrationResult> {
-    const {network: walletNetwork} = await requireWallet(this.walletDAO, walletId)
-    requireRegistrationFields(registration, walletNetwork)
-    this.coreTransactionService.classifyAddress(registration.payoutAddress, walletNetwork)
-    if (registration.ownerAddress != null) this.coreTransactionService.requireP2pkhAddress(registration.ownerAddress, walletNetwork, 'owner')
-    if (registration.votingAddress != null) this.coreTransactionService.requireP2pkhAddress(registration.votingAddress, walletNetwork, 'voting')
-    const providedOperator = registration.operatorPublicKey == null ? null : requireBasicOperatorKey(registration.operatorPublicKey)
-    const {txid, fee, peersAcked} = await this.sendProviderTx(walletId, password, async ({network, keys, owned, provider, grouped, utxos, collaterals}) => {
-      const {txid, vout} = registration.collateral
-      const coin = requireCollateral(utxos, collaterals, registration)
-      const collateralPath = addressPaths(grouped).get(coin.address)
-      if (collateralPath == null) throw new Error(`No derivation path for address ${coin.address}`)
-
-      // One index for all three: a node not confirmed yet lists no owner key, so
-      // the owner chain alone would hand out the index that node already took.
-      const index = unusedKeyIndex(owned, ...MASTERNODE_KEY_CHAINS)
-      const derived = (chain: MasternodeKeyChain): string => masternodeKeyDeriver(keys, network, chain).derive(index).address
-      const ownerAddress = registration.ownerAddress ?? derived('owner')
-      const votingAddress = registration.votingAddress ?? derived('voting')
-      const operatorPublicKey = providedOperator ?? derived('operator')
-      if (providedOperator != null) await this.requireFreeOperatorKey(providedOperator, provider)
-      requirePayout(registration.payoutAddress, ownerAddress, votingAddress)
-      log.info(`register ${registration.type} on ${txid}:${vout}: service ${registration.serviceAddress ?? 'none'}, ` +
-        `keys ${[registration.ownerAddress, registration.votingAddress, providedOperator].filter(key => key != null).length}/3 given`)
-      return {
-        payload: this.coreTransactionService.proRegPayload(registration, {
-          ownerKeyId: bytesToHex(sdkUtils.addressToPublicKeyHash(ownerAddress)),
-          votingKeyId: bytesToHex(sdkUtils.addressToPublicKeyHash(votingAddress)),
-          operatorPublicKey,
-        }, network),
-        signer: {kind: 'address', derivationPath: collateralPath, address: coin.address},
-        spendable: utxos.filter(utxo => utxo !== coin),
-      }
+  // The transaction previewRegistration returned, signed and broadcast. Main
+  // rebuilds it from its own coin set and refuses anything that does not
+  // reproduce the submitted bytes, so the renderer cannot add an output or swap
+  // an input for one the signature would not cover.
+  async signAndBroadcastRegistration(walletId: string, unsignedHex: string, password: string): Promise<MasternodeRegistrationResult> {
+    const context = await this.providerTxContext(walletId)
+    const plan = await this.registrationTxParams(unsignedHex, context)
+    log.info(`register ${plan.payload.type === MASTERNODE_TYPE_CODE.Evo ? 'Evo' : 'Regular'} on ` +
+      `${plan.payload.collateralOutpoint.txId}:${plan.payload.collateralOutpoint.vOut}: broadcasting`)
+    const {tx, inputTotal} = await withUnlockedWallet(this.walletDAO, walletId, password, async ({seed}) => {
+      const tx = await this.coreTransactionService.buildSignedProviderTx({
+        payload: plan.payload,
+        signer: plan.signer,
+        inputs: plan.inputs,
+        changeAddress: plan.changeAddress,
+        inputTotal: plan.inputTotal,
+        feeDuffs: plan.feeDuffs,
+        seed,
+        network: context.network,
+      })
+      return {tx, inputTotal: plan.inputTotal}
     })
+    const {txid, fee, peersAcked} = await this.broadcastProviderTx(tx, inputTotal)
     return {proTxHash: txid, fee, peersAcked}
+  }
+
+  // The registration the wallet would sign, priced and built but unsigned: the
+  // provider keys are the stored xpubs and the coins are read over the provider,
+  // so no password is asked for.
+  async previewRegistration(walletId: string, registration: MasternodeRegistration): Promise<MasternodeRegistrationPreview> {
+    const wallet = await requireWallet(this.walletDAO, walletId)
+    requireRegistrationFields(registration, wallet.network)
+    this.coreTransactionService.classifyAddress(registration.payoutAddress, wallet.network)
+    const provided = this.providedKeys(registration, wallet.network)
+    const context = await this.providerTxContext(walletId)
+    const plan = await this.registrationPlan(registration, provided, context)
+    const selection = this.selectProviderInputs(plan, context)
+    const {change, feeDuffs} = coreChangeAndFee(selection, 0n)
+    return {
+      type: registration.type,
+      collateral: registration.collateral,
+      ownerAddress: plan.ownerAddress,
+      votingAddress: plan.votingAddress,
+      operatorPublicKey: plan.operatorPublicKey,
+      serviceAddress: registration.serviceAddress,
+      payoutAddress: registration.payoutAddress,
+      operatorReward: registration.operatorReward,
+      platformNodeId: registration.platformNodeId,
+      platformP2PPort: registration.platformP2PPort,
+      platformHttpPort: registration.platformHttpPort,
+      ownerKeyIndex: plan.ownerKeyIndex,
+      votingKeyIndex: plan.votingKeyIndex,
+      operatorKeyIndex: plan.operatorKeyIndex,
+      inputs: coreInputEntries(selection.transferInputs, context.utxos),
+      outputs: change,
+      feeDuffs,
+      unsignedHex: this.coreTransactionService.buildProviderTx({
+        payload: plan.payload,
+        inputs: selection.transferInputs,
+        changeAddress: selection.changeAddress,
+        inputTotal: selection.inputTotal,
+        feeDuffs: selection.feeDuffs,
+      }).hex(),
+    }
+  }
+
+  // The provider keys as the caller gave them: validated and normalised, or null
+  // for the wallet's next unused key on that chain.
+  private providedKeys(
+    registration: MasternodeRegistration,
+    network: Network,
+  ): Pick<MasternodeRegistration, 'ownerAddress' | 'votingAddress' | 'operatorPublicKey'> {
+    const {ownerAddress, votingAddress} = registration
+    if (ownerAddress != null) this.coreTransactionService.requireP2pkhAddress(ownerAddress, network, 'owner')
+    if (votingAddress != null) this.coreTransactionService.requireP2pkhAddress(votingAddress, network, 'voting')
+    return {
+      ownerAddress,
+      votingAddress,
+      operatorPublicKey: registration.operatorPublicKey == null ? null : requireBasicOperatorKey(registration.operatorPublicKey),
+    }
+  }
+
+  // What the transaction previewRegistration returned must be before main signs
+  // it: a v2 ProRegTx whose inputs are this wallet's coins and whose only
+  // output is its change. The rebuild must reproduce the submitted bytes, so a
+  // foreign input, an extra output or a burn cannot hide behind a signature.
+  private async registrationTxParams(
+    unsignedHex: string,
+    {network, grouped, utxos, collaterals, provider}: ProviderTxContext,
+  ): Promise<{
+    payload: ProRegTX
+    signer: ProviderTxSigner
+    inputs: TransferInput[]
+    changeAddress: string
+    inputTotal: bigint
+    feeDuffs: bigint
+  }> {
+    let transaction: Transaction
+    try {
+      transaction = Transaction.fromHex(unsignedHex)
+    } catch {
+      throw new Error('Not a transaction')
+    }
+    const payload = transaction.extraPayload
+    if (transaction.type !== TransactionType.TRANSACTION_PROVIDER_REGISTER || !(payload instanceof ProRegTX)) {
+      throw new Error('Not a registration transaction')
+    }
+    if (payload.version !== PROTX_VERSION || payload.mode !== 0 || payload.netInfo != null ||
+        payload.payouts != null || payload.shares != null || payload.joinSigs != null) {
+      throw new Error('Only a v2 registration without shares is supported')
+    }
+    if (payload.payloadSig !== '') throw new Error('The registration is already signed')
+    if (payload.type !== MASTERNODE_TYPE_CODE.Regular && payload.type !== MASTERNODE_TYPE_CODE.Evo) {
+      throw new Error(`Unknown masternode type: ${payload.type}`)
+    }
+
+    const type = payload.type === MASTERNODE_TYPE_CODE.Evo ? 'Evo' : 'Regular'
+    const ownerAddress = payload.getOwnerAddress(network)
+    const votingAddress = payload.getVotingAddress(network)
+    const operatorPublicKey = requireBasicOperatorKey(payload.pubKeyOperator)
+    const payoutAddress = payload.getPayoutAddress(network)
+    if (payoutAddress == null) throw new Error('The registration has no payout address')
+    const registration: MasternodeRegistration = {
+      type,
+      collateral: {txid: payload.collateralOutpoint.txId, vout: payload.collateralOutpoint.vOut},
+      serviceAddress: payload.ipAddress == null ? null : `${payload.ipAddress}:${payload.port}`,
+      payoutAddress,
+      operatorReward: payload.operatorReward,
+      ownerAddress,
+      votingAddress,
+      operatorPublicKey,
+      platformNodeId: payload.platformNodeID ?? null,
+      platformP2PPort: payload.platformP2PPort ?? null,
+      platformHttpPort: payload.platformHTTPPort ?? null,
+    }
+    requireRegistrationFields(registration, network)
+    this.coreTransactionService.classifyAddress(payoutAddress, network)
+    requirePayout(payoutAddress, ownerAddress, votingAddress)
+
+    const coin = requireCollateral(utxos, collaterals, registration)
+    const collateralPath = addressPaths(grouped).get(coin.address)
+    if (collateralPath == null) throw new Error(`No derivation path for address ${coin.address}`)
+    await this.requireFreeOperatorKey(operatorPublicKey, provider)
+
+    const byOutpoint = new Map(utxos.map(utxo => [`${utxo.txId}:${utxo.vOut}`, utxo]))
+    const paths = addressPaths(grouped)
+    const seen = new Set<string>()
+    let inputTotal = 0n
+    const inputs: TransferInput[] = transaction.inputs.map(input => {
+      const reference = `${input.txId}:${input.vOut}`
+      if (seen.has(reference)) throw new Error('The registration spends an input twice')
+      seen.add(reference)
+      const utxo = byOutpoint.get(reference)
+      if (utxo == null) throw new Error(`An input is not an unspent coin of this wallet: ${reference}`)
+      if (utxo.height === 0) throw new Error('An input needs a confirmation first')
+      if (utxo === coin) throw new Error('The collateral may not pay the registration fee')
+      if (collaterals.some(row => row.txid === utxo.txId && row.vout === utxo.vOut)) {
+        throw new Error('A masternode collateral may not pay the registration fee')
+      }
+      const derivationPath = paths.get(utxo.address)
+      if (derivationPath == null) throw new Error(`No derivation path for address ${utxo.address}`)
+      inputTotal += utxo.satoshis
+      return {txId: utxo.txId, vOut: utxo.vOut, script: utxo.script, derivationPath, address: utxo.address}
+    })
+    if (inputs.length === 0) throw new Error('The registration has no coin to pay its fee')
+
+    if (transaction.outputs.length > 1) throw new Error('A registration pays its change and nothing else')
+    let changeAddress = coin.address
+    let changeDuffs = 0n
+    if (transaction.outputs.length === 1) {
+      const [output] = transaction.outputs
+      const address = output.script.getAddress(network)
+      if (address == null || paths.get(address) == null) {
+        throw new Error('The registration pays an address that is not this wallet\'s')
+      }
+      changeAddress = address
+      changeDuffs = output.satoshis
+    }
+    const feeDuffs = inputTotal - changeDuffs
+    if (feeDuffs <= 0n) throw new Error('The registration pays no fee')
+
+    const rebuilt = this.coreTransactionService.proRegPayload(registration, {
+      ownerKeyId: bytesToHex(sdkUtils.addressToPublicKeyHash(ownerAddress)),
+      votingKeyId: bytesToHex(sdkUtils.addressToPublicKeyHash(votingAddress)),
+      operatorPublicKey,
+    }, network)
+
+    // The preview priced exactly this selection; anything above the quote is
+    // the dust change it folds into the fee, never a burn the renderer chose.
+    const quotedFeeDuffs = coreFeeDuffsFor(
+      this.preferences.general.coreFeeMultiplier, inputs.length, 1, false, rebuilt.signedSize())
+    if (feeDuffs < quotedFeeDuffs || feeDuffs - quotedFeeDuffs >= DUST_THRESHOLD_DUFFS) {
+      throw new Error('The registration fee does not match the quoted network fee')
+    }
+
+    const reproduced = this.coreTransactionService.buildProviderTx({payload: rebuilt, inputs, changeAddress, inputTotal, feeDuffs})
+    if (reproduced.hex() !== unsignedHex.toLowerCase()) {
+      throw new Error('The transaction does not match the registration this wallet would build')
+    }
+    return {payload: rebuilt, signer: {kind: 'address', derivationPath: collateralPath, address: coin.address}, inputs, changeAddress, inputTotal, feeDuffs}
+  }
+
+  private async registrationPlan(
+    registration: MasternodeRegistration,
+    provided: Pick<MasternodeRegistration, 'ownerAddress' | 'votingAddress' | 'operatorPublicKey'>,
+    {network, keys, owned, provider, grouped, utxos, collaterals}: ProviderTxContext,
+  ): Promise<MasternodeRegistrationPlan> {
+    const coin = requireCollateral(utxos, collaterals, registration)
+    const collateralPath = addressPaths(grouped).get(coin.address)
+    if (collateralPath == null) throw new Error(`No derivation path for address ${coin.address}`)
+
+    // One index for all three: a node not confirmed yet lists no owner key, so
+    // the owner chain alone would hand out the index that node already took.
+    const index = unusedKeyIndex(owned, ...MASTERNODE_KEY_CHAINS)
+    const derived = (chain: MasternodeKeyChain): string => masternodeKeyDeriver(keys, network, chain).derive(index).address
+    const ownerAddress = provided.ownerAddress ?? derived('owner')
+    const votingAddress = provided.votingAddress ?? derived('voting')
+    const operatorPublicKey = provided.operatorPublicKey ?? derived('operator')
+    if (provided.operatorPublicKey != null) await this.requireFreeOperatorKey(provided.operatorPublicKey, provider)
+    requirePayout(registration.payoutAddress, ownerAddress, votingAddress)
+    return {
+      payload: this.coreTransactionService.proRegPayload(registration, {
+        ownerKeyId: bytesToHex(sdkUtils.addressToPublicKeyHash(ownerAddress)),
+        votingKeyId: bytesToHex(sdkUtils.addressToPublicKeyHash(votingAddress)),
+        operatorPublicKey,
+      }, network),
+      signer: {kind: 'address', derivationPath: collateralPath, address: coin.address},
+      spendable: utxos.filter(utxo => utxo !== coin),
+      ownerAddress,
+      votingAddress,
+      operatorPublicKey,
+      ownerKeyIndex: provided.ownerAddress == null ? index : null,
+      votingKeyIndex: provided.votingAddress == null ? index : null,
+      operatorKeyIndex: provided.operatorPublicKey == null ? index : null,
+    }
+  }
+
+  // The coins a provider transaction adds for its fee, priced against the
+  // payload's signed size — the selection register and its preview share.
+  private selectProviderInputs(plan: ProviderTxPlan, {grouped, collaterals}: ProviderTxContext) {
+    const {coreFeeMultiplier} = this.preferences.general
+    return selectTransferInputs(
+      grouped,
+      withoutCollaterals(plan.spendable, collaterals),
+      DUST_THRESHOLD_DUFFS,
+      inputsCount => coreFeeDuffsFor(coreFeeMultiplier, inputsCount, 1, false, plan.payload.signedSize()),
+    )
   }
 
   // A ProUpRegTx restates all three fields, so a kept one is the node's current value.
@@ -261,6 +476,27 @@ export class MasternodeService {
     if (listed.some(entry => entry.proTxHash !== except)) throw new Error('Another masternode already uses this operator key')
   }
 
+  // Everything a provider transaction is planned from. No seed: the provider keys
+  // are the stored xpubs, so a preview resolves them too.
+  private async providerTxContext(walletId: string): Promise<ProviderTxContext> {
+    const wallet = await requireWallet(this.walletDAO, walletId)
+    if (!this.listed.has(walletId)) await this.discover(walletId)
+    const owned = this.listed.get(walletId)
+    if (owned == null) throw new Error('The masternode list has not arrived yet')
+    const keys = await this.masternodeKeyDAO.getKeys(walletId)
+    if (keys == null) throw new Error('Masternode keys are derived at the next password check')
+
+    const provider = this.providers.forWallet(walletId, wallet.network)
+    await provider.ensureReady()
+    const [grouped, utxos, imported, collaterals] = await Promise.all([
+      this.addressDAO.getAddressesByWalletId(walletId),
+      provider.getWalletUtxos(),
+      this.masternodeKeyDAO.getImportedKeys(walletId),
+      this.masternodeDAO.getCollaterals(walletId),
+    ])
+    return {network: wallet.network, keys, owned, imported, provider, grouped, utxos, collaterals}
+  }
+
   // The change is the only output, so it is what has to clear dust. `target` is
   // the node an update names: one no longer listed is dropped by every peer silently.
   private async sendProviderTx(
@@ -269,41 +505,32 @@ export class MasternodeService {
     plan: (context: ProviderTxContext) => Promise<ProviderTxPlan>,
     target?: string,
   ): Promise<MasternodeUpdateResult> {
-    if (!this.listed.has(walletId)) await this.discover(walletId)
-    const owned = this.listed.get(walletId)
-    if (owned == null) throw new Error('The masternode list has not arrived yet')
-    const keys = await this.masternodeKeyDAO.getKeys(walletId)
-    if (keys == null) throw new Error('Masternode keys are derived at the next password check')
-
-    const {tx, inputTotal} = await withUnlockedWallet(this.walletDAO, walletId, password, async ({wallet, seed}) => {
-      const {network} = wallet
+    const context = await this.providerTxContext(walletId)
+    const {network} = context
+    const {tx, inputTotal} = await withUnlockedWallet(this.walletDAO, walletId, password, async ({seed}) => {
       if (target != null && !this.walletSyncService.getListedMasternodes(network)?.proTxHashes.has(target)) {
         this.walletSyncService.refreshListedMasternodes()
         throw new Error("The network's masternode list does not carry this node: its collateral was spent, or the list is still arriving")
       }
-      const provider = this.providers.forWallet(walletId, network)
-      await provider.ensureReady()
-      const [grouped, utxos, imported, collaterals] = await Promise.all([
-        this.addressDAO.getAddressesByWalletId(walletId),
-        provider.getWalletUtxos(),
-        this.masternodeKeyDAO.getImportedKeys(walletId),
-        this.masternodeDAO.getCollaterals(walletId),
-      ])
-      const {payload, signer, spendable} = await plan({network, keys, owned, imported, provider, grouped, utxos, collaterals})
-
-      const {coreFeeMultiplier} = this.preferences.general
-      const {transferInputs, inputTotal, changeAddress, feeDuffs} = selectTransferInputs(
-        grouped,
-        withoutCollaterals(spendable, collaterals),
-        DUST_THRESHOLD_DUFFS,
-        inputsCount => coreFeeDuffsFor(coreFeeMultiplier, inputsCount, 1, false, payload.signedSize()),
-      )
+      const providerPlan = await plan(context)
+      const selection = this.selectProviderInputs(providerPlan, context)
       const tx = await this.coreTransactionService.buildSignedProviderTx({
-        payload, signer, inputs: transferInputs, changeAddress, inputTotal, feeDuffs, seed, network,
+        payload: providerPlan.payload,
+        signer: providerPlan.signer,
+        inputs: selection.transferInputs,
+        changeAddress: selection.changeAddress,
+        inputTotal: selection.inputTotal,
+        feeDuffs: selection.feeDuffs,
+        seed,
+        network,
       })
-      return {tx, inputTotal}
+      return {tx, inputTotal: selection.inputTotal}
     })
 
+    return this.broadcastProviderTx(tx, inputTotal)
+  }
+
+  private async broadcastProviderTx(tx: Transaction, inputTotal: bigint): Promise<MasternodeUpdateResult> {
     const fee = inputTotal - tx.outputs.reduce((sum, output) => sum + output.satoshis, 0n)
     log.info(`provider tx ${tx.hash()} (type ${tx.type}, ${tx.inputs.length} input(s), fee ${fee} duffs): broadcasting`)
     // Peers drop an invalid tx without a reason, so the bytes are the only trace.

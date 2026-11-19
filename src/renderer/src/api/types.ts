@@ -279,6 +279,30 @@ export interface MasternodeRegistrationDto extends MasternodePlatformFieldsDto {
   operatorPublicKey: string | null
 }
 
+// A registration stopped one step short of signing: every ProRegTx field
+// resolved, the fee priced, and the transaction the wallet would sign. A null
+// key index is a key the caller supplied rather than one the wallet derives.
+export interface MasternodeRegistrationPreviewDto {
+  type: 'Regular' | 'Evo'
+  collateral: { txid: string; vout: number }
+  ownerAddress: string
+  votingAddress: string
+  operatorPublicKey: string
+  serviceAddress: string | null
+  payoutAddress: string
+  operatorReward: number
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+  ownerKeyIndex: number | null
+  votingKeyIndex: number | null
+  operatorKeyIndex: number | null
+  inputs: PreviewEntry[]
+  outputs: PreviewEntry[]
+  feeDuffs: bigint
+  unsignedHex: string
+}
+
 // keep is the node's current key, wallet the lowest unused wallet key. A new operator
 // key PoSe-bans the node until that operator's service update; a null payoutAddress keeps the payout.
 export interface MasternodeRegistrarUpdateDto {

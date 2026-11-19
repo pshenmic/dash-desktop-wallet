@@ -29,6 +29,7 @@ import {
 } from '../../constants/chain'
 import {
   BuildAssetLockParams,
+  BuildProviderTxParams,
   BuildSignedAssetLockParams,
   BuildSignedProviderTxParams,
   BuildSignedTransferParams,
@@ -195,8 +196,8 @@ export class CoreTransactionService {
 
   // The payload commits to the inputs and the inputs' signatures to the payload,
   // so it is finished in between.
-  async buildSignedProviderTx(params: BuildSignedProviderTxParams): Promise<SDKTransaction> {
-    const {payload, signer, inputs, changeAddress, inputTotal, feeDuffs, seed, network} = params
+  buildProviderTx(params: BuildProviderTxParams): SDKTransaction {
+    const {payload, inputs, changeAddress, inputTotal, feeDuffs} = params
     const type = payload instanceof ProRegTX ? TransactionType.TRANSACTION_PROVIDER_REGISTER
       : payload instanceof ProUpRegTx ? TransactionType.TRANSACTION_PROVIDER_UPDATE_REGISTRAR
       : payload instanceof ProUpServTx ? TransactionType.TRANSACTION_PROVIDER_UPDATE_SERVICE
@@ -204,11 +205,15 @@ export class CoreTransactionService {
     const transaction = new SDKTransaction(undefined, undefined, undefined, 3, type, payload)
     this.addInputs(transaction, inputs)
     this.addChange(transaction, inputTotal - feeDuffs, changeAddress)
-
     payload.inputsHash = transaction.providerInputsHash()
+    return transaction
+  }
+
+  async buildSignedProviderTx(params: BuildSignedProviderTxParams): Promise<SDKTransaction> {
+    const {payload, signer, inputs, seed, network} = params
+    const transaction = this.buildProviderTx(params)
     await this.signPayload(payload, signer, seed, network)
     transaction.sign(await this.privateKeys(inputs, seed, network))
-
     return transaction
   }
 

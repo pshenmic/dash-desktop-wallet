@@ -33,7 +33,8 @@ import { GetMasternodeCollateralsHandler } from './api/masternodes/getMasternode
 import { GetImportedMasternodeKeysHandler } from './api/masternodes/getImportedMasternodeKeys'
 import { ImportMasternodeKeyHandler } from './api/masternodes/importMasternodeKey'
 import { RemoveMasternodeKeyHandler } from './api/masternodes/removeMasternodeKey'
-import { RegisterMasternodeHandler } from './api/masternodes/registerMasternode'
+import { SignAndBroadcastMasternodeRegistrationHandler } from './api/masternodes/signAndBroadcastMasternodeRegistration'
+import { PreviewMasternodeRegistrationHandler } from './api/masternodes/previewMasternodeRegistration'
 import { UpdateMasternodeRegistrarHandler } from './api/masternodes/updateMasternodeRegistrar'
 import { UpdateMasternodeServiceHandler } from './api/masternodes/updateMasternodeService'
 import { RevokeMasternodeHandler } from './api/masternodes/revokeMasternode'
@@ -224,7 +225,8 @@ export class WalletBackend {
     registerHandler('getImportedMasternodeKeys', new GetImportedMasternodeKeysHandler(this.masternodeService).handle)
     registerHandler('importMasternodeKey', new ImportMasternodeKeyHandler(this.masternodeService).handle)
     registerHandler('removeMasternodeKey', new RemoveMasternodeKeyHandler(this.masternodeService).handle)
-    registerHandler('registerMasternode', new RegisterMasternodeHandler(this.masternodeService).handle)
+    registerHandler('previewMasternodeRegistration', new PreviewMasternodeRegistrationHandler(this.masternodeService).handle)
+    registerHandler('signAndBroadcastMasternodeRegistration', new SignAndBroadcastMasternodeRegistrationHandler(this.masternodeService).handle)
     registerHandler('updateMasternodeRegistrar', new UpdateMasternodeRegistrarHandler(this.masternodeService).handle)
     registerHandler('updateMasternodeService', new UpdateMasternodeServiceHandler(this.masternodeService).handle)
     registerHandler('revokeMasternode', new RevokeMasternodeHandler(this.masternodeService).handle)

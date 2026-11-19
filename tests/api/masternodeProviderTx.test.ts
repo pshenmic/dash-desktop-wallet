@@ -1,6 +1,6 @@
 import {beforeEach, describe, expect, it} from 'vitest'
 import {hexToBytes} from '@noble/hashes/utils.js'
-import {bls, recoverHashSigner, recoverMessageSigner, Script, Transaction, utils as sdkUtils} from 'dash-core-sdk'
+import {bls, Output, recoverHashSigner, recoverMessageSigner, Script, Transaction, utils as sdkUtils} from 'dash-core-sdk'
 import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
 import {ProUpRegTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRegTx.js'
 import {ProUpRevTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRevTx.js'
@@ -99,7 +99,8 @@ describe('MasternodeService provider transactions', () => {
   })
 
   async function register(fields: Partial<MasternodeRegistration> = {}): Promise<{tx: Transaction; payload: ProRegTX; fee: bigint}> {
-    const result = await masternodes.register(walletId, registration(fields), PASSWORD)
+    const preview = await masternodes.previewRegistration(walletId, registration(fields))
+    const result = await masternodes.signAndBroadcastRegistration(walletId, preview.unsignedHex, PASSWORD)
     const tx = Transaction.fromHex(broadcast.at(-1)!)
     expect(result.proTxHash).toBe(tx.hash())
     return {tx, payload: tx.extraPayload as ProRegTX, fee: result.fee}
@@ -176,17 +177,13 @@ describe('MasternodeService provider transactions', () => {
 
   it('refuses a P2SH owner or voting key, a malformed operator key and one another node carries', async () => {
     const p2sh = Base58Check.encode(new Uint8Array([ADDRESS_PREFIX.testnet.p2sh, ...sdkUtils.addressToPublicKeyHash(owned[1])]))
-    await expect(masternodes.register(walletId, registration({ownerAddress: p2sh}), PASSWORD))
-      .rejects.toThrow('owner key must be a P2PKH address')
-    await expect(masternodes.register(walletId, registration({votingAddress: p2sh}), PASSWORD))
-      .rejects.toThrow('voting key must be a P2PKH address')
-    await expect(masternodes.register(walletId, registration({operatorPublicKey: 'ff'.repeat(48)}), PASSWORD))
-      .rejects.toThrow('Not a BLS public key')
+    await expect(register({ownerAddress: p2sh})).rejects.toThrow('owner key must be a P2PKH address')
+    await expect(register({votingAddress: p2sh})).rejects.toThrow('voting key must be a P2PKH address')
+    await expect(register({operatorPublicKey: 'ff'.repeat(48)})).rejects.toThrow('Not a BLS public key')
 
     const taken = key('operator', 3)
     list = [node('22'.repeat(32), {operatorPublicKey: taken})]
-    await expect(masternodes.register(walletId, registration({operatorPublicKey: taken}), PASSWORD))
-      .rejects.toThrow('already uses this operator key')
+    await expect(register({operatorPublicKey: taken})).rejects.toThrow('already uses this operator key')
     expect(broadcast).toEqual([])
   })
 
@@ -202,30 +199,141 @@ describe('MasternodeService provider transactions', () => {
   // Core reads a collateral from the UTXO set only, so peers drop the tx silently.
   it('refuses a collateral still in the mempool', async () => {
     utxos[0] = {...utxo(owned[0], 1_000n * DASH, 'cc'.repeat(32)), height: 0, confirmations: 0}
-    await expect(masternodes.register(walletId, registration(), PASSWORD)).rejects.toThrow('needs a confirmation')
+    await expect(register()).rejects.toThrow('needs a confirmation')
     expect(broadcast).toEqual([])
   })
 
   it('refuses a collateral of the wrong amount for the type', async () => {
-    await expect(masternodes.register(walletId, registration(EVO_FIELDS), PASSWORD))
-      .rejects.toThrow('exactly 4000 DASH')
+    await expect(register(EVO_FIELDS)).rejects.toThrow('exactly 4000 DASH')
     expect(broadcast).toEqual([])
   })
 
   it('refuses an Evo without its platform node id', async () => {
     utxos[0] = utxo(owned[0], 4_000n * DASH, 'cc'.repeat(32))
-    await expect(masternodes.register(walletId, registration({...EVO_FIELDS, platformNodeId: null}), PASSWORD))
-      .rejects.toThrow('platform node id')
+    await expect(register({...EVO_FIELDS, platformNodeId: null})).rejects.toThrow('platform node id')
   })
 
   it('refuses a coin that already backs a masternode', async () => {
     list = [node('22'.repeat(32), {collateralTxid: 'cc'.repeat(32), collateralVout: 0, collateralAddress: owned[0]})]
-    await expect(masternodes.register(walletId, registration(), PASSWORD)).rejects.toThrow('already a masternode collateral')
+    await expect(register()).rejects.toThrow('already a masternode collateral')
   })
 
   it('refuses before any list has arrived to tell which keys are free', async () => {
     list = null
-    await expect(masternodes.register(walletId, registration(), PASSWORD)).rejects.toThrow('has not arrived')
+    await expect(register()).rejects.toThrow('has not arrived')
+  })
+
+  describe('previewRegistration', () => {
+    it('resolves the payload and the fee without a password or a broadcast', async () => {
+      const preview = await masternodes.previewRegistration(walletId, registration())
+
+      expect(preview).toMatchObject({
+        type: 'Regular',
+        collateral: {txid: 'cc'.repeat(32), vout: 0},
+        ownerAddress: key('owner', 0),
+        votingAddress: key('voting', 0),
+        operatorPublicKey: key('operator', 0),
+        serviceAddress: '45.33.12.7:19999',
+        payoutAddress: owned[2],
+        operatorReward: 0,
+        platformNodeId: null,
+        platformP2PPort: null,
+        platformHttpPort: null,
+        ownerKeyIndex: 0,
+        votingKeyIndex: 0,
+        operatorKeyIndex: 0,
+      })
+      expect(preview.feeDuffs).toBeGreaterThan(0n)
+      expect(preview.inputs.map(({address, reference}) => [address, reference]))
+        .toEqual([[owned[1], `${'aa'.repeat(32)}:0`]])
+      expect(preview.outputs).toHaveLength(1)
+      expect(preview.outputs[0]).toMatchObject({role: 'change', unit: 'duffs', amount: DASH - preview.feeDuffs})
+      expect(broadcast).toEqual([])
+
+      const tx = Transaction.fromHex(preview.unsignedHex)
+      const payload = tx.extraPayload as ProRegTX
+      expect(tx.type).toBe(1)
+      expect(payload.getOwnerAddress('testnet')).toBe(key('owner', 0))
+      expect(payload.getVotingAddress('testnet')).toBe(key('voting', 0))
+      expect(payload.pubKeyOperator).toBe(key('operator', 0))
+      expect(payload.getPayoutAddress('testnet')).toBe(owned[2])
+      expect(payload.payloadSig).toBe('')
+    })
+
+    it('prices the transaction register broadcasts', async () => {
+      const preview = await masternodes.previewRegistration(walletId, registration())
+      const {tx, payload, fee} = await register()
+
+      expect(preview.feeDuffs).toBe(fee)
+      expect(preview.inputs.map(({reference}) => reference)).toEqual(tx.inputs.map(({txId, vOut}) => `${txId}:${vOut}`))
+      const previewed = (Transaction.fromHex(preview.unsignedHex).extraPayload as ProRegTX)
+      expect(previewed.payloadHash()).toEqual(payload.payloadHash())
+    })
+
+    it('previews supplied keys without a wallet index', async () => {
+      const preview = await masternodes.previewRegistration(walletId, registration({
+        ownerAddress: key('owner', 7), votingAddress: key('voting', 7), operatorPublicKey: key('operator', 7),
+      }))
+
+      expect(preview).toMatchObject({
+        ownerAddress: key('owner', 7),
+        votingAddress: key('voting', 7),
+        operatorPublicKey: key('operator', 7),
+        ownerKeyIndex: null,
+        votingKeyIndex: null,
+        operatorKeyIndex: null,
+      })
+    })
+  })
+
+  describe('signAndBroadcastRegistration', () => {
+    it('signs the bytes the preview returned', async () => {
+      const preview = await masternodes.previewRegistration(walletId, registration())
+      const result = await masternodes.signAndBroadcastRegistration(walletId, preview.unsignedHex, PASSWORD)
+      const tx = Transaction.fromHex(broadcast.at(-1)!)
+
+      expect(result.proTxHash).toBe(tx.hash())
+      expect(result.fee).toBe(preview.feeDuffs)
+      expect(payloadSigner(tx.extraPayload as ProRegTX)).toBe(owned[0])
+    })
+
+    it('refuses bytes that no longer match what the wallet would build', async () => {
+      const preview = await masternodes.previewRegistration(walletId, registration())
+      const forged = Transaction.fromHex(preview.unsignedHex)
+      ;(forged.extraPayload as ProRegTX).inputsHash = '00'.repeat(32)
+
+      await expect(masternodes.signAndBroadcastRegistration(walletId, forged.hex(), PASSWORD))
+        .rejects.toThrow('does not match')
+      expect(broadcast).toEqual([])
+    })
+
+    it('refuses a second output or one that does not pay this wallet', async () => {
+      const preview = await masternodes.previewRegistration(walletId, registration())
+      const stranger = sdkUtils.publicKeyHashToAddress(new Uint8Array(20).fill(7), 'testnet')
+
+      const extra = Transaction.fromHex(preview.unsignedHex)
+      const output = new Output(DASH / 2n)
+      output.generateP2PKH(stranger)
+      extra.addOutput(output)
+      await expect(masternodes.signAndBroadcastRegistration(walletId, extra.hex(), PASSWORD))
+        .rejects.toThrow('pays its change and nothing else')
+
+      const swapped = Transaction.fromHex(preview.unsignedHex)
+      swapped.outputs[0].script = p2pkhScript(stranger)
+      await expect(masternodes.signAndBroadcastRegistration(walletId, swapped.hex(), PASSWORD))
+        .rejects.toThrow("not this wallet's")
+
+      const burned = Transaction.fromHex(preview.unsignedHex)
+      burned.outputs = []
+      await expect(masternodes.signAndBroadcastRegistration(walletId, burned.hex(), PASSWORD))
+        .rejects.toThrow('fee does not match')
+      expect(broadcast).toEqual([])
+    })
+
+    it('refuses a transaction that is not a registration', async () => {
+      await expect(masternodes.signAndBroadcastRegistration(walletId, 'not hex', PASSWORD)).rejects.toThrow('Not a transaction')
+      await expect(masternodes.signAndBroadcastRegistration(walletId, new Transaction().hex(), PASSWORD)).rejects.toThrow('Not a registration')
+    })
   })
   describe('updateRegistrar', () => {
     const PRO_TX_HASH = '11'.repeat(32)

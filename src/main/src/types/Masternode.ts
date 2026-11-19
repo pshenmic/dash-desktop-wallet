@@ -2,6 +2,7 @@ import type {WalletProvider} from '../providers/WalletProvider'
 import type {ProviderPayload, ProviderTxSigner} from './CoreTransaction'
 import type {GroupedAddresses} from './GroupedAddresses'
 import type {Network} from './Network'
+import type {PreviewEntry} from './TransactionPreview'
 import type {UTXO} from './UTXO'
 
 export type MasternodeKeyRole = 'collateral' | 'voting' | 'owner' | 'operator' | 'platformNode'
@@ -81,6 +82,17 @@ export interface ProviderTxPlan {
   spendable: UTXO[]
 }
 
+// A registration plan plus the keys it resolved: null indexes are keys the
+// caller supplied rather than ones the wallet derives.
+export interface MasternodeRegistrationPlan extends ProviderTxPlan {
+  ownerAddress: string
+  votingAddress: string
+  operatorPublicKey: string
+  ownerKeyIndex: number | null
+  votingKeyIndex: number | null
+  operatorKeyIndex: number | null
+}
+
 // The network's own list, which carries a node exactly while its collateral is
 // unspent; askedAt is when the lock pool asked for it, 0 for one it did not ask for.
 export interface ListedMasternodes {
@@ -99,6 +111,31 @@ export interface MasternodeRegistrationResult {
   proTxHash: string
   fee: bigint
   peersAcked: number
+}
+
+// A registration one step short of signing: every ProRegTx field resolved from
+// the wallet or the caller, the coins the fee comes from, and the transaction
+// the wallet would sign. Nothing here needs the seed, so a preview asks for no
+// password.
+export interface MasternodeRegistrationPreview {
+  type: MasternodeType
+  collateral: {txid: string; vout: number}
+  ownerAddress: string
+  votingAddress: string
+  operatorPublicKey: string
+  serviceAddress: string | null
+  payoutAddress: string
+  operatorReward: number
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+  ownerKeyIndex: number | null
+  votingKeyIndex: number | null
+  operatorKeyIndex: number | null
+  inputs: PreviewEntry[]
+  outputs: PreviewEntry[]
+  feeDuffs: bigint
+  unsignedHex: string
 }
 
 // One entry of the network's masternode list. Times are unix seconds, 0 = never.

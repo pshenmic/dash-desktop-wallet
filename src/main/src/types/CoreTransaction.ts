@@ -73,15 +73,19 @@ export type ProviderTxSigner =
   | {kind: 'address'; derivationPath: string; address: string}
   | {kind: 'operator'; index: number}
 
-// payload is completed here: its inputs hash and signature both depend on the
-// inputs chosen.
-export interface BuildSignedProviderTxParams {
+// payload is completed here: its inputs hash depends on the inputs chosen, and
+// nothing else does — which is what lets the same build answer a preview and a
+// send.
+export interface BuildProviderTxParams {
   payload: ProviderPayload
-  signer: ProviderTxSigner
   inputs: TransferInput[]
   changeAddress: string
   inputTotal: bigint
   feeDuffs: bigint
+}
+
+export interface BuildSignedProviderTxParams extends BuildProviderTxParams {
+  signer: ProviderTxSigner
   seed: Uint8Array
   network: Network
 }
