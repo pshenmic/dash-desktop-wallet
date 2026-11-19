@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import { Button, InfoCircleIcon, KeyIcon, PlusIcon, Text } from '@renderer/components/dash-ui-kit-extended'
+import { Button, InfoCircleIcon, PlusIcon, Text } from '@renderer/components/dash-ui-kit-extended'
 import Alert from '@renderer/components/ui/Alert'
 import ListSkeleton from '@renderer/components/ui/Skeleton'
 import NoResults from '@renderer/components/ui/NoResults'
@@ -20,6 +20,7 @@ import { useScrollEndSentinel } from '@renderer/hooks/useScrollEndSentinel'
 import { windowList } from '@renderer/utils/listWindow'
 import { emptyNodesDescription, filterNodes, nodeSegmentOptions } from '@renderer/utils/masternodeNodes'
 import type { NodesTabProps } from '@renderer/types/MasternodeScreens'
+import AddMasternodeModal from './AddMasternodeModal'
 import ManageMasternodeKeysModal from './ManageMasternodeKeysModal'
 import NodeTableRow from './NodeTableRow'
 
@@ -37,6 +38,7 @@ export default function NodesTab({
   const { desired, setDesired } = useConnectionModeContext()
   const { nodes, discovered, loading, err } = useMasternodes(walletId)
   const { importedKeys } = useImportedMasternodeKeys(walletId)
+  const [addOpen, setAddOpen] = useState(false)
   const [keysOpen, setKeysOpen] = useState(false)
   const appliedQuery = useDeferredValue(query)
   const options = useMemo(() => nodeSegmentOptions(nodes, appliedQuery), [nodes, appliedQuery])
@@ -47,30 +49,16 @@ export default function NodesTab({
   const sentinelRef = useScrollEndSentinel(view.hasMore && !showSkeleton, onShowMore, visibleCount)
 
   const actionButtons = (
-    <div className={'flex flex-wrap items-center gap-2'}>
-      <Button
-        type={'button'}
-        size={'compact'}
-        colorScheme={'primary-light'}
-        onClick={() => setKeysOpen(true)}
-        className={'inline-flex items-center gap-1.5 rounded-[.75rem]'}
-      >
-        <KeyIcon size={12} color={'currentColor'} />
-        {importedKeys.length > 0
-          ? `${NODES_TAB_COPY.importedKeysButton} (${importedKeys.length})`
-          : NODES_TAB_COPY.importedKeysButton}
-      </Button>
-      <Button
-        type={'button'}
-        size={'compact'}
-        colorScheme={'primary'}
-        onClick={onRegister}
-        className={'inline-flex items-center gap-1.5 rounded-[.75rem]'}
-      >
-        <PlusIcon size={12} color={'currentColor'} />
-        {NODES_TAB_COPY.registerButton}
-      </Button>
-    </div>
+    <Button
+      type={'button'}
+      size={'compact'}
+      colorScheme={'primary'}
+      onClick={() => setAddOpen(true)}
+      className={'inline-flex items-center gap-1.5 rounded-[.75rem]'}
+    >
+      <PlusIcon size={12} color={'currentColor'} />
+      {NODES_TAB_COPY.addMasternodeButton}
+    </Button>
   )
 
   let body: React.JSX.Element
@@ -177,6 +165,15 @@ export default function NodesTab({
   return (
     <div className={'flex flex-col gap-4 pt-2'}>
       {body}
+      {addOpen && (
+        <AddMasternodeModal
+          open={addOpen}
+          importedCount={importedKeys.length}
+          onClose={() => setAddOpen(false)}
+          onSelectRegister={onRegister}
+          onSelectImport={() => setKeysOpen(true)}
+        />
+      )}
       {keysOpen && (
         <ManageMasternodeKeysModal
           walletId={walletId}

@@ -21,8 +21,19 @@ export const NODES_TAB_COPY = {
   switchToP2P: 'Switch to P2P',
   noMatch: 'No nodes match',
   clearSearch: 'Clear search',
+  addMasternodeButton: 'Add masternode',
   registerButton: 'Register masternode',
   importedKeysButton: 'Imported keys',
+} as const
+
+export const ADD_MASTERNODE_MODAL_COPY = {
+  title: 'Add masternode',
+  description: 'Register a new masternode on-chain or import existing masternode keys to track and manage nodes.',
+  registerTitle: 'Register masternode',
+  registerDescription: 'Create a ProRegTx for a Regular (1,000 DASH) or Evonode (4,000 DASH) collateral.',
+  importTitle: 'Import keys',
+  importDescription: 'Paste Owner, Voting (WIF) or Operator (BLS) private keys to discover and manage existing nodes.',
+  importedCountSuffix: 'imported',
 } as const
 
 export const NODE_TABLE_COLUMNS = ['Node', 'Shared', 'Status', 'Roles & Stake'] as const

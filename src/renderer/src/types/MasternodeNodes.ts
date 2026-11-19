@@ -26,6 +26,14 @@ export interface ManageMasternodeKeysModalProps {
   onClose: () => void
 }
 
+export interface AddMasternodeModalProps {
+  open: boolean
+  importedCount: number
+  onClose: () => void
+  onSelectRegister: () => void
+  onSelectImport: () => void
+}
+
 export interface MasternodeShareSummary {
   totalDuffs: bigint
   ownedDuffs: bigint
