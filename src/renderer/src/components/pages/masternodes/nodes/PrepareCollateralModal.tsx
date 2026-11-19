@@ -262,6 +262,7 @@ export default function PrepareCollateralModal({
 
           <RecipientInput
             compact
+            hideAddressBook
             value={targetAddress}
             valueBadge={badgeFor(targetAddress)}
             onChange={value => {

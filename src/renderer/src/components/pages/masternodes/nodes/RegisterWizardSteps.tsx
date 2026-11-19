@@ -720,6 +720,7 @@ export function RegisterStepReview({
           <div className={'flex flex-col gap-2'}>
             <RecipientInput
               compact
+              hideAddressBook
               value={draft.feeSourceAddress}
               valueBadge={badgeFor(draft.feeSourceAddress)}
               onChange={feeSourceAddress => updateDraft({ feeSourceAddress })}

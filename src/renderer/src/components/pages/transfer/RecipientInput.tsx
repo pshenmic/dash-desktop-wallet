@@ -29,6 +29,7 @@ export default function RecipientInput({
   ownOptionsLoading = false,
   ownOptionsError = null,
   onRetryOwnOptions,
+  hideAddressBook = false,
 }: RecipientInputProps) {
   const [adding, setAdding] = useState(false)
   const [newLabel, setNewLabel] = useState('')
@@ -39,7 +40,7 @@ export default function RecipientInput({
   const isValid = validate ?? ((address: string) => isValidDashAddress(address, network))
 
   const trimmedValue = value.trim()
-  const filteredContacts = matchingContacts(contacts, value, isValid)
+  const filteredContacts = hideAddressBook ? [] : matchingContacts(contacts, value, isValid)
 
   const isValidRecipient = isValid(trimmedValue)
   const hasOwnOptions = ownOptions != null && ownOptions.length > 0
@@ -48,7 +49,7 @@ export default function RecipientInput({
   const invalidRecipient = !hasQueryMatches && (invalid || (trimmedValue.length > 0 && !isValidRecipient))
   const alreadySaved = contacts.some((c) => c.address === trimmedValue)
   const canSaveCurrent = isValidRecipient && !alreadySaved
-  const showAddressBookSection = !(trimmedValue !== '' && !isValidRecipient && !adding && filteredContacts.length === 0 && hasLabelMatches)
+  const showAddressBookSection = !hideAddressBook && !(trimmedValue !== '' && !isValidRecipient && !adding && filteredContacts.length === 0 && hasLabelMatches)
 
   const resetAdding = (): void => {
     setAdding(false)
@@ -105,7 +106,7 @@ export default function RecipientInput({
         valueBadge={valueBadge}
         hasExtraMatches={query => {
           const trimmedQuery = query.trim()
-          return trimmedQuery !== '' && !isValid(trimmedQuery) && matchingContacts(contacts, query, isValid).length > 0
+          return !hideAddressBook && trimmedQuery !== '' && !isValid(trimmedQuery) && matchingContacts(contacts, query, isValid).length > 0
         }}
         ariaLabel={ariaLabel ?? data.label}
         value={value}
@@ -197,6 +198,13 @@ export default function RecipientInput({
                 </Text>
               </div>
             )}
+          </div>
+        )}
+        {hideAddressBook && !ownOptionsLoading && !hasOwnOptions && (
+          <div className={"px-[.625rem] py-2"}>
+            <Text size={12} weight={"medium"} color={"brand"} opacity={50}>
+              {data.noResults}
+            </Text>
           </div>
         )}
       </DropdownField>

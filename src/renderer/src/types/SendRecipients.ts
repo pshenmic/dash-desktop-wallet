@@ -43,6 +43,7 @@ export interface RecipientInputProps {
   ownOptionsLoading?: boolean
   ownOptionsError?: string | null
   onRetryOwnOptions?: () => void
+  hideAddressBook?: boolean
 }
 
 export interface SendRecipientError {
