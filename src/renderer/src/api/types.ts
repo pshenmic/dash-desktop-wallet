@@ -256,6 +256,80 @@ export interface MasternodeDto {
   registeredHeight: number | null
 }
 
+// The platform fields are an Evo's alone, null on a Regular node.
+export interface MasternodePlatformFieldsDto {
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+}
+
+// operatorReward is in hundredths of a percent. A null serviceAddress registers
+// without one, left to the operator's service update.
+export interface MasternodeRegistrationDto extends MasternodePlatformFieldsDto {
+  type: 'Regular' | 'Evo'
+  collateral: { txid: string; vout: number }
+  serviceAddress: string | null
+  payoutAddress: string
+  operatorReward: number
+}
+
+// keep is the node's current key, wallet the lowest unused wallet key. A new operator
+// key PoSe-bans the node until that operator's service update; a null payoutAddress keeps the payout.
+export interface MasternodeRegistrarUpdateDto {
+  operator: { kind: 'keep' } | { kind: 'wallet' } | { kind: 'external'; publicKey: string }
+  voting: { kind: 'keep' } | { kind: 'wallet' } | { kind: 'external'; address: string }
+  payoutAddress: string | null
+}
+
+// Restates the whole service, signed by the operator key the wallet must derive.
+export interface MasternodeServiceUpdateDto extends MasternodePlatformFieldsDto {
+  serviceAddress: string
+  operatorPayoutAddress: string | null
+}
+
+export type RevocationReason = 'notSpecified' | 'termination' | 'compromisedKeys' | 'changeOfKeys'
+
+export interface MasternodeUpdateResult {
+  txid: string
+  fee: bigint
+  peersAcked: number
+}
+
+export interface MasternodeRegistrationResult {
+  proTxHash: string
+  fee: bigint
+  peersAcked: number
+}
+
+// Epochs and createdAt are unix seconds.
+export interface ProposalDto {
+  hash: string
+  name: string
+  url: string
+  paymentAddress: string
+  paymentDuffs: bigint
+  startEpoch: number
+  endEpoch: number
+  createdAt: number
+  collateralHash: string
+}
+
+// Funding votes, an evonode's counted four times.
+export interface ProposalTally {
+  yes: number
+  no: number
+  abstain: number
+}
+
+export type VoteOutcome = 'yes' | 'no' | 'abstain'
+
+// peers asked for the vote; accepted of them kept it, and 0 is a vote Core dropped.
+export interface VoteResult {
+  proTxHash: string
+  peers: number
+  accepted: number
+}
+
 // the backend's business; this carries only what the user chose.
 export interface FeeParams {
   amountCredits: bigint

@@ -109,3 +109,21 @@ export interface DashscanMasternode {
   platformP2PPort: number | null
   platformHTTPPort: number | null
 }
+
+// /governance/proposals, every governance object Core holds, unpaged. Counts are
+// funding votes, weighted; creationTime is an ISO date.
+export interface DashscanProposal {
+  hash: string
+  objectType: string
+  name: string
+  url: string
+  paymentAddress: string
+  paymentAmount: number
+  startEpoch: number
+  endEpoch: number
+  creationTime: string
+  collateralHash: string
+  yesCount: number
+  noCount: number
+  abstainCount: number
+}
