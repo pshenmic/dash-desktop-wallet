@@ -33,6 +33,7 @@ import {
   saveRegisterWizardState,
 } from '@renderer/utils/masternodeRegistrationDraft'
 import { recordPendingMasternode } from '@renderer/utils/pendingMasternodes'
+import { buildCustomFeeProRegPreview, fundedFeeAddressOptions } from '@renderer/utils/proRegCustomFee'
 import {
   RegisterStepAddresses,
   RegisterStepCollateral,
@@ -72,6 +73,7 @@ export default function RegisterMasternodeWizard({
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [previewNonce, setPreviewNonce] = useState(0)
+  const [coreFeeMultiplier, setCoreFeeMultiplier] = useState(1)
 
   const updateWizardState = (
     updater: (current: PersistedRegisterWizardState) => PersistedRegisterWizardState,
@@ -130,7 +132,26 @@ export default function RegisterMasternodeWizard({
   const stepErrors = [validation.step1Error, validation.step2Error, validation.step3Error, null] as const
   const activeStepError = stepErrors[step]
   const registrationDto = validation.dto
-  const canBroadcast = registrationDto != null && preview != null && !previewLoading && previewError == null
+  const fundedFeeOptions = useMemo(
+    () => fundedFeeAddressOptions(addressOptions, utxos, registrationDto?.collateral ?? null),
+    [addressOptions, utxos, registrationDto],
+  )
+  const customFeeResult = useMemo(() => {
+    if (draft.feeSourceMode !== 'address' || preview == null || registrationDto == null) {
+      return { preview, error: null }
+    }
+    return buildCustomFeeProRegPreview({
+      basePreview: preview,
+      feeAddress: draft.feeSourceAddress,
+      utxos,
+      collateral: registrationDto.collateral,
+      coreFeeMultiplier,
+      network,
+    })
+  }, [draft.feeSourceMode, draft.feeSourceAddress, preview, registrationDto, utxos, coreFeeMultiplier, network])
+  const effectivePreview = draft.feeSourceMode === 'address' ? customFeeResult.preview : preview
+  const customFeeError = draft.feeSourceMode === 'address' ? customFeeResult.error : null
+  const canBroadcast = registrationDto != null && effectivePreview != null && customFeeError == null && !previewLoading && previewError == null
 
   useEffect(() => {
     if (step !== 3 || registrationDto == null || result != null) {
@@ -142,9 +163,15 @@ export default function RegisterMasternodeWizard({
     let cancelled = false
     setPreviewLoading(true)
     setPreviewError(null)
-    void API.previewMasternodeRegistration(walletId, registrationDto)
-      .then(res => {
-        if (!cancelled) setPreview(res)
+    void Promise.all([
+      API.previewMasternodeRegistration(walletId, registrationDto),
+      API.getPreferences().then(prefs => prefs.general.coreFeeMultiplier).catch(() => 1),
+    ])
+      .then(([res, multiplier]) => {
+        if (!cancelled) {
+          setCoreFeeMultiplier(multiplier)
+          setPreview(res)
+        }
       })
       .catch(err => {
         if (!cancelled) {
@@ -178,7 +205,7 @@ export default function RegisterMasternodeWizard({
   }
 
   const handleBroadcast = async (): Promise<void> => {
-    if (submitting || !canBroadcast || registrationDto == null || preview == null || password.length === 0) return
+    if (submitting || !canBroadcast || registrationDto == null || effectivePreview == null || password.length === 0) return
     setSubmitting(true)
     setPasswordInvalid(false)
     setBroadcastError(null)
@@ -189,7 +216,7 @@ export default function RegisterMasternodeWizard({
         setSubmitting(false)
         return
       }
-      const res = await API.signAndBroadcastMasternodeRegistration(walletId, preview.unsignedHex, password)
+      const res = await API.signAndBroadcastMasternodeRegistration(walletId, effectivePreview.unsignedHex, password)
       setPassword('')
       recordPendingMasternode(walletId, {
         proTxHash: res.proTxHash,
@@ -199,9 +226,9 @@ export default function RegisterMasternodeWizard({
         collateralAddress: validation.selectedCoin?.address ?? null,
         serviceAddress: registrationDto.serviceAddress,
         payeeAddress: registrationDto.payoutAddress,
-        ownerAddress: preview.ownerAddress,
-        votingAddress: preview.votingAddress,
-        operatorPublicKey: preview.operatorPublicKey,
+        ownerAddress: effectivePreview.ownerAddress,
+        votingAddress: effectivePreview.votingAddress,
+        operatorPublicKey: effectivePreview.operatorPublicKey,
         platformNodeId: registrationDto.platformNodeId,
         platformP2PPort: registrationDto.platformP2PPort,
         platformHttpPort: registrationDto.platformHttpPort,
@@ -261,9 +288,11 @@ export default function RegisterMasternodeWizard({
         <RegisterStepReview
           {...sharedStepProps}
           activeCollateral={activeCollateral}
-          preview={preview}
+          preview={effectivePreview}
           previewLoading={previewLoading}
           previewError={previewError}
+          customFeeError={customFeeError}
+          fundedFeeOptions={fundedFeeOptions}
           onRetryPreview={() => setPreviewNonce(n => n + 1)}
           password={password}
           onPasswordChange={value => {

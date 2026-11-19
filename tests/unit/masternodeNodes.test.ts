@@ -822,6 +822,14 @@ describe('Masternode action builders', () => {
     expect(ok.dto?.votingAddress).toBeNull()
     expect(ok.dto?.operatorPublicKey).toBeNull()
 
+    const okWithCustomFeePending = validateRegistrationWizard(
+      { ...baseDraft, feeSourceMode: 'address', feeSourceAddress: '' },
+      [collateralCoin],
+      [collateralCoin],
+      'testnet',
+    )
+    expect(okWithCustomFeePending.step1Error).toBeNull()
+
     const sameOwner = validateRegistrationWizard(
       { ...baseDraft, ownerMode: 'external', ownerAddress: payoutAddr },
       [collateralCoin],

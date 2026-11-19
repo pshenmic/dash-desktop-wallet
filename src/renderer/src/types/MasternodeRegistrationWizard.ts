@@ -85,11 +85,20 @@ export interface RegisterStepCollateralProps extends RegisterStepSharedProps {
   onRetryUtxos: () => void
 }
 
+export interface CustomFeeProRegPreviewResult {
+  preview: MasternodeRegistrationPreviewDto | null
+  error: string | null
+}
+
+export type FeeSelectableUtxo = SelectableUtxo & { collateral?: boolean }
+
 export interface RegisterStepReviewProps extends RegisterStepSharedProps {
   activeCollateral: string
   preview: MasternodeRegistrationPreviewDto | null
   previewLoading: boolean
   previewError: string | null
+  customFeeError: string | null
+  fundedFeeOptions: DropdownFieldOption[]
   onRetryPreview: () => void
   password: string
   onPasswordChange: (value: string) => void

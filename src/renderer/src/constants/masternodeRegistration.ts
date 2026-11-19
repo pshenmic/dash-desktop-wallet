@@ -3,7 +3,6 @@ import type {
   MasternodeType,
   RegisterWizardStepMeta,
   RegistrationCollateralSource,
-  RegistrationFeeSource,
   RegistrationKeySource,
   RegistrationServiceMode,
 } from '@renderer/types/MasternodeRegistrationWizard'
@@ -19,11 +18,6 @@ export const REGISTER_WIZARD_STEPS: readonly RegisterWizardStepMeta[] = [
 export const REGISTER_WIZARD_COLLATERAL_SOURCE_OPTIONS: SegmentOption<RegistrationCollateralSource>[] = [
   { value: 'wallet', label: 'Wallet UTXO' },
   { value: 'manual', label: 'Manual outpoint' },
-]
-
-export const REGISTER_WIZARD_FEE_SOURCE_OPTIONS: SegmentOption<RegistrationFeeSource>[] = [
-  { value: 'auto', label: 'Automatic wallet coin' },
-  { value: 'address', label: 'Specific address' },
 ]
 
 export const REGISTER_WIZARD_OWNER_MODE_OPTIONS: SegmentOption<RegistrationKeySource>[] = [
@@ -70,9 +64,12 @@ export const REGISTER_WIZARD_COPY = {
   manualVoutPlaceholder: '0',
   manualOutpointMissingTitle: 'Outpoint not found in this wallet',
   manualOutpointMissingDescription: 'To sign the ProRegTx funding input automatically, the collateral coin must belong to the active wallet.',
-  feeSourceLabel: 'Transaction fee source (fundAddress)',
-  feeSourceAutoNote: 'Automatically selects non-collateral wallet coins to pay the ProRegTx mining fee.',
-  feeSourceCustomNote: 'Specified for planning clarity; the active signer selects non-collateral UTXOs from this wallet on broadcast.',
+  feeSourceLabel: 'Transaction fee source',
+  customFeesCheckboxLabel: 'Custom fees address',
+  customFeesHint: 'Select a funded wallet P2PKH address with confirmed non-collateral coins to pay the ProRegTx fee and receive change.',
+  customFeesInvalidAddress: 'Enter a valid wallet P2PKH fee source address.',
+  customFeesNoEligibleCoins: 'No confirmed unlocked non-collateral coins are available on this address.',
+  customFeesInsufficient: 'Confirmed coins on this address do not cover the ProRegTx network fee.',
   payoutHint: 'Receives the owner share of masternode block rewards.',
   ownerKeyLabel: 'Owner key address (ownerKeyAddr)',
   ownerWalletNote: 'Auto-derived at m/9\'/coin\'/3\'/1\'/index from this wallet’s seed. Required to sign future ProUpRegTx updates.',

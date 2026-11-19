@@ -330,13 +330,6 @@ export function validateRegistrationWizard(
     }
   }
 
-  if (step1Error == null && draft.feeSourceMode === 'address') {
-    const feeAddr = draft.feeSourceAddress.trim()
-    if (feeAddr === '' || !isValidDashChangeAddress(feeAddr, addressNetwork)) {
-      step1Error = 'Enter a valid P2PKH fee source address or switch to automatic selection'
-    }
-  }
-
   let step2Error: string | null = null
   const payout = draft.payoutAddress.trim()
   const owner = draft.ownerAddress.trim()

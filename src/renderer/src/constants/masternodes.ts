@@ -63,6 +63,8 @@ export const MASTERNODE_VOTE_WEIGHT: Record<string, number> = {
 }
 
 export const MAX_OPERATOR_REWARD_BPS = 10_000
+export const PROREG_DUST_THRESHOLD_DUFFS = 546n
+export const PROREG_SEQUENCE_FINAL = 0xffffffff
 export const MAINNET_CORE_PORT = 9999
 export const MAINNET_PLATFORM_P2P_PORT = 26656
 export const MAINNET_PLATFORM_HTTP_PORT = 443

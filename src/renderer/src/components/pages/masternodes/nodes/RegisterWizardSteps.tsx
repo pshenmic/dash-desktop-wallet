@@ -7,6 +7,7 @@ import {
 } from '@renderer/components/dash-ui-kit-extended'
 import RecipientInput from '@renderer/components/pages/transfer/RecipientInput'
 import Alert from '@renderer/components/ui/Alert'
+import Checkbox from '@renderer/components/ui/Checkbox'
 import CopyButton from '@renderer/components/ui/CopyButton'
 import CopyableError from '@renderer/components/ui/CopyableError'
 import CustomBadge from '@renderer/components/ui/CustomBadge'
@@ -32,7 +33,6 @@ import {
   OPERATOR_REWARD_PRESETS,
   REGISTER_WIZARD_COLLATERAL_SOURCE_OPTIONS,
   REGISTER_WIZARD_COPY,
-  REGISTER_WIZARD_FEE_SOURCE_OPTIONS,
   REGISTER_WIZARD_OPERATOR_MODE_OPTIONS,
   REGISTER_WIZARD_OWNER_MODE_OPTIONS,
   REGISTER_WIZARD_SERVICE_MODE_OPTIONS,
@@ -73,19 +73,12 @@ export function RegisterStepCollateral({
   draft,
   updateDraft,
   validation,
-  network,
-  addressOptions,
-  badgeFor,
-  addressesLoading,
-  addressesError,
-  onRetryAddresses,
   collateralOptions,
   activeCollateral,
   utxosLoading,
   utxosError,
   onRetryUtxos,
 }: RegisterStepCollateralProps): React.JSX.Element {
-  const addressNetwork = network ?? undefined
   const confirming = validation.selectedCoin != null && isConfirmingUtxo(validation.selectedCoin)
 
   return (
@@ -200,44 +193,6 @@ export function RegisterStepCollateral({
             title={REGISTER_WIZARD_COPY.manualOutpointMissingTitle}
             description={REGISTER_WIZARD_COPY.manualOutpointMissingDescription}
           />
-        )}
-      </div>
-
-      <div className={`flex flex-col gap-2.5 ${SURFACE_SECTION}`}>
-        <div className={'flex flex-wrap items-center justify-between gap-2'}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.feeSourceLabel}</Text>
-          <SegmentedControl
-            appearance={SegmentedControlAppearance.Pill}
-            ariaLabel={REGISTER_WIZARD_COPY.feeSourceLabel}
-            options={REGISTER_WIZARD_FEE_SOURCE_OPTIONS}
-            value={draft.feeSourceMode}
-            onChange={feeSourceMode => updateDraft({ feeSourceMode })}
-          />
-        </div>
-        {draft.feeSourceMode === 'auto' ? (
-          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
-            {REGISTER_WIZARD_COPY.feeSourceAutoNote}
-          </Text>
-        ) : (
-          <>
-            <RecipientInput
-              compact
-              value={draft.feeSourceAddress}
-              valueBadge={badgeFor(draft.feeSourceAddress)}
-              onChange={feeSourceAddress => updateDraft({ feeSourceAddress })}
-              data={MASTERNODE_FEE_SOURCE_RECIPIENT_COPY}
-              ariaLabel={REGISTER_WIZARD_COPY.feeSourceLabel}
-              validate={addr => isValidDashChangeAddress(addr, addressNetwork)}
-              ownOptions={addressOptions}
-              ownOptionsHeading={MASTERNODE_YOUR_ADDRESSES_HEADING}
-              ownOptionsLoading={addressesLoading}
-              ownOptionsError={addressesError}
-              onRetryOwnOptions={onRetryAddresses}
-            />
-            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
-              {REGISTER_WIZARD_COPY.feeSourceCustomNote}
-            </Text>
-          </>
         )}
       </div>
     </div>
@@ -535,12 +490,20 @@ export function RegisterStepNetwork({
 
 export function RegisterStepReview({
   draft,
+  updateDraft,
   validation,
+  network,
+  addressOptions,
+  fundedFeeOptions,
   badgeFor,
+  addressesLoading,
+  addressesError,
+  onRetryAddresses,
   activeCollateral,
   preview,
   previewLoading,
   previewError,
+  customFeeError,
   onRetryPreview,
   password,
   onPasswordChange,
@@ -550,6 +513,7 @@ export function RegisterStepReview({
   canBroadcast,
   onSubmit,
 }: RegisterStepReviewProps): React.JSX.Element {
+  const addressNetwork = network ?? undefined
   const { dto } = validation
   const payoutBadge = badgeFor(draft.payoutAddress)
   const collateralDisplay = draft.collateralSource === 'wallet'
@@ -572,14 +536,6 @@ export function RegisterStepReview({
         <div className={'flex items-center justify-between gap-4'}>
           <Text size={12} weight={'medium'} color={'brand'} opacity={60}>{REGISTER_MASTERNODE_COPY.collateralLabel}</Text>
           <HighlightedIdentifier className={'min-w-0 text-xs!'}>{collateralDisplay}</HighlightedIdentifier>
-        </div>
-        <div className={'flex items-center justify-between gap-4'}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={60}>{REGISTER_WIZARD_COPY.feeSourceLabel}</Text>
-          {draft.feeSourceMode === 'auto' ? (
-            <Text size={12} weight={'medium'} color={'brand'}>{REGISTER_WIZARD_COPY.autoFeeSourceValue}</Text>
-          ) : (
-            <HighlightedIdentifier className={'min-w-0 text-xs!'}>{draft.feeSourceAddress.trim()}</HighlightedIdentifier>
-          )}
         </div>
       </div>
 
@@ -681,31 +637,70 @@ export function RegisterStepReview({
         )}
       </div>
 
-      {previewLoading && (
-        <div className={`flex items-center gap-2.5 ${SURFACE_SECTION}`} role={'status'}>
-          <Spinner size={16} className={'dash-text-primary'} />
-          <Text size={12} weight={'medium'} color={'brand'} opacity={70}>{REGISTER_WIZARD_COPY.previewLoadingLabel}</Text>
+      <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
+        <div className={'flex flex-wrap items-center justify-between gap-2'}>
+          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.previewTransactionSection}</Text>
+          <Checkbox
+            appearance={'subtle'}
+            className={'flex-row-reverse!'}
+            checked={draft.feeSourceMode === 'address'}
+            onChange={checked => updateDraft({ feeSourceMode: checked ? 'address' : 'auto' })}
+            label={<Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.customFeesCheckboxLabel}</Text>}
+          />
         </div>
-      )}
 
-      {!previewLoading && previewError != null && (
-        <Alert
-          tone={AlertTone.Warning}
-          icon={<InfoCircleIcon size={16} color={'currentColor'} />}
-          title={REGISTER_WIZARD_COPY.previewErrorTitle}
-          description={previewError}
-          actions={(
-            <Button type={'button'} size={'compact'} colorScheme={'primary-light'} onClick={onRetryPreview}>
-              {REGISTER_WIZARD_COPY.retryButton}
-            </Button>
-          )}
-        />
-      )}
+        {draft.feeSourceMode === 'address' && (
+          <div className={'flex flex-col gap-2'}>
+            <RecipientInput
+              compact
+              value={draft.feeSourceAddress}
+              valueBadge={badgeFor(draft.feeSourceAddress)}
+              onChange={feeSourceAddress => updateDraft({ feeSourceAddress })}
+              data={MASTERNODE_FEE_SOURCE_RECIPIENT_COPY}
+              ariaLabel={REGISTER_WIZARD_COPY.feeSourceLabel}
+              validate={addr => isValidDashChangeAddress(addr, addressNetwork)}
+              ownOptions={fundedFeeOptions.length > 0 ? fundedFeeOptions : addressOptions}
+              ownOptionsHeading={MASTERNODE_YOUR_ADDRESSES_HEADING}
+              ownOptionsLoading={addressesLoading}
+              ownOptionsError={addressesError}
+              onRetryOwnOptions={onRetryAddresses}
+            />
+            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
+              {REGISTER_WIZARD_COPY.customFeesHint}
+            </Text>
+            {customFeeError != null && (
+              <Alert
+                tone={AlertTone.Warning}
+                icon={<InfoCircleIcon size={16} color={'currentColor'} />}
+                title={customFeeError}
+              />
+            )}
+          </div>
+        )}
 
-      {preview != null && (
-        <>
-          <div className={`flex flex-col gap-2.5 ${SURFACE_SECTION}`}>
-            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.previewTransactionSection}</Text>
+        {previewLoading && (
+          <div className={'flex items-center gap-2.5 pt-1'} role={'status'}>
+            <Spinner size={16} className={'dash-text-primary'} />
+            <Text size={12} weight={'medium'} color={'brand'} opacity={70}>{REGISTER_WIZARD_COPY.previewLoadingLabel}</Text>
+          </div>
+        )}
+
+        {!previewLoading && previewError != null && (
+          <Alert
+            tone={AlertTone.Warning}
+            icon={<InfoCircleIcon size={16} color={'currentColor'} />}
+            title={REGISTER_WIZARD_COPY.previewErrorTitle}
+            description={previewError}
+            actions={(
+              <Button type={'button'} size={'compact'} colorScheme={'primary-light'} onClick={onRetryPreview}>
+                {REGISTER_WIZARD_COPY.retryButton}
+              </Button>
+            )}
+          />
+        )}
+
+        {!previewLoading && preview != null && (
+          <>
             <div className={'flex items-center justify-between gap-4'}>
               <Text size={12} weight={'medium'} color={'brand'} opacity={60}>{REGISTER_MASTERNODE_COPY.networkFee}</Text>
               <Text size={12} weight={'extrabold'} color={'brand'} className={'tabular-nums'}>{`${davToDash(preview.feeDuffs)} ${DASH_UNIT}`}</Text>
@@ -725,27 +720,29 @@ export function RegisterStepReview({
                 </div>
               </div>
             )}
-          </div>
+          </>
+        )}
+      </div>
 
-          <details className={SURFACE_SECTION}>
-            <summary className={'cursor-pointer text-xs font-medium dash-text-default'}>
-              {REGISTER_WIZARD_COPY.unsignedHexSummary}
-            </summary>
-            <div className={'mt-3 flex flex-col gap-2'}>
-              <div className={'flex items-center justify-between gap-2'}>
-                <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.unsignedHexLabel}</Text>
-                <CopyButton text={preview.unsignedHex} />
-              </div>
-              <textarea
-                readOnly
-                value={preview.unsignedHex}
-                aria-label={REGISTER_WIZARD_COPY.unsignedHexSummary}
-                rows={4}
-                className={`w-full resize-y ${SURFACE_ROW} dash-text-default font-mono text-xs break-all outline-none focus-visible:ring-2 focus-visible:ring-dash-brand/40 dark:focus-visible:ring-white/40`}
-              />
+      {!previewLoading && preview != null && (
+        <details className={SURFACE_SECTION}>
+          <summary className={'cursor-pointer text-xs font-medium dash-text-default'}>
+            {REGISTER_WIZARD_COPY.unsignedHexSummary}
+          </summary>
+          <div className={'mt-3 flex flex-col gap-2'}>
+            <div className={'flex items-center justify-between gap-2'}>
+              <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.unsignedHexLabel}</Text>
+              <CopyButton text={preview.unsignedHex} />
             </div>
-          </details>
-        </>
+            <textarea
+              readOnly
+              value={preview.unsignedHex}
+              aria-label={REGISTER_WIZARD_COPY.unsignedHexSummary}
+              rows={4}
+              className={`w-full resize-y ${SURFACE_ROW} dash-text-default font-mono text-xs break-all outline-none focus-visible:ring-2 focus-visible:ring-dash-brand/40 dark:focus-visible:ring-white/40`}
+            />
+          </div>
+        </details>
       )}
 
       {canBroadcast && (
