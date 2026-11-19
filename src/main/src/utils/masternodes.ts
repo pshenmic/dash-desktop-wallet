@@ -157,7 +157,7 @@ export function operatedNode(owned: Masternode[], proTxHash: string): Masternode
 // signing a ProUpSharedRegTx, which this wallet cannot do.
 export function revocableNode(owned: Masternode[], proTxHash: string): Masternode & {operatorKeyIndex: number} {
   const node = operatedNode(owned, proTxHash)
-  if (node.isShared) throw new Error('Revoking a shared masternode needs every share owner to restore it')
+  if (node.isShared) throw new Error('A shared masternode cannot be revoked: restoring it needs every share owner')
   return node
 }
 

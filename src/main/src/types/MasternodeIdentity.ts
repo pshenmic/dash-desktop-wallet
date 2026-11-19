@@ -13,6 +13,9 @@ export interface MasternodeIdentity {
   identifier: string
 }
 
+// What a write carries; walletId is supplied by the DAO.
+export type MasternodeIdentityRow = Pick<MasternodeIdentity, 'proTxHash' | 'role' | 'identifier'>
+
 // One node identity as the wallet lists it, with what Platform serves for it.
 export interface MasternodeIdentityInfo {
   proTxHash: string

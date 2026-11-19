@@ -137,6 +137,16 @@ describe('MasternodeService.discover', () => {
     expect(await masternodeIdentities.getByWalletId(walletId)).toEqual([])
   })
 
+  it('drops the identities of a node the wallet no longer owns', async () => {
+    const proTxHash = 'ab'.repeat(32)
+    await discover(source([node(proTxHash, {type: 'Evo', votingAddress: key('voting', 0), ownerAddress: key('owner', 0)})]))
+    expect(await masternodeIdentities.getByWalletId(walletId)).toHaveLength(2)
+
+    await discover(source([]))
+
+    expect(await masternodeIdentities.getByWalletId(walletId)).toEqual([])
+  })
+
   // DashSync pays a collateral its ProRegTx creates to the reserved 3'/0' chain.
   it('owns a node whose collateral address is on the collateral chain', async () => {
     await discover(source([

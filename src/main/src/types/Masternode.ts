@@ -1,3 +1,4 @@
+import type {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
 import type {WalletProvider} from '../providers/WalletProvider'
 import type {ProviderPayload, ProviderTxSigner} from './CoreTransaction'
 import type {GroupedAddresses} from './GroupedAddresses'
@@ -85,6 +86,7 @@ export interface ProviderTxPlan {
 // A registration plan plus the keys it resolved: null indexes are keys the
 // caller supplied rather than ones the wallet derives.
 export interface MasternodeRegistrationPlan extends ProviderTxPlan {
+  payload: ProRegTX
   ownerAddress: string
   votingAddress: string
   operatorPublicKey: string
@@ -111,6 +113,14 @@ export interface MasternodeRegistrationResult {
   proTxHash: string
   fee: bigint
   peersAcked: number
+}
+
+// A registration read back from a ProRegTx: the payload always carries all three
+// keys, unlike the caller's request where a null one means "the wallet's next".
+export interface ParsedMasternodeRegistration extends MasternodeRegistration {
+  ownerAddress: string
+  votingAddress: string
+  operatorPublicKey: string
 }
 
 // A registration one step short of signing: every ProRegTx field resolved from

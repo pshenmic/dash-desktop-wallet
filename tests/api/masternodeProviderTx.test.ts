@@ -217,6 +217,17 @@ describe('MasternodeService provider transactions', () => {
     expect(await masternodeIdentities.getByWalletId(walletId)).toEqual([])
   })
 
+  // A node is in no list before it mines, so discovery has nothing to own yet.
+  it('keeps a just-registered identity through the next discovery', async () => {
+    utxos[0] = utxo(owned[0], 4_000n * DASH, 'cc'.repeat(32))
+    await register({type: 'Evo', ...EVO_FIELDS})
+
+    list = []
+    await masternodes.discover(walletId)
+
+    expect(await masternodeIdentities.getByWalletId(walletId)).toHaveLength(2)
+  })
+
   // Core reads a collateral from the UTXO set only, so peers drop the tx silently.
   it('refuses a collateral still in the mempool', async () => {
     utxos[0] = {...utxo(owned[0], 1_000n * DASH, 'cc'.repeat(32)), height: 0, confirmations: 0}
@@ -304,6 +315,23 @@ describe('MasternodeService provider transactions', () => {
         votingKeyIndex: null,
         operatorKeyIndex: null,
       })
+    })
+
+    it('reports the fields the payload carries, not the request spelling', async () => {
+      utxos[0] = utxo(owned[0], 4_000n * DASH, 'cc'.repeat(32))
+      const preview = await masternodes.previewRegistration(walletId, registration({
+        ...EVO_FIELDS, platformNodeId: EVO_FIELDS.platformNodeId.toUpperCase(),
+      }))
+
+      expect(preview.platformNodeId).toBe(EVO_FIELDS.platformNodeId)
+    })
+
+    // The sign step refuses an unconfirmed input, so selecting one would return
+    // a transaction the wallet can never broadcast.
+    it('leaves an unconfirmed coin out of the fee selection', async () => {
+      utxos[1] = {...utxos[1], height: 0, confirmations: 0}
+
+      await expect(masternodes.previewRegistration(walletId, registration())).rejects.toThrow('No spendable funds')
     })
   })
 

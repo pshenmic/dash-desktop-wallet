@@ -13,6 +13,7 @@ import {Preferences} from '../../preferences'
 import {
   ImportedMasternodeKey,
   Masternode,
+  MasternodeCollateral,
   MasternodeKeyChain,
   MasternodeKeyFilter,
   MasternodeRegistrarUpdate,
@@ -25,15 +26,17 @@ import {
   NetworkMasternode,
   OperatorKeyChoice,
   OwnedCollateral,
+  ParsedMasternodeRegistration,
   ProviderTxContext,
   ProviderTxPlan,
   RevocationReason,
 } from '../../types/Masternode'
 import {ProviderTxSigner, TransferInput} from '../../types/CoreTransaction'
+import {UTXO} from '../../types/UTXO'
 import {memoryWindowStore, runAddressWindow} from '../../utils/addressWindow'
 import {coreFeeDuffsFor} from '../../utils/coreFeeRate'
 import {masternodeKeyDeriver, masternodePublicKey, requireBasicOperatorKey} from '../../utils/masternodeKeys'
-import {masternodeIdentityIds} from '../../utils/masternodeIdentities'
+import {masternodeIdentityRows} from '../../utils/masternodeIdentities'
 import {
   carriesKey,
   collateralsToStore,
@@ -85,6 +88,9 @@ export class MasternodeService {
   private listed = new Map<string, Masternode[]>()
   // When discovery first found each node, which a list must postdate to drop it.
   private firstSeen = new Map<string, number>()
+  // Registrations still in the mempool: their identity rows must survive passes
+  // that do not carry the node yet.
+  private pendingIdentities = new Map<string, Set<string>>()
 
   constructor(
     walletDAO: WalletDAO,
@@ -165,9 +171,12 @@ export class MasternodeService {
     })
     const {txid, fee, peersAcked} = await this.broadcastProviderTx(tx, inputTotal)
     if (plan.payload.type === MASTERNODE_TYPE_CODE.Evo) {
-      await this.rememberMasternodeIdentities(walletId, [{
+      const pending = this.pendingIdentities.get(walletId) ?? new Set<string>()
+      pending.add(txid)
+      this.pendingIdentities.set(walletId, pending)
+      await this.masternodeIdentityDAO.save(walletId, masternodeIdentityRows([{
         proTxHash: txid, type: 'Evo', votingAddress: plan.payload.getVotingAddress(context.network),
-      }]).catch(err => log.warn(`wallet ${walletId}: node identities not stored:`, err))
+      }])).catch(err => log.warn(`wallet ${walletId}: node identities not stored:`, err))
     }
     return {proTxHash: txid, fee, peersAcked}
   }
@@ -183,19 +192,10 @@ export class MasternodeService {
     const context = await this.providerTxContext(walletId)
     const plan = await this.registrationPlan(registration, provided, context)
     const selection = this.selectProviderInputs(plan, context)
+    // A registration pays change only, so nothing is subtracted before it.
     const {change, feeDuffs} = coreChangeAndFee(selection, 0n)
     return {
-      type: registration.type,
-      collateral: registration.collateral,
-      ownerAddress: plan.ownerAddress,
-      votingAddress: plan.votingAddress,
-      operatorPublicKey: plan.operatorPublicKey,
-      serviceAddress: registration.serviceAddress,
-      payoutAddress: registration.payoutAddress,
-      operatorReward: registration.operatorReward,
-      platformNodeId: registration.platformNodeId,
-      platformP2PPort: registration.platformP2PPort,
-      platformHttpPort: registration.platformHttpPort,
+      ...this.registrationFromPayload(plan.payload, wallet.network),
       ownerKeyIndex: plan.ownerKeyIndex,
       votingKeyIndex: plan.votingKeyIndex,
       operatorKeyIndex: plan.operatorKeyIndex,
@@ -243,6 +243,46 @@ export class MasternodeService {
     inputTotal: bigint
     feeDuffs: bigint
   }> {
+    const {transaction, payload} = this.requireRegistrationTransaction(unsignedHex)
+    const registration = this.registrationFromPayload(payload, network)
+    requireRegistrationFields(registration, network)
+    this.coreTransactionService.classifyAddress(registration.payoutAddress, network)
+    requirePayout(registration.payoutAddress, registration.ownerAddress, registration.votingAddress)
+
+    const coin = requireCollateral(utxos, collaterals, registration)
+    const paths = addressPaths(grouped)
+    const collateralPath = paths.get(coin.address)
+    if (collateralPath == null) throw new Error(`No derivation path for address ${coin.address}`)
+    await this.requireFreeOperatorKey(registration.operatorPublicKey, provider)
+
+    const {inputs, inputTotal} = this.requireRegistrationInputs(transaction, utxos, coin, collaterals, paths)
+    const {changeAddress, changeDuffs} = this.requireRegistrationChange(transaction, paths, network, coin.address)
+    const feeDuffs = inputTotal - changeDuffs
+    if (feeDuffs <= 0n) throw new Error('The registration pays no fee')
+
+    const rebuilt = this.coreTransactionService.proRegPayload(registration, {
+      ownerKeyId: bytesToHex(sdkUtils.addressToPublicKeyHash(registration.ownerAddress)),
+      votingKeyId: bytesToHex(sdkUtils.addressToPublicKeyHash(registration.votingAddress)),
+      operatorPublicKey: registration.operatorPublicKey,
+    }, network)
+
+    // The preview priced exactly this selection; anything above the quote is
+    // the dust change it folds into the fee, never a burn the renderer chose.
+    const quotedFeeDuffs = coreFeeDuffsFor(
+      this.preferences.general.coreFeeMultiplier, inputs.length, 1, false, rebuilt.signedSize())
+    if (feeDuffs < quotedFeeDuffs || feeDuffs - quotedFeeDuffs >= DUST_THRESHOLD_DUFFS) {
+      throw new Error('The registration fee does not match the quoted network fee')
+    }
+
+    const reproduced = this.coreTransactionService.buildProviderTx({payload: rebuilt, inputs, changeAddress, inputTotal, feeDuffs})
+    if (reproduced.hex() !== unsignedHex.toLowerCase()) {
+      throw new Error('The transaction does not match the registration this wallet would build')
+    }
+    return {payload: rebuilt, signer: {kind: 'address', derivationPath: collateralPath, address: coin.address}, inputs, changeAddress, inputTotal, feeDuffs}
+  }
+
+  // Untrusted hex: the shape is settled before any field is read from it.
+  private requireRegistrationTransaction(unsignedHex: string): {transaction: Transaction; payload: ProRegTX} {
     let transaction: Transaction
     try {
       transaction = Transaction.fromHex(unsignedHex)
@@ -261,37 +301,36 @@ export class MasternodeService {
     if (payload.type !== MASTERNODE_TYPE_CODE.Regular && payload.type !== MASTERNODE_TYPE_CODE.Evo) {
       throw new Error(`Unknown masternode type: ${payload.type}`)
     }
+    return {transaction, payload}
+  }
 
-    const type = payload.type === MASTERNODE_TYPE_CODE.Evo ? 'Evo' : 'Regular'
-    const ownerAddress = payload.getOwnerAddress(network)
-    const votingAddress = payload.getVotingAddress(network)
-    const operatorPublicKey = requireBasicOperatorKey(payload.pubKeyOperator)
+  // The payload's own fields, so a preview shows exactly what the hex carries.
+  private registrationFromPayload(payload: ProRegTX, network: Network): ParsedMasternodeRegistration {
     const payoutAddress = payload.getPayoutAddress(network)
     if (payoutAddress == null) throw new Error('The registration has no payout address')
-    const registration: MasternodeRegistration = {
-      type,
+    return {
+      type: payload.type === MASTERNODE_TYPE_CODE.Evo ? 'Evo' : 'Regular',
       collateral: {txid: payload.collateralOutpoint.txId, vout: payload.collateralOutpoint.vOut},
       serviceAddress: payload.ipAddress == null ? null : `${payload.ipAddress}:${payload.port}`,
       payoutAddress,
       operatorReward: payload.operatorReward,
-      ownerAddress,
-      votingAddress,
-      operatorPublicKey,
+      ownerAddress: payload.getOwnerAddress(network),
+      votingAddress: payload.getVotingAddress(network),
+      operatorPublicKey: requireBasicOperatorKey(payload.pubKeyOperator),
       platformNodeId: payload.platformNodeID ?? null,
       platformP2PPort: payload.platformP2PPort ?? null,
       platformHttpPort: payload.platformHTTPPort ?? null,
     }
-    requireRegistrationFields(registration, network)
-    this.coreTransactionService.classifyAddress(payoutAddress, network)
-    requirePayout(payoutAddress, ownerAddress, votingAddress)
+  }
 
-    const coin = requireCollateral(utxos, collaterals, registration)
-    const collateralPath = addressPaths(grouped).get(coin.address)
-    if (collateralPath == null) throw new Error(`No derivation path for address ${coin.address}`)
-    await this.requireFreeOperatorKey(operatorPublicKey, provider)
-
+  private requireRegistrationInputs(
+    transaction: Transaction,
+    utxos: UTXO[],
+    coin: UTXO,
+    collaterals: MasternodeCollateral[],
+    paths: Map<string, string>,
+  ): {inputs: TransferInput[]; inputTotal: bigint} {
     const byOutpoint = new Map(utxos.map(utxo => [`${utxo.txId}:${utxo.vOut}`, utxo]))
-    const paths = addressPaths(grouped)
     const seen = new Set<string>()
     let inputTotal = 0n
     const inputs: TransferInput[] = transaction.inputs.map(input => {
@@ -311,41 +350,24 @@ export class MasternodeService {
       return {txId: utxo.txId, vOut: utxo.vOut, script: utxo.script, derivationPath, address: utxo.address}
     })
     if (inputs.length === 0) throw new Error('The registration has no coin to pay its fee')
+    return {inputs, inputTotal}
+  }
 
+  private requireRegistrationChange(
+    transaction: Transaction,
+    paths: Map<string, string>,
+    network: Network,
+    collateralAddress: string,
+  ): {changeAddress: string; changeDuffs: bigint} {
     if (transaction.outputs.length > 1) throw new Error('A registration pays its change and nothing else')
-    let changeAddress = coin.address
-    let changeDuffs = 0n
-    if (transaction.outputs.length === 1) {
-      const [output] = transaction.outputs
-      const address = output.script.getAddress(network)
-      if (address == null || paths.get(address) == null) {
-        throw new Error('The registration pays an address that is not this wallet\'s')
-      }
-      changeAddress = address
-      changeDuffs = output.satoshis
-    }
-    const feeDuffs = inputTotal - changeDuffs
-    if (feeDuffs <= 0n) throw new Error('The registration pays no fee')
+    if (transaction.outputs.length === 0) return {changeAddress: collateralAddress, changeDuffs: 0n}
 
-    const rebuilt = this.coreTransactionService.proRegPayload(registration, {
-      ownerKeyId: bytesToHex(sdkUtils.addressToPublicKeyHash(ownerAddress)),
-      votingKeyId: bytesToHex(sdkUtils.addressToPublicKeyHash(votingAddress)),
-      operatorPublicKey,
-    }, network)
-
-    // The preview priced exactly this selection; anything above the quote is
-    // the dust change it folds into the fee, never a burn the renderer chose.
-    const quotedFeeDuffs = coreFeeDuffsFor(
-      this.preferences.general.coreFeeMultiplier, inputs.length, 1, false, rebuilt.signedSize())
-    if (feeDuffs < quotedFeeDuffs || feeDuffs - quotedFeeDuffs >= DUST_THRESHOLD_DUFFS) {
-      throw new Error('The registration fee does not match the quoted network fee')
+    const [output] = transaction.outputs
+    const address = output.script.getAddress(network)
+    if (address == null || paths.get(address) == null) {
+      throw new Error('The registration pays an address that is not this wallet\'s')
     }
-
-    const reproduced = this.coreTransactionService.buildProviderTx({payload: rebuilt, inputs, changeAddress, inputTotal, feeDuffs})
-    if (reproduced.hex() !== unsignedHex.toLowerCase()) {
-      throw new Error('The transaction does not match the registration this wallet would build')
-    }
-    return {payload: rebuilt, signer: {kind: 'address', derivationPath: collateralPath, address: coin.address}, inputs, changeAddress, inputTotal, feeDuffs}
+    return {changeAddress: address, changeDuffs: output.satoshis}
   }
 
   private async registrationPlan(
@@ -364,7 +386,7 @@ export class MasternodeService {
     const ownerAddress = provided.ownerAddress ?? derived('owner')
     const votingAddress = provided.votingAddress ?? derived('voting')
     const operatorPublicKey = provided.operatorPublicKey ?? derived('operator')
-    if (provided.operatorPublicKey != null) await this.requireFreeOperatorKey(provided.operatorPublicKey, provider)
+    await this.requireFreeOperatorKey(operatorPublicKey, provider)
     requirePayout(registration.payoutAddress, ownerAddress, votingAddress)
     return {
       payload: this.coreTransactionService.proRegPayload(registration, {
@@ -373,7 +395,8 @@ export class MasternodeService {
         operatorPublicKey,
       }, network),
       signer: {kind: 'address', derivationPath: collateralPath, address: coin.address},
-      spendable: utxos.filter(utxo => utxo !== coin),
+      // The sign step refuses an unconfirmed fee coin, so the preview must not pick one.
+      spendable: utxos.filter(utxo => utxo !== coin && utxo.height > 0),
       ownerAddress,
       votingAddress,
       operatorPublicKey,
@@ -605,20 +628,16 @@ export class MasternodeService {
     const followedNow = await provider.watchMasternodes(owned, owned.filter(({proTxHash}) => !followed.has(proTxHash)))
     await this.masternodeDAO.replaceCollaterals(walletId, collateralsToStore(owned, stored, followedNow))
     this.listed.set(walletId, owned)
-    await this.rememberMasternodeIdentities(walletId, owned).catch(err =>
-      log.warn(`wallet ${walletId}: node identities not stored:`, err))
+    const pending = this.pendingIdentities.get(walletId)
+    try {
+      const keep = [...owned.map(({proTxHash}) => proTxHash), ...(pending ?? [])]
+      await this.masternodeIdentityDAO.replace(walletId, masternodeIdentityRows(owned), keep)
+    } catch (err) {
+      log.warn(`wallet ${walletId}: node identities not stored:`, err)
+    }
+    for (const {proTxHash} of owned) pending?.delete(proTxHash)
+    if (pending?.size === 0) this.pendingIdentities.delete(walletId)
     log.debug(`wallet ${walletId}: ${owned.length} masternode(s)`)
-  }
-
-  // Platform creates the owner identity at the proTxHash and the voter one from
-  // it and the voting key. Only an evonode's are tracked.
-  private async rememberMasternodeIdentities(
-    walletId: string,
-    nodes: Array<Pick<Masternode, 'proTxHash' | 'type' | 'votingAddress'>>,
-  ): Promise<void> {
-    const rows = nodes.filter(({type}) => type === 'Evo').flatMap(({proTxHash, votingAddress}) =>
-      masternodeIdentityIds(proTxHash, votingAddress).map(({role, identifier}) => ({proTxHash, role, identifier})))
-    await this.masternodeIdentityDAO.save(walletId, rows)
   }
 
   // A list without PoSe scores (p2p) leaves an evonode to report its own over
