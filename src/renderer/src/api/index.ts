@@ -183,11 +183,13 @@ export class API {
     return this.api.getImportedMasternodeKeys(walletId)
   }
 
-  // Owner and voting keys are WIF, an operator key the hex BLS secret. Answers
-  // the nodes the key was found on, which is empty for one not registered yet,
-  // and null while no masternode list has arrived to search (the key is kept).
-  static async importMasternodeKey(walletId: string, role: MasternodeKeyRole, privateKey: string): Promise<MasternodeDto[] | null> {
-    return this.api.importMasternodeKey(walletId, role, privateKey)
+  // Owner and voting keys are WIF, an operator key the hex BLS secret. A voting
+  // key needs the wallet password, since its secret is encrypted so it can sign
+  // votes; owner and operator imports stay address-only. Answers the nodes the key
+  // was found on, which is empty for one not registered yet, and null while no
+  // masternode list has arrived to search (the key is kept).
+  static async importMasternodeKey(walletId: string, role: MasternodeKeyRole, privateKey: string, password?: string): Promise<MasternodeDto[] | null> {
+    return this.api.importMasternodeKey(walletId, role, privateKey, password)
   }
 
   static async removeMasternodeKey(walletId: string, key: ImportedMasternodeKeyDto): Promise<void> {

@@ -102,12 +102,21 @@ export function lastVoteTime(votes: GovernanceVote[], {collateralTxid, collatera
 
 // The checks Core's own wallet runs before relaying. `votes` is null where the
 // source has none to check the hour against; `time` is the new vote's, unix seconds.
-export function requireVotingNode(owned: Masternode[], proTxHash: string, votes: GovernanceVote[] | null, time: number): VotingNode {
+// signableImportedVoting holds imported voting addresses whose secret is stored.
+export function requireVotingNode(
+  owned: Masternode[],
+  proTxHash: string,
+  votes: GovernanceVote[] | null,
+  time: number,
+  signableImportedVoting: ReadonlySet<string> = new Set(),
+): VotingNode {
   const node = owned.find(candidate => candidate.proTxHash === proTxHash)
   if (node == null) throw new Error(`Masternode ${proTxHash} is not one of this wallet's`)
   if (node.status === POSE_BANNED_STATUS) throw new Error(`Masternode ${proTxHash} is PoSe-banned`)
   const {votingKeyIndex, votingAddress, collateralTxid, collateralVout} = node
-  if (votingKeyIndex == null) throw new Error(`Masternode ${proTxHash} carries a voting key this wallet does not derive`)
+  if (votingKeyIndex == null && !signableImportedVoting.has(votingAddress)) {
+    throw new Error(`Masternode ${proTxHash} carries a voting key this wallet does not derive`)
+  }
   if (collateralTxid == null || collateralVout == null) throw new Error(`Masternode ${proTxHash} has no known collateral yet`)
   const last = votes == null ? null : lastVoteTime(votes, node)
   if (last != null && last > time - GOVERNANCE_UPDATE_MIN_SECONDS) {

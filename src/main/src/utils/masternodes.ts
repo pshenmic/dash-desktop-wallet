@@ -160,7 +160,7 @@ export function revocableNode(owned: Masternode[], proTxHash: string): Masternod
   return node
 }
 
-export function carriesKey(node: NetworkMasternode, {role, publicKey}: ImportedMasternodeKey): boolean {
+export function carriesKey(node: NetworkMasternode, {role, publicKey}: Pick<ImportedMasternodeKey, 'role' | 'publicKey'>): boolean {
   const values = masternodeFilterValues(role, publicKey)
   return nodeKeyValues(role, node).some(key => values.includes(key))
 }

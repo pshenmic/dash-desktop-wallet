@@ -194,10 +194,12 @@ export interface Masternode extends NetworkMasternode {
 }
 
 // publicKey is what the list carries for the role: the address for owner and
-// voting, the hex public key for operator.
+// voting, the hex public key for operator. hasPrivateKey is true only for a
+// voting key whose secret is stored, which is what lets it sign a vote.
 export interface ImportedMasternodeKey {
   role: MasternodeKeyChain
   publicKey: string
+  hasPrivateKey: boolean
 }
 
 // What outlives the list: the coin a send must not spend, and whether the p2p

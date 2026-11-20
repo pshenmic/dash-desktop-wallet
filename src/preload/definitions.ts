@@ -4,7 +4,7 @@ type Network = 'mainnet' | 'testnet'
 
 // Mirrors MasternodeKeyChain and ImportedMasternodeKey in src/main/src/types/Masternode.
 type MasternodeKeyRole = 'owner' | 'voting' | 'operator'
-type ImportedMasternodeKey = { role: MasternodeKeyRole; publicKey: string }
+type ImportedMasternodeKey = { role: MasternodeKeyRole; publicKey: string; hasPrivateKey: boolean }
 // Mirrors MasternodeRegistration in src/main/src/types/Masternode.
 type MasternodeRegistration = {
   type: 'Regular' | 'Evo'
@@ -96,7 +96,7 @@ export const apiDefinitions = (ipcRenderer) => ({
   getMasternodeIdentities: (walletId: string) => ipcRenderer.invoke('getMasternodeIdentities', walletId),
   getMasternodeCollaterals: (walletId: string) => ipcRenderer.invoke('getMasternodeCollaterals', walletId),
   getImportedMasternodeKeys: (walletId: string) => ipcRenderer.invoke('getImportedMasternodeKeys', walletId),
-  importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => ipcRenderer.invoke('importMasternodeKey', walletId, role, privateKey),
+  importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string, password?: string) => ipcRenderer.invoke('importMasternodeKey', walletId, role, privateKey, password),
   removeMasternodeKey: (walletId: string, key: ImportedMasternodeKey) => ipcRenderer.invoke('removeMasternodeKey', walletId, key),
   signAndBroadcastMasternodeRegistration: (walletId: string, unsignedHex: string, password: string) => ipcRenderer.invoke('signAndBroadcastMasternodeRegistration', walletId, unsignedHex, password),
   previewMasternodeRegistration: (walletId: string, registration: MasternodeRegistration) => ipcRenderer.invoke('previewMasternodeRegistration', walletId, registration),

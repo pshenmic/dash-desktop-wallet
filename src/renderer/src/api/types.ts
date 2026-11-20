@@ -220,10 +220,12 @@ export interface ListedUtxo extends SelectableUtxo {
 export type MasternodeKeyRole = 'owner' | 'voting' | 'operator'
 
 // publicKey is what the list carries for the role: the address for owner and
-// voting, the hex public key for operator.
+// voting, the hex public key for operator. hasPrivateKey is true only for a
+// voting key whose secret is stored, which is what lets it sign a vote.
 export interface ImportedMasternodeKeyDto {
   role: MasternodeKeyRole
   publicKey: string
+  hasPrivateKey: boolean
 }
 
 // getMasternodes — a masternode this wallet holds a key or the collateral of, as

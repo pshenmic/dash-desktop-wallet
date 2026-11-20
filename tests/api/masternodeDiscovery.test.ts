@@ -10,6 +10,8 @@ import {WalletSyncService} from '../../src/main/src/services/core/WalletSyncServ
 import {ListedMasternodes, Masternode, MasternodeKeyFilter, MasternodeKeys, NetworkMasternode} from '../../src/main/src/types/Masternode'
 import {UTXO} from '../../src/main/src/types/UTXO'
 import {masternodeKeyDeriver} from '../../src/main/src/utils/masternodeKeys'
+import {decryptImportedKey} from '../../src/main/src/utils/importedKeyEncryption'
+import {withUnlockedWallet} from '../../src/main/src/utils/walletSeed'
 import {masternodeIdentityIds} from '../../src/main/src/utils/masternodeIdentities'
 import {nodeKeyValues} from '../../src/main/src/utils/masternodes'
 import {Harness, harness, PASSWORD, VALID_SEEDPHRASE} from './harness'
@@ -214,14 +216,22 @@ describe('MasternodeService.discover', () => {
     const unregistered = PrivateKey.fromBytes(new Uint8Array(32).fill(8), 'mainnet')
     current = source([node('f', {votingAddress: voting.getAddress()})])
 
-    const found = await masternodes.importKey(walletId, 'voting', ` ${voting.toWIF()}\n`)
+    const found = await masternodes.importKey(walletId, 'voting', ` ${voting.toWIF()}\n`, PASSWORD)
     expect(found!.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['f', ['voting']]])
     expect(await masternodes.importKey(walletId, 'owner', unregistered.toWIF())).toEqual([])
     expect(await masternodes.getImportedKeys(walletId)).toHaveLength(2)
+    expect(await masternodes.getImportedKeys(walletId)).toEqual(expect.arrayContaining([
+      {role: 'voting', publicKey: voting.getAddress(), hasPrivateKey: true},
+      {role: 'owner', publicKey: unregistered.getAddress(), hasPrivateKey: false},
+    ]))
+    const secret = await masternodes.getImportedKeySecret(walletId, 'voting', voting.getAddress())
+    expect(secret).not.toBeNull()
+    expect(await withUnlockedWallet(wired.walletDAO, walletId, PASSWORD, async ({seed}) =>
+      decryptImportedKey(secret!, seed))).toBe(voting.toWIF())
 
-    await masternodes.removeKey(walletId, {role: 'voting', publicKey: voting.getAddress()})
+    await masternodes.removeKey(walletId, {role: 'voting', publicKey: voting.getAddress(), hasPrivateKey: true})
     expect(await listed()).toEqual([])
-    expect(await masternodes.getImportedKeys(walletId)).toEqual([{role: 'owner', publicKey: unregistered.getAddress()}])
+    expect(await masternodes.getImportedKeys(walletId)).toEqual([{role: 'owner', publicKey: unregistered.getAddress(), hasPrivateKey: false}])
   })
 
   // Not an empty answer: p2p before its first proven list has searched nothing.
@@ -229,7 +239,7 @@ describe('MasternodeService.discover', () => {
     current = source(null)
     const voting = PrivateKey.fromBytes(new Uint8Array(32).fill(7), 'mainnet')
 
-    expect(await masternodes.importKey(walletId, 'voting', voting.toWIF())).toBeNull()
+    expect(await masternodes.importKey(walletId, 'voting', voting.toWIF(), PASSWORD)).toBeNull()
     expect(await masternodes.getImportedKeys(walletId)).toHaveLength(1)
   })
 

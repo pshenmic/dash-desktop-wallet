@@ -68,6 +68,7 @@ import {WalletSyncService} from './WalletSyncService'
 import {requireWallet} from '../../utils/requireWallet'
 import {bytesToHex, hexToBytes} from '@noble/hashes/utils.js'
 import createCoreClient from 'dash-core-sdk/src/createCoreClient.js'
+import {encryptImportedKey} from '../../utils/importedKeyEncryption'
 import {EVONODE_STATUS_TIMEOUT_MS} from '../../constants/dapi'
 import {Network} from '../../types/Network'
 import {Logger} from '../../utils/logger'
@@ -130,15 +131,29 @@ export class MasternodeService {
 
   // Kept even when no node carries it yet, so a later registration is found.
   // Answers the listed nodes that carry it, or null while no list has arrived to
-  // search — p2p before its first proven list — which is not "none".
-  async importKey(walletId: string, role: MasternodeKeyChain, privateKey: string): Promise<Masternode[] | null> {
+  // search — p2p before its first proven list — which is not "none". A voting
+  // key's secret is encrypted under the seed, so it can sign a vote later.
+  async importKey(walletId: string, role: MasternodeKeyChain, privateKey: string, password?: string): Promise<Masternode[] | null> {
     if (!MASTERNODE_KEY_CHAINS.includes(role)) throw new Error(`Unknown masternode key role: ${role}`)
     const wallet = await requireWallet(this.walletDAO, walletId)
     const key = {role, publicKey: masternodePublicKey(role, privateKey.trim(), wallet.network)}
-    await this.masternodeKeyDAO.saveImportedKey(walletId, key)
+    const encryptedPrivateKey = role === 'voting'
+      ? await this.encryptImportedVotingKey(walletId, privateKey.trim(), password)
+      : null
+    await this.masternodeKeyDAO.saveImportedKey(walletId, key, encryptedPrivateKey)
     log.info(`wallet ${walletId}: imported a ${role} key`)
     await this.discover(walletId)
     return this.listed.get(walletId)?.filter(node => carriesKey(node, key)) ?? null
+  }
+
+  async getImportedKeySecret(walletId: string, role: MasternodeKeyChain, publicKey: string): Promise<string | null> {
+    return this.masternodeKeyDAO.getImportedKeySecret(walletId, role, publicKey)
+  }
+
+  private async encryptImportedVotingKey(walletId: string, privateKey: string, password?: string): Promise<string> {
+    if (password == null || password.length === 0) throw new Error('A wallet password is required to save a voting key')
+    return withUnlockedWallet(this.walletDAO, walletId, password, async ({seed}) =>
+      encryptImportedKey(privateKey, seed))
   }
 
   async removeKey(walletId: string, key: ImportedMasternodeKey): Promise<void> {

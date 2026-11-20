@@ -28,9 +28,10 @@ export interface GovernanceVote {
 }
 
 // What signing a node's vote needs, once the node passed the checks before relaying.
+// votingKeyIndex is null when an imported key signs instead.
 export interface VotingNode {
   proTxHash: string
-  votingKeyIndex: number
+  votingKeyIndex: number | null
   votingAddress: string
   collateralTxid: string
   collateralVout: number

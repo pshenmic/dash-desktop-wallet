@@ -176,9 +176,9 @@ describe('ownedMasternodes', () => {
       node('b', {operatorPublicKey: OPERATOR_0_LEGACY}),
       node('c', {ownerAddress: 'Xother'}),
     ], none, [
-      {role: 'voting', publicKey: 'Ximported'},
-      {role: 'owner', publicKey: OPERATOR_0},
-      {role: 'operator', publicKey: OPERATOR_0},
+      {role: 'voting', publicKey: 'Ximported', hasPrivateKey: true},
+      {role: 'owner', publicKey: OPERATOR_0, hasPrivateKey: false},
+      {role: 'operator', publicKey: OPERATOR_0, hasPrivateKey: false},
     ], [], new Map())
     expect(owned.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['a', ['voting']], ['b', ['operator']]])
   })
@@ -198,7 +198,7 @@ describe('ownedMasternodes', () => {
       {ownerAddress: 'Ximported', amountDuffs: 30000000000n},
       {ownerAddress: 'Xother', amountDuffs: 70000000000n},
     ]})
-    const owned = ownedMasternodes([shared], none, [{role: 'owner', publicKey: 'Ximported'}], [], new Map())
+    const owned = ownedMasternodes([shared], none, [{role: 'owner', publicKey: 'Ximported', hasPrivateKey: false}], [], new Map())
     expect(owned.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['a', ['owner']]])
     expect(owned[0].shares!.map(({keyIndex, imported}) => [keyIndex, imported])).toEqual([[null, true], [null, false]])
   })

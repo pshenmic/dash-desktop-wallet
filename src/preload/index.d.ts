@@ -90,6 +90,7 @@ interface MasternodeCollateralDTO {
 interface ImportedMasternodeKeyDTO {
   role: MasternodeKeyRole
   publicKey: string
+  hasPrivateKey: boolean
 }
 
 // Mirrors MasternodeIdentityInfo; empty until Platform indexes the registration.
@@ -344,7 +345,7 @@ declare global {
       getMasternodeIdentities: (walletId: string) => Promise<MasternodeIdentityInfoDTO[]>
       getMasternodeCollaterals: (walletId: string) => Promise<MasternodeCollateralDTO[]>
       getImportedMasternodeKeys: (walletId: string) => Promise<ImportedMasternodeKeyDTO[]>
-      importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => Promise<MasternodeDTO[] | null>
+      importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string, password?: string) => Promise<MasternodeDTO[] | null>
       removeMasternodeKey: (walletId: string, key: ImportedMasternodeKeyDTO) => Promise<void>
       signAndBroadcastMasternodeRegistration: (walletId: string, unsignedHex: string, password: string) => Promise<MasternodeRegistrationResultDTO>
       previewMasternodeRegistration: (walletId: string, registration: MasternodeRegistrationDTO) => Promise<MasternodeRegistrationPreviewDTO>
