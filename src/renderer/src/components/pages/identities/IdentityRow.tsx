@@ -7,7 +7,7 @@ import CustomBadge from '@renderer/components/ui/CustomBadge'
 import IdentityAvatar from '@renderer/components/ui/IdentityAvatar'
 import SensitiveValue from '@renderer/components/ui/SensitiveValue'
 import { ADDRESS_ROW_FIAT_CLASS, ADDRESS_ROW_ICON_BUTTON_CLASS, ADDRESS_ROW_IDENTIFIER_CLASS } from '@renderer/constants/addressRow'
-import { IDENTITY_ROW_COPY } from '@renderer/constants/identities'
+import { IDENTITY_ROW_COPY, MASTERNODE_IDENTITIES_COPY } from '@renderer/constants/identities'
 import { SURFACE_ROW } from '@renderer/constants/surfaces'
 import { ROW_OPEN_OVERLAY_CLASS } from '@renderer/constants/listToolbar'
 import { useAuth } from '@renderer/contexts/AuthContext'
@@ -24,7 +24,7 @@ import { identityName } from '@renderer/utils/identifierFormat'
 import { identityKeysCountLabel } from '@renderer/utils/identityKeySetup'
 import IdentityVotingName from './IdentityVotingName'
 
-export default function IdentityRow({ identity, votingNames, onOpen }: IdentityRowProps): React.JSX.Element {
+export default function IdentityRow({ identity, votingNames, badges, readOnly = false, onOpen }: IdentityRowProps): React.JSX.Element {
   const { status } = useAuth()
   const network = status?.network ?? null
   const { isBalanceVisible } = useBalanceVisibility()
@@ -37,7 +37,12 @@ export default function IdentityRow({ identity, votingNames, onOpen }: IdentityR
   const explorerUrl = network == null ? null : identityUrl(identity.identifier, network)
 
   const items: ContextMenuItem[] = [
-    { id: 'keys', label: IDENTITY_ROW_COPY.manageKeys, icon: <KeyIcon size={10} color={'currentColor'} />, onSelect: () => onOpen(identity.identifier) },
+    {
+      id: 'keys',
+      label: readOnly ? MASTERNODE_IDENTITIES_COPY.viewIdentity : IDENTITY_ROW_COPY.manageKeys,
+      icon: <KeyIcon size={10} color={'currentColor'} />,
+      onSelect: () => onOpen(identity.identifier),
+    },
     { id: 'copy', label: IDENTITY_ROW_COPY.copyId, icon: <CopyIcon2 size={10} color={'currentColor'} />, onSelect: () => copyWithToast(identity.identifier) },
   ]
   if (explorerUrl != null) {
@@ -81,10 +86,14 @@ export default function IdentityRow({ identity, votingNames, onOpen }: IdentityR
           {name != null || votingName != null ? (
             <>
               {name != null && (
-                <div className={'flex min-w-0 items-center gap-1.5'}>
+                <div className={'flex min-w-0 flex-wrap items-center gap-1.5'}>
                   <Text reset size={14} weight={'medium'} color={'brand'} className={'min-w-0 truncate'}>{name}</Text>
                   {extraNames > 0 && <CustomBadge variant={'muted'} text={`+${extraNames}`} className={'shrink-0'} />}
+                  {badges}
                 </div>
+              )}
+              {name == null && badges != null && (
+                <div className={'flex min-w-0 flex-wrap items-center gap-1.5'}>{badges}</div>
               )}
               {votingName != null && <IdentityVotingName name={votingName} extraNames={votingNames.length - 1} onOpen={() => onOpen(identity.identifier)} />}
               <div className={'flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5'}>
@@ -95,7 +104,10 @@ export default function IdentityRow({ identity, votingNames, onOpen }: IdentityR
           ) : (
             <>
               {identifierLine}
-              {keysCaption}
+              <div className={'flex min-w-0 flex-wrap items-center gap-1.5'}>
+                {keysCaption}
+                {badges}
+              </div>
             </>
           )}
         </div>

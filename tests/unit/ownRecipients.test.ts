@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { DestinationKind } from '../../src/renderer/src/enums/DestinationKind'
 import type { OwnRecipientInventory } from '../../src/renderer/src/types/SendRecipients'
-import { ownRecipientOptions } from '../../src/renderer/src/utils/ownRecipients'
+import {
+  availableOwnRecipientOptions,
+  matchingOptionsByLabel,
+  ownRecipientOptions,
+  walletAddressLabels,
+} from '../../src/renderer/src/utils/ownRecipients'
 
 function inventory(): OwnRecipientInventory {
-  const address = {walletId: 'wallet', accountId: 0, derivationPath: '', index: 0, isUsed: false, balance: 0n, txCount: 0, label: null, usdBalance: null}
+  const address = {walletId: 'wallet', accountId: 0, derivationPath: '', index: 0, isUsed: false, isLocked: false, balance: 0n, txCount: 0, label: null, usdBalance: null}
   return {
     receiving: [
-      {...address, address: 'receive-empty', isChange: 0, label: 'Savings'},
+      {...address, address: 'receive-empty', isChange: 0, label: 'LegacyIgnored'},
       {...address, address: 'receive-funded', isChange: 0, balance: 10n, txCount: 3},
       {...address, address: 'receive-spent', isChange: 0, txCount: 4},
       {...address, address: 'receive-used', isChange: 0, isUsed: true},
@@ -27,14 +32,48 @@ function inventory(): OwnRecipientInventory {
 }
 
 describe('own recipient options', () => {
-  it('only includes unused empty receiving and change addresses and their labels', () => {
+  it('only includes unused empty receiving and change addresses unless labeled via Receive requests, ignoring raw address.label', () => {
     expect(ownRecipientOptions(DestinationKind.CoreAddress, inventory())).toEqual([
-      {value: 'receive-empty', label: 'receive-empty', description: 'Your receiving address · Savings', metadata: ['0 Dash', 'Tx count: 0']},
+      {value: 'receive-empty', label: 'receive-empty', description: 'Your receiving address', metadata: ['0 Dash', 'Tx count: 0']},
       {value: 'change-empty', label: 'change-empty', description: 'Your change address', metadata: ['0 Dash', 'Tx count: 0']},
     ])
   })
 
-  it('only includes empty Platform addresses with zero nonce', () => {
+  it('includes Core, Platform, and Shielded Receive addresses saved with a label even when marked used or before shielded sync', () => {
+    const recipients = inventory()
+    recipients.labelsByAddress = new Map([
+      ['receive-used', 'Salary'],
+      ['platform-funded', 'Treasury'],
+      ['shielded-request-only', 'Vault'],
+    ])
+    recipients.receiveRequests = [
+      {address: 'receive-used', label: 'Salary', kind: 'core'},
+      {address: 'platform-funded', label: 'Treasury', kind: 'platform'},
+      {address: 'shielded-request-only', label: 'Vault', kind: 'shielded'},
+    ]
+
+    const coreOptions = ownRecipientOptions(DestinationKind.CoreAddress, recipients)
+    expect(coreOptions).toContainEqual({
+      value: 'receive-used',
+      label: 'receive-used',
+      badge: 'Salary',
+      description: 'Your receiving address',
+      metadata: ['0 Dash', 'Tx count: 0'],
+    })
+
+    const platformOptions = ownRecipientOptions(DestinationKind.PlatformAddress, recipients)
+    expect(platformOptions).toEqual([
+      {value: 'platform-empty', label: 'platform-empty', metadata: ['0 Dash', 'Nonce: 0']},
+      {value: 'platform-funded', label: 'platform-funded', badge: 'Treasury', metadata: ['0.0000000002 Dash', 'Nonce: 1']},
+    ])
+
+    recipients.shieldedNotes = null
+    expect(ownRecipientOptions(DestinationKind.Shielded, recipients)).toEqual([
+      {value: 'shielded-request-only', label: 'shielded-request-only', badge: 'Vault'},
+    ])
+  })
+
+  it('only includes empty Platform addresses with zero nonce when unlabeled', () => {
     expect(ownRecipientOptions(DestinationKind.PlatformAddress, inventory())).toEqual([
       {value: 'platform-empty', label: 'platform-empty', metadata: ['0 Dash', 'Nonce: 0']},
     ])
@@ -48,7 +87,7 @@ describe('own recipient options', () => {
     ])
   })
 
-  it('only includes Shielded addresses without any received notes, including spent notes', () => {
+  it('only includes unlabeled Shielded addresses without any received notes, including spent notes', () => {
     const recipients = inventory()
     recipients.shieldedAddresses.push('shielded-funded', 'shielded-spent')
     recipients.shieldedNotes = [
@@ -76,5 +115,39 @@ describe('own recipient options', () => {
     expect(ownRecipientOptions(DestinationKind.Shielded, addresses)).toHaveLength(1)
     addresses.shieldedAddresses = []
     expect(ownRecipientOptions(DestinationKind.Shielded, addresses)).toEqual([])
+  })
+
+  it('excludes own addresses already selected in other recipient rows while keeping the current row selection', () => {
+    const options = [
+      {value: 'addr-1', label: 'addr-1'},
+      {value: 'addr-2', label: 'addr-2'},
+      {value: 'addr-3', label: 'addr-3'},
+    ]
+    const recipients = [
+      {id: 'r1', address: ' addr-1 ', amount: '1'},
+      {id: 'r2', address: '', amount: '2'},
+    ]
+    expect(availableOwnRecipientOptions(options, recipients, 'r1')?.map(option => option.value)).toEqual(['addr-1', 'addr-2', 'addr-3'])
+    expect(availableOwnRecipientOptions(options, recipients, 'r2')?.map(option => option.value)).toEqual(['addr-2', 'addr-3'])
+    expect(availableOwnRecipientOptions(undefined, recipients, 'r1')).toBeUndefined()
+  })
+
+  it('derives walletAddressLabels from Receive requests only and matches options by partial label', () => {
+    const labels = walletAddressLabels([
+      {address: 'receive-used', label: '  Main Savings  '},
+    ])
+    expect(labels.get('receive-used')).toBe('Main Savings')
+    expect(labels.has('receive-empty')).toBe(false)
+
+    const options = [
+      {value: 'addr-1', label: 'addr-1', badge: 'Main Savings'},
+      {value: 'addr-2', label: 'addr-2', badge: 'Payroll'},
+      {value: 'addr-3', label: 'addr-3'},
+    ]
+    expect(matchingOptionsByLabel(options, 'sav').map(o => o.value)).toEqual(['addr-1'])
+    expect(matchingOptionsByLabel(options, 'PAY').map(o => o.value)).toEqual(['addr-2'])
+    expect(matchingOptionsByLabel(options, 'addr').map(o => o.value)).toEqual([])
+    expect(matchingOptionsByLabel(options, 'addr-1').map(o => o.value)).toEqual([])
+    expect(matchingOptionsByLabel(options, '   ').map(o => o.value)).toEqual([])
   })
 })

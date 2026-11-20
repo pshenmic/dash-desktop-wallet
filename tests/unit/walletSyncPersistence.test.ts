@@ -25,6 +25,7 @@ const newAddress = (address: string, index: number): Address => ({
   index,
   isChange: false,
   isUsed: false,
+  isLocked: false,
   label: null,
 })
 

@@ -9,6 +9,8 @@ import ShieldedAddressTab from './ShieldedAddressTab'
 import PlatformUnlockTab from './PlatformUnlockTab'
 import AddAddressSection from './AddAddressSection'
 import SyncGateNotice from '@renderer/components/ui/SyncGateNotice'
+import { toast } from '@renderer/components/ui/Toast'
+import { ADDRESS_LOCK_TOGGLE_FAILED } from '@renderer/constants/addressRow'
 import { refreshAddresses, useAdresses } from '@renderer/hooks/useAdresses'
 import { refreshPlatformAddresses, usePlatformAddresses } from '@renderer/hooks/usePlatformAddresses'
 import { useReceiveRequests } from '@renderer/hooks/useReceiveRequests'
@@ -20,6 +22,7 @@ import { NoResultsTone } from '@renderer/enums/NoResultsTone'
 import type { AddressListProps } from '@renderer/types/ExportKey'
 import type { RetryButtonProps } from '@renderer/types/RetryButton'
 import { WalletAddressDto } from '@renderer/api/types'
+import { toggleWalletAddressLock } from '@renderer/utils/addressLock'
 
 function TabContent<T>({
   items,
@@ -83,14 +86,29 @@ export default function AddressList({ coreGated = false, onExportKey }: AddressL
     err: platformErr,
   } = usePlatformAddresses(walletId)
   const { labelsByAddress } = useReceiveRequests(walletId)
+  const [lockingAddress, setLockingAddress] = useState<string | null>(null)
   const retryAddresses = walletId === undefined ? undefined : () => refreshAddresses(walletId)
   const retryPlatformAddresses = walletId === undefined ? undefined : () => refreshPlatformAddresses(walletId)
+
+  const handleToggleLock = async (item: WalletAddressDto): Promise<void> => {
+    if (!walletId || lockingAddress != null) return
+    setLockingAddress(item.address)
+    try {
+      await toggleWalletAddressLock(walletId, item.address, !item.isLocked)
+    } catch {
+      toast.error(ADDRESS_LOCK_TOGGLE_FAILED)
+    } finally {
+      setLockingAddress(null)
+    }
+  }
 
   const renderAddress = (item: WalletAddressDto): React.JSX.Element => (
     <AddressCard
       key={item.address}
       {...item}
       label={labelsByAddress.get(item.address) ?? null}
+      lockBusy={lockingAddress === item.address}
+      onToggleLock={walletId == null ? undefined : () => { void handleToggleLock(item) }}
       onExportKey={onExportKey ? () => onExportKey({ address: item.address, path: item.derivationPath }) : undefined}
     />
   )

@@ -30,6 +30,7 @@ export type WalletAddressDto = {
   index: number
   isChange: number
   isUsed: boolean
+  isLocked: boolean
   balance: bigint
   txCount: number
   label: string | null
@@ -218,6 +219,23 @@ export interface ListedUtxo extends SelectableUtxo {
 
 export type MasternodeKeyRole = 'owner' | 'voting' | 'operator'
 
+export interface MasternodeShareDto {
+  ownerAddress: string
+  amountDuffs: bigint
+}
+
+export interface OwnedMasternodeShareDto extends MasternodeShareDto {
+  keyIndex: number | null
+  imported: boolean
+}
+
+export interface MasternodeCollateralDto {
+  proTxHash: string
+  txid: string
+  vout: number
+  address: string | null
+}
+
 // publicKey is what the list carries for the role: the address for owner and
 // voting, the hex public key for operator.
 export interface ImportedMasternodeKeyDto {
@@ -254,6 +272,119 @@ export interface MasternodeDto {
   lastPaidBlock: number | null
   lastPaidTime: number | null
   registeredHeight: number | null
+  isShared: boolean | null
+  shares: OwnedMasternodeShareDto[] | null
+}
+
+export type MasternodeIdentityRole = 'owner' | 'voter'
+
+// Not seed-derived, so no index or derivation path; empty until Platform indexes the registration.
+export interface MasternodeIdentityInfoDto {
+  proTxHash: string
+  role: MasternodeIdentityRole
+  identifier: string
+  usernames: string[]
+  keys: IdentityKeyDto[]
+  balance: { amount: bigint; usdAmount: string }
+}
+
+// The platform fields are an Evo's alone, null on a Regular node.
+export interface MasternodePlatformFieldsDto {
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+}
+
+// operatorReward is in hundredths of a percent. A null serviceAddress registers
+// without one; a null key takes the wallet's next unused key on its chain.
+export interface MasternodeRegistrationDto extends MasternodePlatformFieldsDto {
+  type: 'Regular' | 'Evo'
+  collateral: { txid: string; vout: number }
+  serviceAddress: string | null
+  payoutAddress: string
+  operatorReward: number
+  ownerAddress: string | null
+  votingAddress: string | null
+  operatorPublicKey: string | null
+}
+
+// A null key index is a caller-supplied key.
+export interface MasternodeRegistrationPreviewDto {
+  type: 'Regular' | 'Evo'
+  collateral: { txid: string; vout: number }
+  ownerAddress: string
+  votingAddress: string
+  operatorPublicKey: string
+  serviceAddress: string | null
+  payoutAddress: string
+  operatorReward: number
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+  ownerKeyIndex: number | null
+  votingKeyIndex: number | null
+  operatorKeyIndex: number | null
+  inputs: PreviewEntry[]
+  outputs: PreviewEntry[]
+  feeDuffs: bigint
+  unsignedHex: string
+}
+
+// keep is the node's current key, wallet the lowest unused wallet key. A new operator
+// key PoSe-bans the node until that operator's service update; a null payoutAddress keeps the payout.
+export interface MasternodeRegistrarUpdateDto {
+  operator: { kind: 'keep' } | { kind: 'wallet' } | { kind: 'external'; publicKey: string }
+  voting: { kind: 'keep' } | { kind: 'wallet' } | { kind: 'external'; address: string }
+  payoutAddress: string | null
+}
+
+// Restates the whole service, signed by the operator key the wallet must derive.
+export interface MasternodeServiceUpdateDto extends MasternodePlatformFieldsDto {
+  serviceAddress: string
+  operatorPayoutAddress: string | null
+}
+
+export type RevocationReason = 'notSpecified' | 'termination' | 'compromisedKeys' | 'changeOfKeys'
+
+export interface MasternodeUpdateResult {
+  txid: string
+  fee: bigint
+  peersAcked: number
+}
+
+export interface MasternodeRegistrationResult {
+  proTxHash: string
+  fee: bigint
+  peersAcked: number
+}
+
+// Epochs and createdAt are unix seconds.
+export interface ProposalDto {
+  hash: string
+  name: string
+  url: string
+  paymentAddress: string
+  paymentDuffs: bigint
+  startEpoch: number
+  endEpoch: number
+  createdAt: number
+  collateralHash: string
+}
+
+// Funding votes, an evonode's counted four times.
+export interface ProposalTally {
+  yes: number
+  no: number
+  abstain: number
+}
+
+export type VoteOutcome = 'yes' | 'no' | 'abstain'
+
+// peers asked for the vote; accepted of them kept it, and 0 is a vote Core dropped.
+export interface VoteResult {
+  proTxHash: string
+  peers: number
+  accepted: number
 }
 
 // the backend's business; this carries only what the user chose.

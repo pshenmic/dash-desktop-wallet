@@ -10,5 +10,8 @@ export interface AddressRowProps {
   explorerUrl?: string
   onQr?: () => void
   onExportKey?: () => void
+  isLocked?: boolean
+  lockBusy?: boolean
+  onToggleLock?: () => void
   hidden?: boolean
 }

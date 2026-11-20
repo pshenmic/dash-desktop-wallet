@@ -22,3 +22,10 @@ export const PROVER_ERROR_PREVIEW_LENGTH = 48
 
 // One Orchard action per note spent, so the note cap is the bundle's.
 export const SHIELDED_NOTE_LIMIT = 6
+
+export const SHIELDED_ADDRESSES_CACHE_NS = 'shielded-addresses'
+export const SHIELDED_ADDRESS_MIN_POOL = 10
+export const SHIELDED_ADDRESS_BATCH_SIZE = 10
+export const SHIELDED_SYNC_SETTLE_MAX_POLLS = 1_000
+export const SHIELDED_DECODE_COMMIT_RETRY_MS = 100
+export const SHIELDED_DECODE_COMMIT_MAX_RETRIES = 20

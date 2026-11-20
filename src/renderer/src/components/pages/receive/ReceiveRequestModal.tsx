@@ -1,10 +1,17 @@
-import { Button, HighlightedIdentifier, Text } from '@renderer/components/dash-ui-kit-extended'
+import { Button, HighlightedIdentifier, LockIcon, Text, Tooltip } from '@renderer/components/dash-ui-kit-extended'
 import CopyButton from '@renderer/components/ui/CopyButton'
+import CustomBadge from '@renderer/components/ui/CustomBadge'
 import DashBigNumber from '@renderer/components/ui/DashBigNumber'
 import HashField from '@renderer/components/ui/HashField'
 import Modal from '@renderer/components/ui/Modal'
 import { toast } from '@renderer/components/ui/Toast'
-import { ADDRESS_ROW_FIAT_CLASS, ADDRESS_ROW_IDENTIFIER_CLASS } from '@renderer/constants/addressRow'
+import {
+  ADDRESS_ROW_FIAT_CLASS,
+  ADDRESS_ROW_IDENTIFIER_CLASS,
+  ADDRESS_ROW_LOCKED_BADGE,
+  ADDRESS_ROW_LOCK_LABEL,
+  ADDRESS_ROW_UNLOCK_LABEL,
+} from '@renderer/constants/addressRow'
 import { DASH_UNIT } from '@renderer/constants/balance'
 import { RECEIVE_INVOICE_ADDRESS_LABELS } from '@renderer/constants/receiveInvoice'
 import { RECEIVE_MODAL_COPY } from '@renderer/constants/receivePage'
@@ -18,6 +25,9 @@ import ReceiveQr from './ReceiveQr'
 
 export default function ReceiveRequestModal({
   request,
+  lockedAddresses,
+  lockingAddress = null,
+  onToggleAddressLock,
   onClose,
 }: ReceiveRequestModalProps): React.JSX.Element | null {
   const { status } = useAuth()
@@ -25,6 +35,8 @@ export default function ReceiveRequestModal({
 
   if (!request) return null
 
+  const isAddressLocked = request.kind === 'core' && (lockedAddresses?.has(request.address) ?? false)
+  const lockLabel = isAddressLocked ? ADDRESS_ROW_UNLOCK_LABEL : ADDRESS_ROW_LOCK_LABEL
   const amountDash = receiveRequestAmountDash(request.amountDuffs)
   const paymentUri = corePaymentUri(request.address, amountDash, request.label)
   const modalTitle = request.label
@@ -74,7 +86,26 @@ export default function ReceiveRequestModal({
                 <HighlightedIdentifier className={`${ADDRESS_ROW_IDENTIFIER_CLASS} text-right`}>
                   {request.address}
                 </HighlightedIdentifier>
+                {isAddressLocked && (
+                  <CustomBadge text={ADDRESS_ROW_LOCKED_BADGE} variant={"warning"} size={"xs"} className={"shrink-0"} />
+                )}
                 <CopyButton text={request.address} className={"shrink-0"} />
+                {request.kind === 'core' && onToggleAddressLock && (
+                  <Tooltip label={lockLabel}>
+                    <button
+                      type={"button"}
+                      disabled={lockingAddress === request.address}
+                      aria-label={`${lockLabel} ${request.address}`}
+                      aria-pressed={isAddressLocked}
+                      onClick={() => onToggleAddressLock(request.address, !isAddressLocked)}
+                      className={`size-5 shrink-0 rounded-[.3125rem] flex items-center justify-center ${
+                        isAddressLocked ? 'dash-block-accent-25 dash-text-primary' : 'dash-block-5 dash-text-default'
+                      } hover:opacity-80 transition-opacity duration-200 cursor-pointer disabled:pointer-events-none disabled:opacity-40`}
+                    >
+                      <LockIcon size={10} color={"currentColor"} className={isAddressLocked ? '' : 'opacity-50'} />
+                    </button>
+                  </Tooltip>
+                )}
               </div>
             </div>
 

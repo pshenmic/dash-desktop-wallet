@@ -156,4 +156,28 @@ describe('cfheaders pipelining', () => {
 
     expect(inner().phase).toBe('cfilters')
   })
+
+  // The scan holds at a height with no filter header, so without the walk a
+  // rewind below the checkpoint the session anchored at never scans again.
+  it('walks the filter headers again from below when the cursor is rewound under its anchor', () => {
+    const state = worker as unknown as {
+      anchorHeight: number
+      phase: string
+      cfilter: {cursor: number}
+      heightToFilterHeader: {set: (height: number, header: Uint8Array) => void}
+    }
+    state.anchorHeight = 5000
+    state.heightToFilterHeader.set(5000, new Uint8Array(32))
+    state.cfilter.cursor = TIP
+    state.phase = 'synced'
+    inner().cfHeaders.walkStart = TIP + 1
+    inner().cfHeaders.pending.clear()
+
+    worker.watchProviders(['aa'.repeat(32)], 1)
+
+    expect(state.cfilter.cursor).toBe(1)
+    expect(state.anchorHeight).toBe(0)
+    expect(Math.min(...inner().cfHeaders.pending.keys())).toBe(1000)
+    expect(requests()).toBeGreaterThan(0)
+  })
 })

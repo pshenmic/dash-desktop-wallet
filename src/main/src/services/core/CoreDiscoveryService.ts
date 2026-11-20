@@ -278,6 +278,7 @@ export class CoreDiscoveryService {
       index: derived.index,
       isChange,
       isUsed: false,
+      isLocked: false,
       label: null,
     }
   }

@@ -2,6 +2,7 @@ import {
   ChainSmallIcon,
   DeleteIcon,
   HighlightedIdentifier,
+  LockIcon,
   Text,
   Tooltip,
 } from '@renderer/components/dash-ui-kit-extended'
@@ -14,7 +15,13 @@ import QrButton from '@renderer/components/ui/QrButton'
 import RetryButton from '@renderer/components/ui/RetryButton'
 import ListSkeleton from '@renderer/components/ui/Skeleton'
 import { toast } from '@renderer/components/ui/Toast'
-import { ADDRESS_ROW_FIAT_CLASS, ADDRESS_ROW_IDENTIFIER_CLASS } from '@renderer/constants/addressRow'
+import {
+  ADDRESS_ROW_FIAT_CLASS,
+  ADDRESS_ROW_IDENTIFIER_CLASS,
+  ADDRESS_ROW_LOCKED_BADGE,
+  ADDRESS_ROW_LOCK_LABEL,
+  ADDRESS_ROW_UNLOCK_LABEL,
+} from '@renderer/constants/addressRow'
 import { DASH_UNIT } from '@renderer/constants/balance'
 import { RECEIVE_HISTORY_COPY, RECEIVE_MODAL_COPY } from '@renderer/constants/receivePage'
 import { SURFACE_ROW } from '@renderer/constants/surfaces'
@@ -28,6 +35,9 @@ export default function ReceiveRequestsTable({
   requests,
   loading = false,
   error = null,
+  lockedAddresses,
+  lockingAddress = null,
+  onToggleAddressLock,
   onSelect,
   onDelete,
   onRetry,
@@ -84,6 +94,8 @@ export default function ReceiveRequestsTable({
           {requests.map((request) => {
             const amountDash = receiveRequestAmountDash(request.amountDuffs)
             const paymentUri = corePaymentUri(request.address, amountDash, request.label)
+            const isAddressLocked = request.kind === 'core' && (lockedAddresses?.has(request.address) ?? false)
+            const lockLabel = isAddressLocked ? ADDRESS_ROW_UNLOCK_LABEL : ADDRESS_ROW_LOCK_LABEL
             const formattedDate = new Date(request.createdAt).toLocaleString(undefined, {
               year: 'numeric',
               month: '2-digit',
@@ -120,10 +132,13 @@ export default function ReceiveRequestsTable({
                   </Text>
                 )}
 
-                <div className={"flex min-w-0 items-center"}>
+                <div className={"flex min-w-0 items-center gap-1.5"}>
                   <HighlightedIdentifier className={ADDRESS_ROW_IDENTIFIER_CLASS}>
                     {request.address}
                   </HighlightedIdentifier>
+                  {isAddressLocked && (
+                    <CustomBadge text={ADDRESS_ROW_LOCKED_BADGE} variant={"warning"} size={"xs"} className={"shrink-0"} />
+                  )}
                 </div>
 
                 {amountDash !== null && request.amountDuffs !== null ? (
@@ -187,6 +202,23 @@ export default function ReceiveRequestsTable({
                       <DollarIcon size={18} color={"currentColor"} className={"dash-text-default opacity-50"} />
                     </button>
                   </Tooltip>
+
+                  {request.kind === 'core' && onToggleAddressLock && (
+                    <Tooltip label={lockLabel}>
+                      <button
+                        type={"button"}
+                        disabled={lockingAddress === request.address}
+                        aria-label={`${lockLabel} ${request.address}`}
+                        aria-pressed={isAddressLocked}
+                        onClick={() => onToggleAddressLock(request.address, !isAddressLocked)}
+                        className={`size-5 rounded-[.3125rem] flex items-center justify-center ${
+                          isAddressLocked ? 'dash-block-accent-25 dash-text-primary' : 'dash-block-5 dash-text-default'
+                        } hover:opacity-80 transition-opacity duration-200 cursor-pointer disabled:pointer-events-none disabled:opacity-40`}
+                      >
+                        <LockIcon size={10} color={"currentColor"} className={isAddressLocked ? '' : 'opacity-50'} />
+                      </button>
+                    </Tooltip>
+                  )}
 
                   <Tooltip label={RECEIVE_HISTORY_COPY.deleteAction}>
                     <button

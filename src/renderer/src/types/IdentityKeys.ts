@@ -24,12 +24,14 @@ export interface KeyBoundsLabel {
 
 export interface KeyTableRowProps {
   identityKey: IdentityKeyDto
+  readOnly?: boolean
   onAction: (identityKey: IdentityKeyDto, action: IdentityKeyAction) => void
 }
 
 export interface IdentityKeysSectionProps {
   walletId: string
   identity: IdentityApiDto
+  readOnly?: boolean
 }
 
 export interface IdentityKeyUpdateCopy {

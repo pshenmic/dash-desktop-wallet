@@ -22,6 +22,7 @@ export interface ReceiveRequestFormProps {
   error?: string | null
   headerExtra?: ReactNode
   extraFields?: ReactNode
+  hasExtraValues?: boolean
   note?: ReactNode
   submitDisabled?: boolean
   submitLabel?: string
@@ -35,6 +36,9 @@ export interface ReceiveRequestsTableProps {
   requests: ReceiveRequestDto[]
   loading?: boolean
   error?: string | null
+  lockedAddresses?: ReadonlySet<string>
+  lockingAddress?: string | null
+  onToggleAddressLock?: (address: string, nextLocked: boolean) => void
   onSelect: (request: ReceiveRequestDto) => void
   onDelete: (request: ReceiveRequestDto) => void
   onRetry?: () => void
@@ -42,6 +46,9 @@ export interface ReceiveRequestsTableProps {
 
 export interface ReceiveRequestModalProps {
   request: ReceiveRequestDto | null
+  lockedAddresses?: ReadonlySet<string>
+  lockingAddress?: string | null
+  onToggleAddressLock?: (address: string, nextLocked: boolean) => void
   onClose: () => void
 }
 

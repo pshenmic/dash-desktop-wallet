@@ -16,6 +16,8 @@ export interface AddressListProps {
 }
 
 export interface AddressCardProps extends WalletAddressDto {
+  lockBusy?: boolean
+  onToggleLock?: () => void
   onExportKey?: () => void
 }
 

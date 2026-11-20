@@ -41,7 +41,7 @@ export function nextReceivePlatformAddress(
 }
 
 export function receiveCoreAddresses(addresses: WalletAddressDto[]): WalletAddressDto[] {
-  return addresses.filter((address) => !address.isUsed && address.txCount === 0 && address.balance === 0n)
+  return addresses.filter((address) => !address.isLocked && !address.isUsed && address.txCount === 0 && address.balance === 0n)
 }
 
 export function defaultReceiveCoreAddress(
@@ -75,12 +75,20 @@ export function receiveShieldedAddresses(
   return addresses.filter((address) => (balances.get(address) ?? 0n) === 0n)
 }
 
+export function unclaimedReceiveShieldedAddresses(
+  addresses: string[],
+  balances: Map<string, bigint>,
+  claimedAddresses: ReadonlySet<string>,
+): string[] {
+  return receiveShieldedAddresses(addresses, balances).filter((address) => !claimedAddresses.has(address))
+}
+
 export function nextReceiveShieldedAddress(
   addresses: string[],
   balances: Map<string, bigint>,
   claimedAddresses: ReadonlySet<string>,
 ): string | undefined {
-  return receiveShieldedAddresses(addresses, balances).find((address) => !claimedAddresses.has(address))
+  return unclaimedReceiveShieldedAddresses(addresses, balances, claimedAddresses)[0]
 }
 
 export function claimedReceiveAddresses(

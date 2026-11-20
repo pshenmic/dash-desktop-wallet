@@ -14,11 +14,12 @@ import {
   receiveRequestKind,
   receiveShieldedAddresses,
   toReceiveRequest,
+  unclaimedReceiveShieldedAddresses,
 } from '../../src/renderer/src/utils/receiveDefaults'
 import type { WalletAddressDto } from '../../src/renderer/src/api/types'
 
 const addr = (address: string, balance: bigint, isUsed = false, txCount = 0): WalletAddressDto =>
-  ({ walletId: 'wallet', accountId: 0, address, derivationPath: '', index: 0, isChange: 0, isUsed, balance, txCount, label: null, usdBalance: null })
+  ({ walletId: 'wallet', accountId: 0, address, derivationPath: '', index: 0, isChange: 0, isUsed, isLocked: false, balance, txCount, label: null, usdBalance: null })
 
 const platformAddr = (platformAddress: string, balanceCredits: bigint, nonce: number) =>
   ({ platformAddress, balanceCredits, nonce })
@@ -80,6 +81,12 @@ describe('receiveCoreAddresses', () => {
   it('returns an empty list when no fresh addresses remain', () => {
     expect(receiveCoreAddresses([addr('funded', 100n), addr('used', 0n, true)])).toEqual([])
     expect(receiveCoreAddresses([])).toEqual([])
+  })
+
+  it('leaves locked addresses out', () => {
+    const list = [{...addr('locked', 0n), isLocked: true}, addr('open', 0n)]
+
+    expect(receiveCoreAddresses(list).map(address => address.address)).toEqual(['open'])
   })
 })
 
@@ -190,6 +197,13 @@ describe('nextReceivePlatformAddress', () => {
   it('returns undefined when all unused platform addresses are claimed', () => {
     const list = [platformAddr('p1', 0n, 0), platformAddr('p2', 50n, 1)]
     expect(nextReceivePlatformAddress(list, new Set(['p1']))).toBeUndefined()
+  })
+})
+
+describe('unclaimedReceiveShieldedAddresses', () => {
+  it('filters out both funded addresses and addresses claimed by payment requests', () => {
+    const balances = new Map<string, bigint>([['s1', 10n], ['s2', 0n]])
+    expect(unclaimedReceiveShieldedAddresses(['s1', 's2', 's3', 's4'], balances, new Set(['s2']))).toEqual(['s3', 's4'])
   })
 })
 

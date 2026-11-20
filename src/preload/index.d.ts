@@ -92,6 +92,25 @@ interface ImportedMasternodeKeyDTO {
   publicKey: string
 }
 
+// Mirrors MasternodeIdentityInfo; empty until Platform indexes the registration.
+interface MasternodeIdentityInfoDTO {
+  proTxHash: string
+  role: 'owner' | 'voter'
+  identifier: string
+  usernames: string[]
+  keys: Array<{
+    keyId: number
+    purpose: string
+    securityLevel: string
+    keyType: string
+    data: string
+    readOnly: boolean
+    disabledAt: number | null
+    contractBounds: { contractId: string; documentType: string | null } | null
+  }>
+  balance: { amount: bigint; usdAmount: string }
+}
+
 interface MasternodeDTO {
   proTxHash: string
   type: string
@@ -127,6 +146,105 @@ interface PaymentRequestDTO {
   label: string | null
   message: string | null
   createdAt: number
+}
+
+// Mirrors MasternodeRegistration and MasternodeRegistrationResult in
+// src/main/src/types/Masternode.
+interface MasternodeRegistrationDTO {
+  type: 'Regular' | 'Evo'
+  collateral: { txid: string; vout: number }
+  serviceAddress: string | null
+  payoutAddress: string
+  operatorReward: number
+  ownerAddress: string | null
+  votingAddress: string | null
+  operatorPublicKey: string | null
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+}
+
+interface MasternodeRegistrationResultDTO {
+  proTxHash: string
+  fee: bigint
+  peersAcked: number
+}
+
+// Mirrors MasternodeRegistrationPreview; a null key index is a caller-supplied key.
+interface MasternodeRegistrationPreviewDTO {
+  type: 'Regular' | 'Evo'
+  collateral: { txid: string; vout: number }
+  ownerAddress: string
+  votingAddress: string
+  operatorPublicKey: string
+  serviceAddress: string | null
+  payoutAddress: string
+  operatorReward: number
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+  ownerKeyIndex: number | null
+  votingKeyIndex: number | null
+  operatorKeyIndex: number | null
+  inputs: PreviewEntry[]
+  outputs: PreviewEntry[]
+  feeDuffs: bigint
+  unsignedHex: string
+}
+
+// Mirrors MasternodeRegistrarUpdate and MasternodeUpdateResult in
+// src/main/src/types/Masternode, which says what each choice does.
+interface MasternodeRegistrarUpdateDTO {
+  operator: { kind: 'keep' } | { kind: 'wallet' } | { kind: 'external'; publicKey: string }
+  voting: { kind: 'keep' } | { kind: 'wallet' } | { kind: 'external'; address: string }
+  payoutAddress: string | null
+}
+
+// Mirrors MasternodeServiceUpdate and RevocationReason in
+// src/main/src/types/Masternode. Both are signed by the operator key.
+interface MasternodeServiceUpdateDTO {
+  serviceAddress: string
+  operatorPayoutAddress: string | null
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+}
+
+type RevocationReasonDTO = 'notSpecified' | 'termination' | 'compromisedKeys' | 'changeOfKeys'
+
+interface MasternodeUpdateResultDTO {
+  txid: string
+  fee: bigint
+  peersAcked: number
+}
+
+// Mirrors Proposal, ProposalTally, VoteOutcome and VoteResult (with VoteRelay) in
+// src/main/src/types/Governance.
+interface ProposalDTO {
+  hash: string
+  name: string
+  url: string
+  paymentAddress: string
+  paymentDuffs: bigint
+  startEpoch: number
+  endEpoch: number
+  createdAt: number
+  collateralHash: string
+}
+
+interface ProposalTallyDTO {
+  yes: number
+  no: number
+  abstain: number
+}
+
+type VoteOutcomeDTO = 'yes' | 'no' | 'abstain'
+
+interface VoteResultDTO {
+  proTxHash: string
+  peers: number
+  // How many of those peers served the vote back; 0 is a vote Core dropped.
+  accepted: number
 }
 
 // Hand-maintained alongside definitions.ts, and deliberately a second
@@ -223,10 +341,20 @@ declare global {
       getBalance: (address: string | string[], network: Network) => Promise<unknown>
       getIdentities: (walletId: string) => Promise<unknown>
       getMasternodes: (walletId: string) => Promise<MasternodeDTO[] | null>
+      getMasternodeIdentities: (walletId: string) => Promise<MasternodeIdentityInfoDTO[]>
       getMasternodeCollaterals: (walletId: string) => Promise<MasternodeCollateralDTO[]>
       getImportedMasternodeKeys: (walletId: string) => Promise<ImportedMasternodeKeyDTO[]>
       importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => Promise<MasternodeDTO[] | null>
       removeMasternodeKey: (walletId: string, key: ImportedMasternodeKeyDTO) => Promise<void>
+      signAndBroadcastMasternodeRegistration: (walletId: string, unsignedHex: string, password: string) => Promise<MasternodeRegistrationResultDTO>
+      previewMasternodeRegistration: (walletId: string, registration: MasternodeRegistrationDTO) => Promise<MasternodeRegistrationPreviewDTO>
+      updateMasternodeRegistrar: (walletId: string, proTxHash: string, update: MasternodeRegistrarUpdateDTO, password: string) => Promise<MasternodeUpdateResultDTO>
+      updateMasternodeService: (walletId: string, proTxHash: string, update: MasternodeServiceUpdateDTO, password: string) => Promise<MasternodeUpdateResultDTO>
+      revokeMasternode: (walletId: string, proTxHash: string, reason: RevocationReasonDTO, password: string) => Promise<MasternodeUpdateResultDTO>
+      getGovernanceProposals: (walletId: string) => Promise<ProposalDTO[] | null>
+      refreshGovernance: (walletId: string, proposalHash?: string) => Promise<void>
+      getProposalTally: (walletId: string, proposalHash: string) => Promise<ProposalTallyDTO | null>
+      voteProposal: (walletId: string, proposalHash: string, outcome: VoteOutcomeDTO, proTxHashes: string[], password: string) => Promise<VoteResultDTO[]>
       getUsernames: (walletId: string) => Promise<unknown>
       refreshDashPay: (walletId: string) => Promise<void>
       registerUsername: (walletId: string, identifier: string, label: string, password: string) => Promise<unknown>
@@ -245,6 +373,7 @@ declare global {
       selectWallet: (walletId: string) => Promise<void>
       getWalletBalance: (walletId: string) => Promise<unknown>
       setAddressLabel: (walletId: string, address: string, label: string) => Promise<void>
+      setAddressLocked: (walletId: string, address: string, locked: boolean) => Promise<void>
       setWalletLabel: (walletId: string, label: string | null) => Promise<void>
       sendTransaction: (walletId: string, recipients: CoreRecipient[], password: string, source?: CoreSpendSource, changeTo?: string) => Promise<unknown>
       getTxLockStatus: (walletId: string, txid: string) => Promise<unknown>

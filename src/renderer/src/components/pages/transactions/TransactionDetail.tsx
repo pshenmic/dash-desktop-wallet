@@ -227,7 +227,7 @@ export default function TransactionDetail({ transaction, onBack }: TransactionDe
                   </Text>
                 }
               />
-              {resolvedTransaction.blockHeight && (
+              {resolvedTransaction.blockHeight !== undefined && resolvedTransaction.blockHeight > 0 && (
                 <DetailToken
                   icon={<BoxIcon size={14} color={"currentColor"} className={"dash-text-primary"} />}
                   label={`${detail.fields.lockTime}:`}

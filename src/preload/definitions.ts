@@ -5,6 +5,37 @@ type Network = 'mainnet' | 'testnet'
 // Mirrors MasternodeKeyChain and ImportedMasternodeKey in src/main/src/types/Masternode.
 type MasternodeKeyRole = 'owner' | 'voting' | 'operator'
 type ImportedMasternodeKey = { role: MasternodeKeyRole; publicKey: string }
+// Mirrors MasternodeRegistration in src/main/src/types/Masternode.
+type MasternodeRegistration = {
+  type: 'Regular' | 'Evo'
+  collateral: { txid: string; vout: number }
+  serviceAddress: string | null
+  payoutAddress: string
+  operatorReward: number
+  ownerAddress: string | null
+  votingAddress: string | null
+  operatorPublicKey: string | null
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+}
+// Mirrors MasternodeRegistrarUpdate in src/main/src/types/Masternode.
+type MasternodeRegistrarUpdate = {
+  operator: { kind: 'keep' } | { kind: 'wallet' } | { kind: 'external'; publicKey: string }
+  voting: { kind: 'keep' } | { kind: 'wallet' } | { kind: 'external'; address: string }
+  payoutAddress: string | null
+}
+// Mirrors MasternodeServiceUpdate and RevocationReason in src/main/src/types/Masternode.
+type MasternodeServiceUpdate = {
+  serviceAddress: string
+  operatorPayoutAddress: string | null
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+}
+type RevocationReason = 'notSpecified' | 'termination' | 'compromisedKeys' | 'changeOfKeys'
+// Mirrors VoteOutcome in src/main/src/types/Governance.
+type VoteOutcome = 'yes' | 'no' | 'abstain'
 
 // Mirrors src/main/src/types/CoinSelection, which the bundles do not share: an
 // address narrows the automatic selection, a picked outpoint list is spent whole.
@@ -62,10 +93,20 @@ export const apiDefinitions = (ipcRenderer) => ({
   getWalletBalance: (walletId: string) => ipcRenderer.invoke('getWalletBalance', walletId),
   getIdentities: (walletId: string) => ipcRenderer.invoke('getIdentities', walletId),
   getMasternodes: (walletId: string) => ipcRenderer.invoke('getMasternodes', walletId),
+  getMasternodeIdentities: (walletId: string) => ipcRenderer.invoke('getMasternodeIdentities', walletId),
   getMasternodeCollaterals: (walletId: string) => ipcRenderer.invoke('getMasternodeCollaterals', walletId),
   getImportedMasternodeKeys: (walletId: string) => ipcRenderer.invoke('getImportedMasternodeKeys', walletId),
   importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => ipcRenderer.invoke('importMasternodeKey', walletId, role, privateKey),
   removeMasternodeKey: (walletId: string, key: ImportedMasternodeKey) => ipcRenderer.invoke('removeMasternodeKey', walletId, key),
+  signAndBroadcastMasternodeRegistration: (walletId: string, unsignedHex: string, password: string) => ipcRenderer.invoke('signAndBroadcastMasternodeRegistration', walletId, unsignedHex, password),
+  previewMasternodeRegistration: (walletId: string, registration: MasternodeRegistration) => ipcRenderer.invoke('previewMasternodeRegistration', walletId, registration),
+  updateMasternodeRegistrar: (walletId: string, proTxHash: string, update: MasternodeRegistrarUpdate, password: string) => ipcRenderer.invoke('updateMasternodeRegistrar', walletId, proTxHash, update, password),
+  updateMasternodeService: (walletId: string, proTxHash: string, update: MasternodeServiceUpdate, password: string) => ipcRenderer.invoke('updateMasternodeService', walletId, proTxHash, update, password),
+  revokeMasternode: (walletId: string, proTxHash: string, reason: RevocationReason, password: string) => ipcRenderer.invoke('revokeMasternode', walletId, proTxHash, reason, password),
+  getGovernanceProposals: (walletId: string) => ipcRenderer.invoke('getGovernanceProposals', walletId),
+  refreshGovernance: (walletId: string, proposalHash?: string) => ipcRenderer.invoke('refreshGovernance', walletId, proposalHash),
+  getProposalTally: (walletId: string, proposalHash: string) => ipcRenderer.invoke('getProposalTally', walletId, proposalHash),
+  voteProposal: (walletId: string, proposalHash: string, outcome: VoteOutcome, proTxHashes: string[], password: string) => ipcRenderer.invoke('voteProposal', walletId, proposalHash, outcome, proTxHashes, password),
   updateIdentityKeys: (walletId: string, identifier: string, update: IdentityKeysUpdate, password: string) => ipcRenderer.invoke('updateIdentityKeys', walletId, identifier, update, password),
   getIdentityPrivateKeys: (walletId: string, identifier: string, password: string) => ipcRenderer.invoke('getIdentityPrivateKeys', walletId, identifier, password),
   getUsernames: (walletId: string) => ipcRenderer.invoke('getUsernames', walletId),
@@ -81,6 +122,7 @@ export const apiDefinitions = (ipcRenderer) => ({
   getPlatformAddresses: (walletId: string) => ipcRenderer.invoke('getPlatformAddresses', walletId),
   addPlatformAddress: (walletId: string) => ipcRenderer.invoke('addPlatformAddress', walletId),
   setAddressLabel: (walletId: string, address: string, label: string) => ipcRenderer.invoke('setAddressLabel', walletId, address, label),
+  setAddressLocked: (walletId: string, address: string, locked: boolean) => ipcRenderer.invoke('setAddressLocked', walletId, address, locked),
   setWalletLabel: (walletId: string, label: string | null) => ipcRenderer.invoke('setWalletLabel', walletId, label),
   sendTransaction: (walletId: string, recipients: CoreRecipient[], password: string, source?: CoreSpendSource, changeTo?: string) => ipcRenderer.invoke('sendTransaction', walletId, recipients, password, source, changeTo),
   getTxLockStatus: (walletId: string, txid: string) => ipcRenderer.invoke('getTxLockStatus', walletId, txid),

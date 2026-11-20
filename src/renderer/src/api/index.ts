@@ -1,6 +1,6 @@
 import { WalletTxDto } from '@renderer/types/WalletTransaction'
 import { TransferOperation } from '../enums/TransferOperation'
-import { AddressKeyInfoDto, UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PaymentRequestDto, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, ListedUtxo, MasternodeDto, ImportedMasternodeKeyDto, MasternodeKeyRole} from './types'
+import { AddressKeyInfoDto, UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PaymentRequestDto, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, ListedUtxo, MasternodeDto, MasternodeCollateralDto, MasternodeIdentityInfoDto, ImportedMasternodeKeyDto, MasternodeKeyRole, MasternodeRegistrationDto, MasternodeRegistrationPreviewDto, MasternodeRegistrationResult, MasternodeRegistrarUpdateDto, MasternodeServiceUpdateDto, MasternodeUpdateResult, RevocationReason, ProposalDto, ProposalTally, VoteOutcome, VoteResult} from './types'
 
 export class API {
   private static get api() {
@@ -147,6 +147,10 @@ export class API {
     return this.api.setAddressLabel(walletId, address, label)
   }
 
+  static async setAddressLocked(walletId: string, address: string, locked: boolean): Promise<void> {
+    return this.api.setAddressLocked(walletId, address, locked)
+  }
+
   static async getTransactions(walletId: string): Promise<WalletHistory> {
     return this.api.getTransactions(walletId) as Promise<WalletHistory>
   }
@@ -171,6 +175,14 @@ export class API {
     return this.api.getMasternodes(walletId)
   }
 
+  static async getMasternodeCollaterals(walletId: string): Promise<MasternodeCollateralDto[]> {
+    return this.api.getMasternodeCollaterals(walletId)
+  }
+
+  static async getMasternodeIdentities(walletId: string): Promise<MasternodeIdentityInfoDto[]> {
+    return this.api.getMasternodeIdentities(walletId)
+  }
+
   static async getImportedMasternodeKeys(walletId: string): Promise<ImportedMasternodeKeyDto[]> {
     return this.api.getImportedMasternodeKeys(walletId)
   }
@@ -184,6 +196,46 @@ export class API {
 
   static async removeMasternodeKey(walletId: string, key: ImportedMasternodeKeyDto): Promise<void> {
     return this.api.removeMasternodeKey(walletId, key)
+  }
+
+  static async signAndBroadcastMasternodeRegistration(walletId: string, unsignedHex: string, password: string): Promise<MasternodeRegistrationResult> {
+    return this.api.signAndBroadcastMasternodeRegistration(walletId, unsignedHex, password)
+  }
+
+  static async previewMasternodeRegistration(walletId: string, registration: MasternodeRegistrationDto): Promise<MasternodeRegistrationPreviewDto> {
+    return this.api.previewMasternodeRegistration(walletId, registration)
+  }
+
+  static async updateMasternodeRegistrar(walletId: string, proTxHash: string, update: MasternodeRegistrarUpdateDto, password: string): Promise<MasternodeUpdateResult> {
+    return this.api.updateMasternodeRegistrar(walletId, proTxHash, update, password)
+  }
+
+  static async updateMasternodeService(walletId: string, proTxHash: string, update: MasternodeServiceUpdateDto, password: string): Promise<MasternodeUpdateResult> {
+    return this.api.updateMasternodeService(walletId, proTxHash, update, password)
+  }
+
+  static async revokeMasternode(walletId: string, proTxHash: string, reason: RevocationReason, password: string): Promise<MasternodeUpdateResult> {
+    return this.api.revokeMasternode(walletId, proTxHash, reason, password)
+  }
+
+  // Fetches the proposal list, and the votes of one proposal when named; the
+  // governance reads below only answer what a refresh brought.
+  static async refreshGovernance(walletId: string, proposalHash?: string): Promise<void> {
+    return this.api.refreshGovernance(walletId, proposalHash)
+  }
+
+  // Null until the source has a list to give; p2p answers once chain.db opens.
+  static async getGovernanceProposals(walletId: string): Promise<ProposalDto[] | null> {
+    return this.api.getGovernanceProposals(walletId)
+  }
+
+  // Null while the votes or the masternode list they are checked against arrive.
+  static async getProposalTally(walletId: string, proposalHash: string): Promise<ProposalTally | null> {
+    return this.api.getProposalTally(walletId, proposalHash)
+  }
+
+  static async voteProposal(walletId: string, proposalHash: string, outcome: VoteOutcome, proTxHashes: string[], password: string): Promise<VoteResult[]> {
+    return this.api.voteProposal(walletId, proposalHash, outcome, proTxHashes, password)
   }
 
   // DashPay and DPNS reads answer from memory

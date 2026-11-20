@@ -7,7 +7,7 @@ import {CorePrevOutService} from '../../src/main/src/services/core/CorePrevOutSe
 
 const receiving = Array.from({length: 50}, (_, index) => ({address: `addr-${index}`, index}))
 
-function provider(used: string[]): {
+function provider(used: string[], locked: string[] = []): {
   provider: P2PWalletProvider
   getUsedAddresses: ReturnType<typeof vi.fn>
   getTransactionsByAddress: ReturnType<typeof vi.fn>
@@ -17,7 +17,12 @@ function provider(used: string[]): {
   const getTransactionsByAddress = vi.fn(async () => [])
 
   const transactionDAO = {getUsedAddresses, getTransactionsByAddress} as unknown as TransactionDAO
-  const addressDAO = {getAddressesByWalletId: async () => ({receiving, change: []})} as unknown as AddressDAO
+  const addressDAO = {
+    getAddressesByWalletId: async () => ({
+      receiving: receiving.map(address => ({...address, isLocked: locked.includes(address.address)})),
+      change: [],
+    }),
+  } as unknown as AddressDAO
 
   return {
     provider: new P2PWalletProvider(transactionDAO, 'w1', {} as WalletSyncService, addressDAO, {} as CorePrevOutService, 'testnet'),
@@ -53,6 +58,18 @@ describe('nextUnusedAddress on the local store', () => {
     const {provider: p} = provider(receiving.map(a => a.address))
 
     expect(await p.nextUnusedAddress()).toBe('addr-49')
+  })
+
+  it('skips locked addresses', async () => {
+    const {provider: p} = provider([], ['addr-0'])
+
+    expect(await p.nextUnusedAddress()).toBe('addr-1')
+  })
+
+  it('refuses when every receiving address is locked', async () => {
+    const {provider: p} = provider([], receiving.map(a => a.address))
+
+    await expect(p.nextUnusedAddress()).rejects.toThrow('Every receiving address is locked')
   })
 
   it('refuses a wallet with no receiving addresses', async () => {

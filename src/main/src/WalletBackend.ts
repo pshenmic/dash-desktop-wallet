@@ -33,6 +33,16 @@ import { GetMasternodeCollateralsHandler } from './api/masternodes/getMasternode
 import { GetImportedMasternodeKeysHandler } from './api/masternodes/getImportedMasternodeKeys'
 import { ImportMasternodeKeyHandler } from './api/masternodes/importMasternodeKey'
 import { RemoveMasternodeKeyHandler } from './api/masternodes/removeMasternodeKey'
+import { SignAndBroadcastMasternodeRegistrationHandler } from './api/masternodes/signAndBroadcastMasternodeRegistration'
+import { PreviewMasternodeRegistrationHandler } from './api/masternodes/previewMasternodeRegistration'
+import { GetMasternodeIdentitiesHandler } from './api/masternodes/getMasternodeIdentities'
+import { UpdateMasternodeRegistrarHandler } from './api/masternodes/updateMasternodeRegistrar'
+import { UpdateMasternodeServiceHandler } from './api/masternodes/updateMasternodeService'
+import { RevokeMasternodeHandler } from './api/masternodes/revokeMasternode'
+import { GetGovernanceProposalsHandler } from './api/governance/getGovernanceProposals'
+import { GetProposalTallyHandler } from './api/governance/getProposalTally'
+import { VoteProposalHandler } from './api/governance/voteProposal'
+import { RefreshGovernanceHandler } from './api/governance/refreshGovernance'
 import { GetUsernamesHandler } from './api/wallet/getUsernames'
 import { RefreshDashPayHandler } from './api/wallet/refreshDashPay'
 import { RegisterUsernameHandler } from './api/wallet/registerUsername'
@@ -53,6 +63,7 @@ import {GetBalance} from "./api/wallet/getBalance";
 import {DeleteWalletHandler} from "./api/wallet/deleteWallet";
 import {GetWalletBalance} from "./api/wallet/getWalletBalance";
 import {SetAddressLabel} from "./api/wallet/setAddressLabel";
+import {SetAddressLockedHandler} from './api/wallet/setAddressLocked'
 import {SetWalletLabel} from "./api/wallet/setWalletLabel";
 import {SendTransactionHandler} from "./api/wallet/sendTransaction";
 import {GetTxLockStatusHandler} from "./api/wallet/getTxLockStatus";
@@ -142,7 +153,9 @@ import {SetUtxoLockedHandler} from './api/wallet/setUtxoLocked'
 import {DISCOVERY_INTERVAL_MS} from './constants/addresses'
 import {CoreDiscoveryService} from './services/core/CoreDiscoveryService'
 import {MasternodeService} from './services/core/MasternodeService'
+import {GovernanceService} from './services/core/GovernanceService'
 import {MasternodeDAO} from './database/MasternodeDAO'
+import {MasternodeIdentityDAO} from './database/MasternodeIdentityDAO'
 import {CorePrevOutService} from './services/core/CorePrevOutService'
 import {WalletCredentialsService} from './services/wallet/WalletCredentialsService'
 import {IdentityService} from './services/platform/IdentityService'
@@ -157,6 +170,7 @@ import {GetLogFileHandler} from './api/logs/getLogFile'
 import {ShowLogFileInFolderHandler} from './api/logs/showLogFileInFolder'
 import {registerHandler} from './utils/ipcHandler'
 import {Logger} from './utils/logger'
+import {Network} from './types/Network'
 
 const prevout = new Logger('prevout')
 const locks = new Logger('locks')
@@ -182,6 +196,7 @@ export class WalletBackend {
   private coreDiscoveryService?: CoreDiscoveryService
   private coreLockService?: CoreLockService
   private masternodeService?: MasternodeService
+  private governanceService?: GovernanceService
   private walletCredentialsService?: WalletCredentialsService
   private identityService?: IdentityService
   private logService?: LogService
@@ -191,7 +206,7 @@ export class WalletBackend {
   private identityDAO?: IdentityDAO
 
   private initHandlers(): void {
-    if (!this.walletService || !this.platformAddressService || !this.platformHistoryService || !this.platformTransferService || !this.feeService || !this.applicationService || !this.walletSyncService || !this.ratesService || !this.contactService || !this.paymentRequestService || !this.shieldedService || !this.assetLockService || !this.addressDAO || !this.walletDAO || !this.identityDAO || !this.identityRegistrationService || !this.coreDiscoveryService || !this.coreLockService || !this.walletCredentialsService || !this.identityService || !this.logService || !this.platformWorkerService || !this.masternodeService) {
+    if (!this.walletService || !this.platformAddressService || !this.platformHistoryService || !this.platformTransferService || !this.feeService || !this.applicationService || !this.walletSyncService || !this.ratesService || !this.contactService || !this.shieldedService || !this.assetLockService || !this.addressDAO || !this.walletDAO || !this.identityDAO || !this.identityRegistrationService || !this.coreDiscoveryService || !this.coreLockService || !this.walletCredentialsService || !this.identityService || !this.logService || !this.platformWorkerService || !this.masternodeService || !this.paymentRequestService || !this.governanceService) {
       throw new Error('Services not initialized. Call start() first.')
     }
 
@@ -213,6 +228,16 @@ export class WalletBackend {
     registerHandler('getImportedMasternodeKeys', new GetImportedMasternodeKeysHandler(this.masternodeService).handle)
     registerHandler('importMasternodeKey', new ImportMasternodeKeyHandler(this.masternodeService).handle)
     registerHandler('removeMasternodeKey', new RemoveMasternodeKeyHandler(this.masternodeService).handle)
+    registerHandler('previewMasternodeRegistration', new PreviewMasternodeRegistrationHandler(this.masternodeService).handle)
+    registerHandler('signAndBroadcastMasternodeRegistration', new SignAndBroadcastMasternodeRegistrationHandler(this.masternodeService).handle)
+    registerHandler('getMasternodeIdentities', new GetMasternodeIdentitiesHandler(this.identityService).handle)
+    registerHandler('updateMasternodeRegistrar', new UpdateMasternodeRegistrarHandler(this.masternodeService).handle)
+    registerHandler('updateMasternodeService', new UpdateMasternodeServiceHandler(this.masternodeService).handle)
+    registerHandler('revokeMasternode', new RevokeMasternodeHandler(this.masternodeService).handle)
+    registerHandler('getGovernanceProposals', new GetGovernanceProposalsHandler(this.governanceService).handle)
+    registerHandler('getProposalTally', new GetProposalTallyHandler(this.governanceService).handle)
+    registerHandler('voteProposal', new VoteProposalHandler(this.governanceService).handle)
+    registerHandler('refreshGovernance', new RefreshGovernanceHandler(this.governanceService).handle)
     registerHandler('getUsernames', new GetUsernamesHandler(this.identityService).handle)
     registerHandler('refreshDashPay', new RefreshDashPayHandler(this.walletService).handle)
     registerHandler('registerUsername', new RegisterUsernameHandler(this.identityService).handle)
@@ -228,6 +253,7 @@ export class WalletBackend {
     registerHandler('getPlatformAddresses', new GetPlatformAddressesHandler(this.platformAddressService).handle)
     registerHandler('addPlatformAddress', new AddPlatformAddressHandler(this.platformAddressService).handle)
     registerHandler('setAddressLabel', new SetAddressLabel(this.walletService).handle)
+    registerHandler('setAddressLocked', new SetAddressLockedHandler(this.walletService).handle)
     registerHandler('setWalletLabel', new SetWalletLabel(this.walletService).handle)
     registerHandler('sendTransaction', new SendTransactionHandler(this.walletService).handle)
     registerHandler('getTxLockStatus', new GetTxLockStatusHandler(this.coreLockService).handle)
@@ -351,16 +377,18 @@ export class WalletBackend {
     // and each consumer settles that proof into its own transition.
     const prevOuts = new CorePrevOutService(walletDAO, transactionDAO)
     const masternodeDAO = new MasternodeDAO(knex)
+    const masternodeIdentityDAO = new MasternodeIdentityDAO(knex)
     const providers = new WalletProviderFactory(walletDAO, addressDAO, transactionDAO, this.applicationService, this.walletSyncService, prevOuts, masternodeDAO)
     const coreTransactionService = new CoreTransactionService()
     this.coreDiscoveryService = new CoreDiscoveryService(walletDAO, addressDAO, identityDAO, dashPayCache, transactionDAO, this.walletSyncService, providers)
     this.coreLockService = new CoreLockService(walletDAO, addressDAO, this.walletSyncService, coreTransactionService, providers, preferences)
     const masternodeKeyDAO = new MasternodeKeyDAO(knex)
-    this.masternodeService = new MasternodeService(walletDAO, masternodeKeyDAO, masternodeDAO, providers)
+    this.masternodeService = new MasternodeService(walletDAO, masternodeKeyDAO, masternodeDAO, masternodeIdentityDAO, providers, addressDAO, coreTransactionService, this.walletSyncService, preferences)
+    this.governanceService = new GovernanceService(walletDAO, providers, this.masternodeService, this.walletSyncService)
     this.walletSyncService.watchedProvidersOf = masternodeDAO.getFollowedProTxHashes
     const platformAddressDAO = new PlatformAddressDAO(knex)
     this.walletCredentialsService = new WalletCredentialsService(walletDAO, addressDAO, masternodeKeyDAO, platformAddressDAO, calibratedIterations)
-    this.identityService = new IdentityService(walletDAO, identityDAO, dashPayCache, this.platformWorkerService)
+    this.identityService = new IdentityService(walletDAO, identityDAO, masternodeIdentityDAO, dashPayCache, this.platformWorkerService)
     const shieldedNoteDAO = new ShieldedNoteDAO(knex)
     const platformTransactionDAO = new PlatformTransactionDAO(knex)
     const shieldedPoolDAO = new ShieldedPoolDAO(knex)
@@ -380,6 +408,7 @@ export class WalletBackend {
 
     const discovery = this.coreDiscoveryService
     const masternodeService = this.masternodeService
+    const governanceService = this.governanceService
     const walletService = this.walletService
     const walletSyncService = this.walletSyncService
     const applicationService = this.applicationService
@@ -412,18 +441,22 @@ export class WalletBackend {
       resolvePrevOuts(selected.walletId)
       masternodeService.discover(selected.walletId).catch(err =>
         discoveryLog.error('masternode discovery failed:', err))
+      governanceService.refresh(selected.walletId).catch(err =>
+        discoveryLog.error('governance refresh failed:', err))
     }
     this.walletSyncService.onWalletActivity = (walletId) => {
       discovery.discoverCoreAddresses(walletId).catch(err =>
         discoveryLog.error('post-sync address discovery failed:', err))
       resolvePrevOuts(walletId)
     }
-    // A p2p list arrives on its own schedule, hours apart, so it is matched at once.
-    this.walletSyncService.onMasternodeList = (network) => {
+    // A p2p list arrives on its own schedule, with the block that changed a node, so it is matched at once.
+    const rediscoverMasternodes = (network: Network): void => {
       walletDAO.getSelectedWallet()
         .then(selected => selected?.network === network ? masternodeService.discover(selected.walletId) : undefined)
         .catch(err => discoveryLog.error('masternode discovery failed:', err))
     }
+    this.walletSyncService.onMasternodeList = rediscoverMasternodes
+    this.walletSyncService.onListedMasternodes = rediscoverMasternodes
     // The scan is stopped until this answers, so it must not join a discovery
     // run that started before the block that exhausted the gap was persisted.
     this.walletSyncService.onGapExhausted = (gap) => {
