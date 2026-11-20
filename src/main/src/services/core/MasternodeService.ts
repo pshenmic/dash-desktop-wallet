@@ -1,5 +1,6 @@
 import {bls, PrivateKey, Transaction, TransactionType, utils as sdkUtils} from 'dash-core-sdk'
 import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
+import {ProUpServTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpServTx.js'
 import {HDKey} from '@scure/bip32'
 import {AddressDAO} from '../../database/AddressDAO'
 import {WalletDAO} from '../../database/WalletDAO'
@@ -10,6 +11,7 @@ import {WalletProvider} from '../../providers/WalletProvider'
 import {WalletProviderFactory} from '../../providers/WalletProviderFactory'
 import {MASTERNODE_KEY_CHAINS, MASTERNODE_KEY_WINDOW, MASTERNODE_WALKED_CHAINS, HD_VERSIONS} from '../../constants/addresses'
 import {DUST_THRESHOLD_DUFFS, MASTERNODE_TYPE_CODE, PROTX_VERSION, REVOCATION_REASON_CODE, SHARED_REGISTRATION_NO_PENALTY_WARNING} from '../../constants/chain'
+import {MIN_RELAY_FEE_DUFFS} from '../../constants/fee/core'
 import {Preferences} from '../../preferences'
 import {
   ImportedMasternodeKey,
@@ -644,11 +646,17 @@ export class MasternodeService {
   // payload's signed size — the selection register and its preview share.
   private selectProviderInputs(plan: ProviderTxPlan, {grouped, collaterals}: ProviderTxContext) {
     const {coreFeeMultiplier} = this.preferences.general
+    const feeForInputs = (inputsCount: number): bigint => {
+      const fee = coreFeeDuffsFor(coreFeeMultiplier, inputsCount, 1, false, plan.payload.signedSize())
+      // A service update is small, so its byte-priced fee can fall below what
+      // peers relay. Floor it, and let input selection fund the difference.
+      return plan.payload instanceof ProUpServTx && fee < MIN_RELAY_FEE_DUFFS ? MIN_RELAY_FEE_DUFFS : fee
+    }
     return selectTransferInputs(
       grouped,
       withoutCollaterals(plan.spendable, collaterals),
       DUST_THRESHOLD_DUFFS,
-      inputsCount => coreFeeDuffsFor(coreFeeMultiplier, inputsCount, 1, false, plan.payload.signedSize()),
+      feeForInputs,
     )
   }
 

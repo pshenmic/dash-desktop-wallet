@@ -473,11 +473,12 @@ describe('MasternodeService provider transactions', () => {
 
     it('restates a Regular service at v2, signed by the operator key', async () => {
       list = [operated()]
-      await masternodes.updateService(walletId, PRO_TX_HASH, SERVICE, PASSWORD)
+      const result = await masternodes.updateService(walletId, PRO_TX_HASH, SERVICE, PASSWORD)
       const tx = lastBroadcast()
       const payload = tx.extraPayload as ProUpServTx
 
       expect(tx.type).toBe(2)
+      expect(result.fee).toBe(1_000n)
       expect([payload.version, payload.type, payload.proTxHash]).toEqual([2, 0, PRO_TX_HASH])
       expect([payload.ipAddress, payload.port]).toEqual(['45.33.12.9', 19999])
       expect(payload.scriptOperatorPayout.bytes()).toHaveLength(0)
