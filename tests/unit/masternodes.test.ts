@@ -288,13 +288,13 @@ describe('operatedNode', () => {
     return {...operated('aa', 0), isShared: true, shares: shares.map(share => ({...share, keyIndex: null, imported: false}))}
   }
 
-  it('answers the operator key of a solo or a shared node', () => {
+  it('answers the node whether its operator key is derived or imported', () => {
     expect(operatedNode([operated('aa', 0)], 'aa').operatorKeyIndex).toBe(0)
+    expect(operatedNode([operated('bb', null)], 'bb').operatorKeyIndex).toBeNull()
     expect(operatedNode([shared()], 'aa').operatorKeyIndex).toBe(0)
   })
 
-  it('refuses a node whose operator key the wallet does not derive', () => {
-    expect(() => operatedNode([operated('aa', null)], 'aa')).toThrow('does not derive')
+  it('refuses a node that is not this wallet\'s', () => {
     expect(() => operatedNode([], 'aa')).toThrow('Not a masternode')
   })
 })

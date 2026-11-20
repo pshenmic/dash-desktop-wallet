@@ -93,6 +93,45 @@ interface ImportedMasternodeKeyDTO {
   hasPrivateKey: boolean
 }
 
+// Mirrors SharedRegistrationPreview and its rows in src/main/src/types/Masternode.
+interface SharedRegistrationShareDTO {
+  index: number
+  amountDuffs: bigint
+  ownerAddress: string
+  refundAddress: string | null
+  rewardAddress: string | null
+}
+
+interface SharedRegistrationFundingInputDTO {
+  index: number
+  address: string
+  amountDuffs: bigint
+}
+
+interface SharedRegistrationPreviewDTO {
+  consentHash: string
+  shares: SharedRegistrationShareDTO[]
+  signableShares: number[]
+  fundingInputs: SharedRegistrationFundingInputDTO[]
+  warning: string | null
+}
+
+interface SharedRegistrationSignatureDTO {
+  shareIndex: number
+  signature: string
+}
+
+interface SharedRegistrationConsentResultDTO {
+  preview: SharedRegistrationPreviewDTO
+  signatures: SharedRegistrationSignatureDTO[]
+}
+
+interface SharedRegistrationFundingResultDTO {
+  preview: SharedRegistrationPreviewDTO
+  signedHex: string
+  signedInputs: number[]
+}
+
 // Mirrors MasternodeIdentityInfo; empty until Platform indexes the registration.
 interface MasternodeIdentityInfoDTO {
   proTxHash: string
@@ -349,6 +388,9 @@ declare global {
       removeMasternodeKey: (walletId: string, key: ImportedMasternodeKeyDTO) => Promise<void>
       signAndBroadcastMasternodeRegistration: (walletId: string, unsignedHex: string, password: string) => Promise<MasternodeRegistrationResultDTO>
       previewMasternodeRegistration: (walletId: string, registration: MasternodeRegistrationDTO) => Promise<MasternodeRegistrationPreviewDTO>
+      previewSharedMasternodeRegistration: (walletId: string, txHex: string) => Promise<SharedRegistrationPreviewDTO>
+      signSharedMasternodeRegistrationConsent: (walletId: string, txHex: string, password: string) => Promise<SharedRegistrationConsentResultDTO>
+      signSharedMasternodeRegistrationFunding: (walletId: string, txHex: string, password: string) => Promise<SharedRegistrationFundingResultDTO>
       updateMasternodeRegistrar: (walletId: string, proTxHash: string, update: MasternodeRegistrarUpdateDTO, password: string) => Promise<MasternodeUpdateResultDTO>
       updateMasternodeService: (walletId: string, proTxHash: string, update: MasternodeServiceUpdateDTO, password: string) => Promise<MasternodeUpdateResultDTO>
       revokeMasternode: (walletId: string, proTxHash: string, reason: RevocationReasonDTO, password: string) => Promise<MasternodeUpdateResultDTO>

@@ -14,9 +14,10 @@ import {ProUpRegTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRegTx.js'
 import {ProUpRevTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRevTx.js'
 import {ProUpServTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpServTx.js'
 import {AddrV2Network, EXT_NET_INFO_VERSION, ExtNetInfo, NetInfoEntryType, NetInfoPurpose} from 'dash-core-sdk/src/types/ExtNetInfo.js'
-import {PROTX_VERSION_EXT_ADDR} from 'dash-core-sdk/src/constants.js'
+import {PROTX_VERSION_EXT_ADDR, SIGHASH_ALL, type OPCODES_ENUM} from 'dash-core-sdk/src/constants.js'
 import {OutPoint} from 'dash-core-sdk/src/types/OutPoint.js'
 import {bytesToHex} from '@noble/hashes/utils.js'
+import {secp256k1} from '@noble/curves/secp256k1.js'
 import {KeyPairController} from 'dash-platform-sdk/src/keyPair/index.js'
 import {Network} from '../../types/Network'
 import {ADDRESS_DECODED_LENGTH, ADDRESS_PREFIX} from '../../constants/addresses'
@@ -38,6 +39,7 @@ import {
   ProviderTxSigner,
   RecipientType,
   TransferInput,
+  TransactionInputToSign,
 } from '../../types/CoreTransaction'
 import {MasternodeRegistration, MasternodeServiceUpdate, MasternodeType, ProviderKeyIds, RevocationReason} from '../../types/Masternode'
 import {buildAssetLockOutputs} from '../../utils/assetLockTx'
@@ -217,6 +219,52 @@ export class CoreTransactionService {
     return transaction
   }
 
+  // Signs only the named inputs of an already-built transaction, leaving every
+  // other participant's input untouched. SIGHASH_ALL covers the whole tx, so the
+  // prevout script of the signed input is all the hasher needs from the caller.
+  signTransactionInputs(
+    transaction: SDKTransaction,
+    inputs: TransactionInputToSign[],
+    seed: Uint8Array,
+    network: Network,
+  ): number[] {
+    const hdKey = this.keyPair.seedToHdKey(seed, network)
+    return inputs.map(input => {
+      const key = input.key.kind === 'privateKey'
+        ? input.key.privateKey
+        : this.derivedKey(input.key.derivationPath, input.address, hdKey, network)
+      this.signInput(transaction, input.index, key, input.script)
+      return input.index
+    })
+  }
+
+  private derivedKey(derivationPath: string, address: string, hdKey: ReturnType<KeyPairController['seedToHdKey']>, network: Network): PrivateKey {
+    const derived = derivePath256(hdKey, derivationPath)
+    if (!derived.privateKey) throw new Error(`Failed to derive private key for ${address}`)
+    return PrivateKey.fromBytes(derived.privateKey as Uint8Array, network, true)
+  }
+
+  private signInput(transaction: SDKTransaction, index: number, privateKey: PrivateKey, prevoutScript: Script): void {
+    const saved = transaction.inputs.map(input => Input.fromBytes(input.bytes()))
+    transaction.inputs[index].scriptSig = prevoutScript
+    for (let i = 0; i < transaction.inputs.length; i++) {
+      if (i !== index) transaction.inputs[i].scriptSig = new Script()
+    }
+    const txBytes = transaction.bytes()
+    const sighashBytes = new Uint8Array(txBytes.length + 4)
+    sighashBytes.set(txBytes)
+    new DataView(sighashBytes.buffer).setUint32(txBytes.length, SIGHASH_ALL, true)
+    const der = secp256k1.sign(sdkUtils.doubleSHA256(sighashBytes), privateKey.key, {format: 'der', prehash: false, lowS: true})
+    const signatureWithSighash = new Uint8Array(der.length + 1)
+    signatureWithSighash.set(der)
+    signatureWithSighash[der.length] = SIGHASH_ALL
+    const scriptSig = new Script()
+    scriptSig.pushOpCode(`OP_PUSHBYTES_${signatureWithSighash.length}` as unknown as OPCODES_ENUM, signatureWithSighash)
+    scriptSig.pushOpCode('OP_PUSHBYTES_33', privateKey.getPublicKey().inner)
+    transaction.inputs = saved
+    transaction.inputs[index].scriptSig = scriptSig
+  }
+
   // A ProRegTx's collateral signs Core's sign string as a message; every other
   // signer signs the payload hash itself, the operator with BLS.
   private async signPayload(payload: ProviderPayload, signer: ProviderTxSigner, seed: Uint8Array, network: Network): Promise<void> {
@@ -224,6 +272,11 @@ export class CoreTransactionService {
       const secretKey = bls.deriveOperatorSecretKey(seed, network, signer.index)
       if (payload instanceof ProUpServTx) payload.signWithOperatorKey(secretKey)
       if (payload instanceof ProUpRevTx) payload.signWithOperatorKey(secretKey)
+      return
+    }
+    if (signer.kind === 'operatorSecret') {
+      if (payload instanceof ProUpServTx) payload.signWithOperatorKey(signer.secretKey)
+      if (payload instanceof ProUpRevTx) payload.signWithOperatorKey(signer.secretKey)
       return
     }
     const [key] = await this.privateKeys([signer], seed, network)

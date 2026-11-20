@@ -1,5 +1,6 @@
-import {bls, Transaction, TransactionType, utils as sdkUtils} from 'dash-core-sdk'
+import {bls, PrivateKey, Transaction, TransactionType, utils as sdkUtils} from 'dash-core-sdk'
 import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
+import {HDKey} from '@scure/bip32'
 import {AddressDAO} from '../../database/AddressDAO'
 import {WalletDAO} from '../../database/WalletDAO'
 import {MasternodeDAO} from '../../database/MasternodeDAO'
@@ -7,8 +8,8 @@ import {MasternodeKeyDAO} from '../../database/MasternodeKeyDAO'
 import {MasternodeIdentityDAO} from '../../database/MasternodeIdentityDAO'
 import {WalletProvider} from '../../providers/WalletProvider'
 import {WalletProviderFactory} from '../../providers/WalletProviderFactory'
-import {MASTERNODE_KEY_CHAINS, MASTERNODE_KEY_WINDOW, MASTERNODE_WALKED_CHAINS} from '../../constants/addresses'
-import {DUST_THRESHOLD_DUFFS, MASTERNODE_TYPE_CODE, PROTX_VERSION, REVOCATION_REASON_CODE} from '../../constants/chain'
+import {MASTERNODE_KEY_CHAINS, MASTERNODE_KEY_WINDOW, MASTERNODE_WALKED_CHAINS, HD_VERSIONS} from '../../constants/addresses'
+import {DUST_THRESHOLD_DUFFS, MASTERNODE_TYPE_CODE, PROTX_VERSION, REVOCATION_REASON_CODE, SHARED_REGISTRATION_NO_PENALTY_WARNING} from '../../constants/chain'
 import {Preferences} from '../../preferences'
 import {
   ImportedMasternodeKey,
@@ -16,6 +17,7 @@ import {
   MasternodeCollateral,
   MasternodeKeyChain,
   MasternodeKeyFilter,
+  MasternodeKeys,
   MasternodeRegistrarUpdate,
   MasternodeRegistration,
   MasternodeRegistrationPlan,
@@ -30,12 +32,19 @@ import {
   ProviderTxContext,
   ProviderTxPlan,
   RevocationReason,
+  SharedRegistrationFundingInput,
+  SharedRegistrationFundingResult,
+  SharedRegistrationFundingSource,
+  SharedRegistrationPreview,
+  SharedRegistrationConsentResult,
+  SharedRegistrationSignature,
+  SharedRegistrationShare,
 } from '../../types/Masternode'
-import {ProviderTxSigner, TransferInput} from '../../types/CoreTransaction'
+import {ProviderTxSigner, TransactionInputToSign, TransferInput} from '../../types/CoreTransaction'
 import {UTXO} from '../../types/UTXO'
 import {memoryWindowStore, runAddressWindow} from '../../utils/addressWindow'
 import {coreFeeDuffsFor} from '../../utils/coreFeeRate'
-import {masternodeKeyDeriver, masternodePublicKey, requireBasicOperatorKey} from '../../utils/masternodeKeys'
+import {masternodeKeyDeriver, masternodePublicKey, masternodeAccountPath, requireBasicOperatorKey} from '../../utils/masternodeKeys'
 import {masternodeIdentityRows} from '../../utils/masternodeIdentities'
 import {
   carriesKey,
@@ -69,8 +78,15 @@ import {requireWallet} from '../../utils/requireWallet'
 import {bytesToHex, hexToBytes} from '@noble/hashes/utils.js'
 import createCoreClient from 'dash-core-sdk/src/createCoreClient.js'
 import {encryptImportedKey} from '../../utils/importedKeyEncryption'
+import {decryptImportedKey} from '../../utils/importedKeyEncryption'
+import {
+  sharedRegistrationConsentSigner,
+  sharedRegistrationShares,
+  signSharedRegistrationConsent,
+} from '../../utils/sharedMasternodeSigning'
 import {EVONODE_STATUS_TIMEOUT_MS} from '../../constants/dapi'
 import {Network} from '../../types/Network'
+import {coreSDK} from '../../utils/coreSDK'
 import {Logger} from '../../utils/logger'
 
 const log = new Logger('masternodes')
@@ -131,15 +147,13 @@ export class MasternodeService {
 
   // Kept even when no node carries it yet, so a later registration is found.
   // Answers the listed nodes that carry it, or null while no list has arrived to
-  // search — p2p before its first proven list — which is not "none". A voting
-  // key's secret is encrypted under the seed, so it can sign a vote later.
+  // search — p2p before its first proven list — which is not "none". The secret
+  // is encrypted under the seed, so the key can sign later.
   async importKey(walletId: string, role: MasternodeKeyChain, privateKey: string, password?: string): Promise<Masternode[] | null> {
     if (!MASTERNODE_KEY_CHAINS.includes(role)) throw new Error(`Unknown masternode key role: ${role}`)
     const wallet = await requireWallet(this.walletDAO, walletId)
     const key = {role, publicKey: masternodePublicKey(role, privateKey.trim(), wallet.network)}
-    const encryptedPrivateKey = role === 'voting'
-      ? await this.encryptImportedVotingKey(walletId, privateKey.trim(), password)
-      : null
+    const encryptedPrivateKey = await this.encryptImportedSecret(walletId, privateKey.trim(), password)
     await this.masternodeKeyDAO.saveImportedKey(walletId, key, encryptedPrivateKey)
     log.info(`wallet ${walletId}: imported a ${role} key`)
     await this.discover(walletId)
@@ -150,8 +164,220 @@ export class MasternodeService {
     return this.masternodeKeyDAO.getImportedKeySecret(walletId, role, publicKey)
   }
 
-  private async encryptImportedVotingKey(walletId: string, privateKey: string, password?: string): Promise<string> {
-    if (password == null || password.length === 0) throw new Error('A wallet password is required to save a voting key')
+  // What this wallet can contribute to a shared registration prepared elsewhere:
+  // the shares whose owner key it holds and the funding inputs it owns. Nothing
+  // is signed here, so it can run before the password prompt.
+  async previewSharedRegistration(walletId: string, txHex: string): Promise<SharedRegistrationPreview> {
+    const base = await this.sharedRegistrationBase(walletId, txHex)
+    const funding = await this.sharedRegistrationFunding(walletId, base.tx, base.network)
+    return this.sharedRegistrationPreview(base, funding.sources.map(({index, address, amountDuffs}) => ({index, address, amountDuffs})))
+  }
+
+  // Participant-side consent: sign the preparation's consent digest with every
+  // share owner key this wallet holds. The coordinator combines these into
+  // joinSigs before any funding input is signed.
+  async signSharedRegistrationConsent(walletId: string, txHex: string, password: string): Promise<SharedRegistrationConsentResult> {
+    const {tx, network, shares, keys, imported, ownerIndexes, signableShares} = await this.sharedRegistrationBase(walletId, txHex)
+    if (signableShares.length === 0) {
+      throw new Error('This wallet holds no share owner key for this registration')
+    }
+
+    const importedOwners = new Map(imported
+      .filter(({role, hasPrivateKey}) => role === 'owner' && hasPrivateKey)
+      .map(key => [key.publicKey, key]))
+    const signatures: SharedRegistrationSignature[] = []
+
+    await withUnlockedWallet(this.walletDAO, walletId, password, async ({seed}) => {
+      const ownerAccount = keys == null ? null : HDKey.fromMasterSeed(seed, HD_VERSIONS[network]).derive(masternodeAccountPath(network, 'owner'))
+      for (const share of shares) {
+        const importedKey = importedOwners.get(share.ownerAddress)
+        let key: PrivateKey | null = null
+        if (importedKey != null) {
+          const secret = await this.masternodeKeyDAO.getImportedKeySecret(walletId, 'owner', importedKey.publicKey)
+          if (secret == null) continue
+          key = PrivateKey.fromWIF(decryptImportedKey(secret, seed))
+        } else {
+          const index = ownerIndexes.get(share.ownerAddress)
+          const privateKey = index == null || ownerAccount == null ? null : ownerAccount.deriveChild(index).privateKey
+          if (privateKey == null) continue
+          key = PrivateKey.fromBytes(privateKey, network, true)
+        }
+        const signature = signSharedRegistrationConsent(tx, key)
+        const signer = sharedRegistrationConsentSigner(tx, signature, network)
+        if (signer !== share.ownerAddress) {
+          throw new Error(`Consent for share ${share.index} recovers to ${signer}, not ${share.ownerAddress}`)
+        }
+        signatures.push({shareIndex: share.index, signature})
+      }
+    })
+
+    log.info(`wallet ${walletId}: shared registration consent signed ${signatures.length} share(s)`)
+    return {
+      preview: this.sharedRegistrationPreview({tx, shares, signableShares}, []),
+      signatures,
+    }
+  }
+
+  // Funding signatures sign the whole transaction, joinSigs included, so this
+  // must run on the combined transaction after shared_combine — never on the
+  // prepared one. Consent is unaffected by funding signatures.
+  async signSharedRegistrationFunding(walletId: string, txHex: string, password: string): Promise<SharedRegistrationFundingResult> {
+    const base = await this.sharedRegistrationBase(walletId, txHex)
+    const funding = await this.sharedRegistrationFunding(walletId, base.tx, base.network)
+    if (funding.sources.length === 0) {
+      throw new Error('This wallet has no funding input in this registration')
+    }
+
+    const signedInputs = await withUnlockedWallet(this.walletDAO, walletId, password, async ({seed}) => {
+      const inputs: TransactionInputToSign[] = []
+      for (const source of funding.sources) {
+        if (source.kind === 'wallet') {
+          inputs.push({
+            index: source.index,
+            address: source.address,
+            script: source.script,
+            key: {kind: 'derivation', derivationPath: source.derivationPath},
+          })
+          continue
+        }
+        const secret = await this.masternodeKeyDAO.getImportedKeySecret(walletId, source.role, source.publicKey)
+        if (secret == null) throw new Error(`No stored ${source.role} key for funding input ${source.address}`)
+        inputs.push({
+          index: source.index,
+          address: source.address,
+          script: source.script,
+          key: {kind: 'privateKey', privateKey: PrivateKey.fromWIF(decryptImportedKey(secret, seed))},
+        })
+      }
+      return this.coreTransactionService.signTransactionInputs(base.tx, inputs, seed, base.network)
+    })
+
+    log.info(`wallet ${walletId}: shared registration signed ${signedInputs.length} funding input(s)`)
+    return {
+      preview: this.sharedRegistrationPreview(base, funding.sources.map(({index, address, amountDuffs}) => ({index, address, amountDuffs}))),
+      signedHex: base.tx.hex(),
+      signedInputs,
+    }
+  }
+
+  private async sharedRegistrationBase(walletId: string, txHex: string): Promise<{
+    tx: Transaction
+    network: Network
+    shares: SharedRegistrationShare[]
+    keys: MasternodeKeys | null
+    imported: ImportedMasternodeKey[]
+    ownerIndexes: Map<string, number>
+    signableShares: number[]
+  }> {
+    const wallet = await requireWallet(this.walletDAO, walletId)
+    const tx = Transaction.fromHex(txHex)
+    const shares = sharedRegistrationShares(tx, wallet.network)
+    const [keys, imported] = await Promise.all([
+      this.masternodeKeyDAO.getKeys(walletId),
+      this.masternodeKeyDAO.getImportedKeys(walletId),
+    ])
+    const ownerIndexes = this.ownerIndexes(keys, wallet.network)
+    const importedOwners = new Set(imported
+      .filter(({role, hasPrivateKey}) => role === 'owner' && hasPrivateKey)
+      .map(({publicKey}) => publicKey))
+    const signableShares = shares
+      .filter(share => importedOwners.has(share.ownerAddress) || ownerIndexes.has(share.ownerAddress))
+      .map(({index}) => index)
+    return {tx, network: wallet.network, shares, keys, imported, ownerIndexes, signableShares}
+  }
+
+  private async sharedRegistrationFunding(walletId: string, tx: Transaction, network: Network): Promise<{
+    sources: SharedRegistrationFundingSource[]
+  }> {
+    const provider = this.providers.forWallet(walletId, network)
+    await provider.ensureReady()
+    const [utxos, grouped, imported] = await Promise.all([
+      provider.getWalletUtxos(),
+      this.addressDAO.getAddressesByWalletId(walletId),
+      this.masternodeKeyDAO.getImportedKeys(walletId),
+    ])
+    const paths = addressPaths(grouped)
+    const byOutpoint = new Map(utxos.map(utxo => [`${utxo.txId}:${utxo.vOut}`, utxo]))
+    const importedFunding = new Map(imported
+      .filter(({role, hasPrivateKey}) => (role === 'owner' || role === 'voting') && hasPrivateKey)
+      .map(key => [key.publicKey, key]))
+
+    const sources: SharedRegistrationFundingSource[] = []
+    const unresolved: Array<{input: Transaction['inputs'][number]; index: number}> = []
+    tx.inputs.forEach((input, index) => {
+      const utxo = byOutpoint.get(`${input.txId}:${input.vOut}`)
+      if (utxo != null) {
+        const derivationPath = paths.get(utxo.address)
+        if (derivationPath != null) {
+          sources.push({kind: 'wallet', index, address: utxo.address, amountDuffs: utxo.satoshis, script: utxo.script, derivationPath})
+          return
+        }
+        const importedKey = importedFunding.get(utxo.address)
+        if (importedKey != null && (importedKey.role === 'owner' || importedKey.role === 'voting')) {
+          sources.push({kind: 'imported', index, address: utxo.address, amountDuffs: utxo.satoshis, script: utxo.script, role: importedKey.role, publicKey: importedKey.publicKey})
+          return
+        }
+      }
+      unresolved.push({input, index})
+    })
+
+    if (importedFunding.size > 0 && unresolved.length > 0) {
+      const resolved = await Promise.all(unresolved.map(async ({input, index}) => {
+        try {
+          const {transaction} = await coreSDK(network).getTransaction(input.txId)
+          const output = Transaction.fromBytes(transaction).outputs[input.vOut]
+          if (output == null) return null
+          const address = output.getAddress(sdkUtils.networkValueToEnumValue(network)) ?? ''
+          const importedKey = importedFunding.get(address)
+          if (importedKey == null || (importedKey.role !== 'owner' && importedKey.role !== 'voting')) return null
+          return {
+            kind: 'imported' as const,
+            index,
+            address,
+            amountDuffs: output.satoshis,
+            script: output.script,
+            role: importedKey.role,
+            publicKey: importedKey.publicKey,
+          }
+        } catch (err) {
+          log.warn(`wallet ${walletId}: shared registration funding input ${input.txId}:${input.vOut} not resolved:`, err)
+          return null
+        }
+      }))
+      for (const source of resolved) if (source != null) sources.push(source)
+    }
+
+    return {sources}
+  }
+
+  private sharedRegistrationPreview(
+    {tx, shares, signableShares}: Pick<Awaited<ReturnType<MasternodeService['sharedRegistrationBase']>>, 'tx' | 'shares' | 'signableShares'>,
+    fundingInputs: SharedRegistrationFundingInput[],
+  ): SharedRegistrationPreview {
+    const earlyPenalty = (tx.extraPayload as ProRegTX).earlyPenalty ?? 0n
+    return {
+      consentHash: tx.consentHash(),
+      shares,
+      signableShares,
+      fundingInputs,
+      warning: earlyPenalty === 0n ? SHARED_REGISTRATION_NO_PENALTY_WARNING : null,
+    }
+  }
+
+  // The owner chain is public-only in storage, so only the addresses (and thus
+  // indexes) are known here; signing derives the private key from the seed.
+  private ownerIndexes(keys: MasternodeKeys | null, network: Network): Map<string, number> {
+    if (keys == null) return new Map()
+    const deriver = masternodeKeyDeriver(keys, network, 'owner')
+    const indexes = new Map<string, number>()
+    for (let index = 0; index < MASTERNODE_KEY_WINDOW.gapLimit; index++) {
+      indexes.set(deriver.derive(index).address, index)
+    }
+    return indexes
+  }
+
+  private async encryptImportedSecret(walletId: string, privateKey: string, password?: string): Promise<string> {
+    if (password == null || password.length === 0) throw new Error('A wallet password is required to save an imported masternode key')
     return withUnlockedWallet(this.walletDAO, walletId, password, async ({seed}) =>
       encryptImportedKey(privateKey, seed))
   }
@@ -456,23 +682,24 @@ export class MasternodeService {
     }, proTxHash)
   }
 
-  // The operator signs, so only a node whose operator key the wallet derives;
-  // one run by a hosting provider is updated by that provider. A shared node's
-  // service update is the operator's alone, as a solo node's is.
+  // The operator signs. The key may be derived by this wallet or imported, so a
+// shared node's service update works from the operator's own key. A node run by
+// a hosting provider is updated by that provider.
   async updateService(walletId: string, proTxHash: string, update: MasternodeServiceUpdate, password: string): Promise<MasternodeUpdateResult> {
     requireProTxHash(proTxHash)
     const {network: walletNetwork} = await requireWallet(this.walletDAO, walletId)
     serviceAddressParts(update.serviceAddress, walletNetwork)
     if (update.operatorPayoutAddress != null) this.coreTransactionService.classifyAddress(update.operatorPayoutAddress, walletNetwork)
-    return this.sendProviderTx(walletId, password, async ({network, owned, utxos}) => {
+    return this.sendProviderTx(walletId, password, async ({network, owned, utxos, imported}, seed) => {
       const node = operatedNode(owned, proTxHash)
       const type = node.type === 'Evo' ? 'Evo' : 'Regular'
       requireServiceUpdate(type, update, network)
       const v24Active = this.walletSyncService.getListedMasternodes(network)?.v24Active ?? false
-      log.info(`update service ${proTxHash}: ${type}, service ${update.serviceAddress}, operator key #${node.operatorKeyIndex}`)
+      const signer = await this.operatorSigner(walletId, node, imported, seed)
+      log.info(`update service ${proTxHash}: ${type}, service ${update.serviceAddress}, operator ${signer.kind}`)
       return {
         payload: this.coreTransactionService.proUpServPayload(type, proTxHash, update, v24Active, network),
-        signer: {kind: 'operator', index: node.operatorKeyIndex},
+        signer,
         spendable: utxos,
       }
     }, proTxHash)
@@ -483,15 +710,25 @@ export class MasternodeService {
   async revoke(walletId: string, proTxHash: string, reason: RevocationReason, password: string): Promise<MasternodeUpdateResult> {
     requireProTxHash(proTxHash)
     if (!(reason in REVOCATION_REASON_CODE)) throw new Error(`Unknown revocation reason: ${reason}`)
-    return this.sendProviderTx(walletId, password, async ({owned, utxos}) => {
-      const {operatorKeyIndex} = revocableNode(owned, proTxHash)
-      log.info(`revoke ${proTxHash}: ${reason}, operator key #${operatorKeyIndex}`)
+    return this.sendProviderTx(walletId, password, async ({owned, utxos, imported}, seed) => {
+      const node = revocableNode(owned, proTxHash)
+      const signer = await this.operatorSigner(walletId, node, imported, seed)
+      log.info(`revoke ${proTxHash}: ${reason}, operator ${signer.kind}`)
       return {
         payload: this.coreTransactionService.proUpRevPayload(proTxHash, reason),
-        signer: {kind: 'operator', index: operatorKeyIndex},
+        signer,
         spendable: utxos,
       }
     }, proTxHash)
+  }
+
+  private async operatorSigner(walletId: string, node: Masternode, imported: ImportedMasternodeKey[], seed: Uint8Array): Promise<ProviderTxSigner> {
+    if (node.operatorKeyIndex != null) return {kind: 'operator', index: node.operatorKeyIndex}
+    const key = imported.find(entry => entry.role === 'operator' && entry.hasPrivateKey && carriesKey(node, entry))
+    if (key == null) throw new Error("This wallet does not hold the masternode's operator key")
+    const secret = await this.masternodeKeyDAO.getImportedKeySecret(walletId, 'operator', key.publicKey)
+    if (secret == null) throw new Error("This wallet does not hold the masternode's operator key")
+    return {kind: 'operatorSecret', secretKey: hexToBytes(decryptImportedKey(secret, seed))}
   }
 
   // Operator keys are unique across the list, so an external one is checked
@@ -543,7 +780,7 @@ export class MasternodeService {
   private async sendProviderTx(
     walletId: string,
     password: string,
-    plan: (context: ProviderTxContext) => Promise<ProviderTxPlan>,
+    plan: (context: ProviderTxContext, seed: Uint8Array) => Promise<ProviderTxPlan>,
     target?: string,
   ): Promise<MasternodeUpdateResult> {
     const context = await this.providerTxContext(walletId)
@@ -553,7 +790,7 @@ export class MasternodeService {
         this.walletSyncService.refreshListedMasternodes()
         throw new Error("The network's masternode list does not carry this node: its collateral was spent, or the list is still arriving")
       }
-      const providerPlan = await plan(context)
+      const providerPlan = await plan(context, seed)
       const selection = this.selectProviderInputs(providerPlan, context)
       const tx = await this.coreTransactionService.buildSignedProviderTx({
         payload: providerPlan.payload,

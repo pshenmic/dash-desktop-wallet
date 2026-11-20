@@ -1,4 +1,4 @@
-import {Script} from 'dash-core-sdk'
+import {PrivateKey, Script} from 'dash-core-sdk'
 import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
 import {ProUpRegTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRegTx.js'
 import {ProUpRevTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpRevTx.js'
@@ -72,6 +72,7 @@ export type ProviderPayload = ProRegTX | ProUpRegTx | ProUpServTx | ProUpRevTx
 export type ProviderTxSigner =
   | {kind: 'address'; derivationPath: string; address: string}
   | {kind: 'operator'; index: number}
+  | {kind: 'operatorSecret'; secretKey: Uint8Array}
 
 // Only the inputs hash depends on the chosen inputs, which is what lets one
 // build answer both a preview and a send.
@@ -87,4 +88,16 @@ export interface BuildSignedProviderTxParams extends BuildProviderTxParams {
   signer: ProviderTxSigner
   seed: Uint8Array
   network: Network
+}
+
+// One input of an already-built transaction that this wallet holds the key for.
+// A wallet address derives from the seed; an imported owner/voting key carries
+// its private key already decrypted.
+export interface TransactionInputToSign {
+  index: number
+  address: string
+  script: Script
+  key:
+    | {kind: 'derivation'; derivationPath: string}
+    | {kind: 'privateKey'; privateKey: PrivateKey}
 }

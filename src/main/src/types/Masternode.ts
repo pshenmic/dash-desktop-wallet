@@ -1,3 +1,4 @@
+import type {Script} from 'dash-core-sdk'
 import type {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
 import type {WalletProvider} from '../providers/WalletProvider'
 import type {ProviderPayload, ProviderTxSigner} from './CoreTransaction'
@@ -194,12 +195,60 @@ export interface Masternode extends NetworkMasternode {
 }
 
 // publicKey is what the list carries for the role: the address for owner and
-// voting, the hex public key for operator. hasPrivateKey is true only for a
-// voting key whose secret is stored, which is what lets it sign a vote.
+// voting, the hex public key for operator. hasPrivateKey is true when the
+// secret is stored, which is what lets a key sign.
 export interface ImportedMasternodeKey {
   role: MasternodeKeyChain
   publicKey: string
   hasPrivateKey: boolean
+}
+
+// One row of a shared registration's share table, already resolved for display.
+export interface SharedRegistrationShare {
+  index: number
+  amountDuffs: bigint
+  ownerAddress: string
+  refundAddress: string | null
+  rewardAddress: string | null
+}
+
+// A funding input of the prepared registration that this wallet can sign.
+export interface SharedRegistrationFundingInput {
+  index: number
+  address: string
+  amountDuffs: bigint
+}
+
+// How to obtain the key for one funding input: a wallet derivation path, or an
+// imported owner/voting key whose secret is stored.
+export type SharedRegistrationFundingSource =
+  | {kind: 'wallet'; index: number; address: string; amountDuffs: bigint; script: Script; derivationPath: string}
+  | {kind: 'imported'; index: number; address: string; amountDuffs: bigint; script: Script; role: 'owner' | 'voting'; publicKey: string}
+
+// What the wallet can contribute to a shared registration before it signs.
+export interface SharedRegistrationPreview {
+  consentHash: string
+  shares: SharedRegistrationShare[]
+  signableShares: number[]
+  fundingInputs: SharedRegistrationFundingInput[]
+  warning: string | null
+}
+
+// One share owner's consent, base64 compact signature as shared_combine expects.
+export interface SharedRegistrationSignature {
+  shareIndex: number
+  signature: string
+}
+
+export interface SharedRegistrationConsentResult {
+  preview: SharedRegistrationPreview
+  signatures: SharedRegistrationSignature[]
+}
+
+export interface SharedRegistrationFundingResult {
+  preview: SharedRegistrationPreview
+  signedHex: string
+  signedInputs: number[]
 }
 
 // What outlives the list: the coin a send must not spend, and whether the p2p

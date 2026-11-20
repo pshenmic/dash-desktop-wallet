@@ -27,6 +27,8 @@ import {
 } from '../../src/main/src/types/Masternode'
 import {UTXO} from '../../src/main/src/types/UTXO'
 import {masternodeKeyDeriver} from '../../src/main/src/utils/masternodeKeys'
+import {encryptImportedKey} from '../../src/main/src/utils/importedKeyEncryption'
+import {withUnlockedWallet} from '../../src/main/src/utils/walletSeed'
 import {masternodeIdentityIds} from '../../src/main/src/utils/masternodeIdentities'
 import {nodeKeyValues} from '../../src/main/src/utils/masternodes'
 import {harness, Harness, PASSWORD, VALID_SEEDPHRASE} from './harness'
@@ -531,6 +533,23 @@ describe('MasternodeService provider transactions', () => {
       expect([payload.version, payload.type, payload.proTxHash]).toEqual([2, 0, PRO_TX_HASH])
       expect([payload.ipAddress, payload.port]).toEqual(['45.33.12.9', 19999])
       expect(signedByOperator(payload)).toBe(true)
+    })
+
+    it('updates a shared node\'s service with an imported operator key', async () => {
+      const secret = bls.deriveOperatorSecretKey(new Uint8Array(32).fill(3), 'testnet', 0)
+      const publicKey = bytesToHex(bls.blsPublicKey(secret))
+      const encrypted = await withUnlockedWallet(wired.walletDAO, walletId, PASSWORD, async ({seed}) =>
+        encryptImportedKey(bytesToHex(secret), seed))
+      await wired.masternodeKeyDAO.saveImportedKey(walletId, {role: 'operator', publicKey}, encrypted)
+
+      list = [operated({operatorPublicKey: publicKey, ownerAddress: null, isShared: true, shares: [
+        {ownerAddress: 'Xother1', amountDuffs: 60000000000n},
+        {ownerAddress: 'Xother2', amountDuffs: 40000000000n},
+      ]})]
+      await masternodes.updateService(walletId, PRO_TX_HASH, SERVICE, PASSWORD)
+      const payload = lastBroadcast().extraPayload as ProUpServTx
+
+      expect(bls.blsVerify(hexToBytes(payload.payloadSig), payload.payloadHash(), hexToBytes(publicKey))).toBe(true)
     })
 
     it('refuses to revoke a shared node, which every share owner would have to restore', async () => {

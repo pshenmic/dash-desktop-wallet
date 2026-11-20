@@ -94,7 +94,7 @@ describe('GovernanceService.vote', () => {
       encryptImportedKey(voting.toWIF(), seed))
     importedKeys = [{role: 'voting', publicKey: votingAddress, hasPrivateKey: true}]
     importedSecrets.set(votingAddress, encrypted)
-    owned = [node('bb'.repeat(32), {votingKeyIndex: null, importedRoles: ['voting'], votingAddress})]
+    owned = [node('bb'.repeat(32), {votingKeyIndex: null, importedRoles: ['voting'], votingAddress, isShared: true})]
 
     const results = await service().vote(walletId, PROPOSAL, 'yes', ['bb'.repeat(32)], PASSWORD)
 

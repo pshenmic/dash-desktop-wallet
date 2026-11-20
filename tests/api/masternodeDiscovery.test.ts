@@ -218,11 +218,11 @@ describe('MasternodeService.discover', () => {
 
     const found = await masternodes.importKey(walletId, 'voting', ` ${voting.toWIF()}\n`, PASSWORD)
     expect(found!.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['f', ['voting']]])
-    expect(await masternodes.importKey(walletId, 'owner', unregistered.toWIF())).toEqual([])
+    expect(await masternodes.importKey(walletId, 'owner', unregistered.toWIF(), PASSWORD)).toEqual([])
     expect(await masternodes.getImportedKeys(walletId)).toHaveLength(2)
     expect(await masternodes.getImportedKeys(walletId)).toEqual(expect.arrayContaining([
       {role: 'voting', publicKey: voting.getAddress(), hasPrivateKey: true},
-      {role: 'owner', publicKey: unregistered.getAddress(), hasPrivateKey: false},
+      {role: 'owner', publicKey: unregistered.getAddress(), hasPrivateKey: true},
     ]))
     const secret = await masternodes.getImportedKeySecret(walletId, 'voting', voting.getAddress())
     expect(secret).not.toBeNull()
@@ -231,7 +231,7 @@ describe('MasternodeService.discover', () => {
 
     await masternodes.removeKey(walletId, {role: 'voting', publicKey: voting.getAddress(), hasPrivateKey: true})
     expect(await listed()).toEqual([])
-    expect(await masternodes.getImportedKeys(walletId)).toEqual([{role: 'owner', publicKey: unregistered.getAddress(), hasPrivateKey: false}])
+    expect(await masternodes.getImportedKeys(walletId)).toEqual([{role: 'owner', publicKey: unregistered.getAddress(), hasPrivateKey: true}])
   })
 
   // Not an empty answer: p2p before its first proven list has searched nothing.
@@ -324,9 +324,26 @@ describe('MasternodeService.discover', () => {
       {ownerAddress: owner.getAddress(), amountDuffs: 20000000000n},
       {ownerAddress: 'Xother', amountDuffs: 80000000000n},
     ]})])
-    const found = await masternodes.importKey(walletId, 'owner', owner.toWIF())
+    const found = await masternodes.importKey(walletId, 'owner', owner.toWIF(), PASSWORD)
     expect(found!.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['s', ['owner']]])
     expect(found![0].shares!.map(({keyIndex, imported}) => [keyIndex, imported])).toEqual([[null, true], [null, false]])
+  })
+
+  it('finds a shared node by an imported voting key', async () => {
+    const voting = PrivateKey.fromBytes(new Uint8Array(32).fill(11), 'mainnet')
+    current = source([node('s', {
+      votingAddress: voting.getAddress(),
+      ownerAddress: null,
+      isShared: true,
+      shares: [
+        {ownerAddress: 'Xother', amountDuffs: 50000000000n},
+        {ownerAddress: 'Xanother', amountDuffs: 50000000000n},
+      ],
+    })])
+
+    const found = await masternodes.importKey(walletId, 'voting', voting.toWIF(), PASSWORD)
+
+    expect(found!.map(({proTxHash, importedRoles, isShared}) => [proTxHash, importedRoles, isShared])).toEqual([['s', ['voting'], true]])
   })
 
   it('refuses a key that does not parse, and stores nothing for it', async () => {

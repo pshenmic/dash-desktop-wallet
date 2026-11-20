@@ -1,6 +1,6 @@
 import { WalletTxDto } from '@renderer/types/WalletTransaction'
 import { TransferOperation } from '../enums/TransferOperation'
-import { AddressKeyInfoDto, UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PaymentRequestDto, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, ListedUtxo, MasternodeDto, MasternodeIdentityInfoDto, ImportedMasternodeKeyDto, MasternodeKeyRole, MasternodeRegistrationDto, MasternodeRegistrationPreviewDto, MasternodeRegistrationResult, MasternodeRegistrarUpdateDto, MasternodeServiceUpdateDto, MasternodeUpdateResult, RevocationReason, ProposalDto, ProposalTally, VoteOutcome, VoteResult} from './types'
+import { AddressKeyInfoDto, UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PaymentRequestDto, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, ListedUtxo, MasternodeDto, MasternodeIdentityInfoDto, ImportedMasternodeKeyDto, MasternodeKeyRole, MasternodeRegistrationDto, MasternodeRegistrationPreviewDto, MasternodeRegistrationResult, MasternodeRegistrarUpdateDto, MasternodeServiceUpdateDto, MasternodeUpdateResult, RevocationReason, SharedRegistrationConsentResultDto, SharedRegistrationFundingResultDto, SharedRegistrationPreviewDto, ProposalDto, ProposalTally, VoteOutcome, VoteResult} from './types'
 
 export class API {
   private static get api() {
@@ -183,11 +183,11 @@ export class API {
     return this.api.getImportedMasternodeKeys(walletId)
   }
 
-  // Owner and voting keys are WIF, an operator key the hex BLS secret. A voting
-  // key needs the wallet password, since its secret is encrypted so it can sign
-  // votes; owner and operator imports stay address-only. Answers the nodes the key
-  // was found on, which is empty for one not registered yet, and null while no
-  // masternode list has arrived to search (the key is kept).
+  // Owner and voting keys are WIF, an operator key the hex BLS secret. Every
+  // imported key needs the wallet password, since its secret is encrypted so it
+  // can sign consent, funding, a vote or an operator update. Answers the nodes
+  // the key was found on, which is empty for one not registered yet, and null
+  // while no masternode list has arrived to search (the key is kept).
   static async importMasternodeKey(walletId: string, role: MasternodeKeyRole, privateKey: string, password?: string): Promise<MasternodeDto[] | null> {
     return this.api.importMasternodeKey(walletId, role, privateKey, password)
   }
@@ -202,6 +202,20 @@ export class API {
 
   static async previewMasternodeRegistration(walletId: string, registration: MasternodeRegistrationDto): Promise<MasternodeRegistrationPreviewDto> {
     return this.api.previewMasternodeRegistration(walletId, registration)
+  }
+
+  // Participant side of a shared registration prepared elsewhere: what this
+  // wallet can consent to and fund, then the signatures and partially signed tx.
+  static async previewSharedMasternodeRegistration(walletId: string, txHex: string): Promise<SharedRegistrationPreviewDto> {
+    return this.api.previewSharedMasternodeRegistration(walletId, txHex)
+  }
+
+  static async signSharedMasternodeRegistrationConsent(walletId: string, txHex: string, password: string): Promise<SharedRegistrationConsentResultDto> {
+    return this.api.signSharedMasternodeRegistrationConsent(walletId, txHex, password)
+  }
+
+  static async signSharedMasternodeRegistrationFunding(walletId: string, txHex: string, password: string): Promise<SharedRegistrationFundingResultDto> {
+    return this.api.signSharedMasternodeRegistrationFunding(walletId, txHex, password)
   }
 
   static async updateMasternodeRegistrar(walletId: string, proTxHash: string, update: MasternodeRegistrarUpdateDto, password: string): Promise<MasternodeUpdateResult> {
