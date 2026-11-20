@@ -28,6 +28,7 @@ let transactionDAO: TransactionDAO
 const walletDAO = {getWalletById: async () => ({coreXpub: XPUB})} as unknown as WalletDAO
 const addressDAO = {
   getAddressesByWalletId: async () => ({receiving: [{address: OURS}], change: []}),
+  getLockedAddresses: async () => new Set<string>(),
 } as unknown as AddressDAO
 
 // One coin, which Dashscan still reports as unspent.

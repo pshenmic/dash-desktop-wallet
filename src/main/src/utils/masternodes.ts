@@ -142,17 +142,23 @@ export function ownerNode(owned: Masternode[], proTxHash: string): Masternode & 
   return {...node, ownerKeyIndex}
 }
 
-// A node whose operator key the wallet derives, which is what lets it sign as operator.
-export function operatedNode(owned: Masternode[], proTxHash: string): Masternode & {operatorKeyIndex: number} {
+// A node whose service the operator signs for. The key may be seed-derived or
+// imported, so the index is not required here; the signer decides.
+export function operatedNode(owned: Masternode[], proTxHash: string): Masternode {
   const node = owned.find(entry => entry.proTxHash === proTxHash)
   if (node == null) throw new Error('Not a masternode of this wallet')
-  const {operatorKeyIndex} = node
-  if (operatorKeyIndex == null) throw new Error("This wallet does not derive the masternode's operator key")
-  if (node.isShared) throw new Error('Shared masternode interactions are not supported yet')
-  return {...node, operatorKeyIndex}
+  return node
 }
 
-export function carriesKey(node: NetworkMasternode, {role, publicKey}: ImportedMasternodeKey): boolean {
+// A revoked shared node's registrar comes back only by every share owner
+// signing a ProUpSharedRegTx, which this wallet cannot do.
+export function revocableNode(owned: Masternode[], proTxHash: string): Masternode {
+  const node = operatedNode(owned, proTxHash)
+  if (node.isShared) throw new Error('A shared masternode cannot be revoked: restoring it needs every share owner')
+  return node
+}
+
+export function carriesKey(node: NetworkMasternode, {role, publicKey}: Pick<ImportedMasternodeKey, 'role' | 'publicKey'>): boolean {
   const values = masternodeFilterValues(role, publicKey)
   return nodeKeyValues(role, node).some(key => values.includes(key))
 }

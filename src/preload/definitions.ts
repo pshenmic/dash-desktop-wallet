@@ -4,7 +4,7 @@ type Network = 'mainnet' | 'testnet'
 
 // Mirrors MasternodeKeyChain and ImportedMasternodeKey in src/main/src/types/Masternode.
 type MasternodeKeyRole = 'owner' | 'voting' | 'operator'
-type ImportedMasternodeKey = { role: MasternodeKeyRole; publicKey: string }
+type ImportedMasternodeKey = { role: MasternodeKeyRole; publicKey: string; hasPrivateKey: boolean }
 // Mirrors MasternodeRegistration in src/main/src/types/Masternode.
 type MasternodeRegistration = {
   type: 'Regular' | 'Evo'
@@ -12,6 +12,9 @@ type MasternodeRegistration = {
   serviceAddress: string | null
   payoutAddress: string
   operatorReward: number
+  ownerAddress: string | null
+  votingAddress: string | null
+  operatorPublicKey: string | null
   platformNodeId: string | null
   platformP2PPort: number | null
   platformHttpPort: number | null
@@ -33,6 +36,9 @@ type MasternodeServiceUpdate = {
 type RevocationReason = 'notSpecified' | 'termination' | 'compromisedKeys' | 'changeOfKeys'
 // Mirrors VoteOutcome in src/main/src/types/Governance.
 type VoteOutcome = 'yes' | 'no' | 'abstain'
+// Mirrors ContestedResourceVoteRequest and ContestedResourceVoteChoice there.
+type ContestedResourceVoteRequest = { contractId: string; documentTypeName: string; indexName: string; indexValues: string[] }
+type ContestedResourceVoteChoice = { kind: 'towardsIdentity'; identifier: string } | { kind: 'lock' } | { kind: 'abstain' }
 
 // Mirrors src/main/src/types/CoinSelection, which the bundles do not share: an
 // address narrows the automatic selection, a picked outpoint list is spent whole.
@@ -90,16 +96,23 @@ export const apiDefinitions = (ipcRenderer) => ({
   getWalletBalance: (walletId: string) => ipcRenderer.invoke('getWalletBalance', walletId),
   getIdentities: (walletId: string) => ipcRenderer.invoke('getIdentities', walletId),
   getMasternodes: (walletId: string) => ipcRenderer.invoke('getMasternodes', walletId),
+  getMasternodeIdentities: (walletId: string) => ipcRenderer.invoke('getMasternodeIdentities', walletId),
   getMasternodeCollaterals: (walletId: string) => ipcRenderer.invoke('getMasternodeCollaterals', walletId),
   getImportedMasternodeKeys: (walletId: string) => ipcRenderer.invoke('getImportedMasternodeKeys', walletId),
-  importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => ipcRenderer.invoke('importMasternodeKey', walletId, role, privateKey),
+  importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string, password?: string) => ipcRenderer.invoke('importMasternodeKey', walletId, role, privateKey, password),
   removeMasternodeKey: (walletId: string, key: ImportedMasternodeKey) => ipcRenderer.invoke('removeMasternodeKey', walletId, key),
-  registerMasternode: (walletId: string, registration: MasternodeRegistration, password: string) => ipcRenderer.invoke('registerMasternode', walletId, registration, password),
+  signAndBroadcastMasternodeRegistration: (walletId: string, unsignedHex: string, password: string) => ipcRenderer.invoke('signAndBroadcastMasternodeRegistration', walletId, unsignedHex, password),
+  previewMasternodeRegistration: (walletId: string, registration: MasternodeRegistration) => ipcRenderer.invoke('previewMasternodeRegistration', walletId, registration),
+  previewSharedMasternodeRegistration: (walletId: string, txHex: string) => ipcRenderer.invoke('previewSharedMasternodeRegistration', walletId, txHex),
+  signSharedMasternodeRegistrationConsent: (walletId: string, txHex: string, password: string) => ipcRenderer.invoke('signSharedMasternodeRegistrationConsent', walletId, txHex, password),
+  signSharedMasternodeRegistrationFunding: (walletId: string, txHex: string, password: string) => ipcRenderer.invoke('signSharedMasternodeRegistrationFunding', walletId, txHex, password),
   updateMasternodeRegistrar: (walletId: string, proTxHash: string, update: MasternodeRegistrarUpdate, password: string) => ipcRenderer.invoke('updateMasternodeRegistrar', walletId, proTxHash, update, password),
   updateMasternodeService: (walletId: string, proTxHash: string, update: MasternodeServiceUpdate, password: string) => ipcRenderer.invoke('updateMasternodeService', walletId, proTxHash, update, password),
   revokeMasternode: (walletId: string, proTxHash: string, reason: RevocationReason, password: string) => ipcRenderer.invoke('revokeMasternode', walletId, proTxHash, reason, password),
   getGovernanceProposals: (walletId: string) => ipcRenderer.invoke('getGovernanceProposals', walletId),
   refreshGovernance: (walletId: string, proposalHash?: string) => ipcRenderer.invoke('refreshGovernance', walletId, proposalHash),
+  getContestedResources: (walletId: string) => ipcRenderer.invoke('getContestedResources', walletId),
+  voteContestedResource: (walletId: string, proTxHash: string, resource: ContestedResourceVoteRequest, choice: ContestedResourceVoteChoice, password: string) => ipcRenderer.invoke('voteContestedResource', walletId, proTxHash, resource, choice, password),
   getProposalTally: (walletId: string, proposalHash: string) => ipcRenderer.invoke('getProposalTally', walletId, proposalHash),
   voteProposal: (walletId: string, proposalHash: string, outcome: VoteOutcome, proTxHashes: string[], password: string) => ipcRenderer.invoke('voteProposal', walletId, proposalHash, outcome, proTxHashes, password),
   updateIdentityKeys: (walletId: string, identifier: string, update: IdentityKeysUpdate, password: string) => ipcRenderer.invoke('updateIdentityKeys', walletId, identifier, update, password),
@@ -117,6 +130,7 @@ export const apiDefinitions = (ipcRenderer) => ({
   getPlatformAddresses: (walletId: string) => ipcRenderer.invoke('getPlatformAddresses', walletId),
   addPlatformAddress: (walletId: string) => ipcRenderer.invoke('addPlatformAddress', walletId),
   setAddressLabel: (walletId: string, address: string, label: string) => ipcRenderer.invoke('setAddressLabel', walletId, address, label),
+  setAddressLocked: (walletId: string, address: string, locked: boolean) => ipcRenderer.invoke('setAddressLocked', walletId, address, locked),
   setWalletLabel: (walletId: string, label: string | null) => ipcRenderer.invoke('setWalletLabel', walletId, label),
   sendTransaction: (walletId: string, recipients: CoreRecipient[], password: string, source?: CoreSpendSource, changeTo?: string) => ipcRenderer.invoke('sendTransaction', walletId, recipients, password, source, changeTo),
   getTxLockStatus: (walletId: string, txid: string) => ipcRenderer.invoke('getTxLockStatus', walletId, txid),

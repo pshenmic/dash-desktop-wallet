@@ -128,6 +128,12 @@ describe('requireVotingNode', () => {
     expect(requireVotingNode([owned()], TXID, null, 0).votingKeyIndex).toBe(2)
   })
 
+  it('accepts an imported voting key whose secret the wallet holds', () => {
+    const node = owned({votingKeyIndex: null, votingAddress: 'Ximported'})
+    expect(requireVotingNode([node], TXID, null, 0, new Set(['Ximported']))).toEqual(
+      {proTxHash: TXID, votingKeyIndex: null, votingAddress: 'Ximported', collateralTxid: TXID, collateralVout: 0})
+  })
+
   it('refuses a node Core would not let vote', () => {
     expect(() => requireVotingNode([], TXID, null, 0)).toThrow("not one of this wallet's")
     expect(() => requireVotingNode([owned({status: 'POSE_BANNED'})], TXID, null, 0)).toThrow('PoSe-banned')

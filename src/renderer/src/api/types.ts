@@ -30,6 +30,7 @@ export type WalletAddressDto = {
   index: number
   isChange: number
   isUsed: boolean
+  isLocked: boolean
   balance: bigint
   txCount: number
   label: string | null
@@ -219,10 +220,51 @@ export interface ListedUtxo extends SelectableUtxo {
 export type MasternodeKeyRole = 'owner' | 'voting' | 'operator'
 
 // publicKey is what the list carries for the role: the address for owner and
-// voting, the hex public key for operator.
+// voting, the hex public key for operator. hasPrivateKey is true when the
+// secret is stored, which is what lets the key sign.
 export interface ImportedMasternodeKeyDto {
   role: MasternodeKeyRole
   publicKey: string
+  hasPrivateKey: boolean
+}
+
+// Mirrors SharedRegistrationPreview and its rows in src/main/src/types/Masternode.
+export interface SharedRegistrationShareDto {
+  index: number
+  amountDuffs: bigint
+  ownerAddress: string
+  refundAddress: string | null
+  rewardAddress: string | null
+}
+
+export interface SharedRegistrationFundingInputDto {
+  index: number
+  address: string
+  amountDuffs: bigint
+}
+
+export interface SharedRegistrationPreviewDto {
+  consentHash: string
+  shares: SharedRegistrationShareDto[]
+  signableShares: number[]
+  fundingInputs: SharedRegistrationFundingInputDto[]
+  warning: string | null
+}
+
+export interface SharedRegistrationSignatureDto {
+  shareIndex: number
+  signature: string
+}
+
+export interface SharedRegistrationConsentResultDto {
+  preview: SharedRegistrationPreviewDto
+  signatures: SharedRegistrationSignatureDto[]
+}
+
+export interface SharedRegistrationFundingResultDto {
+  preview: SharedRegistrationPreviewDto
+  signedHex: string
+  signedInputs: number[]
 }
 
 // getMasternodes — a masternode this wallet holds a key or the collateral of, as
@@ -256,6 +298,18 @@ export interface MasternodeDto {
   registeredHeight: number | null
 }
 
+export type MasternodeIdentityRole = 'owner' | 'voter'
+
+// Not seed-derived, so no index or derivation path; empty until Platform indexes the registration.
+export interface MasternodeIdentityInfoDto {
+  proTxHash: string
+  role: MasternodeIdentityRole
+  identifier: string
+  usernames: string[]
+  keys: IdentityKeyDto[]
+  balance: { amount: bigint; usdAmount: string }
+}
+
 // The platform fields are an Evo's alone, null on a Regular node.
 export interface MasternodePlatformFieldsDto {
   platformNodeId: string | null
@@ -264,13 +318,38 @@ export interface MasternodePlatformFieldsDto {
 }
 
 // operatorReward is in hundredths of a percent. A null serviceAddress registers
-// without one, left to the operator's service update.
+// without one; a null key takes the wallet's next unused key on its chain.
 export interface MasternodeRegistrationDto extends MasternodePlatformFieldsDto {
   type: 'Regular' | 'Evo'
   collateral: { txid: string; vout: number }
   serviceAddress: string | null
   payoutAddress: string
   operatorReward: number
+  ownerAddress: string | null
+  votingAddress: string | null
+  operatorPublicKey: string | null
+}
+
+// A null key index is a caller-supplied key.
+export interface MasternodeRegistrationPreviewDto {
+  type: 'Regular' | 'Evo'
+  collateral: { txid: string; vout: number }
+  ownerAddress: string
+  votingAddress: string
+  operatorPublicKey: string
+  serviceAddress: string | null
+  payoutAddress: string
+  operatorReward: number
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+  ownerKeyIndex: number | null
+  votingKeyIndex: number | null
+  operatorKeyIndex: number | null
+  inputs: PreviewEntry[]
+  outputs: PreviewEntry[]
+  feeDuffs: bigint
+  unsignedHex: string
 }
 
 // keep is the node's current key, wallet the lowest unused wallet key. A new operator
@@ -320,6 +399,37 @@ export interface ProposalTally {
   no: number
   abstain: number
 }
+
+// One open Platform vote poll, with the tally a vote would face. Index values
+// stay base64 of their serialized form, which is what a vote transition carries.
+export interface ContestedResourceDto {
+  contractId: string
+  documentTypeName: string
+  indexName: string
+  indexValues: string[]
+  // Text-decoded index values, null where the value is not text.
+  indexValuesText: Array<string | null>
+  endsAt: number
+  vote: {
+    contenders: Array<{identifier: string; votes: number}>
+    lockVotes: number
+    abstainVotes: number
+    outcome: 'WonByIdentity' | 'Locked' | 'NoWinner' | null
+    winner: string | null
+  }
+}
+
+export interface ContestedResourceVoteRequest {
+  contractId: string
+  documentTypeName: string
+  indexName: string
+  indexValues: string[]
+}
+
+export type ContestedResourceVoteChoice =
+  | {kind: 'towardsIdentity'; identifier: string}
+  | {kind: 'lock'}
+  | {kind: 'abstain'}
 
 export type VoteOutcome = 'yes' | 'no' | 'abstain'
 

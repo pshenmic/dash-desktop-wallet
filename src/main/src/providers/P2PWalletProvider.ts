@@ -73,9 +73,10 @@ export class P2PWalletProvider implements WalletProvider {
   async getWalletUtxos(): Promise<UTXO[]> {
     const {receiving, change, dashPay = []} = await this.addressDAO.getAddressesByWalletId(this.walletId)
     const addresses = [...receiving, ...change, ...dashPay].map(a => a.address)
-    const [utxos, lockedOutpoints] = await Promise.all([
+    const [utxos, lockedOutpoints, lockedAddresses] = await Promise.all([
       this.transactionDAO.getUtxosByAddresses(this.walletId, addresses),
       this.transactionDAO.getLockedOutpoints(this.walletId),
+      this.addressDAO.getLockedAddresses(this.walletId),
     ])
     const locked = new Set(lockedOutpoints.map(({txid, vout}) => `${txid}:${vout}`))
     const {tipHeight} = this.walletSyncService.getStatus()
@@ -88,7 +89,7 @@ export class P2PWalletProvider implements WalletProvider {
       height: u.height,
       timestamp: new Date(u.blockTime * 1000),
       confirmations: confirmationsAt(u.height, tipHeight),
-      isLocked: locked.has(`${u.txid}:${u.vout}`),
+      isLocked: locked.has(`${u.txid}:${u.vout}`) || lockedAddresses.has(u.address),
     }))
   }
 
@@ -120,12 +121,14 @@ export class P2PWalletProvider implements WalletProvider {
   async nextUnusedAddress(exclude: Set<string> = new Set()): Promise<string> {
     const {receiving} = await this.addressDAO.getAddressesByWalletId(this.walletId)
     if (receiving.length === 0) throw new Error('Wallet has no receiving addresses')
+    const available = receiving.filter(a => !a.isLocked)
+    if (available.length === 0) throw new Error('Every receiving address is locked')
 
     const used = new Set(
-      await this.transactionDAO.getUsedAddresses(this.walletId, receiving.map(a => a.address)),
+      await this.transactionDAO.getUsedAddresses(this.walletId, available.map(a => a.address)),
     )
 
-    return (receiving.find(({address}) => !used.has(address) && !exclude.has(address)) ?? receiving[receiving.length - 1]).address
+    return (available.find(({address}) => !used.has(address) && !exclude.has(address)) ?? available[available.length - 1]).address
   }
 
   async getUsedAddresses(addresses: string[]): Promise<string[]> {
