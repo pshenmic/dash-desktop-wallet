@@ -1,6 +1,6 @@
 import { WalletTxDto } from '@renderer/types/WalletTransaction'
 import { TransferOperation } from '../enums/TransferOperation'
-import { AddressKeyInfoDto, UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PaymentRequestDto, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, ListedUtxo, MasternodeDto, MasternodeIdentityInfoDto, ImportedMasternodeKeyDto, MasternodeKeyRole, MasternodeRegistrationDto, MasternodeRegistrationPreviewDto, MasternodeRegistrationResult, MasternodeRegistrarUpdateDto, MasternodeServiceUpdateDto, MasternodeUpdateResult, RevocationReason, SharedRegistrationConsentResultDto, SharedRegistrationFundingResultDto, SharedRegistrationPreviewDto, ProposalDto, ProposalTally, ContestedResourceDto, VoteOutcome, VoteResult} from './types'
+import { AddressKeyInfoDto, UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PaymentRequestDto, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, ListedUtxo, MasternodeDto, MasternodeIdentityInfoDto, ImportedMasternodeKeyDto, MasternodeKeyRole, MasternodeRegistrationDto, MasternodeRegistrationPreviewDto, MasternodeRegistrationResult, MasternodeRegistrarUpdateDto, MasternodeServiceUpdateDto, MasternodeUpdateResult, RevocationReason, SharedRegistrationConsentResultDto, SharedRegistrationFundingResultDto, SharedRegistrationPreviewDto, ProposalDto, ProposalTally, ContestedResourceDto, ContestedResourceVoteRequest, ContestedResourceVoteChoice, VoteOutcome, VoteResult} from './types'
 
 export class API {
   private static get api() {
@@ -249,6 +249,11 @@ export class API {
   // Every Platform vote poll still open, with its contenders and tallies.
   static async getContestedResources(walletId: string): Promise<ContestedResourceDto[]> {
     return this.api.getContestedResources(walletId)
+  }
+
+  // Casts one masternode's vote, signed with its voting key.
+  static async voteContestedResource(walletId: string, proTxHash: string, resource: ContestedResourceVoteRequest, choice: ContestedResourceVoteChoice, password: string): Promise<{stHash: string}> {
+    return this.api.voteContestedResource(walletId, proTxHash, resource, choice, password)
   }
 
   static async voteProposal(walletId: string, proposalHash: string, outcome: VoteOutcome, proTxHashes: string[], password: string): Promise<VoteResult[]> {

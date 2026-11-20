@@ -407,6 +407,8 @@ export interface ContestedResourceDto {
   documentTypeName: string
   indexName: string
   indexValues: string[]
+  // Text-decoded index values, null where the value is not text.
+  indexValuesText: Array<string | null>
   endsAt: number
   vote: {
     contenders: Array<{identifier: string; votes: number}>
@@ -416,6 +418,18 @@ export interface ContestedResourceDto {
     winner: string | null
   }
 }
+
+export interface ContestedResourceVoteRequest {
+  contractId: string
+  documentTypeName: string
+  indexName: string
+  indexValues: string[]
+}
+
+export type ContestedResourceVoteChoice =
+  | {kind: 'towardsIdentity'; identifier: string}
+  | {kind: 'lock'}
+  | {kind: 'abstain'}
 
 export type VoteOutcome = 'yes' | 'no' | 'abstain'
 

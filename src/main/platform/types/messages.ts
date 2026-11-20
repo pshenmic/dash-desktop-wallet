@@ -2,7 +2,7 @@ import {NodeStatus} from 'dash-platform-sdk/types.js'
 import {UsernameCheck, UsernameSearchResult} from '../../src/types/Username'
 import {CoreSpendSource} from '../../src/types/CoinSelection'
 import {DashPayContactRequest} from '../../src/types/DashPay'
-import {ContestedResource} from '../../src/types/Governance'
+import {ContestedResource, ContestedResourceVoteChoice, ContestedResourceVoteRequest} from '../../src/types/Governance'
 import {IdentityKey, IdentityKeyRequest, IdentityKeysUpdate, IdentityPrivateKey} from '../../src/types/IdentityKeys'
 import {LogLevel} from '../../src/types/Log'
 import {Network} from '../../src/types/Network'
@@ -386,6 +386,13 @@ export interface PlatformOperations {
   contestedResources: {
     payload: Record<string, never>
     result: {resources: ContestedResource[]}
+  }
+  // Signs and broadcasts one masternode's vote on a contested resource. The
+  // voting key crosses as raw bytes because it is either derived by main or
+  // decrypted from an imported key.
+  contestedResourceVote: {
+    payload: {votingKey: Uint8Array; proTxHash: string; choice: ContestedResourceVoteChoice} & ContestedResourceVoteRequest
+    result: {stHash: string}
   }
   // Names whose label starts with prefix, in label order, at most one proved page.
   usernameSearch: {

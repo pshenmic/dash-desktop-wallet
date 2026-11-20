@@ -44,6 +44,7 @@ import { UpdateMasternodeServiceHandler } from './api/masternodes/updateMasterno
 import { RevokeMasternodeHandler } from './api/masternodes/revokeMasternode'
 import { GetGovernanceProposalsHandler } from './api/governance/getGovernanceProposals'
 import { GetContestedResourcesHandler } from './api/governance/getContestedResources'
+import { VoteContestedResourceHandler } from './api/governance/voteContestedResource'
 import { GetProposalTallyHandler } from './api/governance/getProposalTally'
 import { VoteProposalHandler } from './api/governance/voteProposal'
 import { RefreshGovernanceHandler } from './api/governance/refreshGovernance'
@@ -248,6 +249,7 @@ export class WalletBackend {
     registerHandler('voteProposal', new VoteProposalHandler(this.governanceService).handle)
     registerHandler('refreshGovernance', new RefreshGovernanceHandler(this.governanceService).handle)
     registerHandler('getContestedResources', new GetContestedResourcesHandler(this.contestedResourceService).handle)
+    registerHandler('voteContestedResource', new VoteContestedResourceHandler(this.contestedResourceService).handle)
     registerHandler('getUsernames', new GetUsernamesHandler(this.identityService).handle)
     registerHandler('refreshDashPay', new RefreshDashPayHandler(this.walletService).handle)
     registerHandler('registerUsername', new RegisterUsernameHandler(this.identityService).handle)
@@ -395,7 +397,7 @@ export class WalletBackend {
     const masternodeKeyDAO = new MasternodeKeyDAO(knex)
     this.masternodeService = new MasternodeService(walletDAO, masternodeKeyDAO, masternodeDAO, masternodeIdentityDAO, providers, addressDAO, coreTransactionService, this.walletSyncService, preferences)
     this.governanceService = new GovernanceService(walletDAO, providers, this.masternodeService, this.walletSyncService)
-    this.contestedResourceService = new ContestedResourceService(walletDAO, this.platformWorkerService)
+    this.contestedResourceService = new ContestedResourceService(walletDAO, this.masternodeService, this.platformWorkerService)
     this.walletSyncService.watchedProvidersOf = masternodeDAO.getFollowedProTxHashes
     const platformAddressDAO = new PlatformAddressDAO(knex)
     this.walletCredentialsService = new WalletCredentialsService(walletDAO, addressDAO, masternodeKeyDAO, platformAddressDAO, calibratedIterations)

@@ -56,6 +56,7 @@ describe('listing contested resources', () => {
       documentTypeName: 'domain',
       indexName: 'parentNameAndLabel',
       indexValues: [PARENT, LABEL],
+      indexValuesText: ['dash', 'owl'],
       endsAt: 5_000,
       vote: {
         contenders: [{identifier: 'contender', votes: 4}],
@@ -80,6 +81,15 @@ describe('listing contested resources', () => {
     const {resources} = await contestedResources({}, ctx)
 
     expect(resources[0].vote).toMatchObject({outcome: 'WonByIdentity', winner: 'winner'})
+  })
+
+  it('leaves a non-text index value undecoded', async () => {
+    const raw = base64.encode(new Uint8Array([1, 2, 3]))
+    const {ctx} = context({polls: [{...poll, indexValues: [raw, LABEL]}]})
+
+    const {resources} = await contestedResources({}, ctx)
+
+    expect(resources[0].indexValuesText).toEqual([null, 'owl'])
   })
 
   // Drive returns polls grouped by end date; one contract read serves them all.

@@ -5,6 +5,7 @@ import {ContestedResource, ContestedResourceOutcome, ContestedResourceVote} from
 import {PROVED_QUERY_LIMIT} from '../../constants'
 import {PlatformOperations} from '../../types/messages'
 import {OperationContext, throwIfAborted} from '../types'
+import {textIndexValue} from './indexValue'
 
 type Payload = PlatformOperations['contestedResources']['payload']
 type Result = PlatformOperations['contestedResources']['result']
@@ -47,6 +48,7 @@ async function openPolls({sdk, signal}: OperationContext): Promise<Poll[]> {
           documentTypeName: poll.documentTypeName,
           indexName: poll.indexName,
           indexValues: poll.indexValues,
+          indexValuesText: poll.indexValues.map(value => textIndexValue(base64.decode(value))),
           endsAt: Number(group.timestampMs),
         }
         polls.set(`${entry.contractId}:${entry.documentTypeName}:${entry.indexName}:${entry.indexValues.join(',')}`, entry)

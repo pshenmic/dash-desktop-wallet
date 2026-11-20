@@ -116,6 +116,10 @@ export function laneFor(request: PlatformRequestMessage): string | null {
     case 'usernameRegister':
       return `${request.network}:identity:${request.payload.identifier}`
 
+    // A voter identity has one nonce, so votes for one node must not interleave.
+    case 'contestedResourceVote':
+      return `${request.network}:vote:${request.payload.proTxHash}`
+
     case 'transitionFee':
     case 'previewTransition':
     case 'spendFeeCurve':

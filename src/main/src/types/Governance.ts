@@ -27,12 +27,16 @@ export interface GovernanceVote {
   voter: string | null
 }
 
-// What signing a node's vote needs, once the node passed the checks before relaying.
-// votingKeyIndex is null when an imported key signs instead.
-export interface VotingNode {
+// The voting key of one of this wallet's nodes. votingKeyIndex is null when an
+// imported key signs instead.
+export interface VotingKeyNode {
   proTxHash: string
   votingKeyIndex: number | null
   votingAddress: string
+}
+
+// What signing a node's vote needs, once the node passed the checks before relaying.
+export interface VotingNode extends VotingKeyNode {
   collateralTxid: string
   collateralVout: number
 }
@@ -59,15 +63,31 @@ export interface ContestedResourceVote {
 
 // One open Platform vote poll. Index values stay base64 of their serialized
 // form because that is what a vote transition carries; only the contract knows
-// how to read them as a label or a number.
+// how to read them as a label or a number. Text values are also decoded, which
+// covers the DPNS names wallets can vote on.
 export interface ContestedResource {
   contractId: string
   documentTypeName: string
   indexName: string
   indexValues: string[]
+  indexValuesText: Array<string | null>
   endsAt: number
   vote: ContestedResourceVote
 }
+
+// What a vote names: the poll as listed. Index values stay in their base64 form
+// so a caller can pass what getContestedResources answered unchanged.
+export interface ContestedResourceVoteRequest {
+  contractId: string
+  documentTypeName: string
+  indexName: string
+  indexValues: string[]
+}
+
+export type ContestedResourceVoteChoice =
+  | {kind: 'towardsIdentity'; identifier: string}
+  | {kind: 'lock'}
+  | {kind: 'abstain'}
 
 // peers asked for the vote after its announcement; accepted is how many of them
 // then served it back, which Core does only for a vote it kept.

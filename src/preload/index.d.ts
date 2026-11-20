@@ -285,6 +285,8 @@ interface ContestedResourceDTO {
   documentTypeName: string
   indexName: string
   indexValues: string[]
+  // Text-decoded index values, null where the value is not text.
+  indexValuesText: Array<string | null>
   endsAt: number
   vote: {
     contenders: Array<{identifier: string; votes: number}>
@@ -294,6 +296,18 @@ interface ContestedResourceDTO {
     winner: string | null
   }
 }
+
+interface ContestedResourceVoteRequestDTO {
+  contractId: string
+  documentTypeName: string
+  indexName: string
+  indexValues: string[]
+}
+
+type ContestedResourceVoteChoiceDTO =
+  | {kind: 'towardsIdentity'; identifier: string}
+  | {kind: 'lock'}
+  | {kind: 'abstain'}
 
 type VoteOutcomeDTO = 'yes' | 'no' | 'abstain'
 
@@ -415,6 +429,7 @@ declare global {
       refreshGovernance: (walletId: string, proposalHash?: string) => Promise<void>
       getProposalTally: (walletId: string, proposalHash: string) => Promise<ProposalTallyDTO | null>
       getContestedResources: (walletId: string) => Promise<ContestedResourceDTO[]>
+      voteContestedResource: (walletId: string, proTxHash: string, resource: ContestedResourceVoteRequestDTO, choice: ContestedResourceVoteChoiceDTO, password: string) => Promise<{stHash: string}>
       voteProposal: (walletId: string, proposalHash: string, outcome: VoteOutcomeDTO, proTxHashes: string[], password: string) => Promise<VoteResultDTO[]>
       getUsernames: (walletId: string) => Promise<unknown>
       refreshDashPay: (walletId: string) => Promise<void>
