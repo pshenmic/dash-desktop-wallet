@@ -400,6 +400,23 @@ export interface ProposalTally {
   abstain: number
 }
 
+// One open Platform vote poll, with the tally a vote would face. Index values
+// stay base64 of their serialized form, which is what a vote transition carries.
+export interface ContestedResourceDto {
+  contractId: string
+  documentTypeName: string
+  indexName: string
+  indexValues: string[]
+  endsAt: number
+  vote: {
+    contenders: Array<{identifier: string; votes: number}>
+    lockVotes: number
+    abstainVotes: number
+    outcome: 'WonByIdentity' | 'Locked' | 'NoWinner' | null
+    winner: string | null
+  }
+}
+
 export type VoteOutcome = 'yes' | 'no' | 'abstain'
 
 // peers asked for the vote; accepted of them kept it, and 0 is a vote Core dropped.

@@ -128,6 +128,7 @@ export function laneFor(request: PlatformRequestMessage): string | null {
     case 'usernameStatus':
     case 'usernameSearch':
     case 'usernameContests':
+    case 'contestedResources':
     case 'dashPayContactRequests':
     case 'dashPayContactKey':
     case 'identityScan':

@@ -44,6 +44,31 @@ export interface ProposalTally {
   abstain: number
 }
 
+// Platform's ContestedDocumentVotePollWinnerInfo variants.
+export type ContestedResourceOutcome = 'WonByIdentity' | 'Locked' | 'NoWinner'
+
+// The tally of one Platform vote poll. A contender is an identity that has a
+// document contending for the resource; lock and abstain are the two other choices.
+export interface ContestedResourceVote {
+  contenders: Array<{identifier: string; votes: number}>
+  lockVotes: number
+  abstainVotes: number
+  outcome: ContestedResourceOutcome | null
+  winner: string | null
+}
+
+// One open Platform vote poll. Index values stay base64 of their serialized
+// form because that is what a vote transition carries; only the contract knows
+// how to read them as a label or a number.
+export interface ContestedResource {
+  contractId: string
+  documentTypeName: string
+  indexName: string
+  indexValues: string[]
+  endsAt: number
+  vote: ContestedResourceVote
+}
+
 // peers asked for the vote after its announcement; accepted is how many of them
 // then served it back, which Core does only for a vote it kept.
 export interface VoteRelay {

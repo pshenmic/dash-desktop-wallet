@@ -2,6 +2,7 @@ import {NodeStatus} from 'dash-platform-sdk/types.js'
 import {UsernameCheck, UsernameSearchResult} from '../../src/types/Username'
 import {CoreSpendSource} from '../../src/types/CoinSelection'
 import {DashPayContactRequest} from '../../src/types/DashPay'
+import {ContestedResource} from '../../src/types/Governance'
 import {IdentityKey, IdentityKeyRequest, IdentityKeysUpdate, IdentityPrivateKey} from '../../src/types/IdentityKeys'
 import {LogLevel} from '../../src/types/Log'
 import {Network} from '../../src/types/Network'
@@ -378,6 +379,13 @@ export interface PlatformOperations {
   usernameContests: {
     payload: {identifiers: string[]}
     result: {contests: Array<{identifier: string; label: string}>}
+  }
+  // Every Platform vote poll still open now, with the tally a vote would face.
+  // Drive enumerates polls by end date rather than offering a list endpoint, so
+  // the worker walks the poll pages and reads each poll's state.
+  contestedResources: {
+    payload: Record<string, never>
+    result: {resources: ContestedResource[]}
   }
   // Names whose label starts with prefix, in label order, at most one proved page.
   usernameSearch: {

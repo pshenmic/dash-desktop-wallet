@@ -278,6 +278,23 @@ interface ProposalTallyDTO {
   abstain: number
 }
 
+// Mirrors ContestedResource in src/main/src/types/Governance. Index values stay
+// base64 of their serialized form, which is what a vote transition carries.
+interface ContestedResourceDTO {
+  contractId: string
+  documentTypeName: string
+  indexName: string
+  indexValues: string[]
+  endsAt: number
+  vote: {
+    contenders: Array<{identifier: string; votes: number}>
+    lockVotes: number
+    abstainVotes: number
+    outcome: 'WonByIdentity' | 'Locked' | 'NoWinner' | null
+    winner: string | null
+  }
+}
+
 type VoteOutcomeDTO = 'yes' | 'no' | 'abstain'
 
 interface VoteResultDTO {
@@ -397,6 +414,7 @@ declare global {
       getGovernanceProposals: (walletId: string) => Promise<ProposalDTO[] | null>
       refreshGovernance: (walletId: string, proposalHash?: string) => Promise<void>
       getProposalTally: (walletId: string, proposalHash: string) => Promise<ProposalTallyDTO | null>
+      getContestedResources: (walletId: string) => Promise<ContestedResourceDTO[]>
       voteProposal: (walletId: string, proposalHash: string, outcome: VoteOutcomeDTO, proTxHashes: string[], password: string) => Promise<VoteResultDTO[]>
       getUsernames: (walletId: string) => Promise<unknown>
       refreshDashPay: (walletId: string) => Promise<void>
