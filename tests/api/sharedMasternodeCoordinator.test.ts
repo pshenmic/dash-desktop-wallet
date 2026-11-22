@@ -196,4 +196,14 @@ describe('shared registration coordinator', () => {
       {signedHex: funded.signedHex, signedInputs: [funded.signedInputs[0]]},
     ])).rejects.toThrow('missing a funding signature for input 1')
   })
+
+  it('refuses a contribution whose signature does not verify for its input', async () => {
+    const {joint, funded} = await combined()
+    const swapped = Transaction.fromHex(funded.signedHex)
+    swapped.inputs[0].scriptSig = swapped.inputs[1].scriptSig
+
+    await expect(masternodes.assembleSharedRegistration(walletId, joint.txHex, [
+      {signedHex: swapped.hex(), signedInputs: funded.signedInputs},
+    ])).rejects.toThrow('funding signature for input 0')
+  })
 })

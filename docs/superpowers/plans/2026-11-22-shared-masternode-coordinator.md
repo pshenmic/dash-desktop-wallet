@@ -414,7 +414,7 @@ Add `SharedRegistrationOutpointDTO`, `SharedRegistrationMemberDraftDTO`, `Shared
 buildSharedMasternodeRegistration: (walletId: string, draft: SharedRegistrationDraftDTO) => Promise<SharedRegistrationPlanDTO>
 ```
 
-`definitions.ts` needs no change (the wrapper is shape-agnostic).
+Add the matching entry to `src/preload/definitions.ts`. It is an explicit `ipcRenderer.invoke` map, not a proxy, so a channel declared only in the `.d.ts` is `undefined` at runtime. Mirror the draft type there beside the other Masternode mirrors.
 
 - [ ] **Step 6: Run the test to verify it passes**
 
@@ -494,7 +494,7 @@ Constraints: the signature list must cover every share index exactly once; a bas
 
 - [ ] **Step 4: Add handler, register, mirror preload**
 
-Handler `CombineSharedMasternodeRegistrationHandler`; channel `combineSharedMasternodeRegistration`; preload returns `SharedRegistrationJoinedDTO`.
+Handler `CombineSharedMasternodeRegistrationHandler`; channel `combineSharedMasternodeRegistration`; preload returns `SharedRegistrationJoinedDTO`, and `definitions.ts` gains the matching invoke entry.
 
 - [ ] **Step 5: Run the test to verify it passes**
 
@@ -596,7 +596,7 @@ The final result carries no fee: input values are not available here, and the bu
 
 `withoutScriptSigs(hex)` parses, blanks every `scriptSig`, and returns `tx.hex()`. Put it in `utils/sharedMasternodeRegistration.ts` and unit-test it with a one-input transaction.
 
-After merging, refuse unless every input has a non-empty scriptSig: `The registration is missing a funding signature for input <index>`.
+After merging, refuse unless every input has a non-empty scriptSig: `The registration is missing a funding signature for input <index>`. Then resolve each input's prevout through DAPI and verify its P2PKH SIGHASH_ALL signature against that output's key (`DESIGN.md` §5, *Funding*); a contribution that only produced a non-empty but wrong scriptSig must be refused with `The funding signature for input <index> is not valid`.
 
 - [ ] **Step 5: Implement broadcast**
 
@@ -611,7 +611,7 @@ Do not re-sign or mutate the transaction.
 
 - [ ] **Step 6: Add handlers, register, mirror preload**
 
-Channels `assembleSharedMasternodeRegistration` and `broadcastSharedMasternodeRegistration`; preload DTOs for the contribution, the final transaction and the broadcast result.
+Channels `assembleSharedMasternodeRegistration` and `broadcastSharedMasternodeRegistration`; preload DTOs for the contribution, the final transaction and the broadcast result, and the two matching entries in `definitions.ts`.
 
 - [ ] **Step 7: Run the tests to verify they pass**
 

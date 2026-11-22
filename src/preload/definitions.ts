@@ -34,6 +34,27 @@ type MasternodeServiceUpdate = {
   platformHttpPort: number | null
 }
 type RevocationReason = 'notSpecified' | 'termination' | 'compromisedKeys' | 'changeOfKeys'
+// Mirrors SharedRegistrationDraft, SharedRegistrationSignature and
+// SharedRegistrationContribution in src/main/src/types/Masternode.
+type SharedRegistrationDraft = {
+  members: Array<{
+    amountDuffs: bigint
+    ownerAddress: string
+    refundAddress: string
+    rewardAddress: string | null
+    changeAddress: string
+    inputs: Array<{txid: string; vout: number}>
+  }>
+  serviceAddress: string | null
+  operatorPublicKey: string
+  votingAddress: string
+  operatorReward: number
+  earlyPeriodBlocks: number
+  earlyPenaltyDuffs: bigint
+  feeDuffs: bigint
+}
+type SharedRegistrationSignature = { shareIndex: number; signature: string }
+type SharedRegistrationContribution = { signedHex: string; signedInputs: number[] }
 // Mirrors VoteOutcome in src/main/src/types/Governance.
 type VoteOutcome = 'yes' | 'no' | 'abstain'
 // Mirrors ContestedResourceVoteRequest and ContestedResourceVoteChoice there.
@@ -106,6 +127,10 @@ export const apiDefinitions = (ipcRenderer) => ({
   previewSharedMasternodeRegistration: (walletId: string, txHex: string) => ipcRenderer.invoke('previewSharedMasternodeRegistration', walletId, txHex),
   signSharedMasternodeRegistrationConsent: (walletId: string, txHex: string, password: string) => ipcRenderer.invoke('signSharedMasternodeRegistrationConsent', walletId, txHex, password),
   signSharedMasternodeRegistrationFunding: (walletId: string, txHex: string, password: string) => ipcRenderer.invoke('signSharedMasternodeRegistrationFunding', walletId, txHex, password),
+  buildSharedMasternodeRegistration: (walletId: string, draft: SharedRegistrationDraft) => ipcRenderer.invoke('buildSharedMasternodeRegistration', walletId, draft),
+  combineSharedMasternodeRegistration: (walletId: string, txHex: string, signatures: SharedRegistrationSignature[]) => ipcRenderer.invoke('combineSharedMasternodeRegistration', walletId, txHex, signatures),
+  assembleSharedMasternodeRegistration: (walletId: string, txHex: string, contributions: SharedRegistrationContribution[]) => ipcRenderer.invoke('assembleSharedMasternodeRegistration', walletId, txHex, contributions),
+  broadcastSharedMasternodeRegistration: (walletId: string, txHex: string) => ipcRenderer.invoke('broadcastSharedMasternodeRegistration', walletId, txHex),
   updateMasternodeRegistrar: (walletId: string, proTxHash: string, update: MasternodeRegistrarUpdate, password: string) => ipcRenderer.invoke('updateMasternodeRegistrar', walletId, proTxHash, update, password),
   updateMasternodeService: (walletId: string, proTxHash: string, update: MasternodeServiceUpdate, password: string) => ipcRenderer.invoke('updateMasternodeService', walletId, proTxHash, update, password),
   revokeMasternode: (walletId: string, proTxHash: string, reason: RevocationReason, password: string) => ipcRenderer.invoke('revokeMasternode', walletId, proTxHash, reason, password),

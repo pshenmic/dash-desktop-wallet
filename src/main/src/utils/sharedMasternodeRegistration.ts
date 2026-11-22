@@ -3,6 +3,7 @@ import {Base58Check} from 'dash-core-sdk/src/base58check.js'
 import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
 import {OutPoint} from 'dash-core-sdk/src/types/OutPoint.js'
 import {AddrV2Network, EXT_NET_INFO_VERSION, ExtNetInfo, NetInfoEntryType, NetInfoPurpose} from 'dash-core-sdk/src/types/ExtNetInfo.js'
+import {secp256k1} from '@noble/curves/secp256k1.js'
 import {bytesToHex} from '@noble/hashes/utils.js'
 import {ADDRESS_DECODED_LENGTH, ADDRESS_PREFIX} from '../constants/addresses'
 import {
@@ -143,6 +144,43 @@ export function sharedRegistrationWithoutScriptSigs(txHex: string): string {
   const tx = Transaction.fromHex(txHex)
   for (const input of tx.inputs) input.scriptSig = new Script()
   return tx.hex()
+}
+
+const P2PKH = /^76a914([0-9a-f]{40})88ac$/
+
+// Every funding input must carry a SIGHASH_ALL signature that verifies against
+// the output it spends, so a corrupted or wrong-key contribution is caught here
+// rather than by the network without a reason.
+export function verifySharedRegistrationFunding(tx: Transaction, prevouts: Map<string, SharedRegistrationPrevout>): void {
+  tx.inputs.forEach((input, index) => {
+    const prevout = prevouts.get(sharedRegistrationOutpointKey({txid: input.txId, vout: input.vOut}))
+    if (prevout == null) throw new Error(`A funding input is not available: ${input.txId}:${input.vOut}`)
+    const p2pkh = P2PKH.exec(prevout.script.hex())
+    if (p2pkh == null) throw new Error(`Input ${index} is not P2PKH, so its funding signature cannot be checked`)
+
+    try {
+      const bytes = input.scriptSig.bytes()
+      const signatureLength = bytes[0]
+      const publicKeyLength = bytes[1 + signatureLength]
+      if (signatureLength < 9 || signatureLength > 73 || (publicKeyLength !== 33 && publicKeyLength !== 65)) throw new Error()
+      const signature = bytes.slice(1, 1 + signatureLength)
+      const publicKey = bytes.slice(2 + signatureLength, 2 + signatureLength + publicKeyLength)
+      if (signature[signature.length - 1] !== 1) throw new Error()
+      if (bytesToHex(sdkUtils.SHA256RIPEMD160(publicKey)) !== p2pkh[1]) throw new Error()
+
+      const copy = Transaction.fromHex(tx.hex())
+      for (const other of copy.inputs) other.scriptSig = new Script()
+      copy.inputs[index].scriptSig = prevout.script
+      const body = copy.bytes()
+      const preimage = new Uint8Array(body.length + 4)
+      preimage.set(body)
+      new DataView(preimage.buffer).setUint32(body.length, 1, true)
+      const compact = secp256k1.Signature.fromBytes(signature.slice(0, -1), 'der').toBytes('compact')
+      if (!secp256k1.verify(compact, sdkUtils.doubleSHA256(preimage), publicKey, {prehash: false})) throw new Error()
+    } catch {
+      throw new Error(`The funding signature for input ${index} is not valid`)
+    }
+  })
 }
 
 function sharedRegistrationNetInfo(serviceAddress: string | null, network: Network): ExtNetInfo {

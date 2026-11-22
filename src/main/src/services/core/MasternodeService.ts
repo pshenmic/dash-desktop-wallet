@@ -41,6 +41,7 @@ import {
   SharedRegistrationFundingResult,
   SharedRegistrationFundingSource,
   SharedRegistrationJoined,
+  SharedRegistrationOutpoint,
   SharedRegistrationPlan,
   SharedRegistrationPreview,
   SharedRegistrationPrevout,
@@ -99,6 +100,7 @@ import {
   sharedRegistrationOutpointKey,
   sharedRegistrationTx,
   sharedRegistrationWithoutScriptSigs,
+  verifySharedRegistrationFunding,
 } from '../../utils/sharedMasternodeRegistration'
 import {EVONODE_STATUS_TIMEOUT_MS} from '../../constants/dapi'
 import {Network} from '../../types/Network'
@@ -202,7 +204,7 @@ export class MasternodeService {
     const taken = draft.members.findIndex(member =>
       listed.some(node => nodeKeyValues('owner', node).includes(member.ownerAddress)))
     if (taken >= 0) throw new Error(`The owner key of member ${taken + 1} already owns a masternode`)
-    const prevouts = await this.sharedRegistrationPrevouts(wallet.network, draft)
+    const prevouts = await this.sharedRegistrationPrevouts(wallet.network, draft.members.flatMap(member => member.inputs))
     return sharedRegistrationTx(draft, prevouts, wallet.network).plan
   }
 
@@ -279,6 +281,9 @@ export class MasternodeService {
 
     const unsigned = joined.inputs.findIndex(input => input.scriptSig.hex() === '')
     if (unsigned >= 0) throw new Error(`The registration is missing a funding signature for input ${unsigned}`)
+    const prevouts = await this.sharedRegistrationPrevouts(wallet.network,
+      joined.inputs.map(input => ({txid: input.txId, vout: input.vOut})))
+    verifySharedRegistrationFunding(joined, prevouts)
     log.info(`wallet ${walletId}: shared registration assembled ${joined.inputs.length} input(s)`)
     return {txHex: joined.hex(), proTxHash: joined.hash()}
   }
@@ -291,6 +296,9 @@ export class MasternodeService {
     requireSharedRegistrationConsents(tx, shares, wallet.network)
     const unsigned = tx.inputs.findIndex(input => input.scriptSig.hex() === '')
     if (unsigned >= 0) throw new Error(`The registration is missing a funding signature for input ${unsigned}`)
+    const prevouts = await this.sharedRegistrationPrevouts(wallet.network,
+      tx.inputs.map(input => ({txid: input.txId, vout: input.vOut})))
+    verifySharedRegistrationFunding(tx, prevouts)
 
     const broadcast = await this.walletSyncService.broadcastTransaction(tx.hex())
     log.info(`shared registration ${tx.hash()} broadcast to ${broadcast.peersDelivered.length} peer(s)`)
@@ -513,28 +521,26 @@ export class MasternodeService {
 
   private async sharedRegistrationPrevouts(
     network: Network,
-    draft: SharedRegistrationDraft,
+    outpoints: SharedRegistrationOutpoint[],
   ): Promise<Map<string, SharedRegistrationPrevout>> {
     const transactions = new Map<string, Transaction>()
     const prevouts = new Map<string, SharedRegistrationPrevout>()
-    for (const member of draft.members) {
-      for (const input of member.inputs) {
-        const key = sharedRegistrationOutpointKey(input)
-        if (prevouts.has(key)) continue
-        let tx = transactions.get(input.txid)
-        if (tx == null) {
-          try {
-            const {transaction} = await coreSDK(network).getTransaction(input.txid)
-            tx = Transaction.fromBytes(transaction)
-          } catch {
-            throw new Error(`A funding input is not available: ${input.txid}:${input.vout}`)
-          }
-          transactions.set(input.txid, tx)
+    for (const input of outpoints) {
+      const key = sharedRegistrationOutpointKey(input)
+      if (prevouts.has(key)) continue
+      let tx = transactions.get(input.txid)
+      if (tx == null) {
+        try {
+          const {transaction} = await coreSDK(network).getTransaction(input.txid)
+          tx = Transaction.fromBytes(transaction)
+        } catch {
+          throw new Error(`A funding input is not available: ${input.txid}:${input.vout}`)
         }
-        const output = tx.outputs[input.vout]
-        if (output == null) throw new Error(`A funding input is not available: ${input.txid}:${input.vout}`)
-        prevouts.set(key, {satoshis: output.satoshis, script: output.script})
+        transactions.set(input.txid, tx)
       }
+      const output = tx.outputs[input.vout]
+      if (output == null) throw new Error(`A funding input is not available: ${input.txid}:${input.vout}`)
+      prevouts.set(key, {satoshis: output.satoshis, script: output.script})
     }
     return prevouts
   }
