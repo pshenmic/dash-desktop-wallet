@@ -1,16 +1,29 @@
-import {Script} from 'dash-core-sdk'
+import {CollateralShare, Input, Output, Script, Transaction, TransactionType, utils as sdkUtils} from 'dash-core-sdk'
 import {Base58Check} from 'dash-core-sdk/src/base58check.js'
+import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
+import {OutPoint} from 'dash-core-sdk/src/types/OutPoint.js'
+import {AddrV2Network, EXT_NET_INFO_VERSION, ExtNetInfo, NetInfoEntryType, NetInfoPurpose} from 'dash-core-sdk/src/types/ExtNetInfo.js'
 import {bytesToHex} from '@noble/hashes/utils.js'
 import {ADDRESS_DECODED_LENGTH, ADDRESS_PREFIX} from '../constants/addresses'
 import {
+  DUST_THRESHOLD_DUFFS,
   MASTERNODE_COLLATERAL_DUFFS,
+  MASTERNODE_TYPE_CODE,
   MAX_OPERATOR_REWARD,
+  SEQUENCE_FINAL,
   SHARED_REGISTRATION_MAX_EARLY_PERIOD_BLOCKS,
   SHARED_REGISTRATION_MAX_SHARES,
   SHARED_REGISTRATION_MIN_SHARE_DUFFS,
   SHARED_REGISTRATION_MIN_SHARES,
 } from '../constants/chain'
-import {SharedRegistrationDraft} from '../types/Masternode'
+import {
+  SharedRegistrationDraft,
+  SharedRegistrationMemberPlan,
+  SharedRegistrationOutpoint,
+  SharedRegistrationOutput,
+  SharedRegistrationPlan,
+  SharedRegistrationPrevout,
+} from '../types/Masternode'
 import {Network} from '../types/Network'
 import {requireBasicOperatorKey} from './masternodeKeys'
 import {serviceAddressParts} from './providerTx'
@@ -117,5 +130,116 @@ export function requireSharedRegistrationDraft(draft: SharedRegistrationDraft, n
       if (seen.has(key)) throw new Error('The same funding outpoint appears twice')
       seen.add(key)
     }
+  }
+}
+
+export function sharedRegistrationOutpointKey({txid, vout}: SharedRegistrationOutpoint): string {
+  return `${txid.toLowerCase()}:${vout}`
+}
+
+function sharedRegistrationNetInfo(serviceAddress: string | null, network: Network): ExtNetInfo {
+  if (serviceAddress == null) return new ExtNetInfo()
+  const {ip, port} = serviceAddressParts(serviceAddress, network)
+  return new ExtNetInfo(EXT_NET_INFO_VERSION, new Map([
+    [NetInfoPurpose.CORE_P2P, [{type: NetInfoEntryType.Service, network: AddrV2Network.IPv4, address: ip, port}]],
+  ]))
+}
+
+export function sharedRegistrationTx(
+  draft: SharedRegistrationDraft,
+  prevouts: Map<string, SharedRegistrationPrevout>,
+  network: Network,
+): {tx: Transaction; plan: SharedRegistrationPlan} {
+  requireSharedRegistrationDraft(draft, network)
+
+  const inputs: Input[] = []
+  const values: SharedRegistrationPrevout[] = []
+  for (const member of draft.members) {
+    for (const outpoint of member.inputs) {
+      const prevout = prevouts.get(sharedRegistrationOutpointKey(outpoint))
+      if (prevout == null) throw new Error(`A funding input is not available: ${outpoint.txid}:${outpoint.vout}`)
+      inputs.push(new Input(outpoint.txid, outpoint.vout, new Script(), SEQUENCE_FINAL))
+      values.push(prevout)
+    }
+  }
+
+  const shareOfFee = draft.feeDuffs / BigInt(draft.members.length)
+  const outputs: Output[] = []
+  const members: SharedRegistrationMemberPlan[] = []
+  let valueIndex = 0
+  for (const [index, member] of draft.members.entries()) {
+    const first = valueIndex
+    valueIndex += member.inputs.length
+    const total = values.slice(first, valueIndex).reduce((sum, prevout) => sum + prevout.satoshis, 0n)
+    const change = total - member.amountDuffs - (index === draft.members.length - 1
+      ? draft.feeDuffs - shareOfFee * BigInt(draft.members.length - 1)
+      : shareOfFee)
+    if (change < 0n) throw new Error(`Member ${index + 1} cannot cover its share and fee share`)
+    const paid = change >= DUST_THRESHOLD_DUFFS
+    if (paid) outputs.push(new Output(change, sharedRegistrationScript(member.changeAddress, network)))
+    members.push({
+      index,
+      amountDuffs: member.amountDuffs,
+      feeDuffs: index === draft.members.length - 1 ? draft.feeDuffs - shareOfFee * BigInt(draft.members.length - 1) : shareOfFee,
+      changeDuffs: paid ? change : 0n,
+      inputIndexes: Array.from({length: member.inputs.length}, (_, offset) => first + offset),
+    })
+  }
+
+  outputs.push(new Output(MASTERNODE_COLLATERAL_DUFFS.Regular, Script.sharedCollateral()))
+  const collateralIndex = outputs.length - 1
+  const tx = new Transaction(inputs, outputs, 0, 3, TransactionType.TRANSACTION_PROVIDER_REGISTER)
+
+  const shares = draft.members.map(member => new CollateralShare(
+    member.amountDuffs,
+    sharedRegistrationScript(member.refundAddress, network),
+    member.rewardAddress == null ? new Script() : sharedRegistrationScript(member.rewardAddress, network),
+    bytesToHex(sdkUtils.addressToPublicKeyHash(member.ownerAddress)),
+  ))
+  tx.extraPayload = new ProRegTX(
+    3,
+    MASTERNODE_TYPE_CODE.Regular,
+    0,
+    new OutPoint('00'.repeat(32), collateralIndex),
+    undefined,
+    undefined,
+    '00'.repeat(20),
+    draft.operatorPublicKey,
+    bytesToHex(sdkUtils.addressToPublicKeyHash(draft.votingAddress)),
+    draft.operatorReward,
+    new Script(),
+    tx.providerInputsHash(),
+    undefined,
+    undefined,
+    undefined,
+    '',
+    {
+      netInfo: sharedRegistrationNetInfo(draft.serviceAddress, network),
+      payouts: [],
+      shares,
+      joinSigs: shares.map(() => '00'.repeat(65)),
+      earlyPeriodBlocks: draft.earlyPeriodBlocks,
+      earlyPenalty: draft.earlyPenaltyDuffs,
+    },
+  )
+
+  const inputTotal = values.reduce((sum, prevout) => sum + prevout.satoshis, 0n)
+  const outputTotal = tx.outputs.reduce((sum, output) => sum + output.satoshis, 0n)
+  const collateralScript = Script.sharedCollateral().hex()
+  return {
+    tx,
+    plan: {
+      txHex: tx.hex(),
+      consentHash: tx.consentHash(),
+      collateralIndex,
+      collateralDuffs: MASTERNODE_COLLATERAL_DUFFS.Regular,
+      actualFeeDuffs: inputTotal - outputTotal,
+      members,
+      outputs: tx.outputs.map(output => ({
+        address: output.getAddress(sdkUtils.networkValueToEnumValue(network)) ?? null,
+        amountDuffs: output.satoshis,
+        collateral: output.script.hex() === collateralScript,
+      } satisfies SharedRegistrationOutput)),
+    },
   }
 }

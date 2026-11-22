@@ -273,6 +273,31 @@ export interface SharedRegistrationDraft {
   feeDuffs: bigint
 }
 
+export interface SharedRegistrationPrevout {
+  satoshis: bigint
+  script: Script
+}
+
+export interface SharedRegistrationMemberPlan {
+  index: number
+  amountDuffs: bigint
+  feeDuffs: bigint
+  changeDuffs: bigint
+  inputIndexes: number[]
+}
+
+// What the coordinator gets back before anyone signs: the transaction, its
+// consent digest, and where each member's coins went.
+export interface SharedRegistrationPlan {
+  txHex: string
+  consentHash: string
+  collateralIndex: number
+  collateralDuffs: bigint
+  actualFeeDuffs: bigint
+  members: SharedRegistrationMemberPlan[]
+  outputs: SharedRegistrationOutput[]
+}
+
 // One share owner's consent, base64 compact signature as shared_combine expects.
 export interface SharedRegistrationSignature {
   shareIndex: number
