@@ -225,6 +225,7 @@ export function ownedMasternodes(
       votingKeyIndex: matches.voting.get(node.proTxHash) ?? null,
       operatorKeyIndex: matches.operator.get(node.proTxHash) ?? null,
       importedRoles: MASTERNODE_KEY_CHAINS.filter(role => imported.some(key => key.role === role && carriesKey(node, key))),
+      importedSigningRoles: MASTERNODE_KEY_CHAINS.filter(role => imported.some(key => key.role === role && key.hasPrivateKey && carriesKey(node, key))),
       shares: node.shares?.map(share => ({
         ...share,
         keyIndex: ownerIndexes.get(share.ownerAddress) ?? null,

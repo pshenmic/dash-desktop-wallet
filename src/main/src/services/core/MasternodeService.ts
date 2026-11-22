@@ -1,6 +1,5 @@
 import {bls, PrivateKey, Transaction, TransactionType, utils as sdkUtils} from 'dash-core-sdk'
 import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
-import {ProUpServTx} from 'dash-core-sdk/src/types/ExtraPayload/ProUpServTx.js'
 import {HDKey} from '@scure/bip32'
 import {AddressDAO} from '../../database/AddressDAO'
 import {WalletDAO} from '../../database/WalletDAO'
@@ -648,9 +647,9 @@ export class MasternodeService {
     const {coreFeeMultiplier} = this.preferences.general
     const feeForInputs = (inputsCount: number): bigint => {
       const fee = coreFeeDuffsFor(coreFeeMultiplier, inputsCount, 1, false, plan.payload.signedSize())
-      // A service update is small, so its byte-priced fee can fall below what
+      // A provider payload is small, so its byte-priced fee can fall below what
       // peers relay. Floor it, and let input selection fund the difference.
-      return plan.payload instanceof ProUpServTx && fee < MIN_RELAY_FEE_DUFFS ? MIN_RELAY_FEE_DUFFS : fee
+      return fee < MIN_RELAY_FEE_DUFFS ? MIN_RELAY_FEE_DUFFS : fee
     }
     return selectTransferInputs(
       grouped,

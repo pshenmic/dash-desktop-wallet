@@ -26,7 +26,7 @@ function node(proTxHash: string, fields: Partial<Masternode> = {}): Masternode {
     collateralAddress: null, serviceAddress: null, payeeAddress: null, ownerAddress: null, votingAddress: 'Xvoting',
     operatorPublicKey: 'ff'.repeat(48), platformNodeId: null, platformP2PPort: null, platformHttpPort: null,
     lastPaidBlock: null, lastPaidTime: null, registeredHeight: null, isShared: false, shares: [],
-    ownerKeyIndex: null, votingKeyIndex: 2, operatorKeyIndex: null, importedRoles: [], ...fields,
+    ownerKeyIndex: null, votingKeyIndex: 2, operatorKeyIndex: null, importedRoles: [], importedSigningRoles: [], ...fields,
   }
 }
 

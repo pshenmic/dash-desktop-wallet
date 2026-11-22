@@ -135,9 +135,9 @@ describe('ownedMasternodes', () => {
       {proTxHash: 'b', txid: 'bb', vout: 1, followed: false},
     ]
     const owned = [
-      {...node('a', {collateralTxid: null, collateralVout: null}), ownerKeyIndex: 0, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], shares: []},
-      {...node('b'), ownerKeyIndex: 0, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], shares: []},
-      {...node('c', {collateralTxid: null, collateralVout: null}), ownerKeyIndex: 1, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], shares: []},
+      {...node('a', {collateralTxid: null, collateralVout: null}), ownerKeyIndex: 0, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], importedSigningRoles: [], shares: []},
+      {...node('b'), ownerKeyIndex: 0, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], importedSigningRoles: [], shares: []},
+      {...node('c', {collateralTxid: null, collateralVout: null}), ownerKeyIndex: 1, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], importedSigningRoles: [], shares: []},
     ]
     expect(collateralsToStore(owned, stored, ['b'])).toEqual([
       {proTxHash: 'a', txid: 'aa', vout: 0, followed: true},
@@ -180,7 +180,8 @@ describe('ownedMasternodes', () => {
       {role: 'owner', publicKey: OPERATOR_0, hasPrivateKey: false},
       {role: 'operator', publicKey: OPERATOR_0, hasPrivateKey: false},
     ], [], new Map())
-    expect(owned.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['a', ['voting']], ['b', ['operator']]])
+    expect(owned.map(({proTxHash, importedRoles, importedSigningRoles}) => [proTxHash, importedRoles, importedSigningRoles]))
+      .toEqual([['a', ['voting'], ['voting']], ['b', ['operator'], []]])
   })
 
   it('marks every share our keys hold, even two under different keys', () => {
@@ -218,7 +219,7 @@ describe('ownedMasternodes', () => {
 
 describe('unusedKeyIndex', () => {
   const owned = (ownerKeyIndex: number | null, votingKeyIndex: number | null): Masternode =>
-    ({...node('aa'), ownerKeyIndex, votingKeyIndex, operatorKeyIndex: null, importedRoles: [], shares: []})
+    ({...node('aa'), ownerKeyIndex, votingKeyIndex, operatorKeyIndex: null, importedRoles: [], importedSigningRoles: [], shares: []})
 
   it('is the lowest index of the chain no node carries', () => {
     expect(unusedKeyIndex([owned(0, null), owned(2, 0)], 'owner')).toBe(1)
@@ -263,7 +264,7 @@ describe('requirePayout', () => {
 
 describe('ownerNode', () => {
   const owned = (proTxHash: string, ownerKeyIndex: number | null): Masternode =>
-    ({...node(proTxHash), ownerKeyIndex, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], shares: []})
+    ({...node(proTxHash), ownerKeyIndex, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], importedSigningRoles: [], shares: []})
 
   it('answers a node whose owner key the wallet derives, and refuses any other', () => {
     expect(ownerNode([owned('aa', 3)], 'aa').ownerKeyIndex).toBe(3)
@@ -282,7 +283,7 @@ describe('ownerNode', () => {
 
 describe('operatedNode', () => {
   const operated = (proTxHash: string, operatorKeyIndex: number | null): Masternode =>
-    ({...node(proTxHash), ownerKeyIndex: null, votingKeyIndex: null, operatorKeyIndex, importedRoles: [], shares: []})
+    ({...node(proTxHash), ownerKeyIndex: null, votingKeyIndex: null, operatorKeyIndex, importedRoles: [], importedSigningRoles: [], shares: []})
   const shared = (): Masternode => {
     const shares = [{ownerAddress: 'Xother1', amountDuffs: 60000000000n}, {ownerAddress: 'Xother2', amountDuffs: 40000000000n}]
     return {...operated('aa', 0), isShared: true, shares: shares.map(share => ({...share, keyIndex: null, imported: false}))}
@@ -301,7 +302,7 @@ describe('operatedNode', () => {
 
 describe('revocableNode', () => {
   const operated = (proTxHash: string, operatorKeyIndex: number): Masternode =>
-    ({...node(proTxHash), ownerKeyIndex: null, votingKeyIndex: null, operatorKeyIndex, importedRoles: [], shares: []})
+    ({...node(proTxHash), ownerKeyIndex: null, votingKeyIndex: null, operatorKeyIndex, importedRoles: [], importedSigningRoles: [], shares: []})
 
   it('answers a solo node', () => {
     expect(revocableNode([operated('aa', 0)], 'aa').operatorKeyIndex).toBe(0)
@@ -316,7 +317,7 @@ describe('revocableNode', () => {
 
 describe('existingMasternodes', () => {
   const owned = (proTxHash: string): Masternode =>
-    ({...node(proTxHash), ownerKeyIndex: 0, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], shares: []})
+    ({...node(proTxHash), ownerKeyIndex: 0, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], importedSigningRoles: [], shares: []})
   const firstSeen = new Map([['aa', 100], ['bb', 100]])
   const listed = (askedAt: number, ...proTxHashes: string[]) => ({proTxHashes: new Set(proTxHashes), askedAt, v24Active: false})
 

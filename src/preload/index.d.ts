@@ -168,6 +168,7 @@ interface MasternodeDTO {
   votingKeyIndex: number | null
   operatorKeyIndex: number | null
   importedRoles: MasternodeKeyRole[]
+  importedSigningRoles: MasternodeKeyRole[]
   platformNodeId: string | null
   platformP2PPort: number | null
   platformHttpPort: number | null

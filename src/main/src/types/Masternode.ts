@@ -185,12 +185,14 @@ export interface OwnedMasternodeShare extends MasternodeShare {
 }
 
 // A masternode this wallet holds a key or the collateral of. A null index is a
-// key the seed does not derive; importedRoles are the ones held by an imported key.
+// key the seed does not derive; importedRoles are the ones held by an imported key,
+// importedSigningRoles the subset whose secret is stored.
 export interface Masternode extends NetworkMasternode {
   ownerKeyIndex: number | null
   votingKeyIndex: number | null
   operatorKeyIndex: number | null
   importedRoles: MasternodeKeyChain[]
+  importedSigningRoles: MasternodeKeyChain[]
   shares: OwnedMasternodeShare[] | null
 }
 

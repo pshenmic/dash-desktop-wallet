@@ -120,7 +120,7 @@ describe('lastVoteTime', () => {
 describe('requireVotingNode', () => {
   const TXID = 'aa'.repeat(32)
   const owned = (fields: Partial<Masternode> = {}): Masternode =>
-    ({...node(TXID, 0, 'Xvoter'), ownerKeyIndex: null, votingKeyIndex: 2, operatorKeyIndex: null, importedRoles: [], shares: [], ...fields})
+    ({...node(TXID, 0, 'Xvoter'), ownerKeyIndex: null, votingKeyIndex: 2, operatorKeyIndex: null, importedRoles: [], importedSigningRoles: [], shares: [], ...fields})
 
   it('answers what signing the vote needs', () => {
     expect(requireVotingNode([owned()], TXID, [vote({time: 100})], 100 + 3600)).toEqual(
