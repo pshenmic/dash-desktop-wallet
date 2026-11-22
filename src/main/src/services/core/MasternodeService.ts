@@ -33,10 +33,13 @@ import {
   ProviderTxContext,
   ProviderTxPlan,
   RevocationReason,
+  SharedRegistrationDraft,
   SharedRegistrationFundingPreview,
   SharedRegistrationFundingResult,
   SharedRegistrationFundingSource,
+  SharedRegistrationPlan,
   SharedRegistrationPreview,
+  SharedRegistrationPrevout,
   SharedRegistrationConsentResult,
   SharedRegistrationBase,
   SharedRegistrationSignature,
@@ -54,6 +57,7 @@ import {
   existingMasternodes,
   masternodeFilterValues,
   matchMasternodeKeys,
+  nodeKeyValues,
   operatedNode,
   ownedCollaterals,
   ownedMasternodes,
@@ -85,6 +89,11 @@ import {
   sharedRegistrationShares,
   signSharedRegistrationConsent,
 } from '../../utils/sharedMasternodeSigning'
+import {
+  requireSharedRegistrationDraft,
+  sharedRegistrationOutpointKey,
+  sharedRegistrationTx,
+} from '../../utils/sharedMasternodeRegistration'
 import {EVONODE_STATUS_TIMEOUT_MS} from '../../constants/dapi'
 import {Network} from '../../types/Network'
 import {coreSDK} from '../../utils/coreSDK'
@@ -172,6 +181,23 @@ export class MasternodeService {
   async previewSharedRegistration(walletId: string, txHex: string): Promise<SharedRegistrationFundingPreview> {
     const base = await this.sharedRegistrationBase(walletId, txHex)
     return this.sharedRegistrationFundingPreview(base, await this.sharedRegistrationFunding(walletId, base.tx, base.network))
+  }
+
+  // Coordinator side: build the deterministic transaction every member signs.
+  // Outpoint values come from DAPI, never from the caller.
+  async buildSharedRegistration(walletId: string, draft: SharedRegistrationDraft): Promise<SharedRegistrationPlan> {
+    const wallet = await requireWallet(this.walletDAO, walletId)
+    requireSharedRegistrationDraft(draft, wallet.network)
+    const provider = this.providers.forWallet(walletId, wallet.network)
+    await provider.ensureReadyToList()
+    await this.requireFreeOperatorKey(draft.operatorPublicKey, provider)
+    const listed = await provider.getMasternodes('owner', draft.members.map(member => member.ownerAddress))
+    if (listed == null) throw new Error('The masternode list has not arrived yet')
+    const taken = draft.members.findIndex(member =>
+      listed.some(node => nodeKeyValues('owner', node).includes(member.ownerAddress)))
+    if (taken >= 0) throw new Error(`The owner key of member ${taken + 1} already owns a masternode`)
+    const prevouts = await this.sharedRegistrationPrevouts(wallet.network, draft)
+    return sharedRegistrationTx(draft, prevouts, wallet.network).plan
   }
 
   // Participant-side consent: sign the preparation's consent digest with every
@@ -394,6 +420,34 @@ export class MasternodeService {
     const indexes = new Map<string, number>()
     for (let index = 0; index <= ownerScanLimit(used); index++) indexes.set(deriver.derive(index).address, index)
     return indexes
+  }
+
+  private async sharedRegistrationPrevouts(
+    network: Network,
+    draft: SharedRegistrationDraft,
+  ): Promise<Map<string, SharedRegistrationPrevout>> {
+    const transactions = new Map<string, Transaction>()
+    const prevouts = new Map<string, SharedRegistrationPrevout>()
+    for (const member of draft.members) {
+      for (const input of member.inputs) {
+        const key = sharedRegistrationOutpointKey(input)
+        if (prevouts.has(key)) continue
+        let tx = transactions.get(input.txid)
+        if (tx == null) {
+          try {
+            const {transaction} = await coreSDK(network).getTransaction(input.txid)
+            tx = Transaction.fromBytes(transaction)
+          } catch {
+            throw new Error(`A funding input is not available: ${input.txid}:${input.vout}`)
+          }
+          transactions.set(input.txid, tx)
+        }
+        const output = tx.outputs[input.vout]
+        if (output == null) throw new Error(`A funding input is not available: ${input.txid}:${input.vout}`)
+        prevouts.set(key, {satoshis: output.satoshis, script: output.script})
+      }
+    }
+    return prevouts
   }
 
   private async encryptImportedSecret(walletId: string, privateKey: string, password?: string): Promise<string> {
