@@ -243,12 +243,25 @@ export interface SharedRegistrationFundingInputDto {
   amountDuffs: bigint
 }
 
+export interface SharedRegistrationOutputDto {
+  address: string | null
+  amountDuffs: bigint
+  collateral: boolean
+}
+
 export interface SharedRegistrationPreviewDto {
   consentHash: string
   shares: SharedRegistrationShareDto[]
   signableShares: number[]
-  fundingInputs: SharedRegistrationFundingInputDto[]
+  outputs: SharedRegistrationOutputDto[]
+  collateralDuffs: bigint
   warning: string | null
+}
+
+export interface SharedRegistrationFundingPreviewDto extends SharedRegistrationPreviewDto {
+  fundingInputs: SharedRegistrationFundingInputDto[]
+  fundingTotalDuffs: bigint
+  unresolvedInputs: number
 }
 
 export interface SharedRegistrationSignatureDto {
@@ -262,7 +275,7 @@ export interface SharedRegistrationConsentResultDto {
 }
 
 export interface SharedRegistrationFundingResultDto {
-  preview: SharedRegistrationPreviewDto
+  preview: SharedRegistrationFundingPreviewDto
   signedHex: string
   signedInputs: number[]
 }

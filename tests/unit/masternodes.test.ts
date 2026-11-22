@@ -191,7 +191,7 @@ describe('ownedMasternodes', () => {
       {ownerAddress: 'Xother', amountDuffs: 50000000000n},
     ]})
     const owned = ownedMasternodes([shared], {...none, owner: new Map([['a', 1]])}, [], [], new Map([['Xfirst', 1], ['Xsecond', 6]]))
-    expect(owned[0].shares!.map(({keyIndex}) => keyIndex)).toEqual([1, 6, null])
+    expect(owned[0].shares!.map(({keyIndex, canSign}) => [keyIndex, canSign])).toEqual([[1, true], [6, true], [null, false]])
   })
 
   it('owns a shared node by an imported share owner key, and marks that share', () => {
@@ -201,7 +201,19 @@ describe('ownedMasternodes', () => {
     ]})
     const owned = ownedMasternodes([shared], none, [{role: 'owner', publicKey: 'Ximported', hasPrivateKey: false}], [], new Map())
     expect(owned.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['a', ['owner']]])
-    expect(owned[0].shares!.map(({keyIndex, imported}) => [keyIndex, imported])).toEqual([[null, true], [null, false]])
+    expect(owned[0].shares!.map(({keyIndex, imported, canSign}) => [keyIndex, imported, canSign])).toEqual([[null, true, false], [null, false, false]])
+  })
+
+  it('lets a stored imported share owner key sign where a watch-only one cannot', () => {
+    const shared = node('a', {ownerAddress: null, isShared: true, shares: [
+      {ownerAddress: 'Xstored', amountDuffs: 30000000000n},
+      {ownerAddress: 'Xwatch', amountDuffs: 70000000000n},
+    ]})
+    const owned = ownedMasternodes([shared], none, [
+      {role: 'owner', publicKey: 'Xstored', hasPrivateKey: true},
+      {role: 'owner', publicKey: 'Xwatch', hasPrivateKey: false},
+    ], [], new Map())
+    expect(owned[0].shares!.map(({canSign}) => canSign)).toEqual([true, false])
   })
 
   it('names a stored collateral by the address the list gives that outpoint', () => {
@@ -274,8 +286,8 @@ describe('ownerNode', () => {
 
   it('refuses a shared node, whose updates need every share owner', () => {
     const shared = {...owned('aa', 3), isShared: true, shares: [
-      {ownerAddress: 'Xours', amountDuffs: 20000000000n, keyIndex: 3, imported: false},
-      {ownerAddress: 'Xother', amountDuffs: 80000000000n, keyIndex: null, imported: false},
+      {ownerAddress: 'Xours', amountDuffs: 20000000000n, keyIndex: 3, imported: false, canSign: true},
+      {ownerAddress: 'Xother', amountDuffs: 80000000000n, keyIndex: null, imported: false, canSign: false},
     ]}
     expect(() => ownerNode([shared], 'aa')).toThrow('every share owner')
   })
@@ -286,7 +298,7 @@ describe('operatedNode', () => {
     ({...node(proTxHash), ownerKeyIndex: null, votingKeyIndex: null, operatorKeyIndex, importedRoles: [], importedSigningRoles: [], shares: []})
   const shared = (): Masternode => {
     const shares = [{ownerAddress: 'Xother1', amountDuffs: 60000000000n}, {ownerAddress: 'Xother2', amountDuffs: 40000000000n}]
-    return {...operated('aa', 0), isShared: true, shares: shares.map(share => ({...share, keyIndex: null, imported: false}))}
+    return {...operated('aa', 0), isShared: true, shares: shares.map(share => ({...share, keyIndex: null, imported: false, canSign: false}))}
   }
 
   it('answers the node whether its operator key is derived or imported', () => {
@@ -310,7 +322,7 @@ describe('revocableNode', () => {
 
   it('refuses a shared node, which every share owner would have to restore', () => {
     const shares = [{ownerAddress: 'Xother1', amountDuffs: 60000000000n}]
-    const shared = {...operated('aa', 0), isShared: true, shares: shares.map(share => ({...share, keyIndex: null, imported: false}))}
+    const shared = {...operated('aa', 0), isShared: true, shares: shares.map(share => ({...share, keyIndex: null, imported: false, canSign: false}))}
     expect(() => revocableNode([shared], 'aa')).toThrow('every share owner')
   })
 })

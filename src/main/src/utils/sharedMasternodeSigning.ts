@@ -1,4 +1,4 @@
-import {PrivateKey, recoverHashSigner, signHash, Transaction, utils as sdkUtils} from 'dash-core-sdk'
+import {PrivateKey, recoverHashSigner, Script, signHash, Transaction, utils as sdkUtils} from 'dash-core-sdk'
 import type {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
 import {hexToBytes} from '@noble/hashes/utils.js'
 import {SharedRegistrationShare} from '../types/Masternode'
@@ -21,6 +21,20 @@ export function sharedRegistrationShares(tx: Transaction, network: Network): Sha
     refundAddress: share.scriptRefund.getAddress(sdkNetwork) ?? null,
     rewardAddress: share.scriptReward.getAddress(sdkNetwork) ?? null,
   }))
+}
+
+// The collateral a shared registration creates, which the share table must add
+// up to: a participant who consented to a table that disagrees with it would be
+// signing a registration Core rejects.
+export function sharedRegistrationCollateralDuffs(tx: Transaction, shares: SharedRegistrationShare[]): bigint {
+  const template = Script.sharedCollateral().hex()
+  const collateral = tx.outputs.find(output => output.script.hex() === template)
+  if (collateral == null) throw new Error('A shared registration pays no collateral output')
+  const sum = shares.reduce((total, share) => total + share.amountDuffs, 0n)
+  if (sum !== collateral.satoshis) {
+    throw new Error(`The share table adds up to ${sum} duffs, not the collateral's ${collateral.satoshis}`)
+  }
+  return collateral.satoshis
 }
 
 // Base64 compact signature, the form shared_combine accepts.

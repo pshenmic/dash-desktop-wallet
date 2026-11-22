@@ -167,10 +167,12 @@ export interface MasternodeShare {
 }
 
 // A share with the wallet's marks: keyIndex is the owner-chain index holding it,
-// null when the seed does not derive it; imported is an imported owner key.
+// null when the seed does not derive it; imported is an imported owner key, and
+// canSign says its secret is stored, so it can consent and fund.
 export interface OwnedMasternodeShare extends MasternodeShare {
   keyIndex: number | null
   imported: boolean
+  canSign: boolean
 }
 
 // A masternode this wallet holds a key or the collateral of. A null index is a
@@ -216,13 +218,30 @@ export type SharedRegistrationFundingSource =
   | {kind: 'wallet'; index: number; address: string; amountDuffs: bigint; script: Script; derivationPath: string}
   | {kind: 'imported'; index: number; address: string; amountDuffs: bigint; script: Script; role: 'owner' | 'voting'; publicKey: string}
 
-// What the wallet can contribute to a shared registration before it signs.
+// One output of a prepared registration, so a participant sees where the coins
+// go: the collateral output has no address and is flagged.
+export interface SharedRegistrationOutput {
+  address: string | null
+  amountDuffs: bigint
+  collateral: boolean
+}
+
+// What any shared registration step shows before signing.
 export interface SharedRegistrationPreview {
   consentHash: string
   shares: SharedRegistrationShare[]
   signableShares: number[]
-  fundingInputs: SharedRegistrationFundingInput[]
+  outputs: SharedRegistrationOutput[]
+  collateralDuffs: bigint
   warning: string | null
+}
+
+// The preview plus this wallet's funding side: the inputs it can sign and the
+// ones it could not match to a coin or key it holds.
+export interface SharedRegistrationFundingPreview extends SharedRegistrationPreview {
+  fundingInputs: SharedRegistrationFundingInput[]
+  fundingTotalDuffs: bigint
+  unresolvedInputs: number
 }
 
 // One share owner's consent, base64 compact signature as shared_combine expects.
@@ -237,7 +256,7 @@ export interface SharedRegistrationConsentResult {
 }
 
 export interface SharedRegistrationFundingResult {
-  preview: SharedRegistrationPreview
+  preview: SharedRegistrationFundingPreview
   signedHex: string
   signedInputs: number[]
 }

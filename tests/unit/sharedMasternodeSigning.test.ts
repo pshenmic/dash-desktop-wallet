@@ -10,11 +10,16 @@ import {
   TransactionType,
 } from 'dash-core-sdk'
 import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
-import {sharedRegistrationConsentSigner, sharedRegistrationShares, signSharedRegistrationConsent} from '../../src/main/src/utils/sharedMasternodeSigning'
+import {
+  sharedRegistrationCollateralDuffs,
+  sharedRegistrationConsentSigner,
+  sharedRegistrationShares,
+  signSharedRegistrationConsent,
+} from '../../src/main/src/utils/sharedMasternodeSigning'
 
 const OWNER = PrivateKey.fromBytes(new Uint8Array(32).fill(7), 'mainnet')
 
-function sharedRegistration(): Transaction {
+function sharedRegistration(outputs?: Output[]): Transaction {
   const p2pkh = (hash: string) => Script.fromHex(`76a914${hash}88ac`)
   const shares = [
     new CollateralShare(600_000_00000n, p2pkh('f5e39ebf4b0ede3685a8de904d71bea7c71a5f9d'), p2pkh('868a3bf8d8cf221118b526b9c6b114dc3b18e4d7'), OWNER.getPublicKey().getPublicKeyHash()),
@@ -25,7 +30,7 @@ function sharedRegistration(): Transaction {
     '40660b7a7c0ef6cd15a5cb8912cc86326661e19b', 500, new Script(), '00'.repeat(32),
     undefined, undefined, undefined, '',
     {netInfo: new ExtNetInfo(), payouts: [], shares, joinSigs: shares.map(() => '00'.repeat(65)), earlyPeriodBlocks: 17280, earlyPenalty: 500_000_000n})
-  return new Transaction([], [new Output(1_000_000_00000n, Script.sharedCollateral())], 0, 3,
+  return new Transaction([], outputs ?? [new Output(1_000_000_00000n, Script.sharedCollateral())], 0, 3,
     TransactionType.TRANSACTION_PROVIDER_REGISTER, payload)
 }
 
@@ -45,5 +50,24 @@ describe('shared registration consent', () => {
     expect(shares.map(({index, amountDuffs}) => [index, amountDuffs])).toEqual([[0, 600_000_00000n], [1, 400_000_00000n]])
     expect(shares[0].ownerAddress).toBe(OWNER.getAddress())
     expect(shares[1].rewardAddress).toBeNull()
+  })
+})
+
+describe('shared registration collateral', () => {
+  it('answers the collateral output when the share table adds up to it', () => {
+    const tx = sharedRegistration()
+    expect(sharedRegistrationCollateralDuffs(tx, sharedRegistrationShares(tx, 'mainnet'))).toBe(1_000_000_00000n)
+  })
+
+  it('refuses a share table that does not add up to the collateral', () => {
+    const tx = sharedRegistration([new Output(900_000_00000n, Script.sharedCollateral())])
+    expect(() => sharedRegistrationCollateralDuffs(tx, sharedRegistrationShares(tx, 'mainnet')))
+      .toThrow('adds up to 100000000000 duffs, not the collateral\'s 90000000000')
+  })
+
+  it('refuses a shared registration that pays no collateral', () => {
+    const tx = sharedRegistration([new Output(1_000_000_00000n, Script.fromHex(`76a914${'11'.repeat(20)}88ac`))])
+    expect(() => sharedRegistrationCollateralDuffs(tx, sharedRegistrationShares(tx, 'mainnet')))
+      .toThrow('pays no collateral output')
   })
 })

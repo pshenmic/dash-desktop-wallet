@@ -288,8 +288,8 @@ describe('MasternodeService.discover', () => {
     const [found] = await owned()
     expect(found).toMatchObject({proTxHash: 's', ownerKeyIndex: 2, isShared: true})
     expect(found.shares).toEqual([
-      {ownerAddress: shareOwner, amountDuffs: 20000000000n, keyIndex: 2, imported: false},
-      {ownerAddress: 'Xother', amountDuffs: 80000000000n, keyIndex: null, imported: false},
+      {ownerAddress: shareOwner, amountDuffs: 20000000000n, keyIndex: 2, imported: false, canSign: true},
+      {ownerAddress: 'Xother', amountDuffs: 80000000000n, keyIndex: null, imported: false, canSign: false},
     ])
     expect(await storedCollaterals()).toEqual(['s:ss:3'])
   })

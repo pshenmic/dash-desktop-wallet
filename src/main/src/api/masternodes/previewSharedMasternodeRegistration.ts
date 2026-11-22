@@ -1,6 +1,6 @@
 import {IpcMainInvokeEvent} from 'electron/utility'
 import {MasternodeService} from '../../services/core/MasternodeService'
-import {SharedRegistrationPreview} from '../../types/Masternode'
+import {SharedRegistrationFundingPreview} from '../../types/Masternode'
 
 export class PreviewSharedMasternodeRegistrationHandler {
   private masternodes: MasternodeService
@@ -9,7 +9,7 @@ export class PreviewSharedMasternodeRegistrationHandler {
     this.masternodes = masternodes
   }
 
-  handle = async (_event: IpcMainInvokeEvent, walletId: string, txHex: string): Promise<SharedRegistrationPreview> => {
+  handle = async (_event: IpcMainInvokeEvent, walletId: string, txHex: string): Promise<SharedRegistrationFundingPreview> => {
     return this.masternodes.previewSharedRegistration(walletId, txHex)
   }
 }

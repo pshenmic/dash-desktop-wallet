@@ -12,7 +12,9 @@ import {
   ED25519_SEED_KEY,
   HD_VERSIONS,
   MASTERNODE_FEATURE,
+  MASTERNODE_KEY_MAX_INDEX,
   MASTERNODE_KEY_ROLE,
+  MASTERNODE_KEY_WINDOW,
   MASTERNODE_PLATFORM_KEY_BATCH,
 } from '../constants/addresses'
 import {AddressDeriver} from '../types/AddressWindow'
@@ -84,6 +86,14 @@ export function masternodeKeyDeriver(keys: MasternodeKeys, network: Network, cha
       derivationPath: `${accountPath}/${index}`,
     }),
   }
+}
+
+// The last owner-chain index a consent scan derives. Discovery stops at one gap
+// past the deepest key it matched, so scanning the same reach finds every share
+// owner key it could have matched.
+export function ownerScanLimit(usedIndexes: number[]): number {
+  const highest = usedIndexes.length === 0 ? -1 : Math.max(...usedIndexes)
+  return Math.min(MASTERNODE_KEY_MAX_INDEX, Math.max(highest + MASTERNODE_KEY_WINDOW.gapLimit, MASTERNODE_KEY_WINDOW.gapLimit - 1))
 }
 
 // An imported provider key in the form the list is searched by: an owner or

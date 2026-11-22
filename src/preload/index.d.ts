@@ -78,6 +78,7 @@ interface MasternodeShareDTO {
 interface OwnedMasternodeShareDTO extends MasternodeShareDTO {
   keyIndex: number | null
   imported: boolean
+  canSign: boolean
 }
 
 interface MasternodeCollateralDTO {
@@ -108,12 +109,25 @@ interface SharedRegistrationFundingInputDTO {
   amountDuffs: bigint
 }
 
+interface SharedRegistrationOutputDTO {
+  address: string | null
+  amountDuffs: bigint
+  collateral: boolean
+}
+
 interface SharedRegistrationPreviewDTO {
   consentHash: string
   shares: SharedRegistrationShareDTO[]
   signableShares: number[]
-  fundingInputs: SharedRegistrationFundingInputDTO[]
+  outputs: SharedRegistrationOutputDTO[]
+  collateralDuffs: bigint
   warning: string | null
+}
+
+interface SharedRegistrationFundingPreviewDTO extends SharedRegistrationPreviewDTO {
+  fundingInputs: SharedRegistrationFundingInputDTO[]
+  fundingTotalDuffs: bigint
+  unresolvedInputs: number
 }
 
 interface SharedRegistrationSignatureDTO {
@@ -127,7 +141,7 @@ interface SharedRegistrationConsentResultDTO {
 }
 
 interface SharedRegistrationFundingResultDTO {
-  preview: SharedRegistrationPreviewDTO
+  preview: SharedRegistrationFundingPreviewDTO
   signedHex: string
   signedInputs: number[]
 }
@@ -420,7 +434,7 @@ declare global {
       removeMasternodeKey: (walletId: string, key: ImportedMasternodeKeyDTO) => Promise<void>
       signAndBroadcastMasternodeRegistration: (walletId: string, unsignedHex: string, password: string) => Promise<MasternodeRegistrationResultDTO>
       previewMasternodeRegistration: (walletId: string, registration: MasternodeRegistrationDTO) => Promise<MasternodeRegistrationPreviewDTO>
-      previewSharedMasternodeRegistration: (walletId: string, txHex: string) => Promise<SharedRegistrationPreviewDTO>
+      previewSharedMasternodeRegistration: (walletId: string, txHex: string) => Promise<SharedRegistrationFundingPreviewDTO>
       signSharedMasternodeRegistrationConsent: (walletId: string, txHex: string, password: string) => Promise<SharedRegistrationConsentResultDTO>
       signSharedMasternodeRegistrationFunding: (walletId: string, txHex: string, password: string) => Promise<SharedRegistrationFundingResultDTO>
       updateMasternodeRegistrar: (walletId: string, proTxHash: string, update: MasternodeRegistrarUpdateDTO, password: string) => Promise<MasternodeUpdateResultDTO>

@@ -226,11 +226,11 @@ export function ownedMasternodes(
       operatorKeyIndex: matches.operator.get(node.proTxHash) ?? null,
       importedRoles: MASTERNODE_KEY_CHAINS.filter(role => imported.some(key => key.role === role && carriesKey(node, key))),
       importedSigningRoles: MASTERNODE_KEY_CHAINS.filter(role => imported.some(key => key.role === role && key.hasPrivateKey && carriesKey(node, key))),
-      shares: node.shares?.map(share => ({
-        ...share,
-        keyIndex: ownerIndexes.get(share.ownerAddress) ?? null,
-        imported: imported.some(key => key.role === 'owner' && key.publicKey === share.ownerAddress),
-      })) ?? null,
+      shares: node.shares?.map(share => {
+        const keyIndex = ownerIndexes.get(share.ownerAddress) ?? null
+        const importedKey = imported.find(key => key.role === 'owner' && key.publicKey === share.ownerAddress)
+        return {...share, keyIndex, imported: importedKey != null, canSign: keyIndex != null || importedKey?.hasPrivateKey === true}
+      }) ?? null,
     }))
     .filter(node => outpoints.has(`${node.collateralTxid}:${node.collateralVout}`)
       || node.importedRoles.length > 0
