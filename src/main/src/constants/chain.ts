@@ -10,6 +10,10 @@ export const DUFFS_PER_DASH = 100_000_000n
 export const DUST_THRESHOLD_DUFFS = 546n
 
 export const MASTERNODE_COLLATERAL_DUFFS: Record<MasternodeType, bigint> = {Regular: 1_000n * DUFFS_PER_DASH, Evo: 4_000n * DUFFS_PER_DASH}
+export const SHARED_REGISTRATION_MIN_SHARES = 2
+export const SHARED_REGISTRATION_MAX_SHARES = 8
+export const SHARED_REGISTRATION_MIN_SHARE_DUFFS = 100n * DUFFS_PER_DASH
+export const SHARED_REGISTRATION_MAX_EARLY_PERIOD_BLOCKS = 420_480
 // nType of a ProTx.
 export const MASTERNODE_TYPE_CODE: Record<MasternodeType, number> = {Regular: 0, Evo: 1}
 // Core's shared_sign reports this when a registration has no early-exit cost.

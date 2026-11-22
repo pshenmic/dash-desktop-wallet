@@ -244,6 +244,35 @@ export interface SharedRegistrationFundingPreview extends SharedRegistrationPrev
   unresolvedInputs: number
 }
 
+export interface SharedRegistrationOutpoint {
+  txid: string
+  vout: number
+}
+
+// One member's contribution as the coordinator knows it: their share terms, their
+// change destination and the coins they will sign.
+export interface SharedRegistrationMemberDraft {
+  amountDuffs: bigint
+  ownerAddress: string
+  refundAddress: string
+  rewardAddress: string | null
+  changeAddress: string
+  inputs: SharedRegistrationOutpoint[]
+}
+
+// What the coordinator supplies to build a registration. Every member pays its
+// own share and fee share.
+export interface SharedRegistrationDraft {
+  members: SharedRegistrationMemberDraft[]
+  serviceAddress: string | null
+  operatorPublicKey: string
+  votingAddress: string
+  operatorReward: number
+  earlyPeriodBlocks: number
+  earlyPenaltyDuffs: bigint
+  feeDuffs: bigint
+}
+
 // One share owner's consent, base64 compact signature as shared_combine expects.
 export interface SharedRegistrationSignature {
   shareIndex: number
