@@ -14,6 +14,13 @@ export interface MasternodeIdentity {
 
 export type MasternodeIdentityRow = Pick<MasternodeIdentity, 'proTxHash' | 'role' | 'identifier'>
 
+export interface MasternodeIdentityTableRow {
+  wallet_id: string
+  pro_tx_hash: string
+  role: MasternodeIdentityRole
+  identifier: string
+}
+
 export interface MasternodeIdentityInfo {
   proTxHash: string
   role: MasternodeIdentityRole

@@ -31,7 +31,7 @@ import {harness, Harness, PASSWORD, VALID_SEEDPHRASE} from './harness'
 const FUNDING_TXID = 'aa'.repeat(32)
 
 function sharedRegistration(owner: PrivateKey, other: PrivateKey): Transaction {
-  const p2pkh = (hash: string) => Script.fromHex(`76a914${hash}88ac`)
+  const p2pkh = (hash: string): Script => Script.fromHex(`76a914${hash}88ac`)
   const shares = [
     new CollateralShare(60_000_000_000n, p2pkh('f5e39ebf4b0ede3685a8de904d71bea7c71a5f9d'), p2pkh('868a3bf8d8cf221118b526b9c6b114dc3b18e4d7'), owner.getPublicKey().getPublicKeyHash()),
     new CollateralShare(40_000_000_000n, p2pkh('92cc55887af36a89aa15f3b4b9b10511d2fe557d'), new Script(), other.getPublicKey().getPublicKeyHash()),
@@ -123,5 +123,17 @@ describe('shared registration participant signing', () => {
     expected.inputs[0].scriptSig = script
     expected.sign([funder])
     expect(Transaction.fromHex(funded.signedHex).inputs[0].scriptSig.hex()).toBe(expected.inputs[0].scriptSig.hex())
+  })
+
+  it('refuses to sign a funding input this wallet has locked', async () => {
+    const owner = PrivateKey.fromBytes(new Uint8Array(32).fill(7), 'mainnet')
+    const other = PrivateKey.fromBytes(new Uint8Array(32).fill(8), 'mainnet')
+    const [{address}] = (await wired.addressDAO.getAddressesByWalletId(walletId)).receiving
+    const script = Output.createP2PKH(100_000_000_000n, address).script
+    utxos = [{address, satoshis: 100_000_000_000n, script, txId: FUNDING_TXID, vOut: 0, height: 1, timestamp: null, confirmations: 1, isLocked: true}]
+    const tx = sharedRegistration(owner, other)
+
+    await expect(masternodes.previewSharedRegistration(walletId, tx.hex())).rejects.toThrow('locked')
+    await expect(masternodes.signSharedRegistrationFunding(walletId, tx.hex(), PASSWORD)).rejects.toThrow('locked')
   })
 })

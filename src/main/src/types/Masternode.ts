@@ -1,4 +1,4 @@
-import type {Script} from 'dash-core-sdk'
+import type {Script, Transaction} from 'dash-core-sdk'
 import type {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
 import type {WalletProvider} from '../providers/WalletProvider'
 import type {ProviderPayload, ProviderTxSigner} from './CoreTransaction'
@@ -123,18 +123,7 @@ export interface ParsedMasternodeRegistration extends MasternodeRegistration {
   operatorPublicKey: string
 }
 
-export interface MasternodeRegistrationPreview {
-  type: MasternodeType
-  collateral: {txid: string; vout: number}
-  ownerAddress: string
-  votingAddress: string
-  operatorPublicKey: string
-  serviceAddress: string | null
-  payoutAddress: string
-  operatorReward: number
-  platformNodeId: string | null
-  platformP2PPort: number | null
-  platformHttpPort: number | null
+export interface MasternodeRegistrationPreview extends ParsedMasternodeRegistration {
   ownerKeyIndex: number | null
   votingKeyIndex: number | null
   operatorKeyIndex: number | null
@@ -251,6 +240,19 @@ export interface SharedRegistrationFundingResult {
   preview: SharedRegistrationPreview
   signedHex: string
   signedInputs: number[]
+}
+
+// A shared registration read back before either side signs: its shares, the keys
+// this wallet holds for them, and which of those keys have a stored secret.
+export interface SharedRegistrationBase {
+  tx: Transaction
+  network: Network
+  shares: SharedRegistrationShare[]
+  keys: MasternodeKeys | null
+  imported: ImportedMasternodeKey[]
+  ownerIndexes: Map<string, number>
+  importedOwners: Set<string>
+  signableShares: number[]
 }
 
 // What outlives the list: the coin a send must not spend, and whether the p2p

@@ -5,7 +5,7 @@ import {WalletProviderFactory} from '../../providers/WalletProviderFactory'
 import {HD_VERSIONS} from '../../constants/addresses'
 import {VOTE_OUTCOME_CODE} from '../../constants/chain'
 import {Proposal, ProposalTally, VoteOutcome, VoteResult} from '../../types/Governance'
-import {requireVoteRequest, requireVotingNode} from '../../utils/governance'
+import {requireVoteRequest, requireVotingNode, signableImportedVotingKeys} from '../../utils/governance'
 import {masternodeAccountPath} from '../../utils/masternodeKeys'
 import {isHash} from '../../utils/providerTx'
 import {decryptImportedKey} from '../../utils/importedKeyEncryption'
@@ -63,9 +63,7 @@ export class GovernanceService {
     const owned = await this.masternodeService.getMasternodes(walletId)
     if (owned == null) throw new Error('The masternode list has not arrived yet')
     const time = Math.floor(Date.now() / 1000)
-    const signableImported = new Set(imported
-      .filter(({role, hasPrivateKey}) => role === 'voting' && hasPrivateKey)
-      .map(({publicKey}) => publicKey))
+    const signableImported = signableImportedVotingKeys(imported)
     const nodes = proTxHashes.map(proTxHash => requireVotingNode(owned, proTxHash, votes, time, signableImported))
 
     // Read before the seed is unlocked, so no database work happens while it is held.

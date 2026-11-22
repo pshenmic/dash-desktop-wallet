@@ -95,16 +95,7 @@ export class CoreTransactionService {
 
   private async privateKeys(inputs: Array<Pick<TransferInput, 'derivationPath' | 'address'>>, seed: Uint8Array, network: Network): Promise<PrivateKey[]> {
     const hdKey = this.keyPair.seedToHdKey(seed, network)
-
-    const privateKeys: PrivateKey[] = []
-    for (const input of inputs) {
-      const derived = derivePath256(hdKey, input.derivationPath)
-      if (!derived.privateKey) {
-        throw new Error(`Failed to derive private key for ${input.address}`)
-      }
-      privateKeys.push(PrivateKey.fromBytes(derived.privateKey as Uint8Array, network, true))
-    }
-    return privateKeys
+    return inputs.map(input => this.derivedKey(input.derivationPath, input.address, hdKey, network))
   }
 
   buildAssetLock(params: BuildAssetLockParams): SDKTransaction {

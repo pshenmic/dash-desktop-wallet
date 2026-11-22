@@ -73,7 +73,7 @@ export class MasternodeKeyDAO {
   }
 
   // A null secret leaves an existing one alone: an owner or operator re-import
-  // must not erase a voting secret stored under the same outpoint.
+  // must not erase a voting secret stored under the same role and public key.
   saveImportedKey = async (
     walletId: string,
     {role, publicKey}: Pick<ImportedMasternodeKey, 'role' | 'publicKey'>,

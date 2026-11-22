@@ -7,7 +7,7 @@ import {MasternodeService} from '../core/MasternodeService'
 import {ContestedResource, ContestedResourceVoteChoice, ContestedResourceVoteRequest} from '../../types/Governance'
 import {decryptImportedKey} from '../../utils/importedKeyEncryption'
 import {Logger} from '../../utils/logger'
-import {votingKeyOf} from '../../utils/governance'
+import {signableImportedVotingKeys, votingKeyOf} from '../../utils/governance'
 import {masternodeAccountPath} from '../../utils/masternodeKeys'
 import {requireProTxHash} from '../../utils/providerTx'
 import {requireWallet} from '../../utils/requireWallet'
@@ -55,9 +55,7 @@ export class ContestedResourceService {
     ])
     if (owned == null) throw new Error('The masternode list has not arrived yet')
 
-    const signableImported = new Set(imported
-      .filter(({role, hasPrivateKey}) => role === 'voting' && hasPrivateKey)
-      .map(({publicKey}) => publicKey))
+    const signableImported = signableImportedVotingKeys(imported)
     const {node, key} = votingKeyOf(owned, proTxHash, signableImported)
     if (node.status === POSE_BANNED_STATUS) throw new Error(`Masternode ${proTxHash} is PoSe-banned`)
     const secret = key.votingKeyIndex == null

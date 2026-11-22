@@ -8,7 +8,7 @@ import {MasternodeIdentityDAO} from '../../database/MasternodeIdentityDAO'
 import {WalletDAO} from '../../database/WalletDAO'
 import {Username, UsernameSearchResult} from '../../types/Username'
 import {DashPayContact} from '../../types/DashPay'
-import {Identity, IdentityInfo} from '../../types/Identity'
+import {Identity, IdentityInfo, PlatformIdentityInfo} from '../../types/Identity'
 import {MasternodeIdentityInfo} from '../../types/MasternodeIdentity'
 import {IdentityKeysUpdate, IdentityPrivateKey} from '../../types/IdentityKeys'
 import {Network} from '../../types/Network'
@@ -92,7 +92,7 @@ export class IdentityService {
     })
   }
 
-  private async platformIdentityInfos(network: Network, identifiers: string[]) {
+  private async platformIdentityInfos(network: Network, identifiers: string[]): Promise<Map<string, PlatformIdentityInfo>> {
     const {infos} = await this.platform.request('identityInfos', network, {identifiers, skipDPNS: false})
     return new Map(infos.map(info => [info.identifier, info]))
   }

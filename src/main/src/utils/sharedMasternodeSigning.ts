@@ -6,7 +6,7 @@ import {Network} from '../types/Network'
 
 // The digest is displayed byte-reversed like every Dash hash; the signer takes
 // the 32 bytes in internal order.
-export function sharedRegistrationConsentDigest(tx: Transaction): Uint8Array {
+function sharedRegistrationConsentDigest(tx: Transaction): Uint8Array {
   return hexToBytes(tx.consentHash()).toReversed()
 }
 

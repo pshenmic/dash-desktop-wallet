@@ -10,7 +10,7 @@ import {
 } from '../constants/chain'
 import {DashscanProposal} from '../types/Dashscan'
 import {GovernanceVote, Proposal, ProposalTally, VoteOutcome, VotingKeyNode, VotingNode} from '../types/Governance'
-import {Masternode, MasternodeType, NetworkMasternode} from '../types/Masternode'
+import {ImportedMasternodeKey, Masternode, MasternodeType, NetworkMasternode} from '../types/Masternode'
 import {Network} from '../types/Network'
 import {isHash, requireProTxHash} from './providerTx'
 
@@ -98,6 +98,13 @@ export function lastVoteTime(votes: GovernanceVote[], {collateralTxid, collatera
   const own = votes.filter(vote => vote.signal === VoteSignal.FUNDING && vote.voter === votingAddress
     && vote.collateralTxid === collateralTxid && vote.collateralVout === collateralVout)
   return own.length === 0 ? null : Math.max(...own.map(({time}) => time))
+}
+
+// The imported voting keys whose secret is stored, which are the ones that can sign.
+export function signableImportedVotingKeys(imported: ImportedMasternodeKey[]): Set<string> {
+  return new Set(imported
+    .filter(({role, hasPrivateKey}) => role === 'voting' && hasPrivateKey)
+    .map(({publicKey}) => publicKey))
 }
 
 // The voting key a node signs with, derived or imported with its secret stored.
