@@ -45,6 +45,7 @@ import {
   SharedRegistrationPlan,
   SharedRegistrationPreview,
   SharedRegistrationPrevout,
+  SharedRegistrationShare,
   SharedRegistrationConsentResult,
   SharedRegistrationBase,
   SharedRegistrationSignature,
@@ -208,18 +209,14 @@ export class MasternodeService {
     return sharedRegistrationTx(draft, prevouts, wallet.network).plan
   }
 
-  // Puts every share owner's consent into the payload, in share order. The
-  // consent digest excludes joinSigs, so the transaction's bytes can change here
-  // without invalidating what the members signed.
+  // The consent digest excludes joinSigs, so the bytes may change here without
+  // invalidating what the members signed.
   async combineSharedRegistration(
     walletId: string,
     txHex: string,
     signatures: SharedRegistrationSignature[],
   ): Promise<SharedRegistrationJoined> {
-    const wallet = await requireWallet(this.walletDAO, walletId)
-    const tx = Transaction.fromHex(txHex)
-    const shares = sharedRegistrationShares(tx, wallet.network)
-    sharedRegistrationCollateralDuffs(tx, shares)
+    const {tx, shares, network} = await this.parseSharedRegistration(walletId, txHex)
 
     const byShare = new Map<number, string>()
     for (const {shareIndex, signature} of signatures) {
@@ -236,7 +233,7 @@ export class MasternodeService {
     const joinSigs = shares.map((share, index) => {
       const signature = byShare.get(index)
       if (signature == null) throw new Error(`Missing consent for share ${index}`)
-      const recovered = sharedRegistrationConsentSigner(tx, signature, wallet.network)
+      const recovered = sharedRegistrationConsentSigner(tx, signature, network)
       if (recovered !== share.ownerAddress) {
         throw new Error(`Consent for share ${index} recovers to ${recovered}, not ${share.ownerAddress}`)
       }
@@ -247,19 +244,15 @@ export class MasternodeService {
     return {txHex: tx.hex(), consentHash: tx.consentHash()}
   }
 
-  // Merges the members' funding signatures into the joined transaction. A
-  // contribution must be the same transaction body, so one member cannot swap an
-  // output while signing.
+  // A contribution must be the same transaction body, so one member cannot swap
+  // an output while signing.
   async assembleSharedRegistration(
     walletId: string,
     txHex: string,
     contributions: SharedRegistrationContribution[],
   ): Promise<SharedRegistrationFinal> {
-    const wallet = await requireWallet(this.walletDAO, walletId)
-    const joined = Transaction.fromHex(txHex)
-    const shares = sharedRegistrationShares(joined, wallet.network)
-    sharedRegistrationCollateralDuffs(joined, shares)
-    requireSharedRegistrationConsents(joined, shares, wallet.network)
+    const {tx: joined, shares, network} = await this.parseSharedRegistration(walletId, txHex)
+    requireSharedRegistrationConsents(joined, shares, network)
 
     const body = sharedRegistrationWithoutScriptSigs(txHex)
     for (const contribution of contributions) {
@@ -279,26 +272,15 @@ export class MasternodeService {
       }
     }
 
-    const unsigned = joined.inputs.findIndex(input => input.scriptSig.hex() === '')
-    if (unsigned >= 0) throw new Error(`The registration is missing a funding signature for input ${unsigned}`)
-    const prevouts = await this.sharedRegistrationPrevouts(wallet.network,
-      joined.inputs.map(input => ({txid: input.txId, vout: input.vOut})))
-    verifySharedRegistrationFunding(joined, prevouts)
+    await this.requireFundedSharedRegistration(joined, network)
     log.info(`wallet ${walletId}: shared registration assembled ${joined.inputs.length} input(s)`)
     return {txHex: joined.hex(), proTxHash: joined.hash()}
   }
 
   async broadcastSharedRegistration(walletId: string, txHex: string): Promise<SharedRegistrationBroadcastResult> {
-    const wallet = await requireWallet(this.walletDAO, walletId)
-    const tx = Transaction.fromHex(txHex)
-    const shares = sharedRegistrationShares(tx, wallet.network)
-    sharedRegistrationCollateralDuffs(tx, shares)
-    requireSharedRegistrationConsents(tx, shares, wallet.network)
-    const unsigned = tx.inputs.findIndex(input => input.scriptSig.hex() === '')
-    if (unsigned >= 0) throw new Error(`The registration is missing a funding signature for input ${unsigned}`)
-    const prevouts = await this.sharedRegistrationPrevouts(wallet.network,
-      tx.inputs.map(input => ({txid: input.txId, vout: input.vOut})))
-    verifySharedRegistrationFunding(tx, prevouts)
+    const {tx, shares, network} = await this.parseSharedRegistration(walletId, txHex)
+    requireSharedRegistrationConsents(tx, shares, network)
+    await this.requireFundedSharedRegistration(tx, network)
 
     const broadcast = await this.walletSyncService.broadcastTransaction(tx.hex())
     log.info(`shared registration ${tx.hash()} broadcast to ${broadcast.peersDelivered.length} peer(s)`)
@@ -517,6 +499,29 @@ export class MasternodeService {
     const indexes = new Map<string, number>()
     for (let index = 0; index <= ownerScanLimit(used); index++) indexes.set(deriver.derive(index).address, index)
     return indexes
+  }
+
+  // Every coordinator entry point takes untrusted hex: settle the shared shape
+  // before any signature is read.
+  private async parseSharedRegistration(
+    walletId: string,
+    txHex: string,
+  ): Promise<{tx: Transaction; shares: SharedRegistrationShare[]; network: Network}> {
+    const wallet = await requireWallet(this.walletDAO, walletId)
+    const tx = Transaction.fromHex(txHex)
+    const shares = sharedRegistrationShares(tx, wallet.network)
+    sharedRegistrationCollateralDuffs(tx, shares)
+    return {tx, shares, network: wallet.network}
+  }
+
+  // Funding requires a signature on every input that verifies against the coin
+  // it spends, so a bad contribution is caught before broadcast.
+  private async requireFundedSharedRegistration(tx: Transaction, network: Network): Promise<void> {
+    const unsigned = tx.inputs.findIndex(input => input.scriptSig.hex() === '')
+    if (unsigned >= 0) throw new Error(`The registration is missing a funding signature for input ${unsigned}`)
+    const prevouts = await this.sharedRegistrationPrevouts(network,
+      tx.inputs.map(input => ({txid: input.txId, vout: input.vOut})))
+    verifySharedRegistrationFunding(tx, prevouts)
   }
 
   private async sharedRegistrationPrevouts(

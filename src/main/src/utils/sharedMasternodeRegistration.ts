@@ -31,6 +31,8 @@ import {serviceAddressParts} from './providerTx'
 
 type AddressType = 'p2pkh' | 'p2sh'
 
+const P2PKH = /^76a914([0-9a-f]{40})88ac$/
+
 function decodeAddress(address: string, network: Network): {type: AddressType; hash: Uint8Array} {
   let decoded: Uint8Array
   try {
@@ -69,37 +71,34 @@ export function requireSharedRegistrationDraft(draft: SharedRegistrationDraft, n
 
   const owners = new Set<string>()
   const refunds = new Set<string>()
+  const refundScripts: string[] = []
   for (const member of members) {
     if (owners.has(member.ownerAddress)) throw new Error('A share owner key may appear once')
     owners.add(member.ownerAddress)
     const refund = sharedRegistrationScript(member.refundAddress, network).hex()
     if (refunds.has(refund)) throw new Error('A refund script may appear once')
     refunds.add(refund)
+    refundScripts.push(refund)
   }
 
-  const ownerScripts = new Set<string>()
+  const ownerScripts: string[] = []
+  const rewardScripts: Array<string | null> = []
   for (const member of members) {
-    if (decodeAddress(member.ownerAddress, network).type !== 'p2pkh') {
-      throw new Error('The owner key of a share must be a P2PKH address')
-    }
-    ownerScripts.add(sharedRegistrationScript(member.ownerAddress, network).hex())
+    const owner = sharedRegistrationScript(member.ownerAddress, network).hex()
+    if (!P2PKH.test(owner)) throw new Error('The owner key of a share must be a P2PKH address')
+    ownerScripts.push(owner)
     sharedRegistrationScript(member.changeAddress, network)
-    if (member.rewardAddress != null) sharedRegistrationScript(member.rewardAddress, network)
+    rewardScripts.push(member.rewardAddress == null ? null : sharedRegistrationScript(member.rewardAddress, network).hex())
   }
 
-  if (decodeAddress(draft.votingAddress, network).type !== 'p2pkh') {
-    throw new Error('The voting key must be a P2PKH address')
-  }
   const votingScript = sharedRegistrationScript(draft.votingAddress, network).hex()
-  for (const member of members) {
-    const scripts = [
-      sharedRegistrationScript(member.refundAddress, network).hex(),
-      ...(member.rewardAddress == null ? [] : [sharedRegistrationScript(member.rewardAddress, network).hex()]),
-    ]
+  if (!P2PKH.test(votingScript)) throw new Error('The voting key must be a P2PKH address')
+  const ownerSet = new Set(ownerScripts)
+  for (const [index] of members.entries()) {
+    const reward = rewardScripts[index]
+    const scripts = reward == null ? [refundScripts[index]] : [refundScripts[index], reward]
     if (scripts.includes(votingScript)) throw new Error('A refund or reward script may not pay the voting key')
-    if (scripts.some(script => ownerScripts.has(script))) {
-      throw new Error('A refund or reward script may not pay a share owner key')
-    }
+    if (scripts.some(script => ownerSet.has(script))) throw new Error('A refund or reward script may not pay a share owner key')
   }
 
   requireBasicOperatorKey(draft.operatorPublicKey)
@@ -146,13 +145,10 @@ export function sharedRegistrationWithoutScriptSigs(txHex: string): string {
   return tx.hex()
 }
 
-const P2PKH = /^76a914([0-9a-f]{40})88ac$/
-
 // Every funding input must carry a SIGHASH_ALL signature that verifies against
-// the output it spends, so a corrupted or wrong-key contribution is caught here
-// rather than by the network without a reason.
+// the output it spends, so a bad contribution is caught here, not by the network.
 export function verifySharedRegistrationFunding(tx: Transaction, prevouts: Map<string, SharedRegistrationPrevout>): void {
-  tx.inputs.forEach((input, index) => {
+  for (const [index, input] of tx.inputs.entries()) {
     const prevout = prevouts.get(sharedRegistrationOutpointKey({txid: input.txId, vout: input.vOut}))
     if (prevout == null) throw new Error(`A funding input is not available: ${input.txId}:${input.vOut}`)
     const p2pkh = P2PKH.exec(prevout.script.hex())
@@ -180,7 +176,7 @@ export function verifySharedRegistrationFunding(tx: Transaction, prevouts: Map<s
     } catch {
       throw new Error(`The funding signature for input ${index} is not valid`)
     }
-  })
+  }
 }
 
 function sharedRegistrationNetInfo(serviceAddress: string | null, network: Network): ExtNetInfo {
@@ -210,6 +206,9 @@ export function sharedRegistrationTx(
   }
 
   const shareOfFee = draft.feeDuffs / BigInt(draft.members.length)
+  const feeShares = draft.members.map((_, index) => index === draft.members.length - 1
+    ? draft.feeDuffs - shareOfFee * BigInt(draft.members.length - 1)
+    : shareOfFee)
   const outputs: Output[] = []
   const members: SharedRegistrationMemberPlan[] = []
   let valueIndex = 0
@@ -217,22 +216,21 @@ export function sharedRegistrationTx(
     const first = valueIndex
     valueIndex += member.inputs.length
     const total = values.slice(first, valueIndex).reduce((sum, prevout) => sum + prevout.satoshis, 0n)
-    const change = total - member.amountDuffs - (index === draft.members.length - 1
-      ? draft.feeDuffs - shareOfFee * BigInt(draft.members.length - 1)
-      : shareOfFee)
+    const change = total - member.amountDuffs - feeShares[index]
     if (change < 0n) throw new Error(`Member ${index + 1} cannot cover its share and fee share`)
     const paid = change >= DUST_THRESHOLD_DUFFS
     if (paid) outputs.push(new Output(change, sharedRegistrationScript(member.changeAddress, network)))
     members.push({
       index,
       amountDuffs: member.amountDuffs,
-      feeDuffs: index === draft.members.length - 1 ? draft.feeDuffs - shareOfFee * BigInt(draft.members.length - 1) : shareOfFee,
+      feeDuffs: feeShares[index],
       changeDuffs: paid ? change : 0n,
       inputIndexes: Array.from({length: member.inputs.length}, (_, offset) => first + offset),
     })
   }
 
-  outputs.push(new Output(MASTERNODE_COLLATERAL_DUFFS.Regular, Script.sharedCollateral()))
+  const collateralScript = Script.sharedCollateral()
+  outputs.push(new Output(MASTERNODE_COLLATERAL_DUFFS.Regular, collateralScript))
   const collateralIndex = outputs.length - 1
   const tx = new Transaction(inputs, outputs, 0, 3, TransactionType.TRANSACTION_PROVIDER_REGISTER)
 
@@ -271,7 +269,6 @@ export function sharedRegistrationTx(
 
   const inputTotal = values.reduce((sum, prevout) => sum + prevout.satoshis, 0n)
   const outputTotal = tx.outputs.reduce((sum, output) => sum + output.satoshis, 0n)
-  const collateralScript = Script.sharedCollateral().hex()
   return {
     tx,
     plan: {
@@ -284,7 +281,7 @@ export function sharedRegistrationTx(
       outputs: tx.outputs.map(output => ({
         address: output.getAddress(sdkUtils.networkValueToEnumValue(network)) ?? null,
         amountDuffs: output.satoshis,
-        collateral: output.script.hex() === collateralScript,
+        collateral: output.script.hex() === collateralScript.hex(),
       } satisfies SharedRegistrationOutput)),
     },
   }
