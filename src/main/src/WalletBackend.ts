@@ -36,6 +36,7 @@ import { RemoveMasternodeKeyHandler } from './api/masternodes/removeMasternodeKe
 import { SignAndBroadcastMasternodeRegistrationHandler } from './api/masternodes/signAndBroadcastMasternodeRegistration'
 import { PreviewMasternodeRegistrationHandler } from './api/masternodes/previewMasternodeRegistration'
 import { BuildSharedMasternodeRegistrationHandler } from './api/masternodes/buildSharedMasternodeRegistration'
+import { CombineSharedMasternodeRegistrationHandler } from './api/masternodes/combineSharedMasternodeRegistration'
 import { PreviewSharedMasternodeRegistrationHandler } from './api/masternodes/previewSharedMasternodeRegistration'
 import { SignSharedMasternodeRegistrationConsentHandler } from './api/masternodes/signSharedMasternodeRegistrationConsent'
 import { SignSharedMasternodeRegistrationFundingHandler } from './api/masternodes/signSharedMasternodeRegistrationFunding'
@@ -239,6 +240,7 @@ export class WalletBackend {
     registerHandler('previewMasternodeRegistration', new PreviewMasternodeRegistrationHandler(this.masternodeService).handle)
     registerHandler('signAndBroadcastMasternodeRegistration', new SignAndBroadcastMasternodeRegistrationHandler(this.masternodeService).handle)
     registerHandler('buildSharedMasternodeRegistration', new BuildSharedMasternodeRegistrationHandler(this.masternodeService).handle)
+    registerHandler('combineSharedMasternodeRegistration', new CombineSharedMasternodeRegistrationHandler(this.masternodeService).handle)
     registerHandler('previewSharedMasternodeRegistration', new PreviewSharedMasternodeRegistrationHandler(this.masternodeService).handle)
     registerHandler('signSharedMasternodeRegistrationConsent', new SignSharedMasternodeRegistrationConsentHandler(this.masternodeService).handle)
     registerHandler('signSharedMasternodeRegistrationFunding', new SignSharedMasternodeRegistrationFundingHandler(this.masternodeService).handle)

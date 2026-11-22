@@ -37,6 +37,7 @@ import {
   SharedRegistrationFundingPreview,
   SharedRegistrationFundingResult,
   SharedRegistrationFundingSource,
+  SharedRegistrationJoined,
   SharedRegistrationPlan,
   SharedRegistrationPreview,
   SharedRegistrationPrevout,
@@ -198,6 +199,45 @@ export class MasternodeService {
     if (taken >= 0) throw new Error(`The owner key of member ${taken + 1} already owns a masternode`)
     const prevouts = await this.sharedRegistrationPrevouts(wallet.network, draft)
     return sharedRegistrationTx(draft, prevouts, wallet.network).plan
+  }
+
+  // Puts every share owner's consent into the payload, in share order. The
+  // consent digest excludes joinSigs, so the transaction's bytes can change here
+  // without invalidating what the members signed.
+  async combineSharedRegistration(
+    walletId: string,
+    txHex: string,
+    signatures: SharedRegistrationSignature[],
+  ): Promise<SharedRegistrationJoined> {
+    const wallet = await requireWallet(this.walletDAO, walletId)
+    const tx = Transaction.fromHex(txHex)
+    const shares = sharedRegistrationShares(tx, wallet.network)
+    sharedRegistrationCollateralDuffs(tx, shares)
+
+    const byShare = new Map<number, string>()
+    for (const {shareIndex, signature} of signatures) {
+      if (!Number.isInteger(shareIndex) || shareIndex < 0 || shareIndex >= shares.length) {
+        throw new Error(`Not a share of this registration: ${shareIndex}`)
+      }
+      if (byShare.has(shareIndex)) throw new Error(`Duplicate consent for share ${shareIndex}`)
+      if (Buffer.from(signature, 'base64').length !== 65) {
+        throw new Error(`Not a 65-byte consent signature for share ${shareIndex}`)
+      }
+      byShare.set(shareIndex, signature)
+    }
+
+    const joinSigs = shares.map((share, index) => {
+      const signature = byShare.get(index)
+      if (signature == null) throw new Error(`Missing consent for share ${index}`)
+      const recovered = sharedRegistrationConsentSigner(tx, signature, wallet.network)
+      if (recovered !== share.ownerAddress) {
+        throw new Error(`Consent for share ${index} recovers to ${recovered}, not ${share.ownerAddress}`)
+      }
+      return Buffer.from(signature, 'base64').toString('hex')
+    })
+    ;(tx.extraPayload as ProRegTX).joinSigs = joinSigs
+    log.info(`wallet ${walletId}: shared registration joined ${joinSigs.length} consent(s)`)
+    return {txHex: tx.hex(), consentHash: tx.consentHash()}
   }
 
   // Participant-side consent: sign the preparation's consent digest with every

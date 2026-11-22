@@ -298,6 +298,12 @@ export interface SharedRegistrationPlan {
   outputs: SharedRegistrationOutput[]
 }
 
+// The registration with every share owner's consent in its join signatures.
+export interface SharedRegistrationJoined {
+  txHex: string
+  consentHash: string
+}
+
 // One share owner's consent, base64 compact signature as shared_combine expects.
 export interface SharedRegistrationSignature {
   shareIndex: number

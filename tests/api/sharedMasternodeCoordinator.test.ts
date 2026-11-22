@@ -1,5 +1,6 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {Output, PrivateKey, Transaction, TransactionType} from 'dash-core-sdk'
+import {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
 import {MasternodeDAO} from '../../src/main/src/database/MasternodeDAO'
 import {MasternodeIdentityDAO} from '../../src/main/src/database/MasternodeIdentityDAO'
 import {Preferences} from '../../src/main/src/preferences'
@@ -11,6 +12,7 @@ import {NetworkMasternode, SharedRegistrationDraft} from '../../src/main/src/typ
 import {UTXO} from '../../src/main/src/types/UTXO'
 import {masternodeKeyDeriver} from '../../src/main/src/utils/masternodeKeys'
 import {nodeKeyValues} from '../../src/main/src/utils/masternodes'
+import {signSharedRegistrationConsent} from '../../src/main/src/utils/sharedMasternodeSigning'
 import {harness, Harness, PASSWORD, VALID_SEEDPHRASE} from './harness'
 
 const {getTransaction} = vi.hoisted(() => ({getTransaction: vi.fn()}))
@@ -123,5 +125,32 @@ describe('shared registration coordinator', () => {
     network = [node('x', {ownerAddress: draft.members[0].ownerAddress})]
 
     await expect(masternodes.buildSharedRegistration(walletId, draft)).rejects.toThrow('member 1')
+  })
+
+  it('combines one consent per share into the payload join signatures', async () => {
+    const plan = await masternodes.buildSharedRegistration(walletId, draft)
+    const consent = await masternodes.signSharedRegistrationConsent(walletId, plan.txHex, PASSWORD)
+    const joined = await masternodes.combineSharedRegistration(walletId, plan.txHex, consent.signatures)
+    const payload = Transaction.fromHex(joined.txHex).extraPayload as ProRegTX
+
+    expect(payload.joinSigs).toEqual(consent.signatures
+      .slice()
+      .sort((left, right) => left.shareIndex - right.shareIndex)
+      .map(signature => Buffer.from(signature.signature, 'base64').toString('hex')))
+    expect(joined.consentHash).toBe(plan.consentHash)
+  })
+
+  it('refuses a missing, duplicated or wrong-owner consent', async () => {
+    const plan = await masternodes.buildSharedRegistration(walletId, draft)
+    const consent = await masternodes.signSharedRegistrationConsent(walletId, plan.txHex, PASSWORD)
+    const [first, second] = consent.signatures
+    const stranger = signSharedRegistrationConsent(Transaction.fromHex(plan.txHex), PrivateKey.fromBytes(new Uint8Array(32).fill(9), 'mainnet'))
+
+    await expect(masternodes.combineSharedRegistration(walletId, plan.txHex, [first]))
+      .rejects.toThrow('Missing consent for share 1')
+    await expect(masternodes.combineSharedRegistration(walletId, plan.txHex, [first, first]))
+      .rejects.toThrow('Duplicate consent for share 0')
+    await expect(masternodes.combineSharedRegistration(walletId, plan.txHex, [{shareIndex: 0, signature: stranger}, second]))
+      .rejects.toThrow('Consent for share 0 recovers to')
   })
 })

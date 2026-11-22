@@ -189,6 +189,11 @@ interface SharedRegistrationPlanDTO {
   outputs: SharedRegistrationOutputDTO[]
 }
 
+interface SharedRegistrationJoinedDTO {
+  txHex: string
+  consentHash: string
+}
+
 // Mirrors MasternodeIdentityInfo; empty until Platform indexes the registration.
 interface MasternodeIdentityInfoDTO {
   proTxHash: string
@@ -478,6 +483,7 @@ declare global {
       signAndBroadcastMasternodeRegistration: (walletId: string, unsignedHex: string, password: string) => Promise<MasternodeRegistrationResultDTO>
       previewMasternodeRegistration: (walletId: string, registration: MasternodeRegistrationDTO) => Promise<MasternodeRegistrationPreviewDTO>
       buildSharedMasternodeRegistration: (walletId: string, draft: SharedRegistrationDraftDTO) => Promise<SharedRegistrationPlanDTO>
+      combineSharedMasternodeRegistration: (walletId: string, txHex: string, signatures: SharedRegistrationSignatureDTO[]) => Promise<SharedRegistrationJoinedDTO>
       previewSharedMasternodeRegistration: (walletId: string, txHex: string) => Promise<SharedRegistrationFundingPreviewDTO>
       signSharedMasternodeRegistrationConsent: (walletId: string, txHex: string, password: string) => Promise<SharedRegistrationConsentResultDTO>
       signSharedMasternodeRegistrationFunding: (walletId: string, txHex: string, password: string) => Promise<SharedRegistrationFundingResultDTO>
