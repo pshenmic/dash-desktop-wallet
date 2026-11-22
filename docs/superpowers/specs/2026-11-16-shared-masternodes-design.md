@@ -37,9 +37,19 @@ never hit it.
 
 ## Non-goals
 
-Consent/funding signing (`sharedmn-consent`/`sharedmn-fund`), dissolve
-(ProDisTx), ProUpShareTx/ProUpSharedRegTx handling, refund/reward script
-display, renderer changes, Dashscan share-filter support (separate project).
+Dissolve (ProDisTx), ProUpShareTx/ProUpSharedRegTx handling, refund/reward
+script display, renderer changes, Dashscan share-filter support (separate
+project).
+
+## Creation (implemented 2026-11-22)
+
+The coordinator flow is `buildSharedRegistration` → `combineSharedRegistration`
+→ `assembleSharedRegistration` → `broadcastSharedRegistration` in
+`MasternodeService`, with the deterministic v3 transaction built in
+`utils/sharedMasternodeRegistration.ts`. It follows
+`dash-trustless-staking/DESIGN.md` §6–§7. Solo and Evo registration stay on v2;
+moving them to v3 is separate, because v3 replaces `scriptPayout` with a
+`payouts` reward-split list and so changes the payout index.
 
 ## Constraints
 
