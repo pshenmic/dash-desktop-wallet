@@ -37,6 +37,18 @@ export function sharedRegistrationCollateralDuffs(tx: Transaction, shares: Share
   return collateral.satoshis
 }
 
+// Funding signs the whole transaction, so every share's consent must already be
+// in the payload and valid for its owner.
+export function requireSharedRegistrationConsents(tx: Transaction, shares: SharedRegistrationShare[], network: Network): void {
+  const consents = (tx.extraPayload as ProRegTX).joinSigs ?? []
+  const unconsented = shares.findIndex((share, index) => {
+    const signature = consents[index]
+    if (signature == null || !/[1-9a-f]/i.test(signature)) return true
+    return sharedRegistrationConsentSigner(tx, Buffer.from(signature, 'hex').toString('base64'), network) !== share.ownerAddress
+  })
+  if (unconsented >= 0) throw new Error(`The registration has not collected share ${unconsented}'s consent yet`)
+}
+
 // Base64 compact signature, the form shared_combine accepts.
 export function signSharedRegistrationConsent(tx: Transaction, privateKey: PrivateKey): string {
   return Buffer.from(signHash(sharedRegistrationConsentDigest(tx), privateKey)).toString('base64')

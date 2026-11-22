@@ -137,6 +137,14 @@ export function sharedRegistrationOutpointKey({txid, vout}: SharedRegistrationOu
   return `${txid.toLowerCase()}:${vout}`
 }
 
+// A funding contribution must be the same transaction with only its scriptSigs
+// filled in; comparing the blanked forms rejects one built over other bytes.
+export function sharedRegistrationWithoutScriptSigs(txHex: string): string {
+  const tx = Transaction.fromHex(txHex)
+  for (const input of tx.inputs) input.scriptSig = new Script()
+  return tx.hex()
+}
+
 function sharedRegistrationNetInfo(serviceAddress: string | null, network: Network): ExtNetInfo {
   if (serviceAddress == null) return new ExtNetInfo()
   const {ip, port} = serviceAddressParts(serviceAddress, network)

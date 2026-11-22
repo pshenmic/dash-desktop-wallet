@@ -153,4 +153,47 @@ describe('shared registration coordinator', () => {
     await expect(masternodes.combineSharedRegistration(walletId, plan.txHex, [{shareIndex: 0, signature: stranger}, second]))
       .rejects.toThrow('Consent for share 0 recovers to')
   })
+
+  async function combined(): Promise<{
+    joint: {txHex: string}
+    funded: {signedHex: string; signedInputs: number[]}
+  }> {
+    const plan = await masternodes.buildSharedRegistration(walletId, draft)
+    const consent = await masternodes.signSharedRegistrationConsent(walletId, plan.txHex, PASSWORD)
+    const joint = await masternodes.combineSharedRegistration(walletId, plan.txHex, consent.signatures)
+    const funded = await masternodes.signSharedRegistrationFunding(walletId, joint.txHex, PASSWORD)
+    return {joint, funded}
+  }
+
+  it('assembles every member input, then broadcasts the final transaction', async () => {
+    const {joint, funded} = await combined()
+    const final = await masternodes.assembleSharedRegistration(walletId, joint.txHex, [
+      {signedHex: funded.signedHex, signedInputs: funded.signedInputs},
+    ])
+
+    expect(Transaction.fromHex(final.txHex).inputs.every(input => input.scriptSig.hex() !== '')).toBe(true)
+    expect(final.proTxHash).toBe(Transaction.fromHex(final.txHex).hash())
+
+    const result = await masternodes.broadcastSharedRegistration(walletId, final.txHex)
+    expect(result.proTxHash).toBe(final.proTxHash)
+    expect(result.peersAcked).toBe(1)
+  })
+
+  it('refuses a contribution signed over a different transaction body', async () => {
+    const {joint, funded} = await combined()
+    const tampered = Transaction.fromHex(funded.signedHex)
+    tampered.outputs[0].satoshis -= 1n
+
+    await expect(masternodes.assembleSharedRegistration(walletId, joint.txHex, [
+      {signedHex: tampered.hex(), signedInputs: funded.signedInputs},
+    ])).rejects.toThrow('does not match')
+  })
+
+  it('refuses a final transaction with an unsigned input', async () => {
+    const {joint, funded} = await combined()
+
+    await expect(masternodes.assembleSharedRegistration(walletId, joint.txHex, [
+      {signedHex: funded.signedHex, signedInputs: [funded.signedInputs[0]]},
+    ])).rejects.toThrow('missing a funding signature for input 1')
+  })
 })

@@ -14,6 +14,7 @@ import {
   requireSharedRegistrationDraft,
   sharedRegistrationScript,
   sharedRegistrationTx,
+  sharedRegistrationWithoutScriptSigs,
 } from '../../src/main/src/utils/sharedMasternodeRegistration'
 
 const DASH = 100_000_000n
@@ -230,5 +231,16 @@ describe('sharedRegistrationTx', () => {
   it('builds the same bytes twice', () => {
     expect(sharedRegistrationTx(draft(), prevouts, 'mainnet').tx.hex())
       .toBe(sharedRegistrationTx(draft(), prevouts, 'mainnet').tx.hex())
+  })
+
+  it('blanks every scriptSig before comparing transactions', () => {
+    const signed = Transaction.fromHex(sharedRegistrationTx(draft(), prevouts, 'mainnet').tx.hex())
+    signed.inputs[0].scriptSig = Script.fromHex('51')
+
+    const blanked = Transaction.fromHex(sharedRegistrationWithoutScriptSigs(signed.hex()))
+
+    expect(blanked.inputs.every(input => input.scriptSig.hex() === '')).toBe(true)
+    expect(sharedRegistrationWithoutScriptSigs(signed.hex()))
+      .toBe(sharedRegistrationWithoutScriptSigs(blanked.hex()))
   })
 })

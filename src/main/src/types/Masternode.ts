@@ -304,6 +304,22 @@ export interface SharedRegistrationJoined {
   consentHash: string
 }
 
+// One member's partially signed transaction and the inputs it signed.
+export interface SharedRegistrationContribution {
+  signedHex: string
+  signedInputs: number[]
+}
+
+export interface SharedRegistrationFinal {
+  txHex: string
+  proTxHash: string
+}
+
+export interface SharedRegistrationBroadcastResult {
+  proTxHash: string
+  peersAcked: number
+}
+
 // One share owner's consent, base64 compact signature as shared_combine expects.
 export interface SharedRegistrationSignature {
   shareIndex: number

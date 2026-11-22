@@ -35,6 +35,8 @@ import { ImportMasternodeKeyHandler } from './api/masternodes/importMasternodeKe
 import { RemoveMasternodeKeyHandler } from './api/masternodes/removeMasternodeKey'
 import { SignAndBroadcastMasternodeRegistrationHandler } from './api/masternodes/signAndBroadcastMasternodeRegistration'
 import { PreviewMasternodeRegistrationHandler } from './api/masternodes/previewMasternodeRegistration'
+import { AssembleSharedMasternodeRegistrationHandler } from './api/masternodes/assembleSharedMasternodeRegistration'
+import { BroadcastSharedMasternodeRegistrationHandler } from './api/masternodes/broadcastSharedMasternodeRegistration'
 import { BuildSharedMasternodeRegistrationHandler } from './api/masternodes/buildSharedMasternodeRegistration'
 import { CombineSharedMasternodeRegistrationHandler } from './api/masternodes/combineSharedMasternodeRegistration'
 import { PreviewSharedMasternodeRegistrationHandler } from './api/masternodes/previewSharedMasternodeRegistration'
@@ -241,6 +243,8 @@ export class WalletBackend {
     registerHandler('signAndBroadcastMasternodeRegistration', new SignAndBroadcastMasternodeRegistrationHandler(this.masternodeService).handle)
     registerHandler('buildSharedMasternodeRegistration', new BuildSharedMasternodeRegistrationHandler(this.masternodeService).handle)
     registerHandler('combineSharedMasternodeRegistration', new CombineSharedMasternodeRegistrationHandler(this.masternodeService).handle)
+    registerHandler('assembleSharedMasternodeRegistration', new AssembleSharedMasternodeRegistrationHandler(this.masternodeService).handle)
+    registerHandler('broadcastSharedMasternodeRegistration', new BroadcastSharedMasternodeRegistrationHandler(this.masternodeService).handle)
     registerHandler('previewSharedMasternodeRegistration', new PreviewSharedMasternodeRegistrationHandler(this.masternodeService).handle)
     registerHandler('signSharedMasternodeRegistrationConsent', new SignSharedMasternodeRegistrationConsentHandler(this.masternodeService).handle)
     registerHandler('signSharedMasternodeRegistrationFunding', new SignSharedMasternodeRegistrationFundingHandler(this.masternodeService).handle)
