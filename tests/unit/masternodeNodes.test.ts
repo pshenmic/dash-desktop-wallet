@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { PrivateKey } from 'dash-core-sdk'
 import type { ConnectionType, MasternodeDto, MasternodeKeyRole, OwnedMasternodeShareDto } from '@renderer/api/types'
 import { DUFFS_PER_DASH } from '@renderer/constants/balance'
-import { MANAGE_KEYS_COPY, NODES_TAB_COPY, NODE_DETAIL_COPY } from '@renderer/constants/masternodeNodes'
+import { MANAGE_KEYS_COPY, NODES_TAB_COPY, NODE_CARD_COPY, NODE_DETAIL_COPY } from '@renderer/constants/masternodeNodes'
 import { REGISTERING_MASTERNODE_STATUS } from '@renderer/constants/masternodes'
-import { NodeSegment, PayoutChoiceKind, RegistrarKeyChoiceKind } from '@renderer/enums/Masternodes'
+import { MasternodeViewMode, NodeSegment, PayoutChoiceKind, RegistrarKeyChoiceKind } from '@renderer/enums/Masternodes'
 import { StatusPillTone } from '@renderer/enums/StatusPillTone'
 import type { RegisterWizardDraft } from '@renderer/types/MasternodeRegistrationWizard'
 import { classifyVotingMasternodes } from '@renderer/utils/governanceProposals'
@@ -42,11 +42,18 @@ import {
   masternodeStatus,
   masternodeType,
   nodeAccessDisplay,
+  nodeCardTitle,
+  nodeCollateralDisplay,
+  nodeCustomLabel,
   nodeImportedKeys,
+  nodeLastPaidDisplay,
+  nodeRolePills,
   nodeRolesLabel,
   nodeSegmentOptions,
   nodeVotingAccessLabel,
+  nodeVotingWeightDisplay,
   nodeWalletRoles,
+  parseMasternodeViewMode,
   revokeNodeDisabledReason,
   shareOriginBadge,
   shareRatio,
@@ -1017,5 +1024,208 @@ describe('Masternode action builders', () => {
     expect(nodeImportedKeys(sharedNode, imported)).toEqual([
       { role: 'owner', publicKey: 'XshareB', hasPrivateKey: true },
     ])
+  })
+})
+
+describe('Masternode view mode and card display helpers', () => {
+  it('parses persisted view mode and defaults invalid values to cards', () => {
+    expect(parseMasternodeViewMode(MasternodeViewMode.List)).toBe(MasternodeViewMode.List)
+    expect(parseMasternodeViewMode(MasternodeViewMode.Cards)).toBe(MasternodeViewMode.Cards)
+    expect(parseMasternodeViewMode(null)).toBe(MasternodeViewMode.Cards)
+    expect(parseMasternodeViewMode(undefined)).toBe(MasternodeViewMode.Cards)
+    expect(parseMasternodeViewMode('')).toBe(MasternodeViewMode.Cards)
+    expect(parseMasternodeViewMode('table')).toBe(MasternodeViewMode.Cards)
+  })
+
+  it('resolves nodeCustomLabel with priority order and ignores whitespace or non-owned shared addresses', () => {
+    const solo = makeNode({
+      collateralAddress: 'Xcol',
+      payeeAddress: 'Xpay',
+    })
+    expect(nodeCustomLabel(solo)).toBeNull()
+    expect(nodeCustomLabel(solo, new Map())).toBeNull()
+    expect(nodeCustomLabel(solo, new Map([['Xcol', '   '], ['Xpay', '  Payout Label  ']]))).toBe('Payout Label')
+    expect(nodeCustomLabel(solo, new Map([['Xcol', 'Collateral Label'], ['Xpay', 'Payout Label']]))).toBe('Collateral Label')
+
+    const shared = makeNode({
+      isShared: true,
+      collateralAddress: 'XsharedCol',
+      payeeAddress: 'XsharedPayeeIgnored',
+      shares: [
+        makeShare({ ownerAddress: 'XextShare', keyIndex: null, imported: false }),
+        makeShare({ ownerAddress: 'XownedShare1', keyIndex: 0 }),
+        makeShare({ ownerAddress: 'XownedShare2', imported: true }),
+      ],
+    })
+    expect(nodeCustomLabel(shared, new Map([['XsharedPayeeIgnored', 'Pool'], ['XextShare', 'Other']]))).toBeNull()
+    expect(nodeCustomLabel(shared, new Map([['XownedShare1', '   '], ['XownedShare2', ' My Share ']]))).toBe('My Share')
+    expect(nodeCustomLabel(shared, new Map([['XsharedCol', 'Shared Collateral'], ['XownedShare1', 'Share 1']]))).toBe('Shared Collateral')
+  })
+
+  it('formats nodeCardTitle, collateral, governance weight, and last-paid display', () => {
+    const regular = makeNode({ type: 'Regular', collateralAddress: 'Xcol', lastPaidBlock: 0 })
+    const evo = makeNode({ type: 'Evo', collateralAddress: 'XevoCol', lastPaidBlock: 123456 })
+    const nullPaid = makeNode({ lastPaidBlock: null })
+    const registering = makeNode({ status: REGISTERING_MASTERNODE_STATUS, lastPaidBlock: 100 })
+
+    expect(nodeCardTitle(regular)).toBe(NODE_CARD_COPY.regularTitle)
+    expect(nodeCardTitle(evo)).toBe(NODE_CARD_COPY.evoTitle)
+    expect(nodeCardTitle(evo, new Map([['XevoCol', 'Validator One']]))).toBe('Validator One')
+
+    expect(nodeCollateralDisplay('Regular')).toBe(NODE_CARD_COPY.regularCollateral)
+    expect(nodeCollateralDisplay('Evo')).toBe(NODE_CARD_COPY.evoCollateral)
+    expect(nodeVotingWeightDisplay('Regular')).toBe(NODE_CARD_COPY.regularVotingWeight)
+    expect(nodeVotingWeightDisplay('Evo')).toBe(NODE_CARD_COPY.evoVotingWeight)
+
+    expect(nodeLastPaidDisplay(regular)).toBe(NODE_CARD_COPY.neverPaid)
+    expect(nodeLastPaidDisplay(makeNode({ lastPaidBlock: -1 }))).toBe(NODE_CARD_COPY.neverPaid)
+    expect(nodeLastPaidDisplay(evo)).toBe('#123,456')
+    expect(nodeLastPaidDisplay(nullPaid)).toBe(NODE_DETAIL_COPY.unavailable)
+    expect(nodeLastPaidDisplay(registering)).toBe(NODE_CARD_COPY.awaitingConfirmation)
+  })
+
+  it('builds nodeRolePills for solo nodes across wallet, imported, watch-only, and external origins', () => {
+    const soloWalletImportedWatch = makeNode({
+      isShared: false,
+      ownerKeyIndex: 0,
+      operatorKeyIndex: null,
+      votingKeyIndex: null,
+      importedRoles: ['operator', 'voting'],
+      importedSigningRoles: ['operator'],
+    })
+    expect(nodeRolePills(soloWalletImportedWatch)).toEqual([
+      {
+        role: 'owner',
+        label: 'Owner',
+        origin: 'wallet',
+        originLabel: NODE_CARD_COPY.walletOriginShort,
+        inWallet: true,
+        canSign: true,
+      },
+      {
+        role: 'operator',
+        label: 'Operator',
+        origin: 'imported',
+        originLabel: NODE_CARD_COPY.importedOriginShort,
+        inWallet: true,
+        canSign: true,
+      },
+      {
+        role: 'voting',
+        label: 'Voting',
+        origin: 'watch-only',
+        originLabel: NODE_CARD_COPY.watchOnlyOriginShort,
+        inWallet: true,
+        canSign: false,
+      },
+    ])
+
+    const soloExternal = makeNode({
+      isShared: false,
+      ownerKeyIndex: null,
+      operatorKeyIndex: null,
+      votingKeyIndex: null,
+      importedRoles: [],
+      importedSigningRoles: [],
+    })
+    expect(nodeRolePills(soloExternal)).toEqual([
+      { role: 'owner', label: 'Owner', origin: 'external', originLabel: NODE_CARD_COPY.externalOriginShort, inWallet: false, canSign: false },
+      { role: 'operator', label: 'Operator', origin: 'external', originLabel: NODE_CARD_COPY.externalOriginShort, inWallet: false, canSign: false },
+      { role: 'voting', label: 'Voting', origin: 'external', originLabel: NODE_CARD_COPY.externalOriginShort, inWallet: false, canSign: false },
+    ])
+  })
+
+  it('builds nodeRolePills for shared nodes using owned shares for the owner role', () => {
+    const sharedWalletShare = makeNode({
+      isShared: true,
+      ownerKeyIndex: null,
+      operatorKeyIndex: null,
+      votingKeyIndex: 0,
+      importedRoles: [],
+      importedSigningRoles: [],
+      shares: [
+        makeShare({ ownerAddress: 'Xwatch', imported: true, canSign: false }),
+        makeShare({ ownerAddress: 'Xwallet', keyIndex: 0 }),
+      ],
+    })
+    expect(nodeRolePills(sharedWalletShare)).toEqual([
+      { role: 'owner', label: 'Owner', origin: 'wallet', originLabel: NODE_CARD_COPY.walletOriginShort, inWallet: true, canSign: true },
+      { role: 'operator', label: 'Operator', origin: 'external', originLabel: NODE_CARD_COPY.externalOriginShort, inWallet: false, canSign: false },
+      { role: 'voting', label: 'Voting', origin: 'wallet', originLabel: NODE_CARD_COPY.walletOriginShort, inWallet: true, canSign: true },
+    ])
+
+    const sharedImportedSignableShare = makeNode({
+      isShared: true,
+      ownerKeyIndex: null,
+      operatorKeyIndex: null,
+      votingKeyIndex: null,
+      importedRoles: ['operator'],
+      importedSigningRoles: ['operator'],
+      shares: [
+        makeShare({ ownerAddress: 'Xwatch', imported: true, canSign: false }),
+        makeShare({ ownerAddress: 'XimpSign', imported: true, canSign: true }),
+      ],
+    })
+    expect(nodeRolePills(sharedImportedSignableShare)[0]).toEqual({
+      role: 'owner',
+      label: 'Owner',
+      origin: 'imported',
+      originLabel: NODE_CARD_COPY.importedOriginShort,
+      inWallet: true,
+      canSign: true,
+    })
+    expect(nodeRolePills(sharedImportedSignableShare)[1]?.origin).toBe('imported')
+
+    const sharedWatchOnlyShare = makeNode({
+      isShared: true,
+      ownerKeyIndex: null,
+      operatorKeyIndex: null,
+      votingKeyIndex: null,
+      shares: [
+        makeShare({ ownerAddress: 'Xwatch', imported: true, canSign: false }),
+      ],
+    })
+    expect(nodeRolePills(sharedWatchOnlyShare)[0]).toEqual({
+      role: 'owner',
+      label: 'Owner',
+      origin: 'watch-only',
+      originLabel: NODE_CARD_COPY.watchOnlyOriginShort,
+      inWallet: true,
+      canSign: false,
+    })
+
+    const sharedExternalShares = makeNode({
+      isShared: true,
+      ownerKeyIndex: null,
+      operatorKeyIndex: null,
+      votingKeyIndex: null,
+      shares: [
+        makeShare({ ownerAddress: 'Xext', keyIndex: null, imported: false, canSign: false }),
+      ],
+    })
+    expect(nodeRolePills(sharedExternalShares)[0]).toEqual({
+      role: 'owner',
+      label: 'Owner',
+      origin: 'external',
+      originLabel: NODE_CARD_COPY.externalOriginShort,
+      inWallet: false,
+      canSign: false,
+    })
+
+    const sharedNullShares = makeNode({
+      isShared: true,
+      ownerKeyIndex: null,
+      operatorKeyIndex: null,
+      votingKeyIndex: null,
+      shares: null,
+    })
+    expect(nodeRolePills(sharedNullShares)[0]).toEqual({
+      role: 'owner',
+      label: 'Owner',
+      origin: 'external',
+      originLabel: NODE_CARD_COPY.externalOriginShort,
+      inWallet: false,
+      canSign: false,
+    })
   })
 })

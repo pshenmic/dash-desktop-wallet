@@ -7,20 +7,30 @@ import SearchField from '@renderer/components/ui/SearchField'
 import SegmentedControl from '@renderer/components/ui/SegmentedControl'
 import ShowMoreButton from '@renderer/components/ui/ShowMoreButton'
 import ListSkeleton from '@renderer/components/ui/Skeleton'
-import { NODE_TABLE_COLUMNS, NODES_TAB_COPY } from '@renderer/constants/masternodeNodes'
+import {
+  MASTERNODE_CARDS_GRID,
+  MASTERNODE_VIEW_MODE_OPTIONS,
+  NODE_CARD_COPY,
+  NODE_TABLE_COLUMNS,
+  NODES_TAB_COPY,
+} from '@renderer/constants/masternodeNodes'
 import { MASTERNODE_TABLE_GRID } from '@renderer/constants/masternodes'
 import { SECTION_TABLE_HEADER, SECTION_TABLE_WRAPPER } from '@renderer/constants/sectionTable'
 import { SHARED_TAB_COPY } from '@renderer/constants/sharedRegistration'
 import { useConnectionModeContext } from '@renderer/contexts/ConnectionModeContext'
 import { AlertTone } from '@renderer/enums/AlertTone'
+import { MasternodeViewMode } from '@renderer/enums/Masternodes'
 import { NoResultsTone } from '@renderer/enums/NoResultsTone'
 import { SegmentedControlAppearance } from '@renderer/enums/SegmentedControlAppearance'
 import { refreshMasternodes, useMasternodes } from '@renderer/hooks/useMasternodes'
+import { useMasternodeViewMode } from '@renderer/hooks/useMasternodeViewMode'
+import { useReceiveRequests } from '@renderer/hooks/useReceiveRequests'
 import { useScrollEndSentinel } from '@renderer/hooks/useScrollEndSentinel'
 import type { SharedTabProps } from '@renderer/types/SharedRegistration'
 import { windowList } from '@renderer/utils/listWindow'
 import { filterNodes, nodeSegmentOptions, sharedMasternodes } from '@renderer/utils/masternodeNodes'
 import ManageMasternodeKeysModal from '../nodes/ManageMasternodeKeysModal'
+import NodeCard from '../nodes/NodeCard'
 import NodeTableRow from '../nodes/NodeTableRow'
 import AddSharedMasternodeModal from './AddSharedMasternodeModal'
 
@@ -37,6 +47,8 @@ export default function SharedTab({
 }: SharedTabProps): React.JSX.Element {
   const { desired, setDesired } = useConnectionModeContext()
   const { nodes, discovered, loading, err } = useMasternodes(walletId)
+  const [viewMode, setViewMode] = useMasternodeViewMode()
+  const { labelsByAddress } = useReceiveRequests(walletId)
   const [addOpen, setAddOpen] = useState(false)
   const [keysOpen, setKeysOpen] = useState(false)
   const appliedQuery = useDeferredValue(query)
@@ -82,7 +94,9 @@ export default function SharedTab({
 
   let body: React.JSX.Element
   if (showSkeleton) {
-    body = <ListSkeleton rows={4} rowClassName={'h-[3.625rem] rounded-[.875rem]'} />
+    body = viewMode === MasternodeViewMode.Cards
+      ? <ListSkeleton rows={4} className={MASTERNODE_CARDS_GRID} rowClassName={'h-[14.5rem] rounded-[.9375rem]'} />
+      : <ListSkeleton rows={4} rowClassName={'h-[3.625rem] rounded-[.875rem]'} />
   } else if (err && !hasNodes) {
     body = (
       <NoResults
@@ -125,9 +139,18 @@ export default function SharedTab({
             onChange={onQueryChange}
             placeholder={SHARED_TAB_COPY.searchPlaceholder}
             ariaLabel={SHARED_TAB_COPY.searchLabel}
-            className={'flex-1 max-w-[22rem]'}
+            className={'flex-1 min-w-[14rem] max-w-[22rem]'}
           />
-          {actionButton}
+          <div className={'flex flex-wrap items-center gap-2'}>
+            <SegmentedControl
+              appearance={SegmentedControlAppearance.Pill}
+              ariaLabel={NODE_CARD_COPY.viewModeLabel}
+              options={MASTERNODE_VIEW_MODE_OPTIONS}
+              value={viewMode}
+              onChange={setViewMode}
+            />
+            {actionButton}
+          </div>
         </div>
         <SegmentedControl
           appearance={SegmentedControlAppearance.Pill}
@@ -146,6 +169,12 @@ export default function SharedTab({
               action={<Button type={'button'} size={'compact'} colorScheme={'primary-light'} onClick={() => onQueryChange('')}>{SHARED_TAB_COPY.clearSearch}</Button>}
             />
           )
+        ) : viewMode === MasternodeViewMode.Cards ? (
+          <div className={MASTERNODE_CARDS_GRID}>
+            {view.items.map(node => (
+              <NodeCard key={node.proTxHash} node={node} labelsByAddress={labelsByAddress} onOpen={onOpenNode} />
+            ))}
+          </div>
         ) : (
           <div className={SECTION_TABLE_WRAPPER}>
             <div className={'min-w-[40rem]'}>

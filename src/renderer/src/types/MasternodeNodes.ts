@@ -1,6 +1,23 @@
-import type { ImportedMasternodeKeyDto, MasternodeDto, Network } from '@renderer/api/types'
+import type { ImportedMasternodeKeyDto, MasternodeDto, MasternodeKeyRole, Network } from '@renderer/api/types'
 import type { AlertTone } from '@renderer/enums/AlertTone'
 import type { PayoutChoiceKind, RegistrarKeyChoiceKind } from '@renderer/enums/Masternodes'
+
+export type NodeRoleOrigin = 'wallet' | 'imported' | 'watch-only' | 'external'
+
+export interface NodeRolePill {
+  role: MasternodeKeyRole
+  label: string
+  origin: NodeRoleOrigin
+  originLabel: string
+  inWallet: boolean
+  canSign: boolean
+}
+
+export interface NodeCardProps {
+  node: MasternodeDto
+  labelsByAddress?: ReadonlyMap<string, string>
+  onOpen: (proTxHash: string) => void
+}
 
 export interface KeyImportNotice {
   tone: AlertTone

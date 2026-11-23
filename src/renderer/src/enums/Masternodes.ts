@@ -3,6 +3,11 @@ export enum MasternodesTab {
   Shared = 'shared',
 }
 
+export enum MasternodeViewMode {
+  Cards = 'cards',
+  List = 'list',
+}
+
 export enum NodeSegment {
   All = 'all',
   VotingKey = 'voting-key',

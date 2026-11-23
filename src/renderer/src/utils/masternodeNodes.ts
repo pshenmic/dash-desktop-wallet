@@ -6,6 +6,7 @@ import {
   MASTERNODE_KEY_ROLE_LABELS,
   MASTERNODE_META_SEPARATOR,
   NODES_TAB_COPY,
+  NODE_CARD_COPY,
   NODE_DETAIL_COPY,
   NODE_MATCHED_FORMS,
   NODE_SHARES_COPY,
@@ -23,10 +24,10 @@ import {
   SHARE_PERCENT_SCALE,
   UNASSIGNED_SERVICE_ADDRESS,
 } from '@renderer/constants/masternodes'
-import { NodeSegment } from '@renderer/enums/Masternodes'
+import { MasternodeViewMode, NodeSegment } from '@renderer/enums/Masternodes'
 import { StatusPillTone } from '@renderer/enums/StatusPillTone'
 import type { CustomBadgeProps } from '@renderer/types/CustomBadge'
-import type { MasternodeShareSummary, NodeAccessDisplay } from '@renderer/types/MasternodeNodes'
+import type { MasternodeShareSummary, NodeAccessDisplay, NodeRoleOrigin, NodeRolePill } from '@renderer/types/MasternodeNodes'
 import type { SegmentOption } from '@renderer/types/SegmentedControl'
 import { davToDash } from './balance'
 import { countLabel } from './countLabel'
@@ -290,4 +291,81 @@ export function nodeImportedKeys(
       }
     }
   })
+}
+
+export function parseMasternodeViewMode(raw: string | null | undefined): MasternodeViewMode {
+  return raw === MasternodeViewMode.List ? MasternodeViewMode.List : MasternodeViewMode.Cards
+}
+
+export function nodeCustomLabel(
+  node: MasternodeDto,
+  labelsByAddress?: ReadonlyMap<string, string>,
+): string | null {
+  if (labelsByAddress == null || labelsByAddress.size === 0) return null
+  const candidates = [
+    node.collateralAddress,
+    !isSharedNode(node) ? node.payeeAddress : null,
+    ...(node.shares?.filter(isOwnedShare).map(share => share.ownerAddress) ?? []),
+  ]
+  for (const address of candidates) {
+    if (address == null) continue
+    const trimmed = labelsByAddress.get(address)?.trim() ?? ''
+    if (trimmed !== '') return trimmed
+  }
+  return null
+}
+
+export function nodeCardTitle(
+  node: MasternodeDto,
+  labelsByAddress?: ReadonlyMap<string, string>,
+): string {
+  return nodeCustomLabel(node, labelsByAddress)
+    ?? (node.type === EVO_MASTERNODE_TYPE ? NODE_CARD_COPY.evoTitle : NODE_CARD_COPY.regularTitle)
+}
+
+export function nodeCollateralDisplay(type: string): string {
+  return type === EVO_MASTERNODE_TYPE ? NODE_CARD_COPY.evoCollateral : NODE_CARD_COPY.regularCollateral
+}
+
+export function nodeVotingWeightDisplay(type: string): string {
+  return type === EVO_MASTERNODE_TYPE ? NODE_CARD_COPY.evoVotingWeight : NODE_CARD_COPY.regularVotingWeight
+}
+
+export function nodeLastPaidDisplay(node: MasternodeDto): string {
+  if (node.status === REGISTERING_MASTERNODE_STATUS) return NODE_CARD_COPY.awaitingConfirmation
+  if (node.lastPaidBlock == null) return NODE_DETAIL_COPY.unavailable
+  if (node.lastPaidBlock <= 0) return NODE_CARD_COPY.neverPaid
+  return formatBlockHeight(node.lastPaidBlock)
+}
+
+function resolveRoleOrigin(node: MasternodeDto, role: MasternodeKeyRole): NodeRoleOrigin {
+  if (isSharedNode(node) && role === 'owner') {
+    const ownedShares = node.shares?.filter(isOwnedShare) ?? []
+    if (ownedShares.some(share => share.keyIndex != null)) return 'wallet'
+    if (ownedShares.some(share => share.imported && share.canSign)) return 'imported'
+    if (ownedShares.length > 0) return 'watch-only'
+    return 'external'
+  }
+  if (roleKeyIndex(node, role) != null) return 'wallet'
+  if (node.importedSigningRoles.includes(role)) return 'imported'
+  if (node.importedRoles.includes(role)) return 'watch-only'
+  return 'external'
+}
+
+function rolePillFromOrigin(role: MasternodeKeyRole, origin: NodeRoleOrigin): NodeRolePill {
+  const label = MASTERNODE_KEY_ROLE_LABELS[role]
+  switch (origin) {
+    case 'wallet':
+      return { role, label, origin, originLabel: NODE_CARD_COPY.walletOriginShort, inWallet: true, canSign: true }
+    case 'imported':
+      return { role, label, origin, originLabel: NODE_CARD_COPY.importedOriginShort, inWallet: true, canSign: true }
+    case 'watch-only':
+      return { role, label, origin, originLabel: NODE_CARD_COPY.watchOnlyOriginShort, inWallet: true, canSign: false }
+    case 'external':
+      return { role, label, origin, originLabel: NODE_CARD_COPY.externalOriginShort, inWallet: false, canSign: false }
+  }
+}
+
+export function nodeRolePills(node: MasternodeDto): NodeRolePill[] {
+  return WALLET_ROLE_ORDER.map(role => rolePillFromOrigin(role, resolveRoleOrigin(node, role)))
 }

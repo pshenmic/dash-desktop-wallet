@@ -1,11 +1,44 @@
 import type { MasternodeKeyRole, RevocationReason } from '@renderer/api/types'
 import { EVO_MASTERNODE_TYPE, REGULAR_MASTERNODE_TYPE } from '@renderer/constants/masternodes'
 import { TRANSACTION_KIND_BADGES } from '@renderer/constants/transactionKindBadges'
-import { NodeSegment, PayoutChoiceKind, RegistrarKeyChoiceKind } from '@renderer/enums/Masternodes'
+import { MasternodeViewMode, NodeSegment, PayoutChoiceKind, RegistrarKeyChoiceKind } from '@renderer/enums/Masternodes'
 import type { SegmentOption } from '@renderer/types/SegmentedControl'
 import type { TransactionKindBadge } from '@renderer/types/TransactionKindBadge'
 
 export const MASTERNODE_META_SEPARATOR = ' · '
+
+export const MASTERNODE_VIEW_MODE_STORAGE_KEY = 'masternodes.viewMode'
+
+export const MASTERNODE_VIEW_MODE_OPTIONS: SegmentOption<MasternodeViewMode>[] = [
+  { value: MasternodeViewMode.Cards, label: 'Cards' },
+  { value: MasternodeViewMode.List, label: 'List' },
+]
+
+export const MASTERNODE_CARDS_GRID = 'grid grid-cols-1 lg:grid-cols-2 gap-3'
+
+export const NODE_CARD_COPY = {
+  viewModeLabel: 'View mode',
+  regularTitle: 'Regular Masternode',
+  evoTitle: 'Evonode',
+  collateralLabel: 'Collateral',
+  regularCollateral: '1,000 DASH',
+  evoCollateral: '4,000 DASH',
+  votingWeightLabel: 'Governance',
+  regularVotingWeight: '1× vote',
+  evoVotingWeight: '4× vote',
+  lastPaidLabel: 'Last paid',
+  neverPaid: 'Never',
+  awaitingConfirmation: 'Pending',
+  posePenaltyPrefix: 'PoSe',
+  serviceLabel: 'Service',
+  payoutLabel: 'Payout',
+  yourStakeLabel: 'Your stake',
+  rolesLabel: 'Keys',
+  walletOriginShort: 'Wallet',
+  importedOriginShort: 'Imported',
+  watchOnlyOriginShort: 'Watch-only',
+  externalOriginShort: 'External',
+} as const
 
 export const NODES_TAB_COPY = {
   searchPlaceholder: 'ProTxHash, service or owner address',
