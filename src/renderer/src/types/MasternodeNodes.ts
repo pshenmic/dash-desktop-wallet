@@ -1,6 +1,11 @@
 import type { ImportedMasternodeKeyDto, MasternodeDto, MasternodeKeyRole, Network } from '@renderer/api/types'
 import type { AlertTone } from '@renderer/enums/AlertTone'
-import type { PayoutChoiceKind, RegistrarKeyChoiceKind } from '@renderer/enums/Masternodes'
+import type { MasternodeViewMode, PayoutChoiceKind, RegistrarKeyChoiceKind } from '@renderer/enums/Masternodes'
+
+export interface MasternodeViewSwitchProps {
+  value: MasternodeViewMode
+  onChange: (next: MasternodeViewMode) => void
+}
 
 export type NodeRoleOrigin = 'wallet' | 'imported' | 'watch-only' | 'external'
 

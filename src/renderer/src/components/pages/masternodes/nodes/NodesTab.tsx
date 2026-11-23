@@ -4,12 +4,9 @@ import ListSkeleton from '@renderer/components/ui/Skeleton'
 import NoResults from '@renderer/components/ui/NoResults'
 import RetryButton from '@renderer/components/ui/RetryButton'
 import SearchField from '@renderer/components/ui/SearchField'
-import SegmentedControl from '@renderer/components/ui/SegmentedControl'
 import ShowMoreButton from '@renderer/components/ui/ShowMoreButton'
 import {
   MASTERNODE_CARDS_GRID,
-  MASTERNODE_VIEW_MODE_OPTIONS,
-  NODE_CARD_COPY,
   NODE_TABLE_COLUMNS,
   NODES_TAB_COPY,
 } from '@renderer/constants/masternodeNodes'
@@ -18,7 +15,6 @@ import { SECTION_TABLE_HEADER, SECTION_TABLE_WRAPPER } from '@renderer/constants
 import { useConnectionModeContext } from '@renderer/contexts/ConnectionModeContext'
 import { MasternodeViewMode } from '@renderer/enums/Masternodes'
 import { NoResultsTone } from '@renderer/enums/NoResultsTone'
-import { SegmentedControlAppearance } from '@renderer/enums/SegmentedControlAppearance'
 import { refreshMasternodes, useMasternodes } from '@renderer/hooks/useMasternodes'
 import { useMasternodeViewMode } from '@renderer/hooks/useMasternodeViewMode'
 import { useReceiveRequests } from '@renderer/hooks/useReceiveRequests'
@@ -28,6 +24,7 @@ import { emptyNodesDescription, filterNodes, soloMasternodes } from '@renderer/u
 import type { NodesTabProps } from '@renderer/types/MasternodeScreens'
 import AddMasternodeModal from './AddMasternodeModal'
 import ManageMasternodeKeysModal from './ManageMasternodeKeysModal'
+import MasternodeViewSwitch from './MasternodeViewSwitch'
 import NodeCard from './NodeCard'
 import NodeTableRow from './NodeTableRow'
 
@@ -115,13 +112,7 @@ export default function NodesTab({
             className={'flex-1 min-w-[14rem] max-w-[22rem]'}
           />
           <div className={'flex flex-wrap items-center gap-2'}>
-            <SegmentedControl
-              appearance={SegmentedControlAppearance.Pill}
-              ariaLabel={NODE_CARD_COPY.viewModeLabel}
-              options={MASTERNODE_VIEW_MODE_OPTIONS}
-              value={viewMode}
-              onChange={setViewMode}
-            />
+            <MasternodeViewSwitch value={viewMode} onChange={setViewMode} />
             {actionButtons}
           </div>
         </div>

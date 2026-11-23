@@ -4,13 +4,10 @@ import Alert from '@renderer/components/ui/Alert'
 import NoResults from '@renderer/components/ui/NoResults'
 import RetryButton from '@renderer/components/ui/RetryButton'
 import SearchField from '@renderer/components/ui/SearchField'
-import SegmentedControl from '@renderer/components/ui/SegmentedControl'
 import ShowMoreButton from '@renderer/components/ui/ShowMoreButton'
 import ListSkeleton from '@renderer/components/ui/Skeleton'
 import {
   MASTERNODE_CARDS_GRID,
-  MASTERNODE_VIEW_MODE_OPTIONS,
-  NODE_CARD_COPY,
   NODE_TABLE_COLUMNS,
   NODES_TAB_COPY,
 } from '@renderer/constants/masternodeNodes'
@@ -21,7 +18,6 @@ import { useConnectionModeContext } from '@renderer/contexts/ConnectionModeConte
 import { AlertTone } from '@renderer/enums/AlertTone'
 import { MasternodeViewMode } from '@renderer/enums/Masternodes'
 import { NoResultsTone } from '@renderer/enums/NoResultsTone'
-import { SegmentedControlAppearance } from '@renderer/enums/SegmentedControlAppearance'
 import { refreshMasternodes, useMasternodes } from '@renderer/hooks/useMasternodes'
 import { useMasternodeViewMode } from '@renderer/hooks/useMasternodeViewMode'
 import { useReceiveRequests } from '@renderer/hooks/useReceiveRequests'
@@ -30,6 +26,7 @@ import type { SharedTabProps } from '@renderer/types/SharedRegistration'
 import { windowList } from '@renderer/utils/listWindow'
 import { filterNodes, sharedMasternodes } from '@renderer/utils/masternodeNodes'
 import ManageMasternodeKeysModal from '../nodes/ManageMasternodeKeysModal'
+import MasternodeViewSwitch from '../nodes/MasternodeViewSwitch'
 import NodeCard from '../nodes/NodeCard'
 import NodeTableRow from '../nodes/NodeTableRow'
 import AddSharedMasternodeModal from './AddSharedMasternodeModal'
@@ -139,13 +136,7 @@ export default function SharedTab({
             className={'flex-1 min-w-[14rem] max-w-[22rem]'}
           />
           <div className={'flex flex-wrap items-center gap-2'}>
-            <SegmentedControl
-              appearance={SegmentedControlAppearance.Pill}
-              ariaLabel={NODE_CARD_COPY.viewModeLabel}
-              options={MASTERNODE_VIEW_MODE_OPTIONS}
-              value={viewMode}
-              onChange={setViewMode}
-            />
+            <MasternodeViewSwitch value={viewMode} onChange={setViewMode} />
             {actionButton}
           </div>
         </div>
