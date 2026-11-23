@@ -24,7 +24,7 @@ export type RecipientInputAppearance = 'default' | 'subtle'
 export interface RecipientFieldStyle {
   field: string
   textSize: DropdownTextSize
-  searchIconSize: number
+  bookIconSize: number
 }
 
 export interface RecipientInputProps {
@@ -32,6 +32,7 @@ export interface RecipientInputProps {
   valueBadge?: string
   onChange: (value: string) => void
   data: TransferPageType['recipient']
+  destination?: DestinationKind
   compact?: boolean
   appearance?: RecipientInputAppearance
   ariaLabel?: string

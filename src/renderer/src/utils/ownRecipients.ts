@@ -1,4 +1,5 @@
-import type { WalletAddressDto } from '../api/types'
+import type { Contact, WalletAddressDto } from '../api/types'
+import { RECIPIENT_AUTOCOMPLETE_MIN_CHARS } from '../constants/addressField'
 import { DestinationKind } from '../enums/DestinationKind'
 import type { DropdownFieldOption } from '../types/DropdownField'
 import type { ReceiveRequestDto, ReceiveRequestKind } from '../types/ReceiveRequest'
@@ -22,17 +23,35 @@ export function walletAddressLabels(
   return labels
 }
 
-export function matchingOptionsByLabel(
+export function recipientAddressBadge(
+  address: string,
+  walletLabels?: ReadonlyMap<string, string>,
+  contacts?: ReadonlyArray<Pick<Contact, 'address' | 'label'>>,
+): string | undefined {
+  const trimmed = address.trim()
+  if (trimmed === '') return undefined
+  const walletLabel = walletLabels?.get(trimmed)?.trim()
+  if (walletLabel) return walletLabel
+  const contactLabel = contacts?.find(contact => contact.address.trim() === trimmed)?.label.trim()
+  return contactLabel || undefined
+}
+
+export function optionMatchesQuery(option: DropdownFieldOption, needle: string): boolean {
+  const badge = option.badge?.trim()
+  if (badge && badge.toLowerCase().includes(needle)) return true
+  if (option.value.toLowerCase().includes(needle)) return true
+  return Boolean(option.searchTerms?.some(term => term.toLowerCase().includes(needle)))
+}
+
+export function matchingOwnOptions(
   options: DropdownFieldOption[],
   query: string,
+  minChars = RECIPIENT_AUTOCOMPLETE_MIN_CHARS,
 ): DropdownFieldOption[] {
   const trimmed = query.trim()
-  if (trimmed === '' || options.some(option => option.value === trimmed)) return []
+  if (trimmed.length < minChars || options.some(option => option.value === trimmed)) return []
   const needle = trimmed.toLowerCase()
-  return options.filter(option => {
-    const badge = option.badge?.trim()
-    return badge != null && badge !== '' && badge.toLowerCase().includes(needle)
-  })
+  return options.filter(option => optionMatchesQuery(option, needle))
 }
 
 export function availableOwnRecipientOptions(
@@ -169,6 +188,7 @@ export function ownRecipientOptions(kind: DestinationKind, inventory: OwnRecipie
         value: identity.identifier,
         label: identity.identifier,
         description: identity.usernames[0],
+        searchTerms: identity.usernames,
         metadata: [`${creditsToDash(identity.balance.amount)} Dash`],
       }))
       break

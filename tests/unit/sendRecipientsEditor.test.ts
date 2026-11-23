@@ -1,15 +1,20 @@
-import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
-import React, {isValidElement, type ReactElement, type ReactNode} from 'react'
-import {bech32m} from '@scure/base'
-import {DestinationKind} from '../../src/renderer/src/enums/DestinationKind'
-import {DESTINATION_PLACEHOLDERS} from '../../src/renderer/src/constants/sendPages'
-import type {SendRecipientsEditorProps} from '../../src/renderer/src/types/SendRecipients'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import React, { isValidElement, type ReactElement, type ReactNode } from 'react'
+import { bech32m } from '@scure/base'
+import { DestinationKind } from '../../src/renderer/src/enums/DestinationKind'
+import { DESTINATION_PLACEHOLDERS } from '../../src/renderer/src/constants/sendPages'
+import type { SendRecipientsEditorProps } from '../../src/renderer/src/types/SendRecipients'
 
-vi.mock('@renderer/components/dash-ui-kit-extended', () => ({PlusIcon: 'svg', Text: 'span'}))
-vi.mock('@renderer/contexts/AuthContext', () => ({useAuth: () => ({status: {network: 'testnet'}})}))
-vi.mock('@renderer/components/ui/AllocationAmountRow', () => ({default: 'allocation-row'}))
-vi.mock('@renderer/components/ui/CreditsAmount', () => ({default: 'span'}))
-vi.mock('@renderer/components/pages/transfer/RecipientInput', () => ({default: 'recipient-input'}))
+const addressBookHarness = vi.hoisted(() => ({
+  contacts: [] as Array<{ id: number; label: string; address: string; network: 'testnet'; createdAt: number }>,
+}))
+
+vi.mock('@renderer/components/dash-ui-kit-extended', () => ({ PlusIcon: 'svg', Text: 'span' }))
+vi.mock('@renderer/contexts/AuthContext', () => ({ useAuth: () => ({ status: { network: 'testnet' } }) }))
+vi.mock('@renderer/hooks/useAddressBook', () => ({ useAddressBook: () => ({ contacts: addressBookHarness.contacts }) }))
+vi.mock('@renderer/components/ui/AllocationAmountRow', () => ({ default: 'allocation-row' }))
+vi.mock('@renderer/components/ui/CreditsAmount', () => ({ default: 'span' }))
+vi.mock('@renderer/components/pages/transfer/RecipientInput', () => ({ default: 'recipient-input' }))
 
 import SendRecipientsEditor from '../../src/renderer/src/components/pages/transfer/SendRecipientsEditor'
 
@@ -17,14 +22,14 @@ type Node = ReactElement<Record<string, unknown>>
 
 function elements(node: ReactNode): Node[] {
   if (Array.isArray(node)) return node.flatMap(elements)
-  if (!isValidElement<{children?: ReactNode}>(node)) return []
+  if (!isValidElement<{ children?: ReactNode }>(node)) return []
   return [node as Node, ...elements(node.props.children)]
 }
 
 function props(overrides: Partial<SendRecipientsEditorProps> = {}): SendRecipientsEditorProps {
   return {
-    recipients: [{id: 'a', address: '', amount: ''}],
-    errors: [{address: null, amount: null}],
+    recipients: [{ id: 'a', address: '', amount: '' }],
+    errors: [{ address: null, amount: null }],
     limit: 5,
     destination: DestinationKind.PlatformAddress,
     budgetDuffs: 100_000_000n,
@@ -38,16 +43,20 @@ function props(overrides: Partial<SendRecipientsEditorProps> = {}): SendRecipien
 
 const platformAddress = bech32m.encode('tdash', bech32m.toWords(Uint8Array.from([0xb0, ...Array(20).fill(1)])))
 
-beforeEach(() => vi.stubGlobal('React', React))
+beforeEach(() => {
+  vi.stubGlobal('React', React)
+  addressBookHarness.contacts = []
+})
 
 afterEach(() => vi.unstubAllGlobals())
 
 describe('SendRecipientsEditor', () => {
-  it.each([DestinationKind.PlatformAddress, DestinationKind.Identity, DestinationKind.Shielded])('renders %s recipients through RecipientInput', destination => {
-    const input = elements(SendRecipientsEditor(props({destination}))).find(node => node.type === 'recipient-input')!
+  it.each([DestinationKind.PlatformAddress, DestinationKind.Identity, DestinationKind.Shielded])('renders %s recipients through RecipientInput with destination', destination => {
+    const input = elements(SendRecipientsEditor(props({ destination }))).find(node => node.type === 'recipient-input')!
     expect(input.props.compact).toBe(true)
     expect(input.props.appearance).toBe('subtle')
-    expect((input.props.data as {placeholder: string}).placeholder).toBe(DESTINATION_PLACEHOLDERS[destination].testnet)
+    expect(input.props.destination).toBe(destination)
+    expect((input.props.data as { placeholder: string }).placeholder).toBe(DESTINATION_PLACEHOLDERS[destination].testnet)
   })
 
   it('validates Platform recipients as Platform addresses', () => {
@@ -58,7 +67,7 @@ describe('SendRecipientsEditor', () => {
   })
 
   it('keeps the new identity recipient read-only', () => {
-    const nodes = elements(SendRecipientsEditor(props({destination: DestinationKind.NewIdentity})))
+    const nodes = elements(SendRecipientsEditor(props({ destination: DestinationKind.NewIdentity })))
     expect(nodes.some(node => node.type === 'recipient-input')).toBe(false)
     const input = nodes.find(node => node.type === 'input')!
     expect(input.props.readOnly).toBe(true)
@@ -68,30 +77,33 @@ describe('SendRecipientsEditor', () => {
   it('drops the slider for fixed denominations', () => {
     const withSlider = elements(SendRecipientsEditor(props())).find(node => node.type === 'allocation-row')!
     expect(withSlider.props.slider).toBeDefined()
-    const denominations = elements(SendRecipientsEditor(props({amountDenominations: [100_000_000n]}))).find(node => node.type === 'allocation-row')!
+    const denominations = elements(SendRecipientsEditor(props({ amountDenominations: [100_000_000n] }))).find(node => node.type === 'allocation-row')!
     expect(denominations.props.slider).toBeUndefined()
   })
 
   it('caps typed amounts to the remaining budget', () => {
     const onChange = vi.fn()
-    const row = elements(SendRecipientsEditor(props({onChange}))).find(node => node.type === 'allocation-row')!
+    const row = elements(SendRecipientsEditor(props({ onChange }))).find(node => node.type === 'allocation-row')!
     ;(row.props.onChange as (value: string) => void)('5')
-    expect(onChange).toHaveBeenCalledWith([{id: 'a', address: '', amount: '1'}])
+    expect(onChange).toHaveBeenCalledWith([{ id: 'a', address: '', amount: '1' }])
   })
 
-  it('forwards wallet address suggestions to each recipient and excludes addresses chosen in other rows', () => {
+  it('forwards wallet address suggestions and suppresses errors for 3+ char contact queries', () => {
     const onRetryOwnOptions = vi.fn()
+    addressBookHarness.contacts = [
+      { id: 1, label: 'Treasury Partner', address: platformAddress, network: 'testnet', createdAt: 0 },
+    ]
     const ownOptions = [
-      {value: 'addr-1', label: 'addr-1'},
-      {value: 'addr-2', label: 'addr-2'},
+      { value: 'addr-1', label: 'addr-1' },
+      { value: 'addr-2', label: 'addr-2' },
     ]
     const inputs = elements(SendRecipientsEditor(props({
       destination: DestinationKind.Identity,
       recipients: [
-        {id: 'a', address: 'addr-1', amount: '0.5'},
-        {id: 'b', address: '', amount: '0.5'},
+        { id: 'a', address: 'addr-1', amount: '0.5' },
+        { id: 'b', address: '', amount: '0.5' },
       ],
-      errors: [{address: null, amount: null}, {address: null, amount: null}],
+      errors: [{ address: null, amount: null }, { address: null, amount: null }],
       ownOptions,
       ownOptionsLoading: true,
       ownOptionsError: 'Failed',
@@ -101,18 +113,41 @@ describe('SendRecipientsEditor', () => {
 
     expect(inputs).toHaveLength(2)
     expect(inputs[0].props.ownOptions).toEqual(ownOptions)
-    expect(inputs[1].props.ownOptions).toEqual([{value: 'addr-2', label: 'addr-2'}])
+    expect(inputs[1].props.ownOptions).toEqual([{ value: 'addr-2', label: 'addr-2' }])
     expect(inputs[0].props.valueBadge).toBe('Primary')
     expect(inputs[1].props.valueBadge).toBeUndefined()
     expect(inputs[0].props.ownOptionsHeading).toBe('Your identities')
     expect(inputs[0].props.ownOptionsLoading).toBe(true)
     expect(inputs[0].props.ownOptionsError).toBe('Failed')
     expect(inputs[0].props.onRetryOwnOptions).toBe(onRetryOwnOptions)
+
+    const contactSearchTree = SendRecipientsEditor(props({
+      destination: DestinationKind.PlatformAddress,
+      recipients: [{ id: 'c', address: 'Trea', amount: '' }],
+      errors: [{ address: 'Invalid address', amount: null }],
+    }))
+    const contactInput = elements(contactSearchTree).find(node => node.type === 'recipient-input')!
+    expect(contactInput.props.invalid).toBe(false)
+
+    const shortSearchTree = SendRecipientsEditor(props({
+      destination: DestinationKind.PlatformAddress,
+      recipients: [{ id: 'c', address: 'Tr', amount: '' }],
+      errors: [{ address: 'Invalid address', amount: null }],
+    }))
+    const shortInput = elements(shortSearchTree).find(node => node.type === 'recipient-input')!
+    expect(shortInput.props.invalid).toBe(true)
+
+    const contactSelectedTree = SendRecipientsEditor(props({
+      destination: DestinationKind.PlatformAddress,
+      recipients: [{ id: 'c', address: platformAddress, amount: '' }],
+    }))
+    const badgeInput = elements(contactSelectedTree).find(node => node.type === 'recipient-input')!
+    expect(badgeInput.props.valueBadge).toBe('Treasury Partner')
   })
 
   it('centers the panel at max-w-170 with natural height and renders no Apply or Reset buttons', () => {
     const tree = SendRecipientsEditor(props())
-    const rootClassName = String((tree.props as {className?: string}).className ?? '')
+    const rootClassName = String((tree.props as { className?: string }).className ?? '')
     expect(rootClassName).toContain('mx-auto')
     expect(rootClassName).toContain('max-w-170')
     expect(rootClassName).not.toContain('100dvh')

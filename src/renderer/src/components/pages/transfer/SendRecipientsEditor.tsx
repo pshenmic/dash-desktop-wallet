@@ -1,14 +1,16 @@
 import { PlusIcon, Text } from '@renderer/components/dash-ui-kit-extended'
 import { useAuth } from '@renderer/contexts/AuthContext'
+import { useAddressBook } from '@renderer/hooks/useAddressBook'
 import { DestinationKind } from '@renderer/enums/DestinationKind'
 import { DESTINATION_PLACEHOLDERS, sendPageData } from '@renderer/constants/sendPages'
 import { SEND_AMOUNT_PATTERN } from '@renderer/constants/sendRecipients'
-import { ADDRESS_INPUT, ADDRESS_INPUT_TEXT_SIZES, FIELD_SUBTLE } from '@renderer/constants/addressField'
+import { ADDRESS_INPUT, ADDRESS_INPUT_TEXT_SIZES, FIELD_SUBTLE, RECIPIENT_AUTOCOMPLETE_MIN_CHARS } from '@renderer/constants/addressField'
 import { CHIP_ACTION, SURFACE_PANEL } from '@renderer/constants/surfaces'
 import type { SendRecipientsEditorProps } from '@renderer/types/SendRecipients'
 import { creditsToDuffs, dashToDuffs, davToDash, duffsToCredits } from '@renderer/utils/balance'
 import { isValidDestinationAddress } from '@renderer/utils/destinationAddress'
-import { availableOwnRecipientOptions, matchingOptionsByLabel } from '@renderer/utils/ownRecipients'
+import { autocompleteContacts } from '@renderer/utils/matchingContacts'
+import { availableOwnRecipientOptions, matchingOwnOptions, recipientAddressBadge } from '@renderer/utils/ownRecipients'
 import { capSendAmount, recipientPercent, recipientRemainingDuffs, recipientSliderAmount, recipientTotalDuffs } from '@renderer/utils/sendRecipients'
 import AllocationAmountRow from '@renderer/components/ui/AllocationAmountRow'
 import CreditsAmount from '@renderer/components/ui/CreditsAmount'
@@ -35,7 +37,9 @@ export default function SendRecipientsEditor({
   onChange,
 }: SendRecipientsEditorProps): React.JSX.Element {
   const {status} = useAuth()
+  const { contacts } = useAddressBook()
   const network = status?.network ?? null
+  const isValidForDestination = (address: string): boolean => isValidDestinationAddress(destination, address, network)
   const recipientData = {...sendPageData.recipient, placeholder: DESTINATION_PLACEHOLDERS[destination][network ?? 'testnet']}
   const update = (id: string, field: 'address' | 'amount', value: string): void => {
     onChange(recipients.map(recipient => recipient.id === id ? {...recipient, [field]: value} : recipient))
@@ -77,10 +81,15 @@ export default function SendRecipientsEditor({
           const receivedCredits = duffsToCredits(amount) - (feeCredits ?? 0n)
           const creatingIdentity = destination === DestinationKind.NewIdentity
           const recipientOwnOptions = availableOwnRecipientOptions(ownOptions, recipients, recipient.id)
-          const hasLabelMatch = recipientOwnOptions != null && matchingOptionsByLabel(recipientOwnOptions, recipient.address).length > 0
-          const addressError = !creatingIdentity && recipient.address.length > 0 && !hasLabelMatch && errors[index]?.address
+          const hasOwnMatch = recipientOwnOptions != null && matchingOwnOptions(recipientOwnOptions, recipient.address).length > 0
+          const hasContactMatch = autocompleteContacts(contacts, recipient.address, isValidForDestination).length > 0
+          const hasQueryMatch =
+            recipient.address.trim().length >= RECIPIENT_AUTOCOMPLETE_MIN_CHARS
+            && !isValidForDestination(recipient.address)
+            && (hasOwnMatch || hasContactMatch)
+          const addressError = !creatingIdentity && recipient.address.length > 0 && !hasQueryMatch && errors[index]?.address
           const amountError = recipient.amount.length > 0 && errors[index]?.amount
-          const recipientBadge = addressLabels?.get(recipient.address.trim())
+          const recipientBadge = recipientAddressBadge(recipient.address, addressLabels, contacts)
           let recipientLabel = `Recipient ${index + 1}`
           let inputLabel = `Recipient ${index + 1} address`
           if (destination === DestinationKind.Identity) {
@@ -116,11 +125,12 @@ export default function SendRecipientsEditor({
               <RecipientInput
                 compact
                 appearance="subtle"
+                destination={destination}
                 ariaLabel={inputLabel}
                 value={recipient.address}
                 valueBadge={recipientBadge}
                 onChange={value => update(recipient.id, 'address', value)}
-                validate={address => isValidDestinationAddress(destination, address, network)}
+                validate={isValidForDestination}
                 invalid={!!addressError}
                 valueAvatar={destination === DestinationKind.Identity}
                 ownOptions={recipientOwnOptions}
