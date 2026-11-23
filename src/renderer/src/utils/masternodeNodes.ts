@@ -185,7 +185,7 @@ export function nodeSegmentOptions(nodes: MasternodeDto[], query: string): Segme
   }))
 }
 
-export function filterNodes(nodes: MasternodeDto[], query: string, segment: NodeSegment): MasternodeDto[] {
+export function filterNodes(nodes: MasternodeDto[], query: string, segment: NodeSegment = NodeSegment.All): MasternodeDto[] {
   const needle = query.trim().toLowerCase()
   return nodes.filter(node => {
     if (needle !== '') {

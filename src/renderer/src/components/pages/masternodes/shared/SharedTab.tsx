@@ -28,7 +28,7 @@ import { useReceiveRequests } from '@renderer/hooks/useReceiveRequests'
 import { useScrollEndSentinel } from '@renderer/hooks/useScrollEndSentinel'
 import type { SharedTabProps } from '@renderer/types/SharedRegistration'
 import { windowList } from '@renderer/utils/listWindow'
-import { filterNodes, nodeSegmentOptions, sharedMasternodes } from '@renderer/utils/masternodeNodes'
+import { filterNodes, sharedMasternodes } from '@renderer/utils/masternodeNodes'
 import ManageMasternodeKeysModal from '../nodes/ManageMasternodeKeysModal'
 import NodeCard from '../nodes/NodeCard'
 import NodeTableRow from '../nodes/NodeTableRow'
@@ -36,8 +36,6 @@ import AddSharedMasternodeModal from './AddSharedMasternodeModal'
 
 export default function SharedTab({
   walletId,
-  segment,
-  onSegmentChange,
   query,
   onQueryChange,
   visibleCount,
@@ -53,8 +51,7 @@ export default function SharedTab({
   const [keysOpen, setKeysOpen] = useState(false)
   const appliedQuery = useDeferredValue(query)
   const sharedNodes = useMemo(() => sharedMasternodes(nodes), [nodes])
-  const options = useMemo(() => nodeSegmentOptions(sharedNodes, appliedQuery), [sharedNodes, appliedQuery])
-  const filtered = useMemo(() => filterNodes(sharedNodes, appliedQuery, segment), [sharedNodes, appliedQuery, segment])
+  const filtered = useMemo(() => filterNodes(sharedNodes, appliedQuery), [sharedNodes, appliedQuery])
   const view = useMemo(() => windowList(filtered, visibleCount), [filtered, visibleCount])
   const hasNodes = sharedNodes.length > 0
   const showSkeleton = loading && !discovered && !hasNodes
@@ -152,23 +149,11 @@ export default function SharedTab({
             {actionButton}
           </div>
         </div>
-        <SegmentedControl
-          appearance={SegmentedControlAppearance.Pill}
-          ariaLabel={SHARED_TAB_COPY.segmentsLabel}
-          options={options}
-          value={segment}
-          onChange={onSegmentChange}
-          className={'flex-wrap'}
-        />
         {filtered.length === 0 ? (
-          appliedQuery.trim() === '' ? (
-            <NoResults noResults={SHARED_TAB_COPY.segmentEmpty} />
-          ) : (
-            <NoResults
-              noResults={`${SHARED_TAB_COPY.noMatch} “${appliedQuery.trim()}”`}
-              action={<Button type={'button'} size={'compact'} colorScheme={'primary-light'} onClick={() => onQueryChange('')}>{SHARED_TAB_COPY.clearSearch}</Button>}
-            />
-          )
+          <NoResults
+            noResults={`${SHARED_TAB_COPY.noMatch} “${appliedQuery.trim()}”`}
+            action={<Button type={'button'} size={'compact'} colorScheme={'primary-light'} onClick={() => onQueryChange('')}>{SHARED_TAB_COPY.clearSearch}</Button>}
+          />
         ) : viewMode === MasternodeViewMode.Cards ? (
           <div className={MASTERNODE_CARDS_GRID}>
             {view.items.map(node => (

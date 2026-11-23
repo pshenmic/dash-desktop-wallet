@@ -10,7 +10,6 @@ import {
   MASTERNODE_CARDS_GRID,
   MASTERNODE_VIEW_MODE_OPTIONS,
   NODE_CARD_COPY,
-  NODE_SEGMENT_EMPTY,
   NODE_TABLE_COLUMNS,
   NODES_TAB_COPY,
 } from '@renderer/constants/masternodeNodes'
@@ -25,7 +24,7 @@ import { useMasternodeViewMode } from '@renderer/hooks/useMasternodeViewMode'
 import { useReceiveRequests } from '@renderer/hooks/useReceiveRequests'
 import { useScrollEndSentinel } from '@renderer/hooks/useScrollEndSentinel'
 import { windowList } from '@renderer/utils/listWindow'
-import { emptyNodesDescription, filterNodes, nodeSegmentOptions, soloMasternodes } from '@renderer/utils/masternodeNodes'
+import { emptyNodesDescription, filterNodes, soloMasternodes } from '@renderer/utils/masternodeNodes'
 import type { NodesTabProps } from '@renderer/types/MasternodeScreens'
 import AddMasternodeModal from './AddMasternodeModal'
 import ManageMasternodeKeysModal from './ManageMasternodeKeysModal'
@@ -34,8 +33,6 @@ import NodeTableRow from './NodeTableRow'
 
 export default function NodesTab({
   walletId,
-  segment,
-  onSegmentChange,
   query,
   onQueryChange,
   visibleCount,
@@ -51,8 +48,7 @@ export default function NodesTab({
   const [keysOpen, setKeysOpen] = useState(false)
   const appliedQuery = useDeferredValue(query)
   const soloNodes = useMemo(() => soloMasternodes(nodes), [nodes])
-  const options = useMemo(() => nodeSegmentOptions(soloNodes, appliedQuery), [soloNodes, appliedQuery])
-  const filtered = useMemo(() => filterNodes(soloNodes, appliedQuery, segment), [soloNodes, appliedQuery, segment])
+  const filtered = useMemo(() => filterNodes(soloNodes, appliedQuery), [soloNodes, appliedQuery])
   const view = useMemo(() => windowList(filtered, visibleCount), [filtered, visibleCount])
   const hasNodes = soloNodes.length > 0
   const showSkeleton = loading && !discovered && !hasNodes
@@ -129,23 +125,11 @@ export default function NodesTab({
             {actionButtons}
           </div>
         </div>
-        <SegmentedControl
-          appearance={SegmentedControlAppearance.Pill}
-          ariaLabel={NODES_TAB_COPY.segmentsLabel}
-          options={options}
-          value={segment}
-          onChange={onSegmentChange}
-          className={'flex-wrap'}
-        />
         {filtered.length === 0 ? (
-          appliedQuery.trim() === '' ? (
-            <NoResults noResults={NODE_SEGMENT_EMPTY[segment]} />
-          ) : (
-            <NoResults
-              noResults={`${NODES_TAB_COPY.noMatch} “${appliedQuery.trim()}”`}
-              action={<Button type={'button'} size={'compact'} colorScheme={'primary-light'} onClick={() => onQueryChange('')}>{NODES_TAB_COPY.clearSearch}</Button>}
-            />
-          )
+          <NoResults
+            noResults={`${NODES_TAB_COPY.noMatch} “${appliedQuery.trim()}”`}
+            action={<Button type={'button'} size={'compact'} colorScheme={'primary-light'} onClick={() => onQueryChange('')}>{NODES_TAB_COPY.clearSearch}</Button>}
+          />
         ) : viewMode === MasternodeViewMode.Cards ? (
           <div className={MASTERNODE_CARDS_GRID}>
             {view.items.map(node => (

@@ -6,7 +6,7 @@ import { MASTERNODE_PARAMS, MASTERNODES_PAGE_SIZE, MASTERNODES_TAB_LABELS } from
 import { PAGE_HEADERS } from '@renderer/constants/pageHeaders'
 import { SURFACE_PANEL } from '@renderer/constants/surfaces'
 import { useAuth } from '@renderer/contexts/AuthContext'
-import { MasternodesTab, NodeSegment } from '@renderer/enums/Masternodes'
+import { MasternodesTab } from '@renderer/enums/Masternodes'
 import { prefetchAddresses } from '@renderer/hooks/useAdresses'
 import { useDetailScrollRestore } from '@renderer/hooks/useDetailScrollRestore'
 import { prefetchReceiveRequests } from '@renderer/hooks/useReceiveRequests'
@@ -31,7 +31,6 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
   const [sharedQuery, setSharedQuery] = useState('')
   const [sharedVisibleCount, setSharedVisibleCount] = useState(MASTERNODES_PAGE_SIZE)
   const tab = enumParam(MasternodesTab, searchParams.get(MASTERNODE_PARAMS.tab), MasternodesTab.Nodes)
-  const segment = searchParams.get(MASTERNODE_PARAMS.segment)
   const detail = searchParams.get(MASTERNODE_PARAMS.node)
   const persistedWizard = getOrCreateRegisterWizardState(walletId, network ?? null)
   const registering = tab === MasternodesTab.Nodes
@@ -48,20 +47,16 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
     prefetchReceiveRequests(walletId).catch(() => {})
   }, [walletId])
 
-  const selectTab = (next: MasternodesTab, nextSegment: NodeSegment | null): void => {
+  const selectTab = (next: MasternodesTab): void => {
     setNodeVisibleCount(MASTERNODES_PAGE_SIZE)
     setSharedVisibleCount(MASTERNODES_PAGE_SIZE)
     setSearchParams(prev => withParams(prev, {
       [MASTERNODE_PARAMS.tab]: next === MasternodesTab.Nodes ? null : next,
-      [MASTERNODE_PARAMS.segment]: nextSegment,
       [MASTERNODE_PARAMS.node]: null,
       [MASTERNODE_PARAMS.register]: null,
       [MASTERNODE_PARAMS.participate]: null,
     }), { replace: true })
   }
-
-  const selectNodes = (nextSegment: NodeSegment): void => selectTab(MasternodesTab.Nodes, nextSegment)
-  const selectShared = (nextSegment: NodeSegment): void => selectTab(MasternodesTab.Shared, nextSegment)
 
   const openDetail = (value: string): void => {
     saveListScroll()
@@ -137,8 +132,6 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
       content: (
         <NodesTab
           walletId={walletId}
-          segment={enumParam(NodeSegment, segment, NodeSegment.All)}
-          onSegmentChange={selectNodes}
           query={nodeQuery}
           onQueryChange={(query) => { setNodeQuery(query); setNodeVisibleCount(MASTERNODES_PAGE_SIZE) }}
           visibleCount={nodeVisibleCount}
@@ -154,8 +147,6 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
       content: (
         <SharedTab
           walletId={walletId}
-          segment={enumParam(NodeSegment, segment, NodeSegment.All)}
-          onSegmentChange={selectShared}
           query={sharedQuery}
           onQueryChange={(query) => { setSharedQuery(query); setSharedVisibleCount(MASTERNODES_PAGE_SIZE) }}
           visibleCount={sharedVisibleCount}
@@ -192,7 +183,7 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
               <PageTabs
                 items={items}
                 value={tab}
-                onValueChange={value => selectTab(enumParam(MasternodesTab, value, MasternodesTab.Nodes), null)}
+                onValueChange={value => selectTab(enumParam(MasternodesTab, value, MasternodesTab.Nodes))}
               />
             </div>
           </>

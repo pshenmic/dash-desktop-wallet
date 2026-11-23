@@ -1,13 +1,11 @@
 import type { Network } from '@renderer/api/types'
-import type { ContestSegment, ContestSort, NodeSegment, ProposalSegment, ProposalSort } from '@renderer/enums/Masternodes'
+import type { ContestSegment, ContestSort, ProposalSegment, ProposalSort } from '@renderer/enums/Masternodes'
 
 export interface MasternodesPageProps {
   walletId: string
 }
 
 export interface NodesTabProps extends MasternodesPageProps {
-  segment: NodeSegment
-  onSegmentChange: (segment: NodeSegment) => void
   query: string
   onQueryChange: (query: string) => void
   visibleCount: number
