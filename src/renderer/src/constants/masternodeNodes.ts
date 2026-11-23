@@ -30,6 +30,7 @@ export const NODE_CARD_COPY = {
   neverPaid: 'Never',
   awaitingConfirmation: 'Pending',
   posePenaltyPrefix: 'PoSe',
+  proTxHashLabel: 'ProTxHash',
   serviceLabel: 'Service',
   payoutLabel: 'Payout',
   yourStakeLabel: 'Your stake',

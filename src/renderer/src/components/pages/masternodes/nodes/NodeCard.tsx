@@ -37,7 +37,6 @@ import {
   nodeLastPaidDisplay,
   nodeRolePills,
   nodeVotingWeightDisplay,
-  shortProTxHash,
 } from '@renderer/utils/masternodeNodes'
 
 function rolePillToneClass(origin: NodeRoleOrigin): string {
@@ -70,6 +69,8 @@ export default function NodeCard({ node, labelsByAddress, onOpen }: NodeCardProp
   const shared = isSharedNode(node)
   const isEvo = node.type === EVO_MASTERNODE_TYPE
   const title = nodeCardTitle(node, labelsByAddress)
+  const serviceLabel = formatServiceAddress(node.serviceAddress)
+  const hasAssignedService = serviceLabel !== NODE_DETAIL_COPY.unassignedService
   const summary = shared ? calculateShareSummary(node.shares) : null
   const rolePills = nodeRolePills(node)
 
@@ -127,12 +128,6 @@ export default function NodeCard({ node, labelsByAddress, onOpen }: NodeCardProp
                 {shared && (
                   <CustomBadge variant={'accent'} size={'xs'} text={NODE_DETAIL_COPY.sharedBadge} className={'shrink-0'} />
                 )}
-                <Text reset size={12} weight={'medium'} color={'brand'} opacity={50} className={'font-mono tabular-nums'}>
-                  {shortProTxHash(node.proTxHash)}
-                </Text>
-                <span className={'pointer-events-auto relative z-10 inline-flex shrink-0'}>
-                  <CopyButton text={node.proTxHash} label={NODE_ROW_COPY.copy} />
-                </span>
               </div>
             </div>
           </div>
@@ -150,35 +145,63 @@ export default function NodeCard({ node, labelsByAddress, onOpen }: NodeCardProp
           </div>
         </div>
 
-        <div className={'pointer-events-none grid grid-cols-2 gap-2.5'}>
-          <div className={'flex min-w-0 flex-col gap-0.5'}>
-            <Text reset size={10} weight={'medium'} color={'brand'} opacity={50} transform={'uppercase'} className={'tracking-wider'}>
+        <div className={'pointer-events-none flex min-w-0 flex-col gap-1'}>
+          <Text reset size={10} weight={'medium'} color={'brand'} opacity={50} transform={'uppercase'} className={'tracking-wider'}>
+            {NODE_CARD_COPY.proTxHashLabel}
+          </Text>
+          <div className={'flex min-w-0 items-start gap-1.5'}>
+            <HighlightedIdentifier className={'min-w-0 flex-1 font-mono text-xs! leading-[1.15rem]! break-all font-medium!'}>
+              {node.proTxHash}
+            </HighlightedIdentifier>
+            <span className={'pointer-events-auto relative z-10 mt-0.5 inline-flex shrink-0'}>
+              <CopyButton text={node.proTxHash} label={NODE_ROW_COPY.copy} />
+            </span>
+          </div>
+        </div>
+
+        <div className={'pointer-events-none flex flex-col gap-1.5'}>
+          <div className={'flex items-baseline justify-between gap-3'}>
+            <Text reset size={10} weight={'medium'} color={'brand'} opacity={50} transform={'uppercase'} className={'shrink-0 tracking-wider'}>
               {NODE_CARD_COPY.serviceLabel}
             </Text>
-            <Text reset size={12} weight={'medium'} color={'brand'} className={'truncate tabular-nums'}>
-              {formatServiceAddress(node.serviceAddress)}
-            </Text>
-            {node.platformP2PPort != null && node.platformHttpPort != null && (
-              <Text reset size={10} weight={'medium'} color={'brand'} opacity={50} className={'truncate tabular-nums'}>
-                {`${NODE_DETAIL_COPY.platformPorts} /${node.platformP2PPort}/${node.platformHttpPort}`}
-              </Text>
-            )}
+            <div className={'flex min-w-0 flex-col items-end gap-0.5'}>
+              <div className={'flex min-w-0 items-center justify-end gap-1.5'}>
+                <Text reset size={12} weight={'medium'} color={'brand'} className={'tabular-nums text-right break-all'}>
+                  {serviceLabel}
+                </Text>
+                {hasAssignedService && (
+                  <span className={'pointer-events-auto relative z-10 inline-flex shrink-0'}>
+                    <CopyButton text={serviceLabel} />
+                  </span>
+                )}
+              </div>
+              {node.platformP2PPort != null && node.platformHttpPort != null && (
+                <Text reset size={10} weight={'medium'} color={'brand'} opacity={50} className={'tabular-nums text-right'}>
+                  {`${NODE_DETAIL_COPY.platformPorts} /${node.platformP2PPort}/${node.platformHttpPort}`}
+                </Text>
+              )}
+            </div>
           </div>
 
-          <div className={'flex min-w-0 flex-col gap-0.5'}>
-            <Text reset size={10} weight={'medium'} color={'brand'} opacity={50} transform={'uppercase'} className={'tracking-wider'}>
+          <div className={'flex items-start justify-between gap-3'}>
+            <Text reset size={10} weight={'medium'} color={'brand'} opacity={50} transform={'uppercase'} className={'mt-0.5 shrink-0 tracking-wider'}>
               {NODE_CARD_COPY.payoutLabel}
             </Text>
             {shared ? (
-              <Text reset size={12} weight={'medium'} color={'brand'} opacity={80} className={'truncate'}>
+              <Text reset size={12} weight={'medium'} color={'brand'} opacity={80} className={'text-right'}>
                 {NODE_DETAIL_COPY.sharedPayoutValue}
               </Text>
             ) : node.payeeAddress ? (
-              <HighlightedIdentifier className={'min-w-0 font-mono text-xs! truncate [&>div]:truncate'}>
-                {node.payeeAddress}
-              </HighlightedIdentifier>
+              <div className={'flex min-w-0 flex-1 items-start justify-end gap-1.5'}>
+                <HighlightedIdentifier className={'min-w-0 font-mono text-xs! leading-[1.15rem]! break-all text-right'}>
+                  {node.payeeAddress}
+                </HighlightedIdentifier>
+                <span className={'pointer-events-auto relative z-10 mt-0.5 inline-flex shrink-0'}>
+                  <CopyButton text={node.payeeAddress} />
+                </span>
+              </div>
             ) : (
-              <Text reset size={12} weight={'medium'} color={'brand'} opacity={50} className={'truncate'}>
+              <Text reset size={12} weight={'medium'} color={'brand'} opacity={50} className={'text-right'}>
                 {NODE_DETAIL_COPY.pendingIndex}
               </Text>
             )}
