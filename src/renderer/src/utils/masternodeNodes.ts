@@ -1,4 +1,4 @@
-import type { ConnectionType, MasternodeDto, MasternodeKeyRole, OwnedMasternodeShareDto } from '@renderer/api/types'
+import type { ConnectionType, ImportedMasternodeKeyDto, MasternodeDto, MasternodeKeyRole, OwnedMasternodeShareDto } from '@renderer/api/types'
 import { DASH_UNIT } from '@renderer/constants/balance'
 import {
   MANAGE_KEYS_COPY,
@@ -30,6 +30,7 @@ import type { MasternodeShareSummary, NodeAccessDisplay } from '@renderer/types/
 import type { SegmentOption } from '@renderer/types/SegmentedControl'
 import { davToDash } from './balance'
 import { countLabel } from './countLabel'
+import { blsLegacyHexFromBasicHex } from './masternodeBls'
 
 const WALLET_ROLE_ORDER: readonly MasternodeKeyRole[] = ['owner', 'operator', 'voting']
 
@@ -261,4 +262,25 @@ export function canRevokeNode(node: MasternodeDto): boolean {
 export function revokeNodeDisabledReason(node: MasternodeDto): string | undefined {
   if (canRevokeNode(node)) return undefined
   return isSharedNode(node) ? NODE_DETAIL_COPY.sharedRevokeUnsupported : NODE_DETAIL_COPY.operatorKeyRequired
+}
+
+export function nodeImportedKeys(
+  node: MasternodeDto,
+  importedKeys: ImportedMasternodeKeyDto[],
+): ImportedMasternodeKeyDto[] {
+  const operatorHex = node.operatorPublicKey.trim().toLowerCase()
+  return importedKeys.filter((key) => {
+    switch (key.role) {
+      case 'owner':
+        return node.ownerAddress === key.publicKey
+          || (node.shares?.some(share => share.ownerAddress === key.publicKey) ?? false)
+      case 'voting':
+        return node.votingAddress === key.publicKey
+      case 'operator': {
+        const basicHex = key.publicKey.trim().toLowerCase()
+        if (operatorHex === '' || basicHex === '') return false
+        return operatorHex === basicHex || operatorHex === blsLegacyHexFromBasicHex(basicHex)
+      }
+    }
+  })
 }

@@ -7,9 +7,6 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 import { createBase58check } from '@scure/base'
 import type { ImportedMasternodeKeyDto, MasternodeDto, MasternodeKeyRole, Network } from '@renderer/api/types'
 import {
-  BLS_LEGACY_LOW_MASK,
-  BLS_LEGACY_SIGN_BIT,
-  BLS_LEGACY_SIGN_SHIFT,
   BLS_SECRET_KEY_HEX_PATTERN,
   DASH_CONF_BLS_PREFIX_PATTERN,
   KEY_LINE_PREFIX_PATTERN,
@@ -23,6 +20,7 @@ import {
 } from '@renderer/constants/masternodeKeys'
 import { MANAGE_KEYS_COPY, MASTERNODE_KEY_ROLE_LABELS } from '@renderer/constants/masternodeNodes'
 import type { DetectedMasternodeKey, DetectedMasternodeKeyItem } from '@renderer/types/MasternodeKeyDetection'
+import { blsLegacyPublicKeyHex } from './masternodeBls'
 import { formatServiceAddress } from './masternodeNodes'
 
 const base58check = createBase58check(sha256)
@@ -47,12 +45,6 @@ export function extractPastedKeyTokens(raw: string): string[] {
     }
   }
   return tokens
-}
-
-function blsLegacyPublicKeyHex(basicBytes: Uint8Array): string {
-  const legacy = Uint8Array.from(basicBytes)
-  legacy[0] = (basicBytes[0] & BLS_LEGACY_LOW_MASK) | ((basicBytes[0] & BLS_LEGACY_SIGN_BIT) << BLS_LEGACY_SIGN_SHIFT)
-  return bytesToHex(legacy)
 }
 
 function nodeLabel(node: MasternodeDto): string {

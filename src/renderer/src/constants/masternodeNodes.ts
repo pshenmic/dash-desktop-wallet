@@ -35,7 +35,6 @@ export const ADD_MASTERNODE_MODAL_COPY = {
   registerDescription: 'Create a ProRegTx for a Regular (1,000 DASH) or Evonode (4,000 DASH) collateral.',
   importTitle: 'Import keys',
   importDescription: 'Paste Owner, Voting (WIF) or Operator (BLS) private keys to discover and manage existing nodes.',
-  importedCountSuffix: 'imported',
 } as const
 
 export const NODE_TABLE_COLUMNS = ['Node', 'Collateral', 'Status', 'Roles & Stake'] as const
@@ -143,7 +142,7 @@ export const MASTERNODE_KEY_ROLE_LABELS: Record<MasternodeKeyRole, string> = {
 export const NODE_MATCHED_FORMS = { one: 'node matched', other: 'nodes matched' } as const
 
 export const MANAGE_KEYS_COPY = {
-  title: 'Imported masternode keys',
+  title: 'Import masternode keys',
   description: 'Paste one or more owner, voting, or operator private keys. Each key format and role is detected automatically.',
   roleLabel: 'Import WIF key as',
   rpcOwnerNoticeTitle: 'Share-owner keys match in P2P mode',
@@ -170,14 +169,24 @@ export const MANAGE_KEYS_COPY = {
   authorizeLabel: 'Authorize with wallet password',
   importing: 'Importing…',
   clear: 'Clear',
-  importedTitle: 'Imported keys',
-  noImportedKeys: 'No external masternode keys imported yet.',
-  remove: 'Remove',
   close: 'Close',
   keyImportedNotice: 'Masternode key imported',
   multiImportedNoticeTemplate: 'Imported {count} masternode keys',
   keySavedForP2PNotice: 'Masternode key saved — switch to P2P to match shared masternode shares',
-  keyRemovedNotice: 'Masternode key removed',
+} as const
+
+export const REMOVE_IMPORTED_KEYS_COPY = {
+  triggerSingle: 'Remove imported key',
+  triggerPlural: 'Remove imported keys',
+  title: 'Remove imported keys',
+  description: 'Removing an imported key deletes its stored secret from this wallet. If no other keys or collateral remain for this masternode, it will be removed from your list.',
+  keysLabel: 'Imported keys on this masternode',
+  selectAll: 'Select all',
+  clear: 'Clear',
+  cancel: 'Cancel',
+  confirmSingle: 'Remove key',
+  confirmPlural: 'Remove {count} keys',
+  removing: 'Removing…',
 } as const
 
 export const REGISTER_MASTERNODE_COPY = {

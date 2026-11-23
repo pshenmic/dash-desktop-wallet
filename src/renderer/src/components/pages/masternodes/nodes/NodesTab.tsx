@@ -15,7 +15,7 @@ import { AlertTone } from '@renderer/enums/AlertTone'
 import { NodeSegment } from '@renderer/enums/Masternodes'
 import { NoResultsTone } from '@renderer/enums/NoResultsTone'
 import { SegmentedControlAppearance } from '@renderer/enums/SegmentedControlAppearance'
-import { refreshMasternodes, useImportedMasternodeKeys, useMasternodes } from '@renderer/hooks/useMasternodes'
+import { refreshMasternodes, useMasternodes } from '@renderer/hooks/useMasternodes'
 import { useScrollEndSentinel } from '@renderer/hooks/useScrollEndSentinel'
 import { windowList } from '@renderer/utils/listWindow'
 import { emptyNodesDescription, filterNodes, nodeSegmentOptions } from '@renderer/utils/masternodeNodes'
@@ -37,7 +37,6 @@ export default function NodesTab({
 }: NodesTabProps): React.JSX.Element {
   const { desired, setDesired } = useConnectionModeContext()
   const { nodes, discovered, loading, err } = useMasternodes(walletId)
-  const { importedKeys } = useImportedMasternodeKeys(walletId)
   const [addOpen, setAddOpen] = useState(false)
   const [keysOpen, setKeysOpen] = useState(false)
   const appliedQuery = useDeferredValue(query)
@@ -168,7 +167,6 @@ export default function NodesTab({
       {addOpen && (
         <AddMasternodeModal
           open={addOpen}
-          importedCount={importedKeys.length}
           onClose={() => setAddOpen(false)}
           onSelectRegister={onRegister}
           onSelectImport={() => setKeysOpen(true)}

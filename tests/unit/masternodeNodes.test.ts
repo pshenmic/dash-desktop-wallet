@@ -41,6 +41,7 @@ import {
   masternodeStatus,
   masternodeType,
   nodeAccessDisplay,
+  nodeImportedKeys,
   nodeRolesLabel,
   nodeSegmentOptions,
   nodeVotingAccessLabel,
@@ -962,5 +963,36 @@ describe('Masternode action builders', () => {
     ])
     expect(filterNodes([regularNode, pendingNode], '', NodeSegment.Banned)).toEqual([])
     expect(classifyVotingMasternodes([pendingNode]).ineligible[0]?.reason).toBe('Awaiting block confirmation')
+  })
+
+  it('matches imported owner, voting, operator (basic or legacy), and shared share keys for a node', () => {
+    const basicOp = 'b1861e7cebdb77ae860788edf2d8b80fda62bcd4647a4cee6841b753b7c438b4c084554b2d71703891092b6d9e509f05'
+    const soloNode = makeNode({
+      ownerAddress: 'XownerMatch',
+      votingAddress: 'XvotingMatch',
+      operatorPublicKey: basicOp.toUpperCase(),
+    })
+    const sharedNode = makeNode({
+      isShared: true,
+      ownerAddress: null,
+      votingAddress: 'XvotingOther',
+      operatorPublicKey: '00'.repeat(48),
+      shares: [
+        makeShare({ ownerAddress: 'XshareA' }),
+        makeShare({ ownerAddress: 'XshareB' }),
+      ],
+    })
+    const imported = [
+      { role: 'owner' as const, publicKey: 'XownerMatch', hasPrivateKey: true },
+      { role: 'voting' as const, publicKey: 'XvotingMatch', hasPrivateKey: true },
+      { role: 'operator' as const, publicKey: basicOp, hasPrivateKey: true },
+      { role: 'owner' as const, publicKey: 'XshareB', hasPrivateKey: true },
+      { role: 'voting' as const, publicKey: 'Xunrelated', hasPrivateKey: true },
+    ]
+
+    expect(nodeImportedKeys(soloNode, imported).map(k => k.role)).toEqual(['owner', 'voting', 'operator'])
+    expect(nodeImportedKeys(sharedNode, imported)).toEqual([
+      { role: 'owner', publicKey: 'XshareB', hasPrivateKey: true },
+    ])
   })
 })

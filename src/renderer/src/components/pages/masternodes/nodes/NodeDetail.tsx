@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react'
-import { Button, HighlightedIdentifier, Text, Tooltip } from '@renderer/components/dash-ui-kit-extended'
+import { useMemo, useState, type ReactNode } from 'react'
+import { Button, DeleteIcon, HighlightedIdentifier, Text, Tooltip } from '@renderer/components/dash-ui-kit-extended'
 import {
   BoxIcon,
   CalendarIconHighlighted,
@@ -25,14 +25,14 @@ import PageHeader from '@renderer/components/ui/PageHeader'
 import RetryButton from '@renderer/components/ui/RetryButton'
 import StatusPill from '@renderer/components/ui/StatusPill'
 import { EVO_MASTERNODE_TYPE, REGISTERING_MASTERNODE_STATUS } from '@renderer/constants/masternodes'
-import { NODE_DETAIL_COPY, NODE_DETAIL_ICON_CLASS, NODE_DETAIL_ROW_CLASS } from '@renderer/constants/masternodeNodes'
+import { NODE_DETAIL_COPY, NODE_DETAIL_ICON_CLASS, NODE_DETAIL_ROW_CLASS, REMOVE_IMPORTED_KEYS_COPY } from '@renderer/constants/masternodeNodes'
 import { PAGE_HEADERS } from '@renderer/constants/pageHeaders'
 import { ICON_CHIP, SURFACE_PANEL } from '@renderer/constants/surfaces'
 import { TRANSACTION_DETAIL_CARD_CLASS } from '@renderer/constants/transactionsPage'
 import { AlertTone } from '@renderer/enums/AlertTone'
 import { MasternodeDetailModal } from '@renderer/enums/Masternodes'
 import { NoResultsTone } from '@renderer/enums/NoResultsTone'
-import { refreshMasternodes, useMasternodes } from '@renderer/hooks/useMasternodes'
+import { refreshMasternodes, useImportedMasternodeKeys, useMasternodes } from '@renderer/hooks/useMasternodes'
 import type { CustomBadgeProps } from '@renderer/types/CustomBadge'
 import type { NodeDetailProps } from '@renderer/types/MasternodeScreens'
 import {
@@ -46,6 +46,7 @@ import {
   masternodeChainBadge,
   masternodeStatus,
   masternodeType,
+  nodeImportedKeys,
   nodeVotingAccessLabel,
   revokeNodeDisabledReason,
   shortProTxHash,
@@ -53,14 +54,20 @@ import {
   updateServiceDisabledReason,
 } from '@renderer/utils/masternodeNodes'
 import NodeSharesCard from './NodeSharesCard'
+import RemoveImportedKeysModal from './RemoveImportedKeysModal'
 import RevokeMasternodeModal from './RevokeMasternodeModal'
 import UpdateRegistrarModal from './UpdateRegistrarModal'
 import UpdateServiceModal from './UpdateServiceModal'
 
 export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailProps): React.JSX.Element {
   const { nodes, discovered, loading, err } = useMasternodes(walletId)
+  const { importedKeys } = useImportedMasternodeKeys(walletId)
   const [activeModal, setActiveModal] = useState<MasternodeDetailModal | null>(null)
   const node = nodes.find(candidate => candidate.proTxHash === proTxHash) ?? null
+  const matchedImportedKeys = useMemo(
+    () => (node == null ? [] : nodeImportedKeys(node, importedKeys)),
+    [node, importedKeys],
+  )
 
   if (node === null) {
     return (
@@ -212,6 +219,18 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
               <TurnOffIcon size={12} color={'currentColor'} />
               {NODE_DETAIL_COPY.revoke}
             </Button>
+            {matchedImportedKeys.length > 0 && (
+              <Button
+                type={'button'}
+                size={'compact'}
+                colorScheme={'danger-light'}
+                onClick={() => setActiveModal(MasternodeDetailModal.RemoveImportedKeys)}
+                className={'inline-flex items-center gap-1.5 rounded-[.75rem]'}
+              >
+                <DeleteIcon size={12} color={'currentColor'} />
+                {matchedImportedKeys.length > 1 ? REMOVE_IMPORTED_KEYS_COPY.triggerPlural : REMOVE_IMPORTED_KEYS_COPY.triggerSingle}
+              </Button>
+            )}
           </div>
         )}
       />
@@ -318,6 +337,16 @@ export default function NodeDetail({ walletId, proTxHash, onBack }: NodeDetailPr
           node={node}
           open
           onClose={() => setActiveModal(null)}
+        />
+      )}
+      {activeModal === MasternodeDetailModal.RemoveImportedKeys && matchedImportedKeys.length > 0 && (
+        <RemoveImportedKeysModal
+          walletId={walletId}
+          node={node}
+          matchedKeys={matchedImportedKeys}
+          open
+          onClose={() => setActiveModal(null)}
+          onNodeRemoved={onBack}
         />
       )}
     </>

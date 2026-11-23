@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { Button, CheckIcon, DeleteIcon, EyeClosedIcon, EyeOpenIcon, HighlightedIdentifier, InfoCircleIcon, Text } from '@renderer/components/dash-ui-kit-extended'
+import { Button, CheckIcon, EyeClosedIcon, EyeOpenIcon, HighlightedIdentifier, InfoCircleIcon, Text } from '@renderer/components/dash-ui-kit-extended'
 import Alert from '@renderer/components/ui/Alert'
 import CopyableError from '@renderer/components/ui/CopyableError'
 import CustomBadge from '@renderer/components/ui/CustomBadge'
@@ -7,10 +7,8 @@ import Modal from '@renderer/components/ui/Modal'
 import ModalActions from '@renderer/components/ui/ModalActions'
 import PasswordField from '@renderer/components/ui/PasswordField'
 import SegmentedControl from '@renderer/components/ui/SegmentedControl'
-import ListSkeleton from '@renderer/components/ui/Skeleton'
-import Spinner from '@renderer/components/ui/Spinner'
 import { API } from '@renderer/api'
-import type { ImportedMasternodeKeyDto, MasternodeKeyRole } from '@renderer/api/types'
+import type { MasternodeKeyRole } from '@renderer/api/types'
 import { INVALID_WALLET_PASSWORD_MESSAGE } from '@renderer/constants'
 import { FIELD_INVALID } from '@renderer/constants/addressField'
 import { WIF_ROLE_OPTIONS } from '@renderer/constants/masternodeKeys'
@@ -48,18 +46,15 @@ export default function ManageMasternodeKeysModal({
   const walletNetwork = status?.network ?? null
   const { desired, setDesired } = useConnectionModeContext()
   const { nodes } = useMasternodes(walletId)
-  const { importedKeys, loading: keysLoading, err: keysError } = useImportedMasternodeKeys(walletId)
+  const { importedKeys } = useImportedMasternodeKeys(walletId)
   const [roleOverrides, setRoleOverrides] = useState<Record<string, 'owner' | 'voting'>>({})
   const [privateKeysInput, setPrivateKeysInput] = useState('')
   const [masked, setMasked] = useState(true)
   const [password, setPassword] = useState('')
   const [passwordInvalid, setPasswordInvalid] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [removingKeyId, setRemovingKeyId] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
   const [importNotice, setImportNotice] = useState<KeyImportNotice | null>(null)
-  const [removeError, setRemoveError] = useState<string | null>(null)
-  const [removeNotice, setRemoveNotice] = useState<string | null>(null)
   const requestIdRef = useRef(0)
 
   useEffect(() => {
@@ -70,11 +65,8 @@ export default function ManageMasternodeKeysModal({
     setPassword('')
     setPasswordInvalid(false)
     setSubmitting(false)
-    setRemovingKeyId(null)
     setImportError(null)
     setImportNotice(null)
-    setRemoveError(null)
-    setRemoveNotice(null)
     return () => {
       requestIdRef.current += 1
     }
@@ -99,7 +91,7 @@ export default function ManageMasternodeKeysModal({
   )
 
   const hasInvalidItem = detectedItems.some(item => item.detection.kind === 'invalid' || (item.detection.kind === 'wif' && item.detection.networkMismatch))
-  const busy = submitting || removingKeyId !== null
+  const busy = submitting
   const hasDraft = detectedItems.length > 0 || privateKeysInput.trim().length > 0
   const canImport = !busy && validItems.length > 0 && password.length > 0
 
@@ -119,8 +111,6 @@ export default function ManageMasternodeKeysModal({
     setPasswordInvalid(false)
     setImportError(null)
     setImportNotice(null)
-    setRemoveError(null)
-    setRemoveNotice(null)
     try {
       const valid = await API.verifyWalletPassword(walletId, password)
       if (!valid) {
@@ -181,25 +171,6 @@ export default function ManageMasternodeKeysModal({
       if (requestId === requestIdRef.current) setImportError(getErrorMessage(err))
     } finally {
       if (requestId === requestIdRef.current) setSubmitting(false)
-    }
-  }
-
-  const handleRemove = async (key: ImportedMasternodeKeyDto): Promise<void> => {
-    if (busy) return
-    const id = `${key.role}:${key.publicKey}`
-    const requestId = ++requestIdRef.current
-    setRemovingKeyId(id)
-    setRemoveError(null)
-    setRemoveNotice(null)
-    setImportNotice(null)
-    try {
-      await API.removeMasternodeKey(walletId, key)
-      await Promise.all([refreshImportedMasternodeKeys(walletId), refreshMasternodes(walletId)])
-      if (requestId === requestIdRef.current) setRemoveNotice(MANAGE_KEYS_COPY.keyRemovedNotice)
-    } catch (err) {
-      if (requestId === requestIdRef.current) setRemoveError(getErrorMessage(err))
-    } finally {
-      if (requestId === requestIdRef.current) setRemovingKeyId(null)
     }
   }
 
@@ -409,66 +380,6 @@ export default function ManageMasternodeKeysModal({
           />
         )}
       </form>
-
-      <div className={'mt-4 flex flex-col gap-2'}>
-        <div className={'flex items-center justify-between gap-2 px-1'}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{MANAGE_KEYS_COPY.importedTitle}</Text>
-          {importedKeys.length > 0 && (
-            <Text size={12} weight={'medium'} color={'brand'} opacity={50} className={'tabular-nums'}>
-              {importedKeys.length}
-            </Text>
-          )}
-        </div>
-
-        {removeError && <CopyableError message={removeError} />}
-
-        {removeNotice && (
-          <Alert
-            tone={AlertTone.Success}
-            icon={<CheckIcon size={16} color={'currentColor'} className={'[&_circle]:hidden'} />}
-            title={removeNotice}
-          />
-        )}
-
-        {keysLoading && importedKeys.length === 0 ? (
-          <ListSkeleton rows={2} rowClassName={'h-11 rounded-[.875rem]'} />
-        ) : keysError != null && importedKeys.length === 0 ? (
-          <div className={SURFACE_SECTION}>
-            <CopyableError message={keysError} />
-          </div>
-        ) : importedKeys.length === 0 ? (
-          <div className={SURFACE_SECTION}>
-            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{MANAGE_KEYS_COPY.noImportedKeys}</Text>
-          </div>
-        ) : (
-          <div className={'flex max-h-56 flex-col gap-1.5 overflow-y-auto'}>
-            {importedKeys.map((item) => {
-              const id = `${item.role}:${item.publicKey}`
-              const removing = removingKeyId === id
-              return (
-                <div key={id} className={`flex items-center justify-between gap-3 ${SURFACE_ROW}`}>
-                  <div className={'flex min-w-0 flex-1 items-center gap-2.5'}>
-                    <CustomBadge variant={'accent'} text={MASTERNODE_KEY_ROLE_LABELS[item.role]} className={'shrink-0'} />
-                    <HighlightedIdentifier className={'min-w-0 font-medium!'}>{item.publicKey}</HighlightedIdentifier>
-                  </div>
-                  <button
-                    type={'button'}
-                    aria-label={MANAGE_KEYS_COPY.remove}
-                    title={MANAGE_KEYS_COPY.remove}
-                    disabled={busy}
-                    onClick={() => { void handleRemove(item) }}
-                    className={'size-6 shrink-0 rounded-[.375rem] flex items-center justify-center dash-block-5 hover:opacity-80 transition-opacity duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-dash-brand/40 dark:focus-visible:ring-dash-mint/40 disabled:pointer-events-none disabled:opacity-40'}
-                  >
-                    {removing
-                      ? <Spinner size={10} className={'dash-text-default opacity-50'} />
-                      : <DeleteIcon size={10} color={'currentColor'} className={'dash-text-default opacity-50'} />}
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
 
       {hasDraft ? (
         <ModalActions

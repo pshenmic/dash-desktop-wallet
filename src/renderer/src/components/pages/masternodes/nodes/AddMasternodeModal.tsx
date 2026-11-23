@@ -1,6 +1,5 @@
 import { KeyIcon, PlusIcon, Text } from '@renderer/components/dash-ui-kit-extended'
 import { ChevronIcon } from '@renderer/components/dash-ui-kit-extended/icons'
-import CustomBadge from '@renderer/components/ui/CustomBadge'
 import Modal from '@renderer/components/ui/Modal'
 import { ADD_MASTERNODE_MODAL_COPY, ADD_MASTERNODE_OPTION_CARD_CLASS } from '@renderer/constants/masternodeNodes'
 import { ICON_CHIP } from '@renderer/constants/surfaces'
@@ -9,7 +8,6 @@ import type { AddMasternodeModalProps } from '@renderer/types/MasternodeNodes'
 
 export default function AddMasternodeModal({
   open,
-  importedCount,
   onClose,
   onSelectRegister,
   onSelectImport,
@@ -58,15 +56,7 @@ export default function AddMasternodeModal({
               <KeyIcon size={14} color={'currentColor'} />
             </span>
             <div className={'flex min-w-0 flex-col gap-1'}>
-              <div className={'flex flex-wrap items-center gap-2'}>
-                <Text size={14} weight={'extrabold'} color={'brand'}>{ADD_MASTERNODE_MODAL_COPY.importTitle}</Text>
-                {importedCount > 0 && (
-                  <CustomBadge
-                    variant={'accent'}
-                    text={`${importedCount} ${ADD_MASTERNODE_MODAL_COPY.importedCountSuffix}`}
-                  />
-                )}
-              </div>
+              <Text size={14} weight={'extrabold'} color={'brand'}>{ADD_MASTERNODE_MODAL_COPY.importTitle}</Text>
               <Text size={12} weight={'medium'} color={'brand'} opacity={60} className={'leading-[135%]'}>
                 {ADD_MASTERNODE_MODAL_COPY.importDescription}
               </Text>

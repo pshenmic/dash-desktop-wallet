@@ -16,6 +16,7 @@ export enum MasternodeDetailModal {
   UpdateRegistrar = 'update-registrar',
   UpdateService = 'update-service',
   Revoke = 'revoke',
+  RemoveImportedKeys = 'remove-imported-keys',
 }
 
 export enum RegistrarKeyChoiceKind {

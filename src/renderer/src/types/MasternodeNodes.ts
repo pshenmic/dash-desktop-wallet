@@ -1,4 +1,4 @@
-import type { MasternodeDto, Network } from '@renderer/api/types'
+import type { ImportedMasternodeKeyDto, MasternodeDto, Network } from '@renderer/api/types'
 import type { AlertTone } from '@renderer/enums/AlertTone'
 import type { PayoutChoiceKind, RegistrarKeyChoiceKind } from '@renderer/enums/Masternodes'
 
@@ -28,10 +28,18 @@ export interface ManageMasternodeKeysModalProps {
 
 export interface AddMasternodeModalProps {
   open: boolean
-  importedCount: number
   onClose: () => void
   onSelectRegister: () => void
   onSelectImport: () => void
+}
+
+export interface RemoveImportedKeysModalProps {
+  walletId: string
+  node: MasternodeDto
+  matchedKeys: ImportedMasternodeKeyDto[]
+  open: boolean
+  onClose: () => void
+  onNodeRemoved: () => void
 }
 
 export interface MasternodeFieldInputProps {
