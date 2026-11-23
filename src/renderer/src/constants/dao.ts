@@ -11,7 +11,7 @@ export const DAO_PARAMS = {
 
 export const DAO_TAB_LABELS: Record<DaoTab, string> = {
   [DaoTab.Proposals]: 'Proposals',
-  [DaoTab.Dpns]: 'DPNS Names',
+  [DaoTab.ContestedResources]: 'Contested Resources',
 }
 
 export const CONTESTED_RESOURCES_NAMESPACE = 'contested-resources'
@@ -20,7 +20,7 @@ export const CONTESTED_RESOURCES_REFRESH_MS = 30_000
 
 export const VOTE_CONTEST_COPY = {
   voteButton: 'Vote',
-  title: 'Vote on DPNS name contest',
+  title: 'Vote on contested resource',
   description: 'Cast a Dash Platform contested resource vote signed with each selected masternode’s voting key.',
   choiceLabel: 'Vote choice',
   contenderVoteHint: 'Award name to this contender',
@@ -32,15 +32,15 @@ export const VOTE_CONTEST_COPY = {
   selectAll: 'Select all',
   clearSelection: 'Clear',
   noEligibleNodes: 'This wallet has no active masternodes with a stored voting key.',
-  resourceLabel: 'Contested name',
+  resourceLabel: 'Contested resource',
   summaryChoiceLabel: 'Selected choice',
   nodesVotedLabel: 'Masternodes voting',
   totalWeightLabel: 'Total voting weight',
   review: 'Review vote',
   confirm: 'Sign & broadcast votes',
   pending: 'Signing and broadcasting votes…',
-  doneHeadline: 'DPNS votes broadcast',
-  partialHeadline: 'Some DPNS votes failed',
+  doneHeadline: 'Contested resource votes broadcast',
+  partialHeadline: 'Some contested resource votes failed',
   stHashLabel: 'State transition',
   stHashAccepted: 'Broadcast',
 } as const

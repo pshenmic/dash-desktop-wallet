@@ -1,4 +1,4 @@
 export enum DaoTab {
   Proposals = 'proposals',
-  Dpns = 'dpns',
+  ContestedResources = 'contested-resources',
 }

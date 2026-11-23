@@ -78,13 +78,13 @@ export const PAGE_HEADERS = {
   },
   dao: {
     title: 'DAO',
-    subtitle: 'Vote on Dash treasury proposals and DPNS contested names.',
+    subtitle: 'Vote on Dash treasury proposals and contested resources.',
   },
   proposalDetail: {
     back: 'Back to Proposals',
   },
   nameContest: {
-    back: 'Back to DPNS Names',
+    back: 'Back to Contested Resources',
   },
   registerUsername: {
     title: 'Register username',

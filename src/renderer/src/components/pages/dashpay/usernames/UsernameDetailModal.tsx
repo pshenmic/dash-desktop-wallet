@@ -84,7 +84,7 @@ export default function UsernameDetailModal({
       label: USERNAME_DETAIL_COPY.viewInDao,
       onClick: () => {
         onClose()
-        navigate(`${DAO_ROUTE}?${withParams('', { [DAO_PARAMS.tab]: DaoTab.Dpns, [DAO_PARAMS.contest]: username.normalizedLabel })}`)
+        navigate(`${DAO_ROUTE}?${withParams('', { [DAO_PARAMS.tab]: DaoTab.ContestedResources, [DAO_PARAMS.contest]: username.normalizedLabel })}`)
       },
     }
   }

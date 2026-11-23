@@ -64,7 +64,7 @@ export default function DaoPage({ walletId }: DaoPageProps): React.JSX.Element {
   }
 
   const selectProposals = (next: ProposalSegment): void => selectTab(DaoTab.Proposals, next)
-  const selectContests = (next: ContestSegment): void => selectTab(DaoTab.Dpns, next)
+  const selectContests = (next: ContestSegment): void => selectTab(DaoTab.ContestedResources, next)
 
   const openDetail = (value: string): void => {
     saveListScroll()
@@ -102,8 +102,8 @@ export default function DaoPage({ walletId }: DaoPageProps): React.JSX.Element {
       ),
     },
     {
-      value: DaoTab.Dpns,
-      label: DAO_TAB_LABELS[DaoTab.Dpns],
+      value: DaoTab.ContestedResources,
+      label: DAO_TAB_LABELS[DaoTab.ContestedResources],
       content: (
         <ContestsTab
           walletId={walletId}
