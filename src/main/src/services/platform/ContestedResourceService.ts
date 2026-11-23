@@ -81,7 +81,7 @@ export class ContestedResourceService {
         choice,
       })
       const voted = choice.kind === 'towardsIdentity' ? choice.identifier : choice.kind
-      log.info(`${proTxHash} voted ${voted} on ${resource.contractId}/${resource.documentTypeName}/${resource.indexName}`)
+      log.info(`${proTxHash} voted ${voted} on ${resource.contractId}/${resource.documentTypeName}/${resource.indexName} in ${stHash}`)
       return {stHash}
     } finally {
       votingKey.fill(0)

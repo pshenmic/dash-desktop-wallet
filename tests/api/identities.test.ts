@@ -199,6 +199,38 @@ describe('listing identities', () => {
     expect(await identities.getUsernames(walletId)).toMatchObject([{label: 'owl', status: 'registered', documentId: 'doc'}])
   })
 
+  // Contact requests are one read among several; an outage there must not hide names or a running vote.
+  it('refreshes names and contests when contact requests time out', async () => {
+    network.contests.set('0w1', [IDENTIFIER])
+    network.status = () => ({...UNCHECKED, status: 'voting', voteEndsAt: 9})
+    request.mockImplementation(async (kind: string, ...rest: [string, never]) =>
+      kind === 'dashPayContactRequests' ? Promise.reject(new Error('timed out')) : answer(kind, ...rest))
+
+    await expect(identities.refreshDashPay(walletId)).resolves.toBeUndefined()
+    expect(await identities.getUsernames(walletId)).toMatchObject([{label: '0w1', status: 'voting'}])
+    // The retrying caller still sees the failure.
+    await expect(identities.refreshDashPayRequests(walletId)).rejects.toThrow('timed out')
+  })
+
+  // A transient status failure on a start must not hide a name, or its vote, until the next refresh.
+  it('keeps a new contest name whose status read fails before anything is cached', async () => {
+    network.contests.set('0w1', [IDENTIFIER])
+    network.status = () => { throw new Error('DAPI down') }
+
+    expect(await identities.getUsernames(walletId)).toMatchObject([
+      {identifier: IDENTIFIER, label: '0w1', status: 'voting', isContested: true},
+    ])
+  })
+
+  it('keeps a registered name whose status read fails before anything is cached', async () => {
+    network.names.set(IDENTIFIER, ['owl.dash'])
+    network.status = () => { throw new Error('DAPI down') }
+
+    expect(await identities.getUsernames(walletId)).toMatchObject([
+      {identifier: IDENTIFIER, label: 'owl', status: 'registered', isContested: false, documentId: null},
+    ])
+  })
+
   it('shares one refresh between reads that arrive together', async () => {
     await Promise.all([identities.getUsernames(walletId), identities.getDashPayContacts(walletId)])
 
