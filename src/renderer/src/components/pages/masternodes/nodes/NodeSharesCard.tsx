@@ -17,7 +17,7 @@ import {
   shareOriginBadge,
   shareRatio,
 } from '@renderer/utils/masternodeNodes'
-import ShareBar from '../contested-resources/ShareBar'
+import ShareBar from '@renderer/components/ui/ShareBar'
 
 export default function NodeSharesCard({ node }: NodeSharesCardProps): React.JSX.Element {
   const { desired, setDesired } = useConnectionModeContext()

@@ -1,12 +1,15 @@
+import { useNavigate } from 'react-router-dom'
 import { HighlightedIdentifier, Text } from '@renderer/components/dash-ui-kit-extended'
 import CopyButton from '@renderer/components/ui/CopyButton'
 import Modal from '@renderer/components/ui/Modal'
 import ModalActions from '@renderer/components/ui/ModalActions'
 import UsernameStatusPill from './UsernameStatusPill'
+import { DAO_PARAMS, DAO_ROUTE } from '@renderer/constants/dao'
 import { USERNAME_DETAIL_COPY, USERNAME_VOTE_FORMS } from '@renderer/constants/dashPayUsernames'
 import { HIGHLIGHTED_IDENTIFIER_CLASS } from '@renderer/constants/identifier'
 import { USERNAME_PRESENTATION } from '@renderer/constants/dpns'
 import { SURFACE_SECTION } from '@renderer/constants/surfaces'
+import { DaoTab } from '@renderer/enums/Dao'
 import { UsernamePresentation } from '@renderer/enums/DashPay'
 import { ModalSize } from '@renderer/enums/ModalSize'
 import type { ModalAction } from '@renderer/types/Modal'
@@ -15,6 +18,7 @@ import { countLabel } from '@renderer/utils/countLabel'
 import { formatTimestamp } from '@renderer/utils/date'
 import { usernameTitle, usernameTypeLabel } from '@renderer/utils/dashPayUsernames'
 import { identityLabel } from '@renderer/utils/identifierFormat'
+import { withParams } from '@renderer/utils/searchParams'
 import { formatTimeLeft } from '@renderer/utils/timeLeft'
 import { contestStandings, joinClosesAt, usernameCaption, voteOutcomeLabel } from '@renderer/utils/usernames'
 
@@ -36,6 +40,7 @@ export default function UsernameDetailModal({
   network,
   onRegister,
 }: UsernameDetailModalProps): React.JSX.Element | null {
+  const navigate = useNavigate()
   if (row == null) return null
 
   const spec = USERNAME_PRESENTATION[row.presentation]
@@ -74,6 +79,14 @@ export default function UsernameDetailModal({
   let primary: ModalAction | null = null
   if (row.presentation === UsernamePresentation.Missing) {
     primary = { label: USERNAME_DETAIL_COPY.register, onClick: () => onRegister(row) }
+  } else if (voting) {
+    primary = {
+      label: USERNAME_DETAIL_COPY.viewInDao,
+      onClick: () => {
+        onClose()
+        navigate(`${DAO_ROUTE}?${withParams('', { [DAO_PARAMS.tab]: DaoTab.Dpns, [DAO_PARAMS.contest]: username.normalizedLabel })}`)
+      },
+    }
   }
 
   return (

@@ -16,7 +16,7 @@ import {
   WalletIcon,
 } from '@renderer/components/dash-ui-kit-extended/icons'
 import DashboardHeading from '@renderer/components/pages/dashboard/DashboardHeading'
-import ContenderOption from '@renderer/components/pages/masternodes/contested-resources/ContenderOption'
+import ContenderOption from '@renderer/components/pages/dao/contested-resources/ContenderOption'
 import DetailToken from '@renderer/components/pages/transactions/TransactionDetailToken'
 import CopyButton from '@renderer/components/ui/CopyButton'
 import NoResults from '@renderer/components/ui/NoResults'

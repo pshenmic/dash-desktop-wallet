@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Button, CircleProcessIcon, HighlightedIdentifier, LockIcon, Text } from '@renderer/components/dash-ui-kit-extended'
+import { Button, CircleProcessIcon, HighlightedIdentifier, KeyIcon, LockIcon, Text } from '@renderer/components/dash-ui-kit-extended'
 import DashboardHeading from '@renderer/components/pages/dashboard/DashboardHeading'
 import CustomBadge from '@renderer/components/ui/CustomBadge'
 import IdentityAvatar from '@renderer/components/ui/IdentityAvatar'
@@ -10,6 +10,7 @@ import RetryButton from '@renderer/components/ui/RetryButton'
 import SearchField from '@renderer/components/ui/SearchField'
 import ListSkeleton from '@renderer/components/ui/Skeleton'
 import StatusPill from '@renderer/components/ui/StatusPill'
+import { VOTE_CONTEST_COPY } from '@renderer/constants/dao'
 import { DASHPAY_PARAMS, DASHPAY_ROUTES } from '@renderer/constants/dashPay'
 import { CONTEST_DETAIL_COPY, CONTEST_LIST_SEPARATOR, CONTEST_ROW_COPY, CONTEST_STATUS_PILLS, CONTEST_VOTE_FORMS, CONTENDER_SEARCH_MIN } from '@renderer/constants/nameContests'
 import { PAGE_HEADERS } from '@renderer/constants/pageHeaders'
@@ -18,7 +19,7 @@ import { DashPayTab } from '@renderer/enums/DashPay'
 import { IdentityAvatarSize } from '@renderer/enums/IdentityAvatarSize'
 import { ContestStatus } from '@renderer/enums/Masternodes'
 import { NoResultsTone } from '@renderer/enums/NoResultsTone'
-import { useNameContests } from '@renderer/hooks/useNameContests'
+import { useContestedResources } from '@renderer/hooks/useContestedResources'
 import type { ContestDetailProps } from '@renderer/types/MasternodeScreens'
 import { countLabel } from '@renderer/utils/countLabel'
 import { formatTimestamp } from '@renderer/utils/date'
@@ -27,10 +28,12 @@ import { contestStatus, totalContestVotes, voteShare } from '@renderer/utils/nam
 import { withParams } from '@renderer/utils/searchParams'
 import { formatTimeLeft } from '@renderer/utils/timeLeft'
 import ContenderOption from './ContenderOption'
+import VoteContestModal from './VoteContestModal'
 
 export default function ContestDetail({ walletId, now, normalizedLabel, onBack }: ContestDetailProps): React.JSX.Element {
-  const { contests, loading, err, retry } = useNameContests(walletId)
+  const { contests, loading, err, retry } = useContestedResources(walletId)
   const [query, setQuery] = useState('')
+  const [voteOpen, setVoteOpen] = useState(false)
   const contest = contests.find(candidate => candidate.normalizedLabel === normalizedLabel)
 
   if (contest == null) {
@@ -69,11 +72,27 @@ export default function ContestDetail({ walletId, now, normalizedLabel, onBack }
         title={fullDpnsName(contest.label)}
         titleAddon={<StatusPill tone={pill.tone}>{waitingForOutcome ? CONTEST_ROW_COPY.pending : pill.label}</StatusPill>}
         subtitle={endsAt == null ? undefined : formatTimestamp(new Date(endsAt))}
-        actions={status === ContestStatus.Open && !waitingForOutcome && endsAt != null && (
-          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
-            {`${CONTEST_DETAIL_COPY.endsIn} `}
-            <strong className={'tabular-nums'}>{formatTimeLeft(endsAt, now)}</strong>
-          </Text>
+        actions={(
+          <div className={'flex flex-wrap items-center gap-3'}>
+            {status === ContestStatus.Open && !waitingForOutcome && endsAt != null && (
+              <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
+                {`${CONTEST_DETAIL_COPY.endsIn} `}
+                <strong className={'tabular-nums'}>{formatTimeLeft(endsAt, now)}</strong>
+              </Text>
+            )}
+            {status === ContestStatus.Open && !waitingForOutcome && contest.voteRequest != null && (
+              <Button
+                type={'button'}
+                size={'compact'}
+                colorScheme={'primary'}
+                onClick={() => setVoteOpen(true)}
+                className={'inline-flex items-center gap-1.5 rounded-[.75rem]'}
+              >
+                <KeyIcon size={12} color={'currentColor'} />
+                {VOTE_CONTEST_COPY.voteButton}
+              </Button>
+            )}
+          </div>
         )}
       />
       <section className={`flex min-w-0 flex-col gap-3 ${SURFACE_PANEL}`}>
@@ -151,6 +170,14 @@ export default function ContestDetail({ walletId, now, normalizedLabel, onBack }
           )}
         </div>
       </section>
+      {voteOpen && contest.voteRequest != null && (
+        <VoteContestModal
+          walletId={walletId}
+          contest={contest}
+          open={voteOpen}
+          onClose={() => setVoteOpen(false)}
+        />
+      )}
     </div>
   )
 }

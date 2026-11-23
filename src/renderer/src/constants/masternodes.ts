@@ -6,16 +6,12 @@ export const MASTERNODES_ROUTE = '/masternodes'
 export const MASTERNODE_PARAMS = {
   tab: 'tab',
   segment: 'segment',
-  contest: 'contest',
   node: 'node',
-  proposal: 'proposal',
   register: 'register',
 } as const
 
 export const MASTERNODES_TAB_LABELS: Record<MasternodesTab, string> = {
   [MasternodesTab.Nodes]: 'Nodes',
-  [MasternodesTab.Proposals]: 'Proposals',
-  [MasternodesTab.ContestedResources]: 'Contested Resources',
 }
 
 export const MASTERNODES_PAGE_SIZE = 50

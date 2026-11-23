@@ -36,7 +36,7 @@ export const ENDED_CONTEST_SORT_OPTIONS: SegmentOption<ContestSort>[] = [
 ]
 
 export const CONTESTS_TAB_COPY = {
-  description: 'DPNS contests involving identities in this wallet.',
+  description: 'Open DPNS name contests across Dash Platform and contested names from this wallet.',
   searchPlaceholder: 'Search name',
   searchLabel: 'Search contested resources',
   sortLabel: 'Sort contests',
@@ -46,7 +46,7 @@ export const CONTESTS_TAB_COPY = {
 } as const
 
 export const CONTEST_SEGMENT_EMPTY: Record<ContestSegment, string> = {
-  [ContestSegment.Open]: 'No open contests for this wallet',
+  [ContestSegment.Open]: 'No open DPNS name contests right now',
   [ContestSegment.EndingSoon]: 'No contests ending soon',
   [ContestSegment.Ended]: 'No ended contests for this wallet',
 }

@@ -1652,6 +1652,13 @@ export const ServerIcon: React.FC<IconProps> = ({ color = 'var(--color-text)', s
   </svg>
 )
 
+export const DaoIcon: React.FC<IconProps> = ({ color = 'var(--color-text)', size = 16, className = '', onClick }) => (
+  <svg className={className} onClick={onClick} color={color} width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M1.5 5.25L8 1.75L14.5 5.25H1.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M3.75 5.25V11.75M8 5.25V11.75M12.25 5.25V11.75M1.75 13.75H14.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+)
+
 export const ContactsIcon: React.FC<IconProps> = ({
   color = 'var(--color-text)',
   size = 16,

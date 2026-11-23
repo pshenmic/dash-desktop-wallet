@@ -2,7 +2,7 @@ import { Text } from '@renderer/components/dash-ui-kit-extended'
 import { CONTENDER_ROW_CLASS } from '@renderer/constants/nameContests'
 import type { ContenderOptionProps } from '@renderer/types/NameContests'
 import { formatShare } from '@renderer/utils/nameContests'
-import ShareBar from './ShareBar'
+import ShareBar from '@renderer/components/ui/ShareBar'
 
 export default function ContenderOption({ icon, title, badge, votes, share }: ContenderOptionProps): React.JSX.Element {
   return (

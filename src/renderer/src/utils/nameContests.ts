@@ -33,7 +33,7 @@ export function isEndingSoon(contest: NameContest, now: number, network: Network
   return left > 0 && left <= ENDING_SOON_MS[network]
 }
 
-export function filterContests(contests: NameContest[], { query, segment, now, network }: ContestFilter): NameContest[] {
+export function filterContests<T extends NameContest>(contests: T[], { query, segment, now, network }: ContestFilter): T[] {
   const needle = stripDpnsInput(query)
   return contests.filter(contest => {
     if (needle !== '' && !matchesDpnsLabel([contest.label, contest.normalizedLabel], needle)) return false
@@ -70,7 +70,7 @@ export function contestLeader(contest: NameContest): ContestLeader {
   }
 }
 
-export function sortContests(contests: NameContest[], sort: ContestSort, segment: ContestSegment): NameContest[] {
+export function sortContests<T extends NameContest>(contests: T[], sort: ContestSort, segment: ContestSegment): T[] {
   const direction = segment === ContestSegment.Ended ? -1 : 1
   return [...contests].sort((a, b) => {
     if (sort === ContestSort.MostVotes) {

@@ -1,3 +1,4 @@
+import { DAO_ROUTE } from './dao'
 import { MASTERNODES_ROUTE } from './masternodes'
 
 export interface NavItem {
@@ -61,6 +62,11 @@ export const navGroups: NavGroup[] = [
         id: 'masternodes',
         label: 'Masternodes',
         to: MASTERNODES_ROUTE
+      },
+      {
+        id: 'dao',
+        label: 'DAO',
+        to: DAO_ROUTE
       },
       {
         id: 'shielded',

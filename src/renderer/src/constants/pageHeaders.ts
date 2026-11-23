@@ -71,16 +71,20 @@ export const PAGE_HEADERS = {
   },
   masternodes: {
     title: 'Masternodes',
-    subtitle: 'Manage your masternodes, governance proposals and contested resources.',
+    subtitle: 'Manage your solo and shared masternodes.',
   },
   masternodeDetail: {
     back: 'Back to masternodes',
+  },
+  dao: {
+    title: 'DAO',
+    subtitle: 'Vote on Dash treasury proposals and DPNS contested names.',
   },
   proposalDetail: {
     back: 'Back to Proposals',
   },
   nameContest: {
-    back: 'Back to Contested Resources',
+    back: 'Back to DPNS Names',
   },
   registerUsername: {
     title: 'Register username',

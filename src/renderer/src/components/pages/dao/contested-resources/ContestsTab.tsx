@@ -22,7 +22,7 @@ import { SECTION_TABLE_HEADER, SECTION_TABLE_WRAPPER } from '@renderer/constants
 import { ContestSegment, ContestSort } from '@renderer/enums/Masternodes'
 import { NoResultsTone } from '@renderer/enums/NoResultsTone'
 import { SegmentedControlAppearance } from '@renderer/enums/SegmentedControlAppearance'
-import { useNameContests } from '@renderer/hooks/useNameContests'
+import { useContestedResources } from '@renderer/hooks/useContestedResources'
 import { useScrollEndSentinel } from '@renderer/hooks/useScrollEndSentinel'
 import type { ContestsTabProps } from '@renderer/types/MasternodeScreens'
 import { windowList } from '@renderer/utils/listWindow'
@@ -44,7 +44,7 @@ export default function ContestsTab({
   onShowMore,
   onOpenContest,
 }: ContestsTabProps): React.JSX.Element {
-  const { contests, loading, err, retry } = useNameContests(walletId)
+  const { contests, loading, err, retry } = useContestedResources(walletId)
   const appliedQuery = useDeferredValue(query)
   const { options, filtered } = useMemo(() => {
     const bySegment = Object.values(ContestSegment).map(value => ({

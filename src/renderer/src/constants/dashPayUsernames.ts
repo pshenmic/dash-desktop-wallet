@@ -45,6 +45,7 @@ export const USERNAME_DETAIL_COPY = {
   winner: 'Winner',
   contenders: 'Contenders',
   thisIdentity: 'This identity',
+  viewInDao: 'Vote in DAO',
   register: 'Register',
   close: 'Close',
 } as const

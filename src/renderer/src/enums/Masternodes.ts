@@ -1,7 +1,5 @@
 export enum MasternodesTab {
   Nodes = 'nodes',
-  Proposals = 'proposals',
-  ContestedResources = 'contested-resources',
 }
 
 export enum NodeSegment {

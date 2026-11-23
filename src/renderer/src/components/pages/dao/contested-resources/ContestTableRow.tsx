@@ -1,9 +1,12 @@
 import { ChevronIcon, HighlightedIdentifier, Text } from '@renderer/components/dash-ui-kit-extended'
+import CustomBadge from '@renderer/components/ui/CustomBadge'
 import IdentityAvatar from '@renderer/components/ui/IdentityAvatar'
+import ShareBar from '@renderer/components/ui/ShareBar'
 import StatusPill from '@renderer/components/ui/StatusPill'
 import {
   CONTEST_AVATAR_LIMIT,
   CONTEST_AVATAR_CLASS,
+  CONTEST_DETAIL_COPY,
   CONTEST_ROW_CHEVRON_CLASS,
   CONTEST_ROW_COPY,
   CONTEST_STATUS_PILLS,
@@ -19,7 +22,6 @@ import { countLabel } from '@renderer/utils/countLabel'
 import { fullDpnsName } from '@renderer/utils/dpnsLabel'
 import { contestLeader, contestStatus, formatShare, isEndingSoon } from '@renderer/utils/nameContests'
 import { formatTimeLeft } from '@renderer/utils/timeLeft'
-import ShareBar from './ShareBar'
 
 export default function ContestTableRow({ contest, now, network, onOpen }: ContestTableRowProps): React.JSX.Element {
   const leader = contestLeader(contest)
@@ -32,7 +34,12 @@ export default function ContestTableRow({ contest, now, network, onOpen }: Conte
 
   return (
     <button type={'button'} onClick={() => onOpen(contest.normalizedLabel)} className={`${SECTION_TABLE_ROW} ${CONTEST_TABLE_GRID}`}>
-      <Text size={14} weight={'medium'} color={'brand'} className={'min-w-0 truncate'}>{fullDpnsName(contest.label)}</Text>
+      <div className={'flex min-w-0 items-center gap-2'}>
+        <Text size={14} weight={'medium'} color={'brand'} className={'min-w-0 truncate'}>{fullDpnsName(contest.label)}</Text>
+        {contest.walletIdentifiers.length > 0 && (
+          <CustomBadge variant={'accent'} size={'xs'} text={CONTEST_DETAIL_COPY.yourIdentity} className={'shrink-0'} />
+        )}
+      </div>
       <span className={'flex items-center'}>
         {avatars.map(contender => (
           <span key={contender.identifier} className={CONTEST_AVATAR_CLASS}>
