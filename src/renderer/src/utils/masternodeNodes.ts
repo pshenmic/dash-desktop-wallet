@@ -53,6 +53,10 @@ export function hasVotingKey(node: MasternodeDto): boolean {
   return node.votingKeyIndex != null || node.importedRoles.includes('voting')
 }
 
+export function hasSignableVotingKey(node: MasternodeDto): boolean {
+  return node.votingKeyIndex != null || node.importedSigningRoles.includes('voting')
+}
+
 export function hasRoleInWallet(node: MasternodeDto, role: MasternodeKeyRole): boolean {
   if (roleKeyIndex(node, role) != null || node.importedRoles.includes(role)) return true
   return role === 'owner' && (node.shares?.some(isOwnedShare) ?? false)
@@ -71,19 +75,25 @@ export function nodeRolesLabel(node: MasternodeDto): string {
 
 export function nodeVotingAccessLabel(node: MasternodeDto): string {
   if (node.votingKeyIndex != null) return NODE_DETAIL_COPY.votingKeyStored
-  if (node.importedRoles.includes('voting')) return NODE_DETAIL_COPY.votingKeyImported
+  if (node.importedSigningRoles.includes('voting')) return NODE_DETAIL_COPY.votingKeyImported
+  if (node.importedRoles.includes('voting')) return NODE_DETAIL_COPY.votingKeyImportedWatchOnly
   return NODE_DETAIL_COPY.votingKeyMissing
 }
 
 export function keyOriginBadge(node: MasternodeDto, role: MasternodeKeyRole): Pick<CustomBadgeProps, 'variant' | 'text'> {
   if (roleKeyIndex(node, role) != null) return { variant: 'accent', text: NODE_DETAIL_COPY.walletKeyBadge }
-  if (node.importedRoles.includes(role)) return { variant: 'accent', text: NODE_DETAIL_COPY.importedKeyBadge }
+  if (node.importedSigningRoles.includes(role)) return { variant: 'accent', text: NODE_DETAIL_COPY.importedKeyBadge }
+  if (node.importedRoles.includes(role)) return { variant: 'muted', text: NODE_DETAIL_COPY.importedWatchOnlyBadge }
   return { variant: 'muted', text: NODE_DETAIL_COPY.externalKeyBadge }
 }
 
 export function shareOriginBadge(share: OwnedMasternodeShareDto): Pick<CustomBadgeProps, 'variant' | 'text'> {
   if (share.keyIndex != null) return { variant: 'accent', text: NODE_DETAIL_COPY.walletKeyBadge }
-  if (share.imported) return { variant: 'accent', text: NODE_DETAIL_COPY.importedKeyBadge }
+  if (share.imported) {
+    return share.canSign
+      ? { variant: 'accent', text: NODE_DETAIL_COPY.importedKeyBadge }
+      : { variant: 'muted', text: NODE_DETAIL_COPY.importedWatchOnlyBadge }
+  }
   return { variant: 'muted', text: NODE_DETAIL_COPY.externalKeyBadge }
 }
 
@@ -237,7 +247,7 @@ export function updateRegistrarDisabledReason(node: MasternodeDto): string | und
 }
 
 export function canUpdateNodeService(node: MasternodeDto): boolean {
-  return node.operatorKeyIndex != null
+  return node.operatorKeyIndex != null || node.importedSigningRoles.includes('operator')
 }
 
 export function updateServiceDisabledReason(node: MasternodeDto): string | undefined {
@@ -245,7 +255,7 @@ export function updateServiceDisabledReason(node: MasternodeDto): string | undef
 }
 
 export function canRevokeNode(node: MasternodeDto): boolean {
-  return !isSharedNode(node) && node.operatorKeyIndex != null
+  return !isSharedNode(node) && (node.operatorKeyIndex != null || node.importedSigningRoles.includes('operator'))
 }
 
 export function revokeNodeDisabledReason(node: MasternodeDto): string | undefined {

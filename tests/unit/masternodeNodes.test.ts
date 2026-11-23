@@ -58,11 +58,14 @@ function dash(amount: number): bigint {
 }
 
 function makeShare(overrides: Partial<OwnedMasternodeShareDto> = {}): OwnedMasternodeShareDto {
+  const keyIndex = overrides.keyIndex ?? null
+  const imported = overrides.imported ?? false
   return {
     ownerAddress: 'XshareOwner',
     amountDuffs: dash(500),
-    keyIndex: null,
-    imported: false,
+    keyIndex,
+    imported,
+    canSign: overrides.canSign ?? (keyIndex != null || imported),
     ...overrides,
   }
 }
@@ -84,6 +87,7 @@ const regularNode: MasternodeDto = {
   votingKeyIndex: 0,
   operatorKeyIndex: null,
   importedRoles: [],
+  importedSigningRoles: [],
   platformNodeId: null,
   platformP2PPort: null,
   platformHttpPort: null,
@@ -380,6 +384,7 @@ describe('Node access display, roles, badges, and service formatting', () => {
       ...sharedWithVoting,
       votingKeyIndex: null,
       importedRoles: ['voting'],
+      importedSigningRoles: ['voting'],
     })
     const sharedNoWalletKeys = makeNode({
       ...sharedWithVoting,
@@ -412,6 +417,7 @@ describe('Node access display, roles, badges, and service formatting', () => {
       shares: null,
       votingKeyIndex: null,
       importedRoles: ['owner', 'voting'],
+      importedSigningRoles: ['owner', 'voting'],
     })
     const sharedNullSharesExternal = makeNode({
       isShared: true,
@@ -447,6 +453,15 @@ describe('Node access display, roles, badges, and service formatting', () => {
       operatorKeyIndex: null,
       votingKeyIndex: null,
       importedRoles: ['voting'],
+      importedSigningRoles: ['voting'],
+    })
+    const watchOnlyVoting = makeNode({
+      isShared: false,
+      ownerKeyIndex: null,
+      operatorKeyIndex: null,
+      votingKeyIndex: null,
+      importedRoles: ['voting'],
+      importedSigningRoles: [],
     })
     const collateralOnly = makeNode({
       isShared: false,
@@ -469,6 +484,7 @@ describe('Node access display, roles, badges, and service formatting', () => {
       primary: 'Voting',
       secondary: 'Imported key',
     })
+    expect(nodeVotingAccessLabel(watchOnlyVoting)).toBe('Imported key (watch-only)')
 
     expect(nodeRolesLabel(collateralOnly)).toBe('Collateral')
     expect(nodeVotingAccessLabel(collateralOnly)).toBe('Outside this wallet')
@@ -479,15 +495,19 @@ describe('Node access display, roles, badges, and service formatting', () => {
   })
 
   it('resolves shareOriginBadge, keyOriginBadge, and role checks', () => {
-    expect(shareOriginBadge(makeShare({ keyIndex: 0, imported: false }))).toEqual({
+    expect(shareOriginBadge(makeShare({ keyIndex: 0, imported: false, canSign: true }))).toEqual({
       variant: 'accent',
       text: 'Wallet key',
     })
-    expect(shareOriginBadge(makeShare({ keyIndex: null, imported: true }))).toEqual({
+    expect(shareOriginBadge(makeShare({ keyIndex: null, imported: true, canSign: true }))).toEqual({
       variant: 'accent',
       text: 'Imported',
     })
-    expect(shareOriginBadge(makeShare({ keyIndex: null, imported: false }))).toEqual({
+    expect(shareOriginBadge(makeShare({ keyIndex: null, imported: true, canSign: false }))).toEqual({
+      variant: 'muted',
+      text: 'Imported (watch-only)',
+    })
+    expect(shareOriginBadge(makeShare({ keyIndex: null, imported: false, canSign: false }))).toEqual({
       variant: 'muted',
       text: 'External',
     })
@@ -497,6 +517,14 @@ describe('Node access display, roles, badges, and service formatting', () => {
       votingKeyIndex: null,
       operatorKeyIndex: null,
       importedRoles: ['voting'],
+      importedSigningRoles: ['voting'],
+    })
+    const watchOnlyRoleNode = makeNode({
+      ownerKeyIndex: null,
+      votingKeyIndex: null,
+      operatorKeyIndex: null,
+      importedRoles: ['voting'],
+      importedSigningRoles: [],
     })
 
     const shareOwnedOnly = makeNode({
@@ -515,6 +543,7 @@ describe('Node access display, roles, badges, and service formatting', () => {
 
     expect(keyOriginBadge(mixedRoleNode, 'owner')).toEqual({ variant: 'accent', text: 'Wallet key' })
     expect(keyOriginBadge(mixedRoleNode, 'voting')).toEqual({ variant: 'accent', text: 'Imported' })
+    expect(keyOriginBadge(watchOnlyRoleNode, 'voting')).toEqual({ variant: 'muted', text: 'Imported (watch-only)' })
     expect(keyOriginBadge(mixedRoleNode, 'operator')).toEqual({ variant: 'muted', text: 'External' })
   })
 
@@ -702,6 +731,27 @@ describe('Masternode action guards', () => {
     expect(updateServiceDisabledReason(operatorOnly)).toBeUndefined()
     expect(canRevokeNode(operatorOnly)).toBe(true)
     expect(revokeNodeDisabledReason(operatorOnly)).toBeUndefined()
+
+    const importedOperatorSignable = makeNode({
+      isShared: true,
+      ownerKeyIndex: null,
+      operatorKeyIndex: null,
+      importedRoles: ['operator'],
+      importedSigningRoles: ['operator'],
+    })
+    expect(canUpdateNodeService(importedOperatorSignable)).toBe(true)
+    expect(updateServiceDisabledReason(importedOperatorSignable)).toBeUndefined()
+    expect(canRevokeNode(importedOperatorSignable)).toBe(false)
+
+    const soloImportedOperatorSignable = makeNode({
+      isShared: false,
+      ownerKeyIndex: null,
+      operatorKeyIndex: null,
+      importedRoles: ['operator'],
+      importedSigningRoles: ['operator'],
+    })
+    expect(canUpdateNodeService(soloImportedOperatorSignable)).toBe(true)
+    expect(canRevokeNode(soloImportedOperatorSignable)).toBe(true)
   })
 })
 

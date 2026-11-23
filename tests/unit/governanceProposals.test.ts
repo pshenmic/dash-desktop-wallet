@@ -49,6 +49,7 @@ function makeNode(overrides: Partial<MasternodeDto> = {}): MasternodeDto {
     votingKeyIndex: 0,
     operatorKeyIndex: 0,
     importedRoles: [],
+    importedSigningRoles: [],
     platformNodeId: null,
     platformP2PPort: null,
     platformHttpPort: null,
@@ -123,5 +124,26 @@ describe('Governance proposal helpers', () => {
     expect(classified.eligible).toEqual([shared])
     expect(classified.ineligible).toEqual([])
     expect(totalSelectedVoteWeight(classified.eligible, new Set(['shared-voter']))).toBe(1)
+  })
+
+  it('allows signable imported voting keys and marks watch-only imported keys ineligible', () => {
+    const signable = makeNode({
+      proTxHash: 'imported-signable',
+      votingKeyIndex: null,
+      importedRoles: ['voting'],
+      importedSigningRoles: ['voting'],
+    })
+    const watchOnly = makeNode({
+      proTxHash: 'imported-watch-only',
+      votingKeyIndex: null,
+      importedRoles: ['voting'],
+      importedSigningRoles: [],
+    })
+
+    const classified = classifyVotingMasternodes([signable, watchOnly])
+    expect(classified.eligible).toEqual([signable])
+    expect(classified.ineligible).toEqual([
+      { node: watchOnly, reason: 'Re-import voting key with wallet password to sign' },
+    ])
   })
 })

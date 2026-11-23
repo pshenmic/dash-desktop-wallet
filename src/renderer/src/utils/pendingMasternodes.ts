@@ -49,6 +49,7 @@ export function pendingMasternodeToDto(entry: PendingMasternodeEntry): Masternod
     votingKeyIndex: null,
     operatorKeyIndex: null,
     importedRoles: [],
+    importedSigningRoles: [],
     platformNodeId: entry.platformNodeId,
     platformP2PPort: entry.platformP2PPort,
     platformHttpPort: entry.platformHttpPort,

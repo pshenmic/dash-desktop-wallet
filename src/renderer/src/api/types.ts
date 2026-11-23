@@ -227,6 +227,7 @@ export interface MasternodeShareDto {
 export interface OwnedMasternodeShareDto extends MasternodeShareDto {
   keyIndex: number | null
   imported: boolean
+  canSign: boolean
 }
 
 export interface MasternodeCollateralDto {

@@ -29,6 +29,7 @@ function makeNode(overrides: Partial<MasternodeDto> = {}): MasternodeDto {
     votingKeyIndex: null,
     operatorKeyIndex: null,
     importedRoles: [],
+    importedSigningRoles: [],
     platformNodeId: null,
     platformP2PPort: null,
     platformHttpPort: null,
@@ -74,7 +75,7 @@ describe('detectMasternodePrivateKey', () => {
     expect(res.alreadyImported).toBe(false)
 
     const nodeWithOperator = makeNode({ operatorPublicKey: res.publicKey.toUpperCase() })
-    const imported: ImportedMasternodeKeyDto[] = [{ role: 'operator', publicKey: res.publicKey }]
+    const imported: ImportedMasternodeKeyDto[] = [{ role: 'operator', publicKey: res.publicKey, hasPrivateKey: true }]
     const matched = detectMasternodePrivateKey(sampleBlsHex, 'testnet', [nodeWithOperator], imported)
     expect(matched.kind).toBe('bls')
     if (matched.kind !== 'bls') throw new Error('expected bls')
@@ -93,7 +94,7 @@ describe('detectMasternodePrivateKey', () => {
     const sharedNode = makeNode({
       isShared: true,
       ownerAddress: null,
-      shares: [{ ownerAddress: testnetAddress, amountDuffs: 50_000_000_000n, keyIndex: null, imported: false }],
+      shares: [{ ownerAddress: testnetAddress, amountDuffs: 50_000_000_000n, keyIndex: null, imported: false, canSign: false }],
     })
 
     const unmatched = detectMasternodePrivateKey(testnetWif, 'testnet', [], [])
@@ -115,7 +116,7 @@ describe('detectMasternodePrivateKey', () => {
       expect(asOwner.matchedService).toBe('203.0.113.10:19999')
     }
 
-    const asVoting = detectMasternodePrivateKey(testnetWif, 'testnet', [votingNode], [{ role: 'voting', publicKey: testnetAddress }])
+    const asVoting = detectMasternodePrivateKey(testnetWif, 'testnet', [votingNode], [{ role: 'voting', publicKey: testnetAddress, hasPrivateKey: true }])
     expect(asVoting.kind).toBe('wif')
     if (asVoting.kind === 'wif') {
       expect(asVoting.matchedRole).toBe('voting')

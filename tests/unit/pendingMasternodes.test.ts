@@ -34,6 +34,7 @@ describe('pendingMasternodes', () => {
     expect(dto.payeeAddress).toBe('yPayee')
     expect(dto.isShared).toBe(false)
     expect(dto.ownerKeyIndex).toBeNull()
+    expect(dto.importedSigningRoles).toEqual([])
   })
 
   it('drops pending entries once discovered on the backend or after TTL expires', () => {

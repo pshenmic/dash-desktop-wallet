@@ -105,8 +105,13 @@ export function classifyVotingMasternodes(nodes: MasternodeDto[]): VotingNodeEli
   for (const node of nodes) {
     if (node.status === REGISTERING_MASTERNODE_STATUS) {
       ineligible.push({ node, reason: VOTE_PROPOSAL_COPY.pendingRegistrationReason })
-    } else if (node.votingKeyIndex == null) {
-      ineligible.push({ node, reason: VOTE_PROPOSAL_COPY.missingVotingKeyReason })
+    } else if (node.votingKeyIndex == null && !node.importedSigningRoles.includes('voting')) {
+      ineligible.push({
+        node,
+        reason: node.importedRoles.includes('voting')
+          ? VOTE_PROPOSAL_COPY.watchOnlyVotingKeyReason
+          : VOTE_PROPOSAL_COPY.missingVotingKeyReason,
+      })
     } else if (node.status === POSE_BANNED_MASTERNODE_STATUS) {
       ineligible.push({ node, reason: VOTE_PROPOSAL_COPY.poseBannedReason })
     } else if (node.collateralTxid == null || node.collateralVout == null) {

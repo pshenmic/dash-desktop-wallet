@@ -5,11 +5,13 @@ import CopyableError from '@renderer/components/ui/CopyableError'
 import CustomBadge from '@renderer/components/ui/CustomBadge'
 import Modal from '@renderer/components/ui/Modal'
 import ModalActions from '@renderer/components/ui/ModalActions'
+import PasswordField from '@renderer/components/ui/PasswordField'
 import SegmentedControl from '@renderer/components/ui/SegmentedControl'
 import ListSkeleton from '@renderer/components/ui/Skeleton'
 import Spinner from '@renderer/components/ui/Spinner'
 import { API } from '@renderer/api'
 import type { ImportedMasternodeKeyDto, MasternodeKeyRole } from '@renderer/api/types'
+import { INVALID_WALLET_PASSWORD_MESSAGE } from '@renderer/constants'
 import { FIELD_INVALID } from '@renderer/constants/addressField'
 import { WIF_ROLE_OPTIONS } from '@renderer/constants/masternodeKeys'
 import {
@@ -50,6 +52,8 @@ export default function ManageMasternodeKeysModal({
   const [roleOverrides, setRoleOverrides] = useState<Record<string, 'owner' | 'voting'>>({})
   const [privateKeysInput, setPrivateKeysInput] = useState('')
   const [masked, setMasked] = useState(true)
+  const [password, setPassword] = useState('')
+  const [passwordInvalid, setPasswordInvalid] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [removingKeyId, setRemovingKeyId] = useState<string | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
@@ -63,6 +67,8 @@ export default function ManageMasternodeKeysModal({
     setRoleOverrides({})
     setPrivateKeysInput('')
     setMasked(true)
+    setPassword('')
+    setPasswordInvalid(false)
     setSubmitting(false)
     setRemovingKeyId(null)
     setImportError(null)
@@ -95,11 +101,13 @@ export default function ManageMasternodeKeysModal({
   const hasInvalidItem = detectedItems.some(item => item.detection.kind === 'invalid' || (item.detection.kind === 'wif' && item.detection.networkMismatch))
   const busy = submitting || removingKeyId !== null
   const hasDraft = detectedItems.length > 0 || privateKeysInput.trim().length > 0
-  const canImport = !busy && validItems.length > 0
+  const canImport = !busy && validItems.length > 0 && password.length > 0
 
   const resetDraft = (): void => {
     setPrivateKeysInput('')
     setRoleOverrides({})
+    setPassword('')
+    setPasswordInvalid(false)
     setImportError(null)
     setImportNotice(null)
   }
@@ -108,11 +116,17 @@ export default function ManageMasternodeKeysModal({
     if (!canImport) return
     const requestId = ++requestIdRef.current
     setSubmitting(true)
+    setPasswordInvalid(false)
     setImportError(null)
     setImportNotice(null)
     setRemoveError(null)
     setRemoveNotice(null)
     try {
+      const valid = await API.verifyWalletPassword(walletId, password)
+      if (!valid) {
+        if (requestId === requestIdRef.current) setPasswordInvalid(true)
+        return
+      }
       const matchedHashes = new Set<string>()
       let anyRpcOwnerUnmatched = false
       let anyNullMatch = false
@@ -125,7 +139,7 @@ export default function ManageMasternodeKeysModal({
       }
 
       if (importedList.length === 1) {
-        const matched = await API.importMasternodeKey(walletId, importedList[0].role, importedList[0].key)
+        const matched = await API.importMasternodeKey(walletId, importedList[0].role, importedList[0].key, password)
         await Promise.all([refreshImportedMasternodeKeys(walletId), refreshMasternodes(walletId)])
         if (requestId === requestIdRef.current) {
           setImportNotice({
@@ -136,12 +150,13 @@ export default function ManageMasternodeKeysModal({
           })
           setPrivateKeysInput('')
           setRoleOverrides({})
+          setPassword('')
         }
         return
       }
 
       for (const entry of importedList) {
-        const matched = await API.importMasternodeKey(walletId, entry.role, entry.key)
+        const matched = await API.importMasternodeKey(walletId, entry.role, entry.key, password)
         if (matched == null) anyNullMatch = true
         else {
           for (const node of matched) matchedHashes.add(node.proTxHash)
@@ -160,6 +175,7 @@ export default function ManageMasternodeKeysModal({
         })
         setPrivateKeysInput('')
         setRoleOverrides({})
+        setPassword('')
       }
     } catch (err) {
       if (requestId === requestIdRef.current) setImportError(getErrorMessage(err))
@@ -362,6 +378,23 @@ export default function ManageMasternodeKeysModal({
               return <CopyableError key={item.id} message={`${detection.message} (${item.rawToken.slice(0, 12)}${item.rawToken.length > 12 ? '…' : ''})`} />
             })}
           </div>
+        )}
+
+        {validItems.length > 0 && (
+          <PasswordField
+            id={`${inputId}-password`}
+            label={MANAGE_KEYS_COPY.authorizeLabel}
+            value={password}
+            onChange={(value) => {
+              setPasswordInvalid(false)
+              setImportError(null)
+              setPassword(value)
+            }}
+            onSubmit={() => { void handleImport() }}
+            error={passwordInvalid ? INVALID_WALLET_PASSWORD_MESSAGE : null}
+            disabled={busy}
+            autoFocus={false}
+          />
         )}
 
         {importError && <CopyableError message={importError} />}
