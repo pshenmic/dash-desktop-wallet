@@ -1,10 +1,13 @@
 import {
   Button,
+  CheckIcon,
+  CreditsIcon,
   HighlightedIdentifier,
   InfoCircleIcon,
   SuccessIcon,
   Text,
 } from '@renderer/components/dash-ui-kit-extended'
+import { ServerIcon } from '@renderer/components/dash-ui-kit-extended/icons'
 import RecipientInput from '@renderer/components/pages/transfer/RecipientInput'
 import Alert from '@renderer/components/ui/Alert'
 import Checkbox from '@renderer/components/ui/Checkbox'
@@ -88,27 +91,92 @@ export function RegisterStepNodeType({
       <div className={'grid grid-cols-1 sm:grid-cols-2 gap-3'}>
         {MASTERNODE_TYPE_CARDS.map(card => {
           const active = draft.type === card.type
+          const TypeIcon = card.type === EVO_MASTERNODE_TYPE ? CreditsIcon : ServerIcon
           return (
             <button
               key={card.type}
               type={'button'}
+              aria-pressed={active}
               onClick={() => updateDraft({ type: card.type })}
-              className={`flex flex-col items-start gap-1.5 rounded-[.9375rem] border p-4 text-left transition-colors cursor-pointer ${
+              className={`flex flex-col items-stretch justify-between gap-3 rounded-[.9375rem] border p-4 text-left transition-colors cursor-pointer ${
                 active
                   ? 'border-dash-brand dark:border-dash-mint dash-block-accent-5'
                   : 'border-dash-primary-dark-blue/10 dark:border-white/10 dash-block-5 hover:dash-block-10'
               }`}
             >
-              <div className={'flex w-full items-center justify-between gap-2'}>
-                <Text size={14} weight={'extrabold'} color={active ? 'blue-mint' : 'brand'}>{card.title}</Text>
-                <CustomBadge variant={active ? 'accent' : 'muted'} text={card.amount} />
+              <div className={'flex flex-col gap-2.5'}>
+                <div className={'flex items-center justify-between gap-2'}>
+                  <div className={'flex items-center gap-2'}>
+                    <span
+                      aria-hidden={'true'}
+                      className={`flex size-8 shrink-0 items-center justify-center rounded-[.625rem] border ${
+                        active
+                          ? 'border-dash-brand/25 bg-dash-brand/10 text-dash-brand dark:border-dash-mint/30 dark:bg-dash-mint/10 dark:text-dash-mint'
+                          : 'border-dash-primary-dark-blue/10 bg-dash-primary-dark-blue/[0.04] text-dash-primary-dark-blue/65 dark:border-white/10 dark:bg-white/[0.06] dark:text-white/65'
+                      }`}
+                    >
+                      <TypeIcon size={15} color={'currentColor'} />
+                    </span>
+                    <CustomBadge variant={active ? 'accent' : 'muted'} size={'xs'} text={card.layerBadge} />
+                  </div>
+                  <span
+                    aria-hidden={'true'}
+                    className={`flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                      active
+                        ? 'border-dash-brand bg-dash-brand text-white dark:border-dash-mint dark:bg-dash-mint dark:text-dash-primary-dark-blue'
+                        : 'border-dash-primary-dark-blue/20 dark:border-white/20'
+                    }`}
+                  >
+                    {active && <CheckIcon size={12} color={'currentColor'} className={'[&_circle]:hidden'} />}
+                  </span>
+                </div>
+
+                <div className={'flex flex-col gap-1'}>
+                  <Text size={16} weight={'extrabold'} color={active ? 'blue-mint' : 'brand'}>{card.title}</Text>
+                  <Text size={12} weight={'medium'} color={'brand'} opacity={60} className={'leading-[135%]'}>
+                    {card.summary}
+                  </Text>
+                </div>
+
+                <div className={'grid grid-cols-3 gap-2 rounded-[.75rem] border border-dash-primary-dark-blue/[0.07] bg-dash-primary-dark-blue/[0.025] px-2.5 py-2 dark:border-white/[0.08] dark:bg-white/[0.03]'}>
+                  <div className={'flex flex-col gap-0.5 min-w-0'}>
+                    <Text reset size={10} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.collateralCardLabel}</Text>
+                    <Text reset size={12} weight={'bold'} color={'brand'} className={'tabular-nums whitespace-nowrap'}>{card.amount}</Text>
+                  </div>
+                  <div className={'flex flex-col gap-0.5 min-w-0'}>
+                    <Text reset size={10} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.apyLabel}</Text>
+                    <Text reset size={12} weight={'extrabold'} color={'blue-mint'} className={'tabular-nums whitespace-nowrap'}>{card.estimatedApy}</Text>
+                  </div>
+                  <div className={'flex flex-col gap-0.5 min-w-0'}>
+                    <Text reset size={10} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.votingCardLabel}</Text>
+                    <Text reset size={12} weight={'bold'} color={'brand'} className={'tabular-nums whitespace-nowrap'}>{card.votingWeight}</Text>
+                  </div>
+                </div>
               </div>
-              <Text size={12} weight={'medium'} color={'brand'} opacity={60} className={'leading-[135%]'}>
-                {card.summary}
-              </Text>
+
+              <ul className={'flex flex-col gap-1 pt-0.5'}>
+                {card.highlights.map(item => (
+                  <li key={item} className={'flex items-start gap-1.5'}>
+                    <span
+                      aria-hidden={'true'}
+                      className={`mt-1.5 size-1 shrink-0 rounded-full ${active ? 'bg-dash-brand dark:bg-dash-mint' : 'bg-dash-primary-dark-blue/35 dark:bg-white/35'}`}
+                    />
+                    <Text reset size={10} weight={'medium'} color={'brand'} opacity={60} className={'leading-[140%]'}>
+                      {item}
+                    </Text>
+                  </li>
+                ))}
+              </ul>
             </button>
           )
         })}
+      </div>
+
+      <div className={'flex items-start gap-2 px-1'}>
+        <InfoCircleIcon size={14} color={'currentColor'} className={'mt-0.5 shrink-0 text-dash-primary-dark-blue/45 dark:text-white/45'} />
+        <Text size={10} weight={'medium'} color={'brand'} opacity={50} className={'leading-[140%]'}>
+          {REGISTER_WIZARD_COPY.apyDisclaimer}
+        </Text>
       </div>
     </div>
   )

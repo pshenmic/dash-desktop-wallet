@@ -59,6 +59,17 @@ export interface RegisterWizardStepMeta {
   label: string
 }
 
+export interface MasternodeTypeCardMeta {
+  type: MasternodeType
+  title: string
+  amount: string
+  estimatedApy: string
+  layerBadge: string
+  votingWeight: string
+  summary: string
+  highlights: readonly string[]
+}
+
 export interface RegisterWizardValidation {
   step1Error: string | null
   step2Error: string | null

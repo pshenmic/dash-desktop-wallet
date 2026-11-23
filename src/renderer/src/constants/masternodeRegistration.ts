@@ -1,6 +1,7 @@
 import { EVO_MASTERNODE_TYPE, REGULAR_MASTERNODE_TYPE } from '@renderer/constants/masternodes'
 import type {
   MasternodeType,
+  MasternodeTypeCardMeta,
   RegisterWizardStepMeta,
   RegistrationKeySource,
   RegistrationServiceMode,
@@ -120,24 +121,37 @@ export const REGISTER_WIZARD_COPY = {
   authorizeLabel: 'Authorize with wallet password',
   retryButton: 'Retry',
   resetForm: 'Reset form',
+  apyLabel: 'Est. APY',
+  collateralCardLabel: 'Collateral',
+  votingCardLabel: 'Governance',
+  apyDisclaimer: 'Estimated APY is an indicative placeholder and varies with active masternode count and network activity.',
 } as const
 
-export const MASTERNODE_TYPE_CARDS: ReadonlyArray<{
-  type: MasternodeType
-  title: string
-  amount: string
-  summary: string
-}> = [
+export const MASTERNODE_TYPE_CARDS: ReadonlyArray<MasternodeTypeCardMeta> = [
   {
     type: REGULAR_MASTERNODE_TYPE as MasternodeType,
     title: REGISTER_WIZARD_COPY.regularTitle,
     amount: REGISTER_WIZARD_COPY.regularAmount,
+    estimatedApy: '~6.5% APY',
+    layerBadge: 'Core Layer',
+    votingWeight: '1× DAO vote',
     summary: REGISTER_WIZARD_COPY.regularSummary,
+    highlights: [
+      'InstantSend & ChainLocks quorum rewards',
+      'Standard IPv4:port Core setup',
+    ],
   },
   {
     type: EVO_MASTERNODE_TYPE as MasternodeType,
     title: REGISTER_WIZARD_COPY.evoTitle,
     amount: REGISTER_WIZARD_COPY.evoAmount,
+    estimatedApy: '~8.5% APY',
+    layerBadge: 'Core + Platform',
+    votingWeight: '4× DAO vote',
     summary: REGISTER_WIZARD_COPY.evoSummary,
+    highlights: [
+      'Core rewards + Dash Platform credit fees',
+      'Requires Tenderdash P2P & HTTP ports',
+    ],
   },
 ]
