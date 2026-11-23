@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type {
   MasternodeRegistrationDto,
   MasternodeRegistrationPreviewDto,
@@ -10,7 +11,8 @@ import type { DropdownFieldOption } from './DropdownField'
 export type MasternodeType = MasternodeRegistrationDto['type']
 
 export type RegistrationKeySource = 'wallet' | 'external'
-export type RegistrationCollateralSource = 'wallet' | 'manual'
+export type ResolvedRegistrationCollateralSource = 'prepare' | 'wallet' | 'manual'
+export type RegistrationCollateralSource = 'auto' | ResolvedRegistrationCollateralSource
 export type RegistrationFeeSource = 'auto' | 'address'
 export type RegistrationServiceMode = 'now' | 'later'
 
@@ -79,14 +81,19 @@ export interface RegisterStepSharedProps {
   onRetryAddresses: () => void
 }
 
+export interface RegisterStepNodeTypeProps {
+  draft: RegisterWizardDraft
+  updateDraft: (patch: Partial<RegisterWizardDraft>) => void
+}
+
 export interface RegisterStepCollateralProps extends RegisterStepSharedProps {
+  resolvedCollateralSource: ResolvedRegistrationCollateralSource
   collateralOptions: DropdownFieldOption[]
   activeCollateral: string
   utxosLoading: boolean
   utxosError: string | null
-  spendablePrepTotalDuffs: bigint
   preparedOutpoint: string | null
-  onOpenPrepareModal: () => void
+  prepareSection: ReactNode
   onRetryUtxos: () => void
 }
 

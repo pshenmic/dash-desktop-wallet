@@ -19,6 +19,7 @@ describe('masternodeRegistrationDraft', () => {
     const initial = getOrCreateRegisterWizardState('wallet-a', 'testnet')
     expect(initial.active).toBe(false)
     expect(initial.step).toBe(0)
+    expect(initial.draft.collateralSource).toBe('auto')
     expect(initial.draft.payoutMode).toBe('wallet')
     expect(initial.draft.servicePort).toBe('19999')
     expect(hasCustomRegisterWizardDraft(initial, 'testnet')).toBe(false)
@@ -26,7 +27,7 @@ describe('masternodeRegistrationDraft', () => {
     setRegisterWizardActive('wallet-a', 'testnet', true)
     saveRegisterWizardState('wallet-a', {
       active: true,
-      step: 2,
+      step: 7,
       draft: {
         ...initial.draft,
         type: 'Evo',
@@ -36,7 +37,7 @@ describe('masternodeRegistrationDraft', () => {
 
     const restored = getOrCreateRegisterWizardState('wallet-a', 'testnet')
     expect(restored.active).toBe(true)
-    expect(restored.step).toBe(2)
+    expect(restored.step).toBe(4)
     expect(restored.draft.type).toBe('Evo')
     expect(restored.draft.payoutAddress).toBe('yPayoutAddr')
     expect(hasCustomRegisterWizardDraft(restored, 'testnet')).toBe(true)

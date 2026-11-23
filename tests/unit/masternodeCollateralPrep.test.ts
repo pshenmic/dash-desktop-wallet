@@ -11,6 +11,7 @@ import {
   planCollateralInvoiceSync,
   prepOutpointKey,
   requiredCollateralDuffs,
+  resolveCollateralPrepSelectedKeys,
   resolveCreatedCollateralOutpoint,
   spendablePrepTotal,
   spendablePrepUtxos,
@@ -269,5 +270,24 @@ describe('masternodeCollateralPrep', () => {
       deleteRequestId: 42,
       createRequest: null,
     })
+  })
+
+  it('resolves selected keys cleanly in auto-select vs manual mode', () => {
+    const coins = [
+      coin('1'.repeat(64), 0, 80_000_000_000n),
+      coin('2'.repeat(64), 0, 50_000_000_000n),
+    ]
+    const required = requiredCollateralDuffs('Regular')
+
+    expect(
+      resolveCollateralPrepSelectedKeys('auto', coins, required, [`${'2'.repeat(64)}:0`]),
+    ).toEqual([`${'1'.repeat(64)}:0`, `${'2'.repeat(64)}:0`])
+
+    expect(
+      resolveCollateralPrepSelectedKeys('manual', coins, required, [
+        `${'2'.repeat(64)}:0`,
+        `${'9'.repeat(64)}:0`,
+      ]),
+    ).toEqual([`${'2'.repeat(64)}:0`])
   })
 })

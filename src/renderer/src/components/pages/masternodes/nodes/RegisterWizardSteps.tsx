@@ -50,6 +50,7 @@ import { AlertTone } from '@renderer/enums/AlertTone'
 import { SegmentedControlAppearance } from '@renderer/enums/SegmentedControlAppearance'
 import type {
   RegisterStepCollateralProps,
+  RegisterStepNodeTypeProps,
   RegisterStepReviewProps,
   RegisterStepSharedProps,
   RegisterWizardDoneProps,
@@ -72,76 +73,81 @@ import {
 } from '@renderer/utils/masternodeActions'
 import MasternodeFieldInput from './MasternodeFieldInput'
 
+export function RegisterStepNodeType({
+  draft,
+  updateDraft,
+}: RegisterStepNodeTypeProps): React.JSX.Element {
+  return (
+    <div className={'flex flex-col gap-3'}>
+      <div className={'flex flex-col gap-1'}>
+        <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.typeLabel}</Text>
+        <Text size={12} weight={'medium'} color={'brand'} opacity={60} className={'leading-[135%]'}>
+          {REGISTER_WIZARD_COPY.nodeTypeStepDescription}
+        </Text>
+      </div>
+      <div className={'grid grid-cols-1 sm:grid-cols-2 gap-3'}>
+        {MASTERNODE_TYPE_CARDS.map(card => {
+          const active = draft.type === card.type
+          return (
+            <button
+              key={card.type}
+              type={'button'}
+              onClick={() => updateDraft({ type: card.type })}
+              className={`flex flex-col items-start gap-1.5 rounded-[.9375rem] border p-4 text-left transition-colors cursor-pointer ${
+                active
+                  ? 'border-dash-brand dark:border-dash-mint dash-block-accent-5'
+                  : 'border-dash-primary-dark-blue/10 dark:border-white/10 dash-block-5 hover:dash-block-10'
+              }`}
+            >
+              <div className={'flex w-full items-center justify-between gap-2'}>
+                <Text size={14} weight={'extrabold'} color={active ? 'blue-mint' : 'brand'}>{card.title}</Text>
+                <CustomBadge variant={active ? 'accent' : 'muted'} text={card.amount} />
+              </div>
+              <Text size={12} weight={'medium'} color={'brand'} opacity={60} className={'leading-[135%]'}>
+                {card.summary}
+              </Text>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export function RegisterStepCollateral({
   draft,
   updateDraft,
   validation,
+  resolvedCollateralSource,
   collateralOptions,
   activeCollateral,
   utxosLoading,
   utxosError,
-  spendablePrepTotalDuffs,
   preparedOutpoint,
-  onOpenPrepareModal,
+  prepareSection,
   onRetryUtxos,
 }: RegisterStepCollateralProps): React.JSX.Element {
   const confirming = validation.selectedCoin != null && isConfirmingUtxo(validation.selectedCoin)
 
   return (
-    <div className={'flex flex-col gap-4'}>
-      <div className={'flex flex-col gap-2'}>
-        <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.typeLabel}</Text>
-        <div className={'grid grid-cols-1 sm:grid-cols-2 gap-3'}>
-          {MASTERNODE_TYPE_CARDS.map(card => {
-            const active = draft.type === card.type
-            return (
-              <button
-                key={card.type}
-                type={'button'}
-                onClick={() => updateDraft({ type: card.type })}
-                className={`flex flex-col items-start gap-1.5 rounded-[.9375rem] border p-4 text-left transition-colors cursor-pointer ${
-                  active
-                    ? 'border-dash-brand dark:border-dash-mint dash-block-accent-5'
-                    : 'border-dash-primary-dark-blue/10 dark:border-white/10 dash-block-5 hover:dash-block-10'
-                }`}
-              >
-                <div className={'flex w-full items-center justify-between gap-2'}>
-                  <Text size={14} weight={'extrabold'} color={active ? 'blue-mint' : 'brand'}>{card.title}</Text>
-                  <CustomBadge variant={active ? 'accent' : 'muted'} text={card.amount} />
-                </div>
-                <Text size={12} weight={'medium'} color={'brand'} opacity={60} className={'leading-[135%]'}>
-                  {card.summary}
-                </Text>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
+    <div className={'flex flex-col gap-3'}>
       <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
           <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.collateralLabel}</Text>
-          <div className={'flex flex-wrap items-center gap-2'}>
-            {draft.collateralSource === 'wallet' && !utxosLoading && utxosError == null && collateralOptions.length > 0 && (
-              <button
-                type={'button'}
-                onClick={onOpenPrepareModal}
-                className={CHIP_ACTION}
-              >
-                {MASTERNODE_COLLATERAL_PREP_COPY.buttonLabel}
-              </button>
-            )}
-            <SegmentedControl
-              appearance={SegmentedControlAppearance.Pill}
-              ariaLabel={REGISTER_WIZARD_COPY.collateralSourceLabel}
-              options={REGISTER_WIZARD_COLLATERAL_SOURCE_OPTIONS}
-              value={draft.collateralSource}
-              onChange={collateralSource => updateDraft({ collateralSource })}
-            />
-          </div>
+          <SegmentedControl
+            appearance={SegmentedControlAppearance.Pill}
+            ariaLabel={REGISTER_WIZARD_COPY.collateralSourceLabel}
+            options={REGISTER_WIZARD_COLLATERAL_SOURCE_OPTIONS}
+            value={resolvedCollateralSource}
+            onChange={collateralSource => updateDraft({ collateralSource })}
+          />
         </div>
 
-        {draft.collateralSource === 'wallet' ? (
+        {resolvedCollateralSource === 'prepare' ? (
+          <Text size={12} weight={'medium'} color={'brand'} opacity={60} className={'leading-[135%]'}>
+            {MASTERNODE_COLLATERAL_PREP_COPY.sectionDescription}
+          </Text>
+        ) : resolvedCollateralSource === 'wallet' ? (
           utxosLoading ? (
             <ListSkeleton rows={1} rowClassName={'h-11 rounded-[.875rem]'} />
           ) : utxosError != null ? (
@@ -160,10 +166,14 @@ export function RegisterStepCollateral({
               tone={AlertTone.Info}
               icon={<InfoCircleIcon size={14} />}
               title={REGISTER_MASTERNODE_COPY.noCollateralUtxos}
-              description={`${MASTERNODE_COLLATERAL_PREP_COPY.emptyHintPrefix} ${davToDash(spendablePrepTotalDuffs)} ${DASH_UNIT}.`}
               actions={(
-                <Button type={'button'} size={'compact'} colorScheme={'primary'} onClick={onOpenPrepareModal}>
-                  {MASTERNODE_COLLATERAL_PREP_COPY.buttonLabel}
+                <Button
+                  type={'button'}
+                  size={'compact'}
+                  colorScheme={'primary'}
+                  onClick={() => updateDraft({ collateralSource: 'prepare' })}
+                >
+                  {REGISTER_WIZARD_COPY.switchToPrepareButton}
                 </Button>
               )}
             />
@@ -202,7 +212,7 @@ export function RegisterStepCollateral({
           </div>
         )}
 
-        {preparedOutpoint != null && draft.collateralSource === 'wallet' && activeCollateral === preparedOutpoint && (
+        {preparedOutpoint != null && resolvedCollateralSource === 'wallet' && activeCollateral === preparedOutpoint && (
           <Alert
             tone={AlertTone.Success}
             icon={<InfoCircleIcon size={14} />}
@@ -211,7 +221,7 @@ export function RegisterStepCollateral({
           />
         )}
 
-        {confirming && (
+        {confirming && resolvedCollateralSource !== 'prepare' && (
           <Alert
             tone={AlertTone.Warning}
             icon={<InfoCircleIcon size={14} />}
@@ -220,7 +230,7 @@ export function RegisterStepCollateral({
           />
         )}
 
-        {draft.collateralSource === 'manual' && validation.manualOutpointMissingFromWallet && (
+        {resolvedCollateralSource === 'manual' && validation.manualOutpointMissingFromWallet && (
           <Alert
             tone={AlertTone.Info}
             icon={<InfoCircleIcon size={14} />}
@@ -229,6 +239,8 @@ export function RegisterStepCollateral({
           />
         )}
       </div>
+
+      {resolvedCollateralSource === 'prepare' && prepareSection}
     </div>
   )
 }
@@ -583,7 +595,7 @@ export function RegisterStepReview({
   const resolvedPayout = dto?.payoutAddress
     ?? (draft.payoutMode === 'wallet' ? (defaultPayoutAddress ?? '') : draft.payoutAddress.trim())
   const payoutBadge = resolvedPayout !== '' ? badgeFor(resolvedPayout) : undefined
-  const collateralDisplay = draft.collateralSource === 'wallet'
+  const collateralDisplay = draft.collateralSource !== 'manual'
     ? activeCollateral
     : `${draft.manualTxid.trim()}:${draft.manualVout.trim()}`
   const serviceDisplay = draft.serviceMode === 'later' || dto?.serviceAddress == null

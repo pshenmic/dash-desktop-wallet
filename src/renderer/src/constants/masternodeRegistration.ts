@@ -2,20 +2,22 @@ import { EVO_MASTERNODE_TYPE, REGULAR_MASTERNODE_TYPE } from '@renderer/constant
 import type {
   MasternodeType,
   RegisterWizardStepMeta,
-  RegistrationCollateralSource,
   RegistrationKeySource,
   RegistrationServiceMode,
+  ResolvedRegistrationCollateralSource,
 } from '@renderer/types/MasternodeRegistrationWizard'
 import type { SegmentOption } from '@renderer/types/SegmentedControl'
 
 export const REGISTER_WIZARD_STEPS: readonly RegisterWizardStepMeta[] = [
-  { id: 'collateral', label: 'Type & Collateral' },
+  { id: 'type', label: 'Node Type' },
+  { id: 'collateral', label: 'Prepare Wallet' },
   { id: 'addresses', label: 'Addresses & Keys' },
-  { id: 'network', label: 'Network & Platform' },
-  { id: 'review', label: 'Review & Register' },
+  { id: 'network', label: 'Network' },
+  { id: 'review', label: 'Review' },
 ] as const
 
-export const REGISTER_WIZARD_COLLATERAL_SOURCE_OPTIONS: SegmentOption<RegistrationCollateralSource>[] = [
+export const REGISTER_WIZARD_COLLATERAL_SOURCE_OPTIONS: SegmentOption<ResolvedRegistrationCollateralSource>[] = [
+  { value: 'prepare', label: 'Prepare wallet' },
   { value: 'wallet', label: 'Wallet UTXO' },
   { value: 'manual', label: 'Manual outpoint' },
 ]
@@ -63,6 +65,8 @@ export const REGISTER_WIZARD_COPY = {
   evoAmount: '4,000 DASH',
   evoSummary: 'Dash Core + Dash Platform / DAPI · 4× governance voting weight',
   collateralSourceLabel: 'Collateral source',
+  switchToPrepareButton: 'Prepare wallet',
+  nodeTypeStepDescription: 'Choose the masternode tier before preparing collateral and configuring DIP-3 keys.',
   manualTxidLabel: 'Collateral txid',
   manualTxidPlaceholder: '64 hex characters',
   manualVoutLabel: 'Output index',

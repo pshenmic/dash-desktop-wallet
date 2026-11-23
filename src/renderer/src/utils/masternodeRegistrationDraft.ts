@@ -18,7 +18,7 @@ export function createInitialRegisterDraft(network: Network | null): RegisterWiz
   const isTestnet = network === 'testnet'
   return {
     type: 'Regular',
-    collateralSource: 'wallet',
+    collateralSource: 'auto',
     selectedCollateral: '',
     manualTxid: '',
     manualVout: '0',
@@ -63,12 +63,14 @@ export function getOrCreateRegisterWizardState(
   }
   const existing = registerWizardDrafts.get(walletId)
   if (existing) {
-    if (existing.draft.payoutMode != null) return existing
+    const clampedStep = Math.min(Math.max(existing.step, 0), 4)
+    if (existing.draft.payoutMode != null && clampedStep === existing.step) return existing
     const migrated: PersistedRegisterWizardState = {
       ...existing,
+      step: clampedStep,
       draft: {
         ...existing.draft,
-        payoutMode: existing.draft.payoutAddress.trim() !== '' ? 'external' : 'wallet',
+        payoutMode: existing.draft.payoutMode ?? (existing.draft.payoutAddress.trim() !== '' ? 'external' : 'wallet'),
       },
     }
     registerWizardDrafts.set(walletId, migrated)

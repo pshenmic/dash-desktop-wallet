@@ -27,6 +27,7 @@ import { getErrorMessage } from '@renderer/utils/error'
 import {
   eligibleCollateralUtxos,
   isConfirmingUtxo,
+  resolveCollateralSource,
   validateRegistrationWizard,
 } from '@renderer/utils/masternodeActions'
 import {
@@ -37,13 +38,13 @@ import {
   saveRegisterWizardState,
 } from '@renderer/utils/masternodeRegistrationDraft'
 import { recordPendingMasternode } from '@renderer/utils/pendingMasternodes'
-import { spendablePrepTotal } from '@renderer/utils/masternodeCollateralPrep'
 import { buildCustomFeeProRegPreview, fundedFeeAddressOptions } from '@renderer/utils/proRegCustomFee'
-import PrepareCollateralModal from './PrepareCollateralModal'
+import PrepareCollateralSection from './PrepareCollateralSection'
 import {
   RegisterStepAddresses,
   RegisterStepCollateral,
   RegisterStepNetwork,
+  RegisterStepNodeType,
   RegisterStepReview,
   RegisterWizardDone,
 } from './RegisterWizardSteps'
@@ -86,7 +87,6 @@ export default function RegisterMasternodeWizard({
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [previewNonce, setPreviewNonce] = useState(0)
   const [coreFeeMultiplier, setCoreFeeMultiplier] = useState(1)
-  const [prepareModalOpen, setPrepareModalOpen] = useState(false)
   const [preparedOutpoint, setPreparedOutpoint] = useState<string | null>(null)
   const [prepUtxoSnapshot, setPrepUtxoSnapshot] = useState<SelectableUtxo[] | null>(null)
 
@@ -95,7 +95,6 @@ export default function RegisterMasternodeWizard({
   }, [utxos])
 
   const effectiveUtxos = prepUtxoSnapshot ?? utxos
-  const spendablePrepTotalDuffs = useMemo(() => spendablePrepTotal(effectiveUtxos), [effectiveUtxos])
 
   const updateWizardState = (
     updater: (current: PersistedRegisterWizardState) => PersistedRegisterWizardState,
@@ -145,14 +144,15 @@ export default function RegisterMasternodeWizard({
   const activeCollateral = collateralOptions.some(opt => opt.value === draft.selectedCollateral)
     ? draft.selectedCollateral
     : (collateralOptions[0]?.value ?? '')
+  const resolvedCollateralSource = resolveCollateralSource(draft.collateralSource, collateralOptions.length > 0)
 
   const validation = useMemo(
     () => validateRegistrationWizard({ ...draft, selectedCollateral: activeCollateral }, collateralCoins, effectiveUtxos, network, defaultPayoutAddress),
     [draft, activeCollateral, collateralCoins, effectiveUtxos, network, defaultPayoutAddress],
   )
 
-  const stepErrors = [validation.step1Error, validation.step2Error, validation.step3Error, null] as const
-  const activeStepError = stepErrors[step]
+  const stepErrors = [null, validation.step1Error, validation.step2Error, validation.step3Error, null] as const
+  const activeStepError = stepErrors[step] ?? null
   const registrationDto = validation.dto
   const fundedFeeOptions = useMemo(
     () => fundedFeeAddressOptions(receiving, change, labelsByAddress, effectiveUtxos, registrationDto?.collateral ?? null),
@@ -176,7 +176,7 @@ export default function RegisterMasternodeWizard({
   const canBroadcast = registrationDto != null && effectivePreview != null && customFeeError == null && !previewLoading && previewError == null
 
   useEffect(() => {
-    if (step !== 3 || registrationDto == null || result != null) {
+    if (step !== 4 || registrationDto == null || result != null) {
       setPreview(null)
       setPreviewLoading(false)
       setPreviewError(null)
@@ -284,33 +284,60 @@ export default function RegisterMasternodeWizard({
   const wizardSteps = [
     {
       label: REGISTER_WIZARD_STEPS[0].label,
+      canAdvance: true,
+      content: <RegisterStepNodeType draft={draft} updateDraft={updateDraft} />,
+    },
+    {
+      label: REGISTER_WIZARD_STEPS[1].label,
       canAdvance: validation.step1Error == null,
       content: (
         <RegisterStepCollateral
           {...sharedStepProps}
+          resolvedCollateralSource={resolvedCollateralSource}
           collateralOptions={collateralOptions}
           activeCollateral={activeCollateral}
           utxosLoading={utxosLoading}
           utxosError={utxosError}
-          spendablePrepTotalDuffs={spendablePrepTotalDuffs}
           preparedOutpoint={preparedOutpoint}
-          onOpenPrepareModal={() => setPrepareModalOpen(true)}
           onRetryUtxos={retryUtxos}
+          prepareSection={(
+            <PrepareCollateralSection
+              walletId={walletId}
+              type={draft.type}
+              network={network}
+              utxos={effectiveUtxos}
+              receiving={receiving}
+              requests={requests}
+              claimedAddresses={claimedAddresses}
+              labelsByAddress={labelsByAddress}
+              badgeFor={badgeFor}
+              addressesLoading={addressesLoading}
+              addressesError={addressesError}
+              onRetryAddresses={retryAddresses}
+              onPrepared={(outpoint, refreshedUtxos) => {
+                if (refreshedUtxos.length > 0) setPrepUtxoSnapshot(refreshedUtxos)
+                setPreparedOutpoint(outpoint)
+                updateDraft({ collateralSource: 'wallet', selectedCollateral: outpoint })
+                retryUtxos()
+                retryAddresses()
+              }}
+            />
+          )}
         />
       ),
     },
     {
-      label: REGISTER_WIZARD_STEPS[1].label,
+      label: REGISTER_WIZARD_STEPS[2].label,
       canAdvance: validation.step2Error == null,
       content: <RegisterStepAddresses {...sharedStepProps} />,
     },
     {
-      label: REGISTER_WIZARD_STEPS[2].label,
+      label: REGISTER_WIZARD_STEPS[3].label,
       canAdvance: validation.step3Error == null,
       content: <RegisterStepNetwork {...sharedStepProps} />,
     },
     {
-      label: REGISTER_WIZARD_STEPS[3].label,
+      label: REGISTER_WIZARD_STEPS[4].label,
       content: (
         <RegisterStepReview
           {...sharedStepProps}
@@ -385,30 +412,6 @@ export default function RegisterMasternodeWizard({
           onSubmit={() => { void handleBroadcast() }}
         />
       )}
-
-      <PrepareCollateralModal
-        open={prepareModalOpen}
-        walletId={walletId}
-        type={draft.type}
-        network={network}
-        utxos={effectiveUtxos}
-        receiving={receiving}
-        requests={requests}
-        claimedAddresses={claimedAddresses}
-        labelsByAddress={labelsByAddress}
-        badgeFor={badgeFor}
-        addressesLoading={addressesLoading}
-        addressesError={addressesError}
-        onRetryAddresses={retryAddresses}
-        onPrepared={(outpoint, refreshedUtxos) => {
-          if (refreshedUtxos.length > 0) setPrepUtxoSnapshot(refreshedUtxos)
-          setPreparedOutpoint(outpoint)
-          updateDraft({ collateralSource: 'wallet', selectedCollateral: outpoint })
-          retryUtxos()
-          retryAddresses()
-        }}
-        onClose={() => setPrepareModalOpen(false)}
-      />
     </div>
   )
 }

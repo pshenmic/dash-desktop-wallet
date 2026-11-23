@@ -20,6 +20,7 @@ export default function TransferWizard({
   const current = currentStep ?? internalStep
   const step = steps[current]
   const isLast = current === steps.length - 1
+  const compactSteps = steps.length >= 5
 
   const goTo = (index: number): void => {
     if (currentStep === undefined) setInternalStep(index)
@@ -36,28 +37,28 @@ export default function TransferWizard({
             const clickable = allowStepClick && done && !submitBusy
             const stepBody = (
               <>
-                <span className={`size-9 shrink-0 rounded-full border flex items-center justify-center ${active || done ? 'border-dash-brand dark:border-dash-mint bg-dash-brand/5 dark:bg-dash-mint/5' : 'border-dash-primary-dark-blue/15 dark:border-white/15'}`}>
+                <span className={`${compactSteps ? 'size-7' : 'size-9'} shrink-0 rounded-full border flex items-center justify-center ${active || done ? 'border-dash-brand dark:border-dash-mint bg-dash-brand/5 dark:bg-dash-mint/5' : 'border-dash-primary-dark-blue/15 dark:border-white/15'}`}>
                   {done
-                    ? <CheckIcon size={14} color={"currentColor"} className={"text-dash-brand dark:text-dash-mint [&_circle]:hidden"} />
-                    : <Text size={14} weight={"medium"} color={active ? 'blue-mint' : 'brand'} opacity={active ? 100 : 50}>{i + 1}</Text>}
+                    ? <CheckIcon size={compactSteps ? 12 : 14} color={"currentColor"} className={"text-dash-brand dark:text-dash-mint [&_circle]:hidden"} />
+                    : <Text size={compactSteps ? 12 : 14} weight={"medium"} color={active ? 'blue-mint' : 'brand'} opacity={active ? 100 : 50}>{i + 1}</Text>}
                 </span>
-                <Text size={14} weight={active ? 'extrabold' : 'medium'} color={active || done ? 'blue-mint' : 'brand'} opacity={active || done ? 100 : 50} className={"whitespace-nowrap"}>{s.label}</Text>
+                <Text size={compactSteps ? 12 : 14} weight={active ? 'extrabold' : 'medium'} color={active || done ? 'blue-mint' : 'brand'} opacity={active || done ? 100 : 50} className={"whitespace-nowrap"}>{s.label}</Text>
               </>
             )
             return (
               <Fragment key={s.label}>
-                <li className={"flex shrink-0 items-center gap-2"} aria-current={active ? 'step' : undefined}>
+                <li className={`flex shrink-0 items-center ${compactSteps ? 'gap-1.5' : 'gap-2'}`} aria-current={active ? 'step' : undefined}>
                   {clickable ? (
                     <button
                       type={"button"}
                       onClick={() => goTo(i)}
-                      className={"flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"}
+                      className={`flex items-center ${compactSteps ? 'gap-1.5' : 'gap-2'} cursor-pointer hover:opacity-80 transition-opacity`}
                     >
                       {stepBody}
                     </button>
                   ) : stepBody}
                 </li>
-                {i < steps.length - 1 && <li aria-hidden={"true"} className={"h-px flex-1 mx-3 bg-dash-primary-dark-blue/10 dark:bg-white/10"} />}
+                {i < steps.length - 1 && <li aria-hidden={"true"} className={`h-px flex-1 ${compactSteps ? 'mx-2 min-w-2' : 'mx-3'} bg-dash-primary-dark-blue/10 dark:bg-white/10`} />}
               </Fragment>
             )
           })}

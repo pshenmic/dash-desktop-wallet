@@ -1,4 +1,6 @@
 import type { TransferPageType } from '@renderer/constants'
+import type { CollateralPrepCoinMode } from '@renderer/types/MasternodeCollateralPrep'
+import type { SegmentOption } from '@renderer/types/SegmentedControl'
 
 export const MASTERNODE_PREP_COLLATERAL_RECIPIENT_COPY: TransferPageType['recipient'] = {
   label: 'Destination collateral address',
@@ -8,10 +10,15 @@ export const MASTERNODE_PREP_COLLATERAL_RECIPIENT_COPY: TransferPageType['recipi
   noResults: 'No addresses found',
 }
 
+export const COLLATERAL_PREP_COIN_MODE_OPTIONS: SegmentOption<CollateralPrepCoinMode>[] = [
+  { value: 'auto', label: 'Auto-select' },
+  { value: 'manual', label: 'Manual' },
+]
+
 export const MASTERNODE_COLLATERAL_PREP_COPY = {
   buttonLabel: 'Prepare wallet',
-  modalTitle: 'Prepare collateral UTXO',
-  modalDescription: 'Combine existing wallet coins into a single exact collateral output and label its receiving address without leaving registration.',
+  sectionTitle: 'Create collateral transfer',
+  sectionDescription: 'Combine existing wallet coins into a single exact collateral output and label its receiving address without leaving registration.',
   emptyHintPrefix: 'No single exact collateral UTXO was found. Unlocked spendable coins total',
   targetAddressSection: 'Destination address',
   labelField: 'Label',
@@ -19,7 +26,7 @@ export const MASTERNODE_COLLATERAL_PREP_COPY = {
   defaultRegularLabel: 'Regular masternode collateral',
   defaultEvoLabel: 'Evonode collateral',
   coinsSection: 'Select wallet coins',
-  autoSelectButton: 'Auto-select',
+  coinModeAriaLabel: 'Coin selection mode',
   selectAllButton: 'Select all',
   clearSelectionButton: 'Clear',
   noSpendableCoins: 'No unlocked non-collateral UTXOs are available in this wallet.',
@@ -32,10 +39,8 @@ export const MASTERNODE_COLLATERAL_PREP_COPY = {
   insufficientPrefix: 'Need at least',
   insufficientSuffix: 'more DASH from selected coins to cover the collateral output and fee.',
   authorizeLabel: 'Authorize with wallet password',
-  cancelButton: 'Cancel',
-  submitPrefix: 'Create',
-  submitSuffix: 'UTXO',
-  submitting: 'Broadcasting…',
+  submitButton: 'Create internal transfer',
+  submitting: 'Creating internal transfer…',
   preparedTitle: 'Prepared collateral UTXO selected',
   preparedDescription: 'Your collateral transaction has been broadcast and selected above. You can continue configuring your masternode steps now.',
   confirmingCoinBadge: 'Confirming',

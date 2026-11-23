@@ -5,7 +5,11 @@ import {
   MASTERNODE_COLLATERAL_PREP_COPY,
 } from '@renderer/constants/masternodeCollateralPrep'
 import { EVO_MASTERNODE_TYPE, MASTERNODE_COLLATERAL_DUFFS } from '@renderer/constants/masternodes'
-import type { CollateralInvoiceSyncPlan, CollateralPrepSummary } from '@renderer/types/MasternodeCollateralPrep'
+import type {
+  CollateralInvoiceSyncPlan,
+  CollateralPrepCoinMode,
+  CollateralPrepSummary,
+} from '@renderer/types/MasternodeCollateralPrep'
 import type { DropdownFieldOption } from '@renderer/types/DropdownField'
 import type { FeeSelectableUtxo, MasternodeType } from '@renderer/types/MasternodeRegistrationWizard'
 import type { ReceiveRequestDto } from '@renderer/types/ReceiveRequest'
@@ -49,6 +53,19 @@ export function autoSelectCollateralPrepUtxos(
     if (total >= targetWithFee) break
   }
   return picked
+}
+
+export function resolveCollateralPrepSelectedKeys(
+  mode: CollateralPrepCoinMode,
+  coins: FeeSelectableUtxo[],
+  requiredDuffs: bigint,
+  manualKeys: ReadonlyArray<string>,
+): string[] {
+  if (mode === 'auto') {
+    return autoSelectCollateralPrepUtxos(coins, requiredDuffs)
+  }
+  const validKeys = new Set(coins.map(prepOutpointKey))
+  return manualKeys.filter(key => validKeys.has(key))
 }
 
 export function summarizeCollateralPrepSelection(

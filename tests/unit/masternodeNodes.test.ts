@@ -16,6 +16,7 @@ import {
   isConfirmingUtxo,
   isRoutableIpv4,
   parseOperatorRewardBps,
+  resolveCollateralSource,
   splitIpPortInput,
   validateRegistrationWizard,
   validateServiceEndpoint,
@@ -947,6 +948,27 @@ describe('Masternode action builders', () => {
     expect(customOwnerDiff.dto?.ownerAddress).toBe(ownerAddr)
     expect(customOwnerDiff.dto?.votingAddress).toBe(ownerAddr)
     expect(customOwnerDiff.dto?.operatorPublicKey).toBe('ab'.repeat(48))
+
+    expect(resolveCollateralSource('auto', false)).toBe('prepare')
+    expect(resolveCollateralSource('auto', true)).toBe('wallet')
+    expect(resolveCollateralSource('manual', true)).toBe('manual')
+
+    const autoNoCollateral = validateRegistrationWizard(
+      { ...baseDraft, collateralSource: 'auto' },
+      [],
+      [],
+      'testnet',
+    )
+    expect(autoNoCollateral.step1Error).toContain('internal collateral transfer')
+
+    const autoWithCollateral = validateRegistrationWizard(
+      { ...baseDraft, collateralSource: 'auto', selectedCollateral: '' },
+      [collateralCoin],
+      [collateralCoin],
+      'testnet',
+    )
+    expect(autoWithCollateral.step1Error).toBeNull()
+    expect(autoWithCollateral.selectedCoin).toEqual(collateralCoin)
 
     const pendingNode = makeNode({
       proTxHash: '00'.repeat(32),

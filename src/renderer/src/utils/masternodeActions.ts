@@ -25,6 +25,8 @@ import type {
 import type {
   RegisterWizardDraft,
   RegisterWizardValidation,
+  RegistrationCollateralSource,
+  ResolvedRegistrationCollateralSource,
 } from '@renderer/types/MasternodeRegistrationWizard'
 import { isValidDashAddress, isValidDashChangeAddress } from '@renderer/utils/address'
 
@@ -299,6 +301,14 @@ export function buildServiceUpdate(form: UpdateServiceFormInput): {
   }
 }
 
+export function resolveCollateralSource(
+  source: RegistrationCollateralSource,
+  hasWalletCollateral: boolean,
+): ResolvedRegistrationCollateralSource {
+  if (source !== 'auto') return source
+  return hasWalletCollateral ? 'wallet' : 'prepare'
+}
+
 export function validateRegistrationWizard(
   draft: RegisterWizardDraft,
   collateralCoins: SelectableUtxo[],
@@ -307,12 +317,15 @@ export function validateRegistrationWizard(
   defaultPayoutAddress: string | null = null,
 ): RegisterWizardValidation {
   const addressNetwork = network ?? undefined
+  const resolvedSource = resolveCollateralSource(draft.collateralSource, collateralCoins.length > 0)
   let collateralOutpoint = ''
   let selectedCoin: SelectableUtxo | null = null
   let manualOutpointMissingFromWallet = false
   let step1Error: string | null = null
 
-  if (draft.collateralSource === 'wallet') {
+  if (resolvedSource === 'prepare') {
+    step1Error = 'Create an internal collateral transfer, select a wallet UTXO, or enter a manual outpoint'
+  } else if (resolvedSource === 'wallet') {
     const active = collateralCoins.find(coin => `${coin.txid}:${coin.vout}` === draft.selectedCollateral) ?? collateralCoins[0] ?? null
     if (active == null) {
       step1Error = 'Select an eligible collateral UTXO or enter a manual outpoint'

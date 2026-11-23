@@ -17,8 +17,9 @@ export interface CollateralInvoiceSyncPlan {
   createRequest: { label: string; amountDuffs: bigint } | null
 }
 
-export interface PrepareCollateralModalProps {
-  open: boolean
+export type CollateralPrepCoinMode = 'auto' | 'manual'
+
+export interface PrepareCollateralSectionProps {
   walletId: string
   type: MasternodeType
   network: Network | null
@@ -32,5 +33,4 @@ export interface PrepareCollateralModalProps {
   addressesError: string | null
   onRetryAddresses: () => void
   onPrepared: (outpoint: string, refreshedUtxos: SelectableUtxo[]) => void
-  onClose: () => void
 }
