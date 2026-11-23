@@ -29,6 +29,7 @@ import * as migration0024 from '../../migrations/0024_payment_requests'
 import * as migration0025 from '../../migrations/0025_masternode_keys'
 import * as migration0026 from '../../migrations/0026_masternode_identities'
 import * as migration0027 from '../../migrations/0027_address_lock'
+import * as migration0028 from '../../migrations/0028_masternode_imported_key_secret'
 
 const migrations = [
   { name: '0000_init.ts', migration: migration0000 },
@@ -59,6 +60,7 @@ const migrations = [
   { name: '0025_masternode_keys.ts', migration: migration0025 },
   { name: '0026_masternode_identities.ts', migration: migration0026 },
   { name: '0027_address_lock.ts', migration: migration0027 },
+  { name: '0028_masternode_imported_key_secret.ts', migration: migration0028 },
 ]
 
 const inlineMigrationSource = {

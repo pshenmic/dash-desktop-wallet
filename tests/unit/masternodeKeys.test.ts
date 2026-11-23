@@ -8,6 +8,7 @@ import {
   masternodeKeyDeriver,
   masternodeKeys,
   masternodePublicKey,
+  ownerScanLimit,
   platformNodeId,
 } from '../../src/main/src/utils/masternodeKeys'
 
@@ -97,5 +98,20 @@ describe('masternodePublicKey', () => {
       expect(() => masternodePublicKey('operator', secret, 'mainnet')).toThrow('outside the scalar field')
     }
     expect(() => masternodePublicKey('operator', '01'.repeat(31), 'mainnet')).toThrow('must be 32 bytes')
+  })
+})
+
+describe('ownerScanLimit', () => {
+  it('covers the first window when discovery matched nothing', () => {
+    expect(ownerScanLimit([])).toBe(49)
+  })
+
+  it('reaches one gap past the deepest key discovery matched', () => {
+    expect(ownerScanLimit([0, 55])).toBe(105)
+    expect(ownerScanLimit([500])).toBe(550)
+  })
+
+  it('never passes the deepest index a walk can open', () => {
+    expect(ownerScanLimit([10_000])).toBe(2_549)
   })
 })

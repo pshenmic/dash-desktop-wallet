@@ -1,13 +1,20 @@
 import type {Knex} from 'knex'
-import {MasternodeIdentity, MasternodeIdentityRow} from '../types/MasternodeIdentity'
+import {MasternodeIdentity, MasternodeIdentityRow, MasternodeIdentityTableRow} from '../types/MasternodeIdentity'
 
-const identityRows = (walletId: string, rows: MasternodeIdentityRow[]) =>
+const identityRows = (walletId: string, rows: MasternodeIdentityRow[]): MasternodeIdentityTableRow[] =>
   rows.map(({proTxHash, role, identifier}) => ({
     wallet_id: walletId,
     pro_tx_hash: proTxHash,
     role,
     identifier,
   }))
+
+async function upsertIdentities(knex: Knex, walletId: string, rows: MasternodeIdentityRow[]): Promise<void> {
+  await knex('masternode_identities')
+    .insert(identityRows(walletId, rows))
+    .onConflict(['wallet_id', 'pro_tx_hash', 'role'])
+    .merge()
+}
 
 export class MasternodeIdentityDAO {
   knex: Knex
@@ -20,10 +27,7 @@ export class MasternodeIdentityDAO {
   // the voter identity, so the newer identifier replaces the older one.
   save = async (walletId: string, rows: MasternodeIdentityRow[]): Promise<void> => {
     if (rows.length === 0) return
-    await this.knex('masternode_identities')
-      .insert(identityRows(walletId, rows))
-      .onConflict(['wallet_id', 'pro_tx_hash', 'role'])
-      .merge()
+    await upsertIdentities(this.knex, walletId, rows)
   }
 
   // The identities of the nodes a discovery run owns, with pending rows kept by
@@ -36,10 +40,7 @@ export class MasternodeIdentityDAO {
       await stale.delete()
 
       if (rows.length > 0) {
-        await trx('masternode_identities')
-          .insert(identityRows(walletId, rows))
-          .onConflict(['wallet_id', 'pro_tx_hash', 'role'])
-          .merge()
+        await upsertIdentities(trx, walletId, rows)
       }
     })
   }

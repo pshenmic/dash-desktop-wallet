@@ -120,12 +120,18 @@ describe('lastVoteTime', () => {
 describe('requireVotingNode', () => {
   const TXID = 'aa'.repeat(32)
   const owned = (fields: Partial<Masternode> = {}): Masternode =>
-    ({...node(TXID, 0, 'Xvoter'), ownerKeyIndex: null, votingKeyIndex: 2, operatorKeyIndex: null, importedRoles: [], shares: [], ...fields})
+    ({...node(TXID, 0, 'Xvoter'), ownerKeyIndex: null, votingKeyIndex: 2, operatorKeyIndex: null, importedRoles: [], importedSigningRoles: [], shares: [], ...fields})
 
   it('answers what signing the vote needs', () => {
     expect(requireVotingNode([owned()], TXID, [vote({time: 100})], 100 + 3600)).toEqual(
       {proTxHash: TXID, votingKeyIndex: 2, votingAddress: 'Xvoter', collateralTxid: TXID, collateralVout: 0})
     expect(requireVotingNode([owned()], TXID, null, 0).votingKeyIndex).toBe(2)
+  })
+
+  it('accepts an imported voting key whose secret the wallet holds', () => {
+    const node = owned({votingKeyIndex: null, votingAddress: 'Ximported'})
+    expect(requireVotingNode([node], TXID, null, 0, new Set(['Ximported']))).toEqual(
+      {proTxHash: TXID, votingKeyIndex: null, votingAddress: 'Ximported', collateralTxid: TXID, collateralVout: 0})
   })
 
   it('refuses a node Core would not let vote', () => {

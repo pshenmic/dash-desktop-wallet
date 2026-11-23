@@ -1,13 +1,15 @@
 import {beforeEach, describe, expect, it} from 'vitest'
-import {GovernanceVote as SDKGovernanceVote} from 'dash-core-sdk'
+import {GovernanceVote as SDKGovernanceVote, PrivateKey} from 'dash-core-sdk'
 import {WalletProviderFactory} from '../../src/main/src/providers/WalletProviderFactory'
 import {GovernanceService} from '../../src/main/src/services/core/GovernanceService'
 import {MasternodeService} from '../../src/main/src/services/core/MasternodeService'
 import {WalletSyncService} from '../../src/main/src/services/core/WalletSyncService'
 import {GovernanceVote, Proposal} from '../../src/main/src/types/Governance'
-import {Masternode} from '../../src/main/src/types/Masternode'
+import {ImportedMasternodeKey, Masternode} from '../../src/main/src/types/Masternode'
 import {Network} from '../../src/main/src/types/Network'
 import {governanceVote} from '../../src/main/src/utils/governance'
+import {encryptImportedKey} from '../../src/main/src/utils/importedKeyEncryption'
+import {withUnlockedWallet} from '../../src/main/src/utils/walletSeed'
 import {masternodeKeyDeriver} from '../../src/main/src/utils/masternodeKeys'
 import {harness, Harness, PASSWORD, VALID_SEEDPHRASE} from './harness'
 
@@ -24,7 +26,7 @@ function node(proTxHash: string, fields: Partial<Masternode> = {}): Masternode {
     collateralAddress: null, serviceAddress: null, payeeAddress: null, ownerAddress: null, votingAddress: 'Xvoting',
     operatorPublicKey: 'ff'.repeat(48), platformNodeId: null, platformP2PPort: null, platformHttpPort: null,
     lastPaidBlock: null, lastPaidTime: null, registeredHeight: null, isShared: false, shares: [],
-    ownerKeyIndex: null, votingKeyIndex: 2, operatorKeyIndex: null, importedRoles: [], ...fields,
+    ownerKeyIndex: null, votingKeyIndex: 2, operatorKeyIndex: null, importedRoles: [], importedSigningRoles: [], ...fields,
   }
 }
 
@@ -34,6 +36,8 @@ describe('GovernanceService.vote', () => {
   let proposals: Proposal[] | null
   let owned: Masternode[] | null
   let votes: GovernanceVote[] | null
+  let importedKeys: ImportedMasternodeKey[]
+  let importedSecrets: Map<string, string>
   let refreshed: Array<string | undefined>
 
   const service = (): GovernanceService => new GovernanceService(
@@ -43,7 +47,11 @@ describe('GovernanceService.vote', () => {
       getProposalVotes: async () => votes,
       refreshGovernance: async (hash?: string) => { refreshed.push(hash) },
     })} as unknown as WalletProviderFactory,
-    {getMasternodes: async () => owned} as unknown as MasternodeService,
+    {
+      getMasternodes: async () => owned,
+      getImportedKeys: async () => importedKeys,
+      getImportedKeySecret: async (_walletId: string, _role: string, publicKey: string) => importedSecrets.get(publicKey) ?? null,
+    } as unknown as MasternodeService,
     {relayVote: async (vote: Uint8Array) => (relayed.push(vote), {peers: 3, accepted: 2})} as unknown as WalletSyncService,
   )
 
@@ -54,6 +62,8 @@ describe('GovernanceService.vote', () => {
     proposals = [proposal]
     votes = null
     owned = null
+    importedKeys = []
+    importedSecrets = new Map()
   })
 
   // The node votes with key #2 of the wallet's voting chain, as the list states it.
@@ -73,6 +83,24 @@ describe('GovernanceService.vote', () => {
     expect(results).toEqual([{proTxHash: 'aa'.repeat(32), peers: 3, accepted: 2}])
     expect(governanceVote(SDKGovernanceVote.fromBytes(relayed[0]), network)).toMatchObject({
       collateralTxid: 'aa'.repeat(32), collateralVout: 1, parentHash: PROPOSAL, outcome: 2, signal: 1, voter: owned![0].votingAddress,
+    })
+  })
+
+  it('signs with an imported voting key whose secret the wallet holds', async () => {
+    const walletId = await wallet('mainnet')
+    const voting = PrivateKey.fromBytes(new Uint8Array(32).fill(7), 'mainnet')
+    const votingAddress = voting.getAddress()
+    const encrypted = await withUnlockedWallet(wired.walletDAO, walletId, PASSWORD, async ({seed}) =>
+      encryptImportedKey(voting.toWIF(), seed))
+    importedKeys = [{role: 'voting', publicKey: votingAddress, hasPrivateKey: true}]
+    importedSecrets.set(votingAddress, encrypted)
+    owned = [node('bb'.repeat(32), {votingKeyIndex: null, importedRoles: ['voting'], votingAddress, isShared: true})]
+
+    const results = await service().vote(walletId, PROPOSAL, 'yes', ['bb'.repeat(32)], PASSWORD)
+
+    expect(results).toEqual([{proTxHash: 'bb'.repeat(32), peers: 3, accepted: 2}])
+    expect(governanceVote(SDKGovernanceVote.fromBytes(relayed[0]), 'mainnet')).toMatchObject({
+      collateralTxid: 'bb'.repeat(32), collateralVout: 1, parentHash: PROPOSAL, outcome: 1, signal: 1, voter: votingAddress,
     })
   })
 

@@ -135,9 +135,9 @@ describe('ownedMasternodes', () => {
       {proTxHash: 'b', txid: 'bb', vout: 1, followed: false},
     ]
     const owned = [
-      {...node('a', {collateralTxid: null, collateralVout: null}), ownerKeyIndex: 0, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], shares: []},
-      {...node('b'), ownerKeyIndex: 0, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], shares: []},
-      {...node('c', {collateralTxid: null, collateralVout: null}), ownerKeyIndex: 1, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], shares: []},
+      {...node('a', {collateralTxid: null, collateralVout: null}), ownerKeyIndex: 0, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], importedSigningRoles: [], shares: []},
+      {...node('b'), ownerKeyIndex: 0, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], importedSigningRoles: [], shares: []},
+      {...node('c', {collateralTxid: null, collateralVout: null}), ownerKeyIndex: 1, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], importedSigningRoles: [], shares: []},
     ]
     expect(collateralsToStore(owned, stored, ['b'])).toEqual([
       {proTxHash: 'a', txid: 'aa', vout: 0, followed: true},
@@ -176,11 +176,12 @@ describe('ownedMasternodes', () => {
       node('b', {operatorPublicKey: OPERATOR_0_LEGACY}),
       node('c', {ownerAddress: 'Xother'}),
     ], none, [
-      {role: 'voting', publicKey: 'Ximported'},
-      {role: 'owner', publicKey: OPERATOR_0},
-      {role: 'operator', publicKey: OPERATOR_0},
+      {role: 'voting', publicKey: 'Ximported', hasPrivateKey: true},
+      {role: 'owner', publicKey: OPERATOR_0, hasPrivateKey: false},
+      {role: 'operator', publicKey: OPERATOR_0, hasPrivateKey: false},
     ], [], new Map())
-    expect(owned.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['a', ['voting']], ['b', ['operator']]])
+    expect(owned.map(({proTxHash, importedRoles, importedSigningRoles}) => [proTxHash, importedRoles, importedSigningRoles]))
+      .toEqual([['a', ['voting'], ['voting']], ['b', ['operator'], []]])
   })
 
   it('marks every share our keys hold, even two under different keys', () => {
@@ -190,7 +191,7 @@ describe('ownedMasternodes', () => {
       {ownerAddress: 'Xother', amountDuffs: 50000000000n},
     ]})
     const owned = ownedMasternodes([shared], {...none, owner: new Map([['a', 1]])}, [], [], new Map([['Xfirst', 1], ['Xsecond', 6]]))
-    expect(owned[0].shares!.map(({keyIndex}) => keyIndex)).toEqual([1, 6, null])
+    expect(owned[0].shares!.map(({keyIndex, canSign}) => [keyIndex, canSign])).toEqual([[1, true], [6, true], [null, false]])
   })
 
   it('owns a shared node by an imported share owner key, and marks that share', () => {
@@ -198,9 +199,21 @@ describe('ownedMasternodes', () => {
       {ownerAddress: 'Ximported', amountDuffs: 30000000000n},
       {ownerAddress: 'Xother', amountDuffs: 70000000000n},
     ]})
-    const owned = ownedMasternodes([shared], none, [{role: 'owner', publicKey: 'Ximported'}], [], new Map())
+    const owned = ownedMasternodes([shared], none, [{role: 'owner', publicKey: 'Ximported', hasPrivateKey: false}], [], new Map())
     expect(owned.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['a', ['owner']]])
-    expect(owned[0].shares!.map(({keyIndex, imported}) => [keyIndex, imported])).toEqual([[null, true], [null, false]])
+    expect(owned[0].shares!.map(({keyIndex, imported, canSign}) => [keyIndex, imported, canSign])).toEqual([[null, true, false], [null, false, false]])
+  })
+
+  it('lets a stored imported share owner key sign where a watch-only one cannot', () => {
+    const shared = node('a', {ownerAddress: null, isShared: true, shares: [
+      {ownerAddress: 'Xstored', amountDuffs: 30000000000n},
+      {ownerAddress: 'Xwatch', amountDuffs: 70000000000n},
+    ]})
+    const owned = ownedMasternodes([shared], none, [
+      {role: 'owner', publicKey: 'Xstored', hasPrivateKey: true},
+      {role: 'owner', publicKey: 'Xwatch', hasPrivateKey: false},
+    ], [], new Map())
+    expect(owned[0].shares!.map(({canSign}) => canSign)).toEqual([true, false])
   })
 
   it('names a stored collateral by the address the list gives that outpoint', () => {
@@ -218,7 +231,7 @@ describe('ownedMasternodes', () => {
 
 describe('unusedKeyIndex', () => {
   const owned = (ownerKeyIndex: number | null, votingKeyIndex: number | null): Masternode =>
-    ({...node('aa'), ownerKeyIndex, votingKeyIndex, operatorKeyIndex: null, importedRoles: [], shares: []})
+    ({...node('aa'), ownerKeyIndex, votingKeyIndex, operatorKeyIndex: null, importedRoles: [], importedSigningRoles: [], shares: []})
 
   it('is the lowest index of the chain no node carries', () => {
     expect(unusedKeyIndex([owned(0, null), owned(2, 0)], 'owner')).toBe(1)
@@ -263,7 +276,7 @@ describe('requirePayout', () => {
 
 describe('ownerNode', () => {
   const owned = (proTxHash: string, ownerKeyIndex: number | null): Masternode =>
-    ({...node(proTxHash), ownerKeyIndex, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], shares: []})
+    ({...node(proTxHash), ownerKeyIndex, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], importedSigningRoles: [], shares: []})
 
   it('answers a node whose owner key the wallet derives, and refuses any other', () => {
     expect(ownerNode([owned('aa', 3)], 'aa').ownerKeyIndex).toBe(3)
@@ -273,8 +286,8 @@ describe('ownerNode', () => {
 
   it('refuses a shared node, whose updates need every share owner', () => {
     const shared = {...owned('aa', 3), isShared: true, shares: [
-      {ownerAddress: 'Xours', amountDuffs: 20000000000n, keyIndex: 3, imported: false},
-      {ownerAddress: 'Xother', amountDuffs: 80000000000n, keyIndex: null, imported: false},
+      {ownerAddress: 'Xours', amountDuffs: 20000000000n, keyIndex: 3, imported: false, canSign: true},
+      {ownerAddress: 'Xother', amountDuffs: 80000000000n, keyIndex: null, imported: false, canSign: false},
     ]}
     expect(() => ownerNode([shared], 'aa')).toThrow('every share owner')
   })
@@ -282,26 +295,26 @@ describe('ownerNode', () => {
 
 describe('operatedNode', () => {
   const operated = (proTxHash: string, operatorKeyIndex: number | null): Masternode =>
-    ({...node(proTxHash), ownerKeyIndex: null, votingKeyIndex: null, operatorKeyIndex, importedRoles: [], shares: []})
+    ({...node(proTxHash), ownerKeyIndex: null, votingKeyIndex: null, operatorKeyIndex, importedRoles: [], importedSigningRoles: [], shares: []})
   const shared = (): Masternode => {
     const shares = [{ownerAddress: 'Xother1', amountDuffs: 60000000000n}, {ownerAddress: 'Xother2', amountDuffs: 40000000000n}]
-    return {...operated('aa', 0), isShared: true, shares: shares.map(share => ({...share, keyIndex: null, imported: false}))}
+    return {...operated('aa', 0), isShared: true, shares: shares.map(share => ({...share, keyIndex: null, imported: false, canSign: false}))}
   }
 
-  it('answers the operator key of a solo or a shared node', () => {
+  it('answers the node whether its operator key is derived or imported', () => {
     expect(operatedNode([operated('aa', 0)], 'aa').operatorKeyIndex).toBe(0)
+    expect(operatedNode([operated('bb', null)], 'bb').operatorKeyIndex).toBeNull()
     expect(operatedNode([shared()], 'aa').operatorKeyIndex).toBe(0)
   })
 
-  it('refuses a node whose operator key the wallet does not derive', () => {
-    expect(() => operatedNode([operated('aa', null)], 'aa')).toThrow('does not derive')
+  it('refuses a node that is not this wallet\'s', () => {
     expect(() => operatedNode([], 'aa')).toThrow('Not a masternode')
   })
 })
 
 describe('revocableNode', () => {
   const operated = (proTxHash: string, operatorKeyIndex: number): Masternode =>
-    ({...node(proTxHash), ownerKeyIndex: null, votingKeyIndex: null, operatorKeyIndex, importedRoles: [], shares: []})
+    ({...node(proTxHash), ownerKeyIndex: null, votingKeyIndex: null, operatorKeyIndex, importedRoles: [], importedSigningRoles: [], shares: []})
 
   it('answers a solo node', () => {
     expect(revocableNode([operated('aa', 0)], 'aa').operatorKeyIndex).toBe(0)
@@ -309,14 +322,14 @@ describe('revocableNode', () => {
 
   it('refuses a shared node, which every share owner would have to restore', () => {
     const shares = [{ownerAddress: 'Xother1', amountDuffs: 60000000000n}]
-    const shared = {...operated('aa', 0), isShared: true, shares: shares.map(share => ({...share, keyIndex: null, imported: false}))}
+    const shared = {...operated('aa', 0), isShared: true, shares: shares.map(share => ({...share, keyIndex: null, imported: false, canSign: false}))}
     expect(() => revocableNode([shared], 'aa')).toThrow('every share owner')
   })
 })
 
 describe('existingMasternodes', () => {
   const owned = (proTxHash: string): Masternode =>
-    ({...node(proTxHash), ownerKeyIndex: 0, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], shares: []})
+    ({...node(proTxHash), ownerKeyIndex: 0, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], importedSigningRoles: [], shares: []})
   const firstSeen = new Map([['aa', 100], ['bb', 100]])
   const listed = (askedAt: number, ...proTxHashes: string[]) => ({proTxHashes: new Set(proTxHashes), askedAt, v24Active: false})
 

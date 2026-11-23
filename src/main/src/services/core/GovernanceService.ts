@@ -5,9 +5,10 @@ import {WalletProviderFactory} from '../../providers/WalletProviderFactory'
 import {HD_VERSIONS} from '../../constants/addresses'
 import {VOTE_OUTCOME_CODE} from '../../constants/chain'
 import {Proposal, ProposalTally, VoteOutcome, VoteResult} from '../../types/Governance'
-import {requireVoteRequest, requireVotingNode} from '../../utils/governance'
+import {requireVoteRequest, requireVotingNode, signableImportedVotingKeys} from '../../utils/governance'
 import {masternodeAccountPath} from '../../utils/masternodeKeys'
 import {isHash} from '../../utils/providerTx'
+import {decryptImportedKey} from '../../utils/importedKeyEncryption'
 import {requireWallet} from '../../utils/requireWallet'
 import {withUnlockedWallet} from '../../utils/walletSeed'
 import {Logger} from '../../utils/logger'
@@ -51,20 +52,37 @@ export class GovernanceService {
     requireVoteRequest(proposalHash, outcome, proTxHashes)
     const {network} = await requireWallet(this.walletDAO, walletId)
     const provider = this.providers.forWallet(walletId, network)
-    const [proposals, votes] = await Promise.all([provider.getProposals(), provider.getProposalVotes(proposalHash)])
+    const [proposals, votes, imported] = await Promise.all([
+      provider.getProposals(),
+      provider.getProposalVotes(proposalHash),
+      this.masternodeService.getImportedKeys(walletId),
+    ])
     if (proposals == null) throw new Error('The proposal list has not arrived yet')
     if (!proposals.some(({hash}) => hash === proposalHash)) throw new Error('Unknown proposal, or no superblock can pay it any more')
 
     const owned = await this.masternodeService.getMasternodes(walletId)
     if (owned == null) throw new Error('The masternode list has not arrived yet')
     const time = Math.floor(Date.now() / 1000)
-    const nodes = proTxHashes.map(proTxHash => requireVotingNode(owned, proTxHash, votes, time))
+    const signableImported = signableImportedVotingKeys(imported)
+    const nodes = proTxHashes.map(proTxHash => requireVotingNode(owned, proTxHash, votes, time, signableImported))
+
+    // Read before the seed is unlocked, so no database work happens while it is held.
+    const importedSecrets = new Map<string, string>()
+    for (const node of nodes) {
+      if (node.votingKeyIndex != null) continue
+      const secret = await this.masternodeService.getImportedKeySecret(walletId, 'voting', node.votingAddress)
+      if (secret == null) throw new Error(`Masternode ${node.proTxHash} has no stored voting key to sign with`)
+      importedSecrets.set(node.proTxHash, secret)
+    }
 
     const signed = await withUnlockedWallet(this.walletDAO, walletId, password, async ({seed}) => {
       const account = HDKey.fromMasterSeed(seed, HD_VERSIONS[network]).derive(masternodeAccountPath(network, 'voting'))
       return nodes.map(({proTxHash, votingKeyIndex, votingAddress, collateralTxid, collateralVout}) => {
         const vote = new GovernanceVote(new OutPoint(collateralTxid, collateralVout), proposalHash, VOTE_OUTCOME_CODE[outcome], VoteSignal.FUNDING, time)
-        vote.sign(PrivateKey.fromBytes(account.deriveChild(votingKeyIndex).privateKey!, network), network)
+        const key = votingKeyIndex != null
+          ? PrivateKey.fromBytes(account.deriveChild(votingKeyIndex).privateKey!, network)
+          : PrivateKey.fromWIF(decryptImportedKey(importedSecrets.get(proTxHash)!, seed))
+        vote.sign(key, network)
         const signer = vote.recoverSigner(network).getAddress(sdkUtils.networkValueToEnumValue(network))
         if (signer !== votingAddress) throw new Error(`Masternode ${proTxHash} lists voting key ${votingAddress}, not ${signer}`)
         return {proTxHash, bytes: vote.bytes()}

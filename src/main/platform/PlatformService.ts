@@ -23,6 +23,8 @@ import {usernameStatus} from './operations/username/status'
 import {usernameRegister} from './operations/username/register'
 import {usernameSearch} from './operations/username/search'
 import {usernameContests} from './operations/username/contests'
+import {contestedResources} from './operations/governance/contestedResources'
+import {contestedResourceVote} from './operations/governance/vote'
 import {dashPayContactRequestSend} from './operations/dashpay/send'
 import {dashPayContactRequests} from './operations/dashpay/requests'
 import {dashPayContactKey} from './operations/dashpay/key'
@@ -238,6 +240,8 @@ export class PlatformService {
       case 'usernameRegister': return usernameRegister(request.payload, ctx)
       case 'usernameSearch': return usernameSearch(request.payload, ctx)
       case 'usernameContests': return usernameContests(request.payload, ctx)
+      case 'contestedResources': return contestedResources(request.payload, ctx)
+      case 'contestedResourceVote': return contestedResourceVote(request.payload, ctx)
       case 'dashPayContactRequestSend': return dashPayContactRequestSend(request.payload, ctx)
       case 'dashPayContactRequests': return dashPayContactRequests(request.payload, ctx)
       case 'dashPayContactKey': return dashPayContactKey(request.payload, ctx)

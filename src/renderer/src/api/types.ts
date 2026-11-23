@@ -237,18 +237,73 @@ export interface MasternodeCollateralDto {
 }
 
 // publicKey is what the list carries for the role: the address for owner and
-// voting, the hex public key for operator.
+// voting, the hex public key for operator. hasPrivateKey is true when the
+// secret is stored, which is what lets the key sign.
 export interface ImportedMasternodeKeyDto {
   role: MasternodeKeyRole
   publicKey: string
+  hasPrivateKey: boolean
+}
+
+// Mirrors SharedRegistrationPreview and its rows in src/main/src/types/Masternode.
+export interface SharedRegistrationShareDto {
+  index: number
+  amountDuffs: bigint
+  ownerAddress: string
+  refundAddress: string | null
+  rewardAddress: string | null
+}
+
+export interface SharedRegistrationFundingInputDto {
+  index: number
+  address: string
+  amountDuffs: bigint
+}
+
+export interface SharedRegistrationOutputDto {
+  address: string | null
+  amountDuffs: bigint
+  collateral: boolean
+}
+
+export interface SharedRegistrationPreviewDto {
+  consentHash: string
+  shares: SharedRegistrationShareDto[]
+  signableShares: number[]
+  outputs: SharedRegistrationOutputDto[]
+  collateralDuffs: bigint
+  warning: string | null
+}
+
+export interface SharedRegistrationFundingPreviewDto extends SharedRegistrationPreviewDto {
+  fundingInputs: SharedRegistrationFundingInputDto[]
+  fundingTotalDuffs: bigint
+  unresolvedInputs: number
+}
+
+export interface SharedRegistrationSignatureDto {
+  shareIndex: number
+  signature: string
+}
+
+export interface SharedRegistrationConsentResultDto {
+  preview: SharedRegistrationPreviewDto
+  signatures: SharedRegistrationSignatureDto[]
+}
+
+export interface SharedRegistrationFundingResultDto {
+  preview: SharedRegistrationFundingPreviewDto
+  signedHex: string
+  signedInputs: number[]
 }
 
 // getMasternodes — a masternode this wallet holds a key or the collateral of, as
 // last listed; null until the first discovery run after startup. A null key
 // index is a key the seed does not derive; importedRoles are held by an imported
-// key. Times are unix seconds, 0 = never. A null field is one the connection
-// mode cannot give: p2p has no PoSe score (an evonode reports its own) and no
-// payments, and the ProRegTx fields fill in once the registration is indexed.
+// key, importedSigningRoles the subset whose stored secret can sign. Times are
+// unix seconds, 0 = never. A null field is one the connection mode cannot give:
+// p2p has no PoSe score (an evonode reports its own) and no payments, and the
+// ProRegTx fields fill in once the registration is indexed.
 export interface MasternodeDto {
   proTxHash: string
   type: string
@@ -266,6 +321,7 @@ export interface MasternodeDto {
   votingKeyIndex: number | null
   operatorKeyIndex: number | null
   importedRoles: MasternodeKeyRole[]
+  importedSigningRoles: MasternodeKeyRole[]
   platformNodeId: string | null
   platformP2PPort: number | null
   platformHttpPort: number | null
@@ -377,6 +433,37 @@ export interface ProposalTally {
   no: number
   abstain: number
 }
+
+// One open Platform vote poll, with the tally a vote would face. Index values
+// stay base64 of their serialized form, which is what a vote transition carries.
+export interface ContestedResourceDto {
+  contractId: string
+  documentTypeName: string
+  indexName: string
+  indexValues: string[]
+  // Text-decoded index values, null where the value is not text.
+  indexValuesText: Array<string | null>
+  endsAt: number
+  vote: {
+    contenders: Array<{identifier: string; votes: number}>
+    lockVotes: number
+    abstainVotes: number
+    outcome: 'WonByIdentity' | 'Locked' | 'NoWinner' | null
+    winner: string | null
+  }
+}
+
+export interface ContestedResourceVoteRequest {
+  contractId: string
+  documentTypeName: string
+  indexName: string
+  indexValues: string[]
+}
+
+export type ContestedResourceVoteChoice =
+  | {kind: 'towardsIdentity'; identifier: string}
+  | {kind: 'lock'}
+  | {kind: 'abstain'}
 
 export type VoteOutcome = 'yes' | 'no' | 'abstain'
 

@@ -35,11 +35,16 @@ import { ImportMasternodeKeyHandler } from './api/masternodes/importMasternodeKe
 import { RemoveMasternodeKeyHandler } from './api/masternodes/removeMasternodeKey'
 import { SignAndBroadcastMasternodeRegistrationHandler } from './api/masternodes/signAndBroadcastMasternodeRegistration'
 import { PreviewMasternodeRegistrationHandler } from './api/masternodes/previewMasternodeRegistration'
+import { PreviewSharedMasternodeRegistrationHandler } from './api/masternodes/previewSharedMasternodeRegistration'
+import { SignSharedMasternodeRegistrationConsentHandler } from './api/masternodes/signSharedMasternodeRegistrationConsent'
+import { SignSharedMasternodeRegistrationFundingHandler } from './api/masternodes/signSharedMasternodeRegistrationFunding'
 import { GetMasternodeIdentitiesHandler } from './api/masternodes/getMasternodeIdentities'
 import { UpdateMasternodeRegistrarHandler } from './api/masternodes/updateMasternodeRegistrar'
 import { UpdateMasternodeServiceHandler } from './api/masternodes/updateMasternodeService'
 import { RevokeMasternodeHandler } from './api/masternodes/revokeMasternode'
 import { GetGovernanceProposalsHandler } from './api/governance/getGovernanceProposals'
+import { GetContestedResourcesHandler } from './api/governance/getContestedResources'
+import { VoteContestedResourceHandler } from './api/governance/voteContestedResource'
 import { GetProposalTallyHandler } from './api/governance/getProposalTally'
 import { VoteProposalHandler } from './api/governance/voteProposal'
 import { RefreshGovernanceHandler } from './api/governance/refreshGovernance'
@@ -154,6 +159,7 @@ import {DISCOVERY_INTERVAL_MS} from './constants/addresses'
 import {CoreDiscoveryService} from './services/core/CoreDiscoveryService'
 import {MasternodeService} from './services/core/MasternodeService'
 import {GovernanceService} from './services/core/GovernanceService'
+import {ContestedResourceService} from './services/platform/ContestedResourceService'
 import {MasternodeDAO} from './database/MasternodeDAO'
 import {MasternodeIdentityDAO} from './database/MasternodeIdentityDAO'
 import {CorePrevOutService} from './services/core/CorePrevOutService'
@@ -197,6 +203,7 @@ export class WalletBackend {
   private coreLockService?: CoreLockService
   private masternodeService?: MasternodeService
   private governanceService?: GovernanceService
+  private contestedResourceService?: ContestedResourceService
   private walletCredentialsService?: WalletCredentialsService
   private identityService?: IdentityService
   private logService?: LogService
@@ -206,7 +213,7 @@ export class WalletBackend {
   private identityDAO?: IdentityDAO
 
   private initHandlers(): void {
-    if (!this.walletService || !this.platformAddressService || !this.platformHistoryService || !this.platformTransferService || !this.feeService || !this.applicationService || !this.walletSyncService || !this.ratesService || !this.contactService || !this.shieldedService || !this.assetLockService || !this.addressDAO || !this.walletDAO || !this.identityDAO || !this.identityRegistrationService || !this.coreDiscoveryService || !this.coreLockService || !this.walletCredentialsService || !this.identityService || !this.logService || !this.platformWorkerService || !this.masternodeService || !this.paymentRequestService || !this.governanceService) {
+    if (!this.walletService || !this.platformAddressService || !this.platformHistoryService || !this.platformTransferService || !this.feeService || !this.applicationService || !this.walletSyncService || !this.ratesService || !this.contactService || !this.shieldedService || !this.assetLockService || !this.addressDAO || !this.walletDAO || !this.identityDAO || !this.identityRegistrationService || !this.coreDiscoveryService || !this.coreLockService || !this.walletCredentialsService || !this.identityService || !this.logService || !this.platformWorkerService || !this.masternodeService || !this.paymentRequestService || !this.governanceService || !this.contestedResourceService) {
       throw new Error('Services not initialized. Call start() first.')
     }
 
@@ -230,6 +237,9 @@ export class WalletBackend {
     registerHandler('removeMasternodeKey', new RemoveMasternodeKeyHandler(this.masternodeService).handle)
     registerHandler('previewMasternodeRegistration', new PreviewMasternodeRegistrationHandler(this.masternodeService).handle)
     registerHandler('signAndBroadcastMasternodeRegistration', new SignAndBroadcastMasternodeRegistrationHandler(this.masternodeService).handle)
+    registerHandler('previewSharedMasternodeRegistration', new PreviewSharedMasternodeRegistrationHandler(this.masternodeService).handle)
+    registerHandler('signSharedMasternodeRegistrationConsent', new SignSharedMasternodeRegistrationConsentHandler(this.masternodeService).handle)
+    registerHandler('signSharedMasternodeRegistrationFunding', new SignSharedMasternodeRegistrationFundingHandler(this.masternodeService).handle)
     registerHandler('getMasternodeIdentities', new GetMasternodeIdentitiesHandler(this.identityService).handle)
     registerHandler('updateMasternodeRegistrar', new UpdateMasternodeRegistrarHandler(this.masternodeService).handle)
     registerHandler('updateMasternodeService', new UpdateMasternodeServiceHandler(this.masternodeService).handle)
@@ -238,6 +248,8 @@ export class WalletBackend {
     registerHandler('getProposalTally', new GetProposalTallyHandler(this.governanceService).handle)
     registerHandler('voteProposal', new VoteProposalHandler(this.governanceService).handle)
     registerHandler('refreshGovernance', new RefreshGovernanceHandler(this.governanceService).handle)
+    registerHandler('getContestedResources', new GetContestedResourcesHandler(this.contestedResourceService).handle)
+    registerHandler('voteContestedResource', new VoteContestedResourceHandler(this.contestedResourceService).handle)
     registerHandler('getUsernames', new GetUsernamesHandler(this.identityService).handle)
     registerHandler('refreshDashPay', new RefreshDashPayHandler(this.walletService).handle)
     registerHandler('registerUsername', new RegisterUsernameHandler(this.identityService).handle)
@@ -385,6 +397,7 @@ export class WalletBackend {
     const masternodeKeyDAO = new MasternodeKeyDAO(knex)
     this.masternodeService = new MasternodeService(walletDAO, masternodeKeyDAO, masternodeDAO, masternodeIdentityDAO, providers, addressDAO, coreTransactionService, this.walletSyncService, preferences)
     this.governanceService = new GovernanceService(walletDAO, providers, this.masternodeService, this.walletSyncService)
+    this.contestedResourceService = new ContestedResourceService(walletDAO, this.masternodeService, this.platformWorkerService)
     this.walletSyncService.watchedProvidersOf = masternodeDAO.getFollowedProTxHashes
     const platformAddressDAO = new PlatformAddressDAO(knex)
     this.walletCredentialsService = new WalletCredentialsService(walletDAO, addressDAO, masternodeKeyDAO, platformAddressDAO, calibratedIterations)
