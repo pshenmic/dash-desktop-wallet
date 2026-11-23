@@ -46,6 +46,14 @@ export function isSharedNode(node: MasternodeDto): boolean {
   return node.isShared === true || (node.shares != null && node.shares.length > 0)
 }
 
+export function soloMasternodes(nodes: MasternodeDto[]): MasternodeDto[] {
+  return nodes.filter(node => !isSharedNode(node))
+}
+
+export function sharedMasternodes(nodes: MasternodeDto[]): MasternodeDto[] {
+  return nodes.filter(isSharedNode)
+}
+
 export function isOwnedShare(share: OwnedMasternodeShareDto): boolean {
   return share.keyIndex != null || share.imported
 }
@@ -191,7 +199,6 @@ export function filterNodes(nodes: MasternodeDto[], query: string, segment: Node
       if (!fields.some(value => value != null && value.toLowerCase().includes(needle))) return false
     }
     switch (segment) {
-      case NodeSegment.Shared: return isSharedNode(node)
       case NodeSegment.VotingKey: return hasVotingKey(node)
       case NodeSegment.NoVotingKey: return !hasVotingKey(node)
       case NodeSegment.Banned: return node.status !== ENABLED_MASTERNODE_STATUS && node.status !== REGISTERING_MASTERNODE_STATUS

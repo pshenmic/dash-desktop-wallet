@@ -1,13 +1,18 @@
 export enum MasternodesTab {
   Nodes = 'nodes',
+  Shared = 'shared',
 }
 
 export enum NodeSegment {
   All = 'all',
-  Shared = 'shared',
   VotingKey = 'voting-key',
   NoVotingKey = 'no-voting-key',
   Banned = 'banned',
+}
+
+export enum SharedRegistrationStage {
+  Consent = 'consent',
+  Funding = 'funding',
 }
 
 export enum MasternodeDetailModal {

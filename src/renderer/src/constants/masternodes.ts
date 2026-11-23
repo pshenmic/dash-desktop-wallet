@@ -8,10 +8,12 @@ export const MASTERNODE_PARAMS = {
   segment: 'segment',
   node: 'node',
   register: 'register',
+  participate: 'participate',
 } as const
 
 export const MASTERNODES_TAB_LABELS: Record<MasternodesTab, string> = {
   [MasternodesTab.Nodes]: 'Nodes',
+  [MasternodesTab.Shared]: 'Shared',
 }
 
 export const MASTERNODES_PAGE_SIZE = 50
@@ -70,7 +72,6 @@ export const TESTNET_DEFAULT_PLATFORM_HTTP_PORT = 1443
 
 export const NODE_SEGMENT_LABELS: Record<NodeSegment, string> = {
   [NodeSegment.All]: 'All',
-  [NodeSegment.Shared]: 'Shared',
   [NodeSegment.VotingKey]: 'Voting key in wallet',
   [NodeSegment.NoVotingKey]: 'No voting key in wallet',
   [NodeSegment.Banned]: 'Banned',

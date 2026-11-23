@@ -1,6 +1,5 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import { Button, InfoCircleIcon, PlusIcon, Text } from '@renderer/components/dash-ui-kit-extended'
-import Alert from '@renderer/components/ui/Alert'
+import { Button, PlusIcon, Text } from '@renderer/components/dash-ui-kit-extended'
 import ListSkeleton from '@renderer/components/ui/Skeleton'
 import NoResults from '@renderer/components/ui/NoResults'
 import RetryButton from '@renderer/components/ui/RetryButton'
@@ -11,14 +10,12 @@ import { NODE_SEGMENT_EMPTY, NODE_TABLE_COLUMNS, NODES_TAB_COPY } from '@rendere
 import { MASTERNODE_TABLE_GRID } from '@renderer/constants/masternodes'
 import { SECTION_TABLE_HEADER, SECTION_TABLE_WRAPPER } from '@renderer/constants/sectionTable'
 import { useConnectionModeContext } from '@renderer/contexts/ConnectionModeContext'
-import { AlertTone } from '@renderer/enums/AlertTone'
-import { NodeSegment } from '@renderer/enums/Masternodes'
 import { NoResultsTone } from '@renderer/enums/NoResultsTone'
 import { SegmentedControlAppearance } from '@renderer/enums/SegmentedControlAppearance'
 import { refreshMasternodes, useMasternodes } from '@renderer/hooks/useMasternodes'
 import { useScrollEndSentinel } from '@renderer/hooks/useScrollEndSentinel'
 import { windowList } from '@renderer/utils/listWindow'
-import { emptyNodesDescription, filterNodes, nodeSegmentOptions } from '@renderer/utils/masternodeNodes'
+import { emptyNodesDescription, filterNodes, nodeSegmentOptions, soloMasternodes } from '@renderer/utils/masternodeNodes'
 import type { NodesTabProps } from '@renderer/types/MasternodeScreens'
 import AddMasternodeModal from './AddMasternodeModal'
 import ManageMasternodeKeysModal from './ManageMasternodeKeysModal'
@@ -40,10 +37,11 @@ export default function NodesTab({
   const [addOpen, setAddOpen] = useState(false)
   const [keysOpen, setKeysOpen] = useState(false)
   const appliedQuery = useDeferredValue(query)
-  const options = useMemo(() => nodeSegmentOptions(nodes, appliedQuery), [nodes, appliedQuery])
-  const filtered = useMemo(() => filterNodes(nodes, appliedQuery, segment), [nodes, appliedQuery, segment])
+  const soloNodes = useMemo(() => soloMasternodes(nodes), [nodes])
+  const options = useMemo(() => nodeSegmentOptions(soloNodes, appliedQuery), [soloNodes, appliedQuery])
+  const filtered = useMemo(() => filterNodes(soloNodes, appliedQuery, segment), [soloNodes, appliedQuery, segment])
   const view = useMemo(() => windowList(filtered, visibleCount), [filtered, visibleCount])
-  const hasNodes = nodes.length > 0
+  const hasNodes = soloNodes.length > 0
   const showSkeleton = loading && !discovered && !hasNodes
   const sentinelRef = useScrollEndSentinel(view.hasMore && !showSkeleton, onShowMore, visibleCount)
 
@@ -115,24 +113,6 @@ export default function NodesTab({
           onChange={onSegmentChange}
           className={'flex-wrap'}
         />
-        {desired === 'rpc' && segment === NodeSegment.Shared && (
-          <Alert
-            tone={AlertTone.Info}
-            icon={<InfoCircleIcon size={16} color={'currentColor'} />}
-            title={NODES_TAB_COPY.rpcSharedTitle}
-            description={NODES_TAB_COPY.rpcSharedDescription}
-            actions={(
-              <Button
-                type={'button'}
-                size={'compact'}
-                colorScheme={'lightBlue-mint'}
-                onClick={() => setDesired('p2p')}
-              >
-                {NODES_TAB_COPY.switchToP2P}
-              </Button>
-            )}
-          />
-        )}
         {filtered.length === 0 ? (
           appliedQuery.trim() === '' ? (
             <NoResults noResults={NODE_SEGMENT_EMPTY[segment]} />

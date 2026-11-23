@@ -49,7 +49,9 @@ import {
   revokeNodeDisabledReason,
   shareOriginBadge,
   shareRatio,
+  sharedMasternodes,
   shortProTxHash,
+  soloMasternodes,
   updateRegistrarDisabledReason,
   updateServiceDisabledReason,
 } from '@renderer/utils/masternodeNodes'
@@ -175,7 +177,7 @@ describe('Shared masternode detection and filtering', () => {
     expect(filterNodes(mixed, '', NodeSegment.NoVotingKey)).toEqual([otherNode, nonVotingImportedNode])
   })
 
-  it('filters NodeSegment.Shared and reports segment counts accurately', () => {
+  it('splits solo and shared masternodes and reports segment counts accurately', () => {
     const sharedIndexed = makeNode({
       proTxHash: 'shared-indexed',
       isShared: true,
@@ -191,17 +193,16 @@ describe('Shared masternode detection and filtering', () => {
     })
     const list = [otherNode, sharedRpc, regularNode, sharedIndexed]
 
-    expect(filterNodes(list, '', NodeSegment.Shared)).toEqual([sharedIndexed, sharedRpc])
+    expect(soloMasternodes(list)).toEqual([otherNode, regularNode])
+    expect(sharedMasternodes(list)).toEqual([sharedRpc, sharedIndexed])
     expect(nodeSegmentOptions(list, '')).toEqual([
       { value: NodeSegment.All, label: 'All · 4' },
-      { value: NodeSegment.Shared, label: 'Shared · 2' },
       { value: NodeSegment.VotingKey, label: 'Voting key in wallet · 2' },
       { value: NodeSegment.NoVotingKey, label: 'No voting key in wallet · 2' },
       { value: NodeSegment.Banned, label: 'Banned · 1' },
     ])
     expect(nodeSegmentOptions(list, 'shared-rpc')).toEqual([
       { value: NodeSegment.All, label: 'All · 1' },
-      { value: NodeSegment.Shared, label: 'Shared · 1' },
       { value: NodeSegment.VotingKey, label: 'Voting key in wallet · 0' },
       { value: NodeSegment.NoVotingKey, label: 'No voting key in wallet · 1' },
       { value: NodeSegment.Banned, label: 'Banned · 0' },
@@ -238,7 +239,7 @@ describe('Shared masternode detection and filtering', () => {
     })
     const list = [sparseNode, soloWithAddresses, sharedWithNulls]
 
-    expect(filterNodes(list, ' participanttwo ', NodeSegment.Shared)).toEqual([sharedWithNulls])
+    expect(filterNodes(sharedMasternodes(list), ' participanttwo ', NodeSegment.All)).toEqual([sharedWithNulls])
     expect(filterNodes(list, 'xsoloowner', NodeSegment.All)).toEqual([soloWithAddresses])
     expect(filterNodes(list, 'xsolopayee', NodeSegment.All)).toEqual([soloWithAddresses])
     expect(filterNodes(list, 'xsolocollateral', NodeSegment.All)).toEqual([soloWithAddresses])

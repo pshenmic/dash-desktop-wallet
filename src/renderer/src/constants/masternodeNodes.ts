@@ -53,8 +53,7 @@ export const MASTERNODE_CHAIN_BADGES: Record<string, TransactionKindBadge> = {
 }
 
 export const NODE_SEGMENT_EMPTY: Record<NodeSegment, string> = {
-  [NodeSegment.All]: 'No nodes',
-  [NodeSegment.Shared]: 'No shared masternodes in this wallet',
+  [NodeSegment.All]: 'No solo masternodes',
   [NodeSegment.VotingKey]: 'No nodes with a voting key in this wallet',
   [NodeSegment.NoVotingKey]: 'All discovered nodes have a voting key in this wallet',
   [NodeSegment.Banned]: 'No banned masternodes',

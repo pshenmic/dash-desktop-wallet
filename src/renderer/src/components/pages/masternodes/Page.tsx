@@ -17,6 +17,8 @@ import { enumParam, withParams } from '@renderer/utils/searchParams'
 import NodeDetail from './nodes/NodeDetail'
 import NodesTab from './nodes/NodesTab'
 import RegisterMasternodeWizard from './nodes/RegisterMasternodeWizard'
+import ParticipateSharedWizard from './shared/ParticipateSharedWizard'
+import SharedTab from './shared/SharedTab'
 
 export default function MasternodesPage({ walletId }: MasternodesPageProps): React.JSX.Element {
   const { status } = useAuth()
@@ -26,34 +28,49 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
   const [searchParams, setSearchParams] = useSearchParams()
   const [nodeQuery, setNodeQuery] = useState('')
   const [nodeVisibleCount, setNodeVisibleCount] = useState(MASTERNODES_PAGE_SIZE)
+  const [sharedQuery, setSharedQuery] = useState('')
+  const [sharedVisibleCount, setSharedVisibleCount] = useState(MASTERNODES_PAGE_SIZE)
   const tab = enumParam(MasternodesTab, searchParams.get(MASTERNODE_PARAMS.tab), MasternodesTab.Nodes)
   const segment = searchParams.get(MASTERNODE_PARAMS.segment)
   const detail = searchParams.get(MASTERNODE_PARAMS.node)
   const persistedWizard = getOrCreateRegisterWizardState(walletId, network ?? null)
-  const registering = detail == null
+  const registering = tab === MasternodesTab.Nodes
+    && detail == null
     && (searchParams.get(MASTERNODE_PARAMS.register) === '1'
       || (searchParams.get(MASTERNODE_PARAMS.tab) == null && persistedWizard.active))
-  const saveListScroll = useDetailScrollRestore(detail ?? (registering ? 'register' : null))
+  const participating = tab === MasternodesTab.Shared
+    && detail == null
+    && searchParams.get(MASTERNODE_PARAMS.participate) === '1'
+  const saveListScroll = useDetailScrollRestore(detail ?? (registering ? 'register' : participating ? 'participate' : null))
 
   useEffect(() => {
     prefetchAddresses(walletId).catch(() => {})
     prefetchReceiveRequests(walletId).catch(() => {})
   }, [walletId])
 
-  const selectNodes = (nextSegment: NodeSegment): void => {
+  const selectTab = (next: MasternodesTab, nextSegment: NodeSegment | null): void => {
     setNodeVisibleCount(MASTERNODES_PAGE_SIZE)
+    setSharedVisibleCount(MASTERNODES_PAGE_SIZE)
     setSearchParams(prev => withParams(prev, {
-      [MASTERNODE_PARAMS.tab]: null,
+      [MASTERNODE_PARAMS.tab]: next === MasternodesTab.Nodes ? null : next,
       [MASTERNODE_PARAMS.segment]: nextSegment,
       [MASTERNODE_PARAMS.node]: null,
       [MASTERNODE_PARAMS.register]: null,
+      [MASTERNODE_PARAMS.participate]: null,
     }), { replace: true })
   }
+
+  const selectNodes = (nextSegment: NodeSegment): void => selectTab(MasternodesTab.Nodes, nextSegment)
+  const selectShared = (nextSegment: NodeSegment): void => selectTab(MasternodesTab.Shared, nextSegment)
 
   const openDetail = (value: string): void => {
     saveListScroll()
     const state: MasternodesNavigationState = { fromList: true }
-    setSearchParams(prev => withParams(prev, { [MASTERNODE_PARAMS.node]: value, [MASTERNODE_PARAMS.register]: null }), { state })
+    setSearchParams(prev => withParams(prev, {
+      [MASTERNODE_PARAMS.node]: value,
+      [MASTERNODE_PARAMS.register]: null,
+      [MASTERNODE_PARAMS.participate]: null,
+    }), { state })
   }
 
   const closeDetail = (): void => {
@@ -71,6 +88,7 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
     setSearchParams(prev => withParams(prev, {
       [MASTERNODE_PARAMS.tab]: null,
       [MASTERNODE_PARAMS.node]: null,
+      [MASTERNODE_PARAMS.participate]: null,
       [MASTERNODE_PARAMS.register]: '1',
     }), { state })
   }
@@ -82,6 +100,25 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
       return
     }
     setSearchParams(prev => withParams(prev, { [MASTERNODE_PARAMS.register]: null }), { replace: true })
+  }
+
+  const openParticipate = (): void => {
+    saveListScroll()
+    const state: MasternodesNavigationState = { fromList: true }
+    setSearchParams(prev => withParams(prev, {
+      [MASTERNODE_PARAMS.tab]: MasternodesTab.Shared,
+      [MASTERNODE_PARAMS.node]: null,
+      [MASTERNODE_PARAMS.register]: null,
+      [MASTERNODE_PARAMS.participate]: '1',
+    }), { state })
+  }
+
+  const closeParticipate = (): void => {
+    if ((location.state as MasternodesNavigationState | null)?.fromList === true) {
+      navigate(-1)
+      return
+    }
+    setSearchParams(prev => withParams(prev, { [MASTERNODE_PARAMS.participate]: null }), { replace: true })
   }
 
   const openNodeFromRegister = (proTxHash: string): void => {
@@ -111,6 +148,23 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
         />
       ),
     },
+    {
+      value: MasternodesTab.Shared,
+      label: MASTERNODES_TAB_LABELS[MasternodesTab.Shared],
+      content: (
+        <SharedTab
+          walletId={walletId}
+          segment={enumParam(NodeSegment, segment, NodeSegment.All)}
+          onSegmentChange={selectShared}
+          query={sharedQuery}
+          onQueryChange={(query) => { setSharedQuery(query); setSharedVisibleCount(MASTERNODES_PAGE_SIZE) }}
+          visibleCount={sharedVisibleCount}
+          onShowMore={() => setSharedVisibleCount(count => count + MASTERNODES_PAGE_SIZE)}
+          onOpenNode={openDetail}
+          onRegister={openParticipate}
+        />
+      ),
+    },
   ]
 
   return (
@@ -125,11 +179,21 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
             onBack={closeRegister}
             onOpenNode={openNodeFromRegister}
           />
+        ) : participating ? (
+          <ParticipateSharedWizard
+            key={walletId}
+            walletId={walletId}
+            onBack={closeParticipate}
+          />
         ) : (
           <>
             <PageHeader title={PAGE_HEADERS.masternodes.title} subtitle={PAGE_HEADERS.masternodes.subtitle} />
             <div className={`relative ${SURFACE_PANEL}`}>
-              <PageTabs items={items} value={tab} onValueChange={() => selectNodes(NodeSegment.All)} />
+              <PageTabs
+                items={items}
+                value={tab}
+                onValueChange={value => selectTab(enumParam(MasternodesTab, value, MasternodesTab.Nodes), null)}
+              />
             </div>
           </>
         )}
