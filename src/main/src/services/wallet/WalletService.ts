@@ -7,6 +7,7 @@ import {TransactionDAO} from '../../database/TransactionDAO'
 import {PaymentRequestDAO} from '../../database/PaymentRequestDAO'
 import {IdentityDAO} from '../../database/IdentityDAO'
 import {PlatformTransactionDAO} from '../../database/PlatformTransactionDAO'
+import {ShieldedAddressDAO} from '../../database/ShieldedAddressDAO'
 import {MasternodeKeyDAO} from '../../database/MasternodeKeyDAO'
 import {MasternodeDAO} from '../../database/MasternodeDAO'
 import {WalletProviderFactory} from '../../providers/WalletProviderFactory'
@@ -28,6 +29,7 @@ import {encryptMnemonic} from "../../utils";
 import {withUnlockedWallet} from "../../utils/walletSeed";
 import {requireSelectedWallet, requireWallet} from '../../utils/requireWallet'
 import {mergePlatformTransactions} from '../../utils/platformExplorerTransactions'
+import {shieldedTransactionAmount} from '../../utils/shieldedTransactionAmount'
 import {dashPayAccountPath} from '../../utils/dashPayKeys'
 import {masternodeKeys} from '../../utils/masternodeKeys'
 import {dashPayPayments} from '../../utils/dashPayContacts'
@@ -62,6 +64,7 @@ export class WalletService {
   private paymentRequestDAO: PaymentRequestDAO
   private identityDAO: IdentityDAO
   private platformTransactionDAO: PlatformTransactionDAO
+  private shieldedAddressDAO: ShieldedAddressDAO
   private masternodeKeyDAO: MasternodeKeyDAO
   private masternodeDAO: MasternodeDAO
   private identities: IdentityService
@@ -84,6 +87,7 @@ export class WalletService {
     paymentRequestDAO: PaymentRequestDAO,
     identityDAO: IdentityDAO,
     platformTransactionDAO: PlatformTransactionDAO,
+    shieldedAddressDAO: ShieldedAddressDAO,
     masternodeKeyDAO: MasternodeKeyDAO,
     masternodeDAO: MasternodeDAO,
     identities: IdentityService,
@@ -102,6 +106,7 @@ export class WalletService {
     this.paymentRequestDAO = paymentRequestDAO
     this.identityDAO = identityDAO
     this.platformTransactionDAO = platformTransactionDAO
+    this.shieldedAddressDAO = shieldedAddressDAO
     this.masternodeKeyDAO = masternodeKeyDAO
     this.masternodeDAO = masternodeDAO
     this.identities = identities
@@ -334,15 +339,20 @@ export class WalletService {
 
     const provider = await this.coreReadProvider(wallet)
 
-    const [core, platform] = await Promise.all([
+    const [core, platform, shielded] = await Promise.all([
       provider.getWalletTransactions(),
       this.platformTransactionDAO.getTransactions(walletId),
+      this.shieldedAddressDAO.getAddresses(walletId),
     ])
+    const shieldedAddresses = new Set(shielded.map(row => row.address))
+    // Change is derived without a diversifier: the shielded address at index 0.
+    const changeAddress = shielded.find(row => row.index === 0)?.address ?? null
 
     return {
       core,
       // Stored one row per source, so the wallet's own net is the fold of them.
-      platform: mergePlatformTransactions(platform),
+      platform: mergePlatformTransactions(platform)
+        .map(transaction => shieldedTransactionAmount(transaction, shieldedAddresses, changeAddress)),
       platformFailed: this.platformHistory.lastRefreshFailed(walletId),
     }
   }
