@@ -28,8 +28,7 @@ import {CheckpointAnchors} from '../checkpointAnchors'
 import {HashIndex} from '../../store/hashIndex'
 import {PeerRotation} from '../../net/peerRotation'
 import {x11Wire} from '../../utils/x11'
-import {doubleSHA256} from '../../utils/hash'
-import {merkleRoot} from '../../utils/merkle'
+import {txsMatchMerkleRoot} from '../../utils/merkle'
 import {deriveFilterHeader, hashFilter} from '../../utils/filterHeader'
 import {GENESIS, NO_PREV_FILTER_HEADER} from '../../constants'
 import type {AppliedBlock, UnconfirmedInputOutpoint, WalletSyncUtxo, WatchAddress} from '../../types/walletSync'
@@ -66,13 +65,6 @@ function equalBytes(a: Uint8Array, b: Uint8Array): boolean {
   return true
 }
 
-// A txid is the double-SHA256 of the serialised transaction; the SDK's hash()
-// is that digest reversed for display, so the leaves are taken here instead.
-function txsMatchMerkleRoot(block: Block): boolean {
-  const root = merkleRoot(block.txs.map(tx => doubleSHA256(tx.bytes())))
-  return root != null && wireToDisplayHex(root) === block.blockHeader.merkleRoot
-}
-
 export class CFilterSyncWorker extends Worker {
   readonly name = 'CFilterSyncWorker'
 
@@ -87,6 +79,7 @@ export class CFilterSyncWorker extends Worker {
   private readonly unconfirmedInputOutpoints: UnconfirmedInputOutpoint[]
   private readonly initialCfilterCursor: number | null
   private readonly birthdayHeight: number
+  private readonly foreignBlock: (hashWire: Uint8Array) => boolean
 
   // ── chain state (mutable: extended on tip-follow) ────────────────────────
   private chainTipHeight: number
@@ -174,6 +167,8 @@ export class CFilterSyncWorker extends Worker {
     this.unconfirmedInputOutpoints = opts.unconfirmedInputOutpoints
     this.initialCfilterCursor = opts.cfilterCursor
     this.watchSet = new WatchSet(opts.network, opts.gapLimit, opts.watchAddresses)
+    this.watchSet.watchProviders(opts.watchedProviders)
+    this.foreignBlock = opts.foreignBlock
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.M = this.peerPool.messages as any
@@ -312,17 +307,32 @@ export class CFilterSyncWorker extends Worker {
     if (added === 0) return
 
     if (rewindToHeight != null) {
-      // Only ever down: a cursor still below the target reaches these addresses anyway.
-      const target = Math.min(this.cfilter.cursor, Math.max(this.birthdayHeight, rewindToHeight))
-      log.info(`addWatchAddresses +${added} (total ${this.watchSet.size}); rewinding cursor to h=${target}`)
-      this.clearInflightBatches()
-      this.matchedBlocks.clear()
-      this.cfilter.cursor = target
-      this.emit('cursorReset', {walletId: this.walletId, height: target})
+      this.rewindCursor(rewindToHeight, `addWatchAddresses +${added} (total ${this.watchSet.size})`)
     } else {
       log.info(`addWatchAddresses +${added} (total ${this.watchSet.size}); forward-only (no rewind)`)
     }
+    this.resumeScan()
+  }
 
+  // Rewinds even for a node already watched: it may have been watched before its
+  // registration was indexed, with no height to rewind to.
+  watchProviders = (proTxHashes: string[], rewindToHeight?: number): void => {
+    if (this.stopped || (this.watchSet.watchProviders(proTxHashes) === 0 && rewindToHeight == null)) return
+    if (rewindToHeight != null) this.rewindCursor(rewindToHeight, `watching ${proTxHashes.length} masternode(s)`)
+    this.resumeScan()
+  }
+
+  // Only ever down: a cursor still below the target reaches the new items anyway.
+  private rewindCursor(height: number, reason: string): void {
+    const target = Math.min(this.cfilter.cursor, Math.max(this.birthdayHeight, height))
+    log.info(`${reason}; rewinding cursor to h=${target}`)
+    this.clearInflightBatches()
+    this.matchedBlocks.clear()
+    this.cfilter.cursor = target
+    this.emit('cursorReset', {walletId: this.walletId, height: target})
+  }
+
+  private resumeScan(): void {
     if (this.phase === 'cfheaders' || this.phase === 'cfcheckpt' || this.phase === 'connecting') return
     if (this.heightToFilterHeader.size === 0) {
       this.requestCheckpoints()
@@ -462,6 +472,9 @@ export class CFilterSyncWorker extends Worker {
     }
     const blockHashHex = block.hash()
     const blockHashWire = displayHexToWire(blockHashHex)
+    // Our own request first: the registry may have fetched this very block before
+    // (a ProRegTx paying this wallet), and its claim must not swallow ours.
+    if (!this.blockFetcher.owns(blockHashWire) && this.foreignBlock(blockHashWire)) return
 
     // block.hash() covers the 80-byte header and nothing else, so matching the
     // hash we asked for proves only that the header is ours. The transaction
@@ -1001,6 +1014,8 @@ export class CFilterSyncWorker extends Worker {
     if (this.stopped) return
     const match = this.watchSet.applyBlock(block, height)
     if (match == null) return
+    if (match.payouts.length > 0) this.emit('payoutUpdates', match.payouts)
+    if (match.txs.length === 0 && match.spends.length === 0) return
     this.emit('blockApplied', {
       walletId: this.walletId,
       height,

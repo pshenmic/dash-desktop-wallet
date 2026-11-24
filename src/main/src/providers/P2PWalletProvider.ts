@@ -12,6 +12,9 @@ import {confirmationsAt} from '../utils/confirmations'
 import {dedupeTransactions} from '../utils/dedupeTransactions'
 import {AddressUsage} from '../types/AddressDiscovery'
 import {ConnectionStatus} from '../types/ConnectionStatus'
+import {Masternode, MasternodeKeyFilter, NetworkMasternode} from '../types/Masternode'
+import {Network} from '../types/Network'
+import {nodeKeyValues} from '../utils/masternodes'
 import {Logger} from '../utils/logger'
 
 const log = new Logger('prevout')
@@ -27,6 +30,7 @@ export class P2PWalletProvider implements WalletProvider {
     private readonly walletSyncService: WalletSyncService,
     private readonly addressDAO: AddressDAO,
     private readonly prevOutService: CorePrevOutService,
+    private readonly network: Network,
   ) {}
 
   async getWalletTransactions(): Promise<Transaction[]> {
@@ -67,7 +71,11 @@ export class P2PWalletProvider implements WalletProvider {
   async getWalletUtxos(): Promise<UTXO[]> {
     const {receiving, change, dashPay = []} = await this.addressDAO.getAddressesByWalletId(this.walletId)
     const addresses = [...receiving, ...change, ...dashPay].map(a => a.address)
-    const utxos = await this.transactionDAO.getUtxosByAddresses(this.walletId, addresses)
+    const [utxos, lockedOutpoints] = await Promise.all([
+      this.transactionDAO.getUtxosByAddresses(this.walletId, addresses),
+      this.transactionDAO.getLockedOutpoints(this.walletId),
+    ])
+    const locked = new Set(lockedOutpoints.map(({txid, vout}) => `${txid}:${vout}`))
     const {tipHeight} = this.walletSyncService.getStatus()
     return utxos.map(u => ({
       address: u.address,
@@ -78,6 +86,7 @@ export class P2PWalletProvider implements WalletProvider {
       height: u.height,
       timestamp: new Date(u.blockTime * 1000),
       confirmations: confirmationsAt(u.height, tipHeight),
+      isLocked: locked.has(`${u.txid}:${u.vout}`),
     }))
   }
 
@@ -92,6 +101,12 @@ export class P2PWalletProvider implements WalletProvider {
     }
   }
 
+  async ensureReadyToList(): Promise<void> {
+    if (await this.getConnectionStatus() === 'syncing') {
+      throw new Error('Wallet sync is not complete — wait for sync to finish before listing coins')
+    }
+  }
+
   async getConnectionStatus(): Promise<ConnectionStatus> {
     const status = this.walletSyncService.getStatus()
     if (status.walletId !== this.walletId || status.phase === 'idle' || status.phase === 'stopped') {
@@ -100,7 +115,7 @@ export class P2PWalletProvider implements WalletProvider {
     return status.phase === 'synced' ? 'synced' : 'syncing'
   }
 
-  async nextUnusedAddress(): Promise<string> {
+  async nextUnusedAddress(exclude: Set<string> = new Set()): Promise<string> {
     const {receiving} = await this.addressDAO.getAddressesByWalletId(this.walletId)
     if (receiving.length === 0) throw new Error('Wallet has no receiving addresses')
 
@@ -108,7 +123,7 @@ export class P2PWalletProvider implements WalletProvider {
       await this.transactionDAO.getUsedAddresses(this.walletId, receiving.map(a => a.address)),
     )
 
-    return (receiving.find(({address}) => !used.has(address)) ?? receiving[receiving.length - 1]).address
+    return (receiving.find(({address}) => !used.has(address) && !exclude.has(address)) ?? receiving[receiving.length - 1]).address
   }
 
   async getUsedAddresses(addresses: string[]): Promise<string[]> {
@@ -119,6 +134,29 @@ export class P2PWalletProvider implements WalletProvider {
   // cannot answer for indexes beyond the current window.
   async scanAddressUsage(): Promise<AddressUsage[] | null> {
     return null
+  }
+
+  // Answers from the proven list the p2p index last sent. A collateral created
+  // outside its ProRegTx has no address there, so ours is filled in from the coin.
+  async getMasternodes(filter: MasternodeKeyFilter, values: string[]): Promise<NetworkMasternode[] | null> {
+    const list = this.walletSyncService.getMasternodeList(this.network)
+    if (list == null) return null
+    const wanted = new Set(values)
+    const coins = filter === 'collateral'
+      ? new Map((await this.getWalletUtxos()).map(({txId, vOut, address}) => [`${txId}:${vOut}`, address]))
+      : new Map<string, string>()
+    return list
+      .map(node => node.collateralAddress != null ? node
+        : {...node, collateralAddress: coins.get(`${node.collateralTxid}:${node.collateralVout}`) ?? null})
+      .filter(node => nodeKeyValues(filter, node).some(key => wanted.has(key)))
+  }
+
+  // A fresh node not indexed yet has no height to rewind to, so it stays fresh.
+  async watchMasternodes(owned: Masternode[], fresh: Masternode[]): Promise<string[]> {
+    const rewound = fresh.filter(({registeredHeight}) => registeredHeight != null)
+    await this.walletSyncService.watchProviders(this.walletId, owned.map(({proTxHash}) => proTxHash),
+      rewound.length > 0 ? Math.min(...rewound.map(({registeredHeight}) => registeredHeight!)) : undefined)
+    return rewound.map(({proTxHash}) => proTxHash)
   }
 
   private p2pkhScript(address: string): Script {

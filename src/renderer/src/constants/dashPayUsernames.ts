@@ -18,7 +18,6 @@ export const USERNAME_LIST_COPY = {
   needsKey: 'Needs an Authentication · High key',
   primary: 'Primary',
   primaryTooltip: 'Your oldest name is the one others see',
-  contested: 'Contested',
   registerAgain: 'Register',
   open: 'Open',
   emptyTitle: 'No username yet',
@@ -27,7 +26,7 @@ export const USERNAME_LIST_COPY = {
 
 export const USERNAME_TYPE_COPY = {
   instant: 'Instant',
-  contest: 'Name contest',
+  premium: 'Premium',
 } as const
 
 export const USERNAME_DETAIL_COPY = {
@@ -81,8 +80,6 @@ export const REGISTER_USERNAME_COPY = {
 export const USERNAME_CHECK_COPY = {
   checking: 'Checking…',
   available: 'Available',
-  contested: 'Contested',
-  instant: 'Instant',
   taken: 'is taken',
   owned: 'This identity already owns',
   ownedByWallet: 'in this wallet owns it',
@@ -92,7 +89,7 @@ export const USERNAME_CHECK_COPY = {
   lookalikeTail: 'counts as the same name',
   lookalikeAria: 'Why is this the same name?',
   lookalikeExplainer: 'Some letters look like numbers: o looks like 0, and i and l look like 1. Dash counts them as the same, and big and small letters too. This way no one can make a fake copy of your name. Your name still shows the way you typed it.',
-  contestedTitle: 'Contested name',
+  contestedTitle: 'Premium name',
   contestedLead: 'Masternodes vote',
   contestedFor: 'for',
   contestedTail: 'before it’s awarded. If someone already requested it, you join their contest.',

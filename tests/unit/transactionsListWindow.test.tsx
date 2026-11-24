@@ -7,6 +7,8 @@ import { DEFAULT_TX_FILTER } from '@renderer/constants/transactionFilters'
 import type { TransactionGroup, WalletTxItem } from '@renderer/types/WalletTransaction'
 
 vi.mock('@renderer/hooks/useBalanceVisibility', () => ({ useBalanceVisibility: () => ({ isBalanceVisible: true }) }))
+vi.mock('@renderer/contexts/AuthContext', () => ({ useAuth: () => ({ status: { selectedWalletId: 'wallet' } }) }))
+vi.mock('@renderer/hooks/useIdentities', () => ({ useIdentities: () => ({ identities: [] }) }))
 vi.mock('@renderer/components/pages/transactions/TransactionCard', () => ({ default: ({ id }: { id: string }) => `[card:${id}]` }))
 vi.mock('@renderer/components/pages/transactions/TransactionsFilter', () => ({ default: () => null }))
 vi.mock('@renderer/components/ui/PartialDataNotice', () => ({ default: () => null }))

@@ -6,6 +6,8 @@ export const SURFACE_ROW = 'rounded-[.875rem] dash-block px-[.9375rem] py-[.625r
 
 export const FIELD_COMPACT = 'min-h-[3.25rem] rounded-2xl border border-dash-primary-dark-blue/15 dark:border-white/20 bg-transparent px-4 focus-within:border-dash-brand dark:focus-within:border-dash-mint'
 
+export const FIELD_CONTROL_HEIGHT = 'h-12'
+
 export const POPOVER = 'p-[.375rem] rounded-[.875rem] bg-white dark:bg-white/12 dark:backdrop-blur-[2rem] shadow-[0_0_35px_0_rgba(0,0,0,0.15)]'
 
 export const POPOVER_OPTION = 'rounded-[.625rem] p-[.625rem] cursor-pointer transition-colors duration-150 hover:dash-block-accent-10'

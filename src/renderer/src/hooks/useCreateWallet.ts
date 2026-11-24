@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react'
-import { generateMnemonic } from '@scure/bip39'
+import { entropyToMnemonic, generateMnemonic } from '@scure/bip39'
 import { wordlist } from '@scure/bip39/wordlists/english.js'
 import { toast } from '../components/ui/Toast'
+import { startShieldedSyncWithAddressPool } from './useShieldedAddresses'
 import { API } from '../api'
 import { messages } from '@renderer/constants'
 import { CONNECTION_MODE_PREVIOUS_STEPS, CREATE_WALLET_PREVIOUS_STEPS } from '@renderer/constants/auth'
@@ -20,8 +21,11 @@ const VERIFY_HIDDEN_COUNT: Record<12 | 24, number> = {
   24: 8,
 }
 
-function generateMnemonicWords(count: WordCount): string[] {
+function generateMnemonicWords(count: WordCount, preview: boolean): string[] {
   const strength = count === 12 ? 128 : 256
+  if (preview) {
+    return entropyToMnemonic(Uint8Array.from({ length: strength / 8 }, (_, index) => index), wordlist).split(' ')
+  }
   return generateMnemonic(wordlist, strength).split(' ')
 }
 
@@ -38,9 +42,10 @@ function normalizeWord(w: string): string {
   return w.trim().toLowerCase()
 }
 
-export function useCreateWallet(): UseCreateWalletState {
+export function useCreateWallet(passphrasePreview = false): UseCreateWalletState {
   const [step, setStep] = useState<CreateWalletStep>('welcome')
   const [password, setPasswordState] = useState('')
+  const [passphrase, setPassphrase] = useState('')
   const [seedPhrase, setSeedPhrase] = useState<string[]>([])
   const [verifyPhrase, setVerifyPhrase] = useState<string[]>([])
   const [wordCount, setWordCountState] = useState<WordCount>(12)
@@ -52,6 +57,7 @@ export function useCreateWallet(): UseCreateWalletState {
   const [connectionMode, setConnectionMode] = useState<ConnectionType>('rpc')
   const [backgroundSyncEnabled, setBackgroundSyncEnabled] = useState(true)
   const [creating, setCreating] = useState(false)
+  const isPreviewFlow = passphrasePreview || passphrase !== '' || (step === 'success' && createdWalletId === null)
 
   const setPassword = useCallback((newPassword: string) => {
     setPasswordState(newPassword)
@@ -60,16 +66,16 @@ export function useCreateWallet(): UseCreateWalletState {
   const setWordCount = useCallback((count: WordCount) => {
     setWordCountState((prevCount) => {
       if (prevCount === count) return prevCount
-      setSeedPhrase((prev) => (prev.length === 0 ? prev : generateMnemonicWords(count)))
+      setSeedPhrase((prev) => (prev.length === 0 ? prev : generateMnemonicWords(count, passphrasePreview)))
       return count
     })
-  }, [])
+  }, [passphrasePreview])
 
   const generateSeedPhrase = useCallback(async () => {
-    const words = generateMnemonicWords(wordCount)
+    const words = generateMnemonicWords(wordCount, passphrasePreview)
     setSeedPhrase(words)
     setStep('seed-phrase')
-  }, [wordCount])
+  }, [wordCount, passphrasePreview])
 
   const getVerifyPhrase = useCallback(() => {
     const n = seedPhrase.length
@@ -122,6 +128,10 @@ export function useCreateWallet(): UseCreateWalletState {
       if (prev === 'password' || prev === 'password-import') {
         setPasswordState('')
       }
+      if (prevStep === 'welcome') {
+        setPassphrase('')
+        setImportedSeedPhrase([])
+      }
       return prevStep
     })
   }, [path])
@@ -132,6 +142,7 @@ export function useCreateWallet(): UseCreateWalletState {
   }, [])
 
   const goToImportSeedPhrase = useCallback(() => {
+    setPassphrase('')
     setPath('import')
     setStep('import-seed-phrase')
   }, [])
@@ -142,6 +153,15 @@ export function useCreateWallet(): UseCreateWalletState {
 
   const finishWalletCreation = useCallback(async (): Promise<void> => {
     if (path === null) return
+    if (isPreviewFlow) {
+      setPasswordState('')
+      setPassphrase('')
+      setSeedPhrase([])
+      setVerifyPhrase([])
+      setImportedSeedPhrase([])
+      setStep('success')
+      return
+    }
 
     const seedPhrases: Record<WalletCreationPath, string[]> = {
       create: seedPhrase,
@@ -160,13 +180,13 @@ export function useCreateWallet(): UseCreateWalletState {
       setCreating(false)
     }
 
-    API.startShieldedSync(walletId, password).catch(error => toast.error(getErrorMessage(error)))
+    startShieldedSyncWithAddressPool(walletId, password).catch(error => toast.error(getErrorMessage(error)))
 
     const syncEnabled = connectionMode === 'p2p' || backgroundSyncEnabled
     saveWalletConnectionSettings(connectionMode, syncEnabled)
     setCreatedWalletId(walletId)
     setStep('success')
-  }, [backgroundSyncEnabled, connectionMode, couldNotCreateWallet, importedSeedPhrase, network, password, path, seedPhrase])
+  }, [backgroundSyncEnabled, connectionMode, couldNotCreateWallet, importedSeedPhrase, isPreviewFlow, network, password, path, seedPhrase])
 
   const submitImportSeedPhrase = useCallback((phrase: string[]) => {
     const isValid =
@@ -180,10 +200,13 @@ export function useCreateWallet(): UseCreateWalletState {
   return {
     step,
     password,
+    passphrase,
     seedPhrase,
     verifyPhrase,
+    importedSeedPhrase,
     wordCount,
     setPassword,
+    setPassphrase,
     setWordCount,
     generateSeedPhrase,
     verifyMissingWords,
@@ -196,6 +219,7 @@ export function useCreateWallet(): UseCreateWalletState {
     submitImportSeedPhrase,
     path,
     createdWalletId,
+    isPreviewFlow,
     creating,
     connectionMode,
     backgroundSyncEnabled,

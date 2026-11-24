@@ -130,6 +130,8 @@ describe('matchesIdentityQuery', () => {
 
   it('matches everything for an empty query and ignores missing names', () => {
     expect(matchesIdentityQuery('id', [null], '  ')).toBe(true)
+    expect(matchesIdentityQuery('id', [], '@')).toBe(true)
+    expect(matchesIdentityQuery('id', [], '@.dash')).toBe(true)
     expect(matchesIdentityQuery('id', [null], 'carol')).toBe(false)
   })
 })

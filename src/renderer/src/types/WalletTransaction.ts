@@ -86,6 +86,7 @@ export interface WalletHistoryItem extends TransactionCardItem {
   type: HistoryTransactionType
   selection: SelectedTransaction
   searchValues: Array<string | null | undefined>
+  searchNames?: string[]
 }
 
 export type SelectedTransaction =
@@ -101,7 +102,7 @@ export interface TxFilter {
 }
 
 export interface TxFilterChip {
-  field: keyof TxFilter
+  field: Exclude<keyof TxFilter, 'search'>
   label: string
 }
 
@@ -123,6 +124,7 @@ export interface FilterSectionProps<T extends string> {
 }
 
 export interface TransactionsFilterProps {
+  active: boolean
   filter: TxFilter
   onChange: (filter: TxFilter) => void
   transactions: PlatformTransaction[]

@@ -9,7 +9,7 @@ import Layout from "./components/Layout"
 import CreateWalletWrapper from "./pages/auth/CreateWalletWrapper"
 import ReceivePage from "./pages/Receive"
 import ShieldedPage from "./pages/Shielded"
-import IdentitiesPage from "./pages/Identities"
+import IdentitiesPage, { IdentitiesLayout } from "./pages/Identities"
 import IdentityRegistrationPage from "./pages/IdentityRegistration"
 import IdentityDetailPage from "./pages/IdentityDetail"
 import IdentityAddKeysPage from "./pages/IdentityAddKeys"
@@ -69,10 +69,12 @@ function App(): React.JSX.Element {
             <Route path={"/unshield"} element={<Navigate to={"/send?from=shielded&to=platformAddress"} replace />} />
             <Route path={"/withdraw-l1"} element={<Navigate to={"/send?from=shielded&to=coreAddress"} replace />} />
             <Route path={"/addresses"} element={<AddressesPage />} />
-            <Route path={IDENTITIES_ROUTES.root} element={<IdentitiesPage />} />
-            <Route path={IDENTITIES_ROUTES.register} element={<IdentityRegistrationPage />} />
-            <Route path={IDENTITIES_ROUTES.identity} element={<IdentityDetailPage />} />
-            <Route path={IDENTITIES_ROUTES.addKeys} element={<IdentityAddKeysPage />} />
+            <Route path={IDENTITIES_ROUTES.root} element={<IdentitiesLayout />}>
+              <Route index element={<IdentitiesPage />} />
+              <Route path={IDENTITIES_ROUTES.register} element={<IdentityRegistrationPage />} />
+              <Route path={IDENTITIES_ROUTES.identity} element={<IdentityDetailPage />} />
+              <Route path={IDENTITIES_ROUTES.addKeys} element={<IdentityAddKeysPage />} />
+            </Route>
             <Route path={DASHPAY_ROUTES.root} element={<DashPayPage />} />
             <Route path={DASHPAY_ROUTES.registerUsername} element={<DashPayRegisterUsernamePage />} />
             <Route path={DASHPAY_ROUTES.addContact} element={<DashPayAddContactPage />} />

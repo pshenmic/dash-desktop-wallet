@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GetAddressesResponse, SelectableUtxo, Transaction, WalletHistory } from '../../src/renderer/src/api/types'
+import type { SelectableUtxo } from '../../src/renderer/src/api/types'
 import { WalletSyncPhase } from '../../src/renderer/src/enums/WalletSyncPhase'
 import type { WalletUtxosResult } from '../../src/renderer/src/types/CoinControl'
 import { buildCoinControlInventory, isCoinControlSelectionValid } from '../../src/renderer/src/utils/coinControl'
@@ -10,8 +10,7 @@ const harness = vi.hoisted(() => ({
   connectionType: 'p2p',
   phase: 'synced',
   getUtxos: vi.fn(),
-  getTransactions: vi.fn(),
-  getAddresses: vi.fn(),
+  setUtxoLocked: vi.fn(),
   index: 0,
   states: [] as unknown[],
   memos: [] as Array<{deps: unknown[]; value: unknown}>,
@@ -50,9 +49,7 @@ vi.mock('react', () => ({
   },
 }))
 
-vi.mock('@renderer/api', () => ({API: {
-  getUtxos: harness.getUtxos, getTransactions: harness.getTransactions, getAddresses: harness.getAddresses,
-}}))
+vi.mock('@renderer/api', () => ({API: {getUtxos: harness.getUtxos, setUtxoLocked: harness.setUtxoLocked}}))
 vi.mock('@renderer/contexts/AuthContext', () => ({
   useAuth: () => ({status: {selectedWalletId: harness.walletId, walletSync: {phase: harness.phase}}}),
 }))
@@ -62,11 +59,8 @@ vi.mock('@renderer/contexts/ConnectionModeContext', () => ({
 
 import { useWalletUtxos } from '../../src/renderer/src/hooks/useWalletUtxos'
 
-const history = (core: unknown[]): WalletHistory =>
-  ({core: core as Transaction[], platform: [], platformFailed: false})
-
-const selectedUtxo: SelectableUtxo = {txid: 'selected', vout: 0, satoshis: 100_000n, address: 'address-a', height: 0, timestamp: null, confirmations: 0}
-const otherUtxo: SelectableUtxo = {txid: 'other', vout: 1, satoshis: 200_000n, address: 'address-b', height: 10, timestamp: null, confirmations: 1}
+const selectedUtxo: SelectableUtxo = {txid: 'selected', vout: 0, satoshis: 100_000n, address: 'address-a', height: 0, timestamp: null, confirmations: 0, isLocked: false}
+const otherUtxo: SelectableUtxo = {txid: 'other', vout: 1, satoshis: 200_000n, address: 'address-b', height: 10, timestamp: null, confirmations: 1, isLocked: false}
 
 function render(refreshKey = 0): WalletUtxosResult {
   harness.index = 0
@@ -109,38 +103,27 @@ beforeEach(() => {
   harness.effects = []
   harness.pendingEffects = []
   harness.getUtxos.mockReset()
-  harness.getTransactions.mockReset()
-  harness.getAddresses.mockReset()
+  harness.setUtxoLocked.mockReset()
 })
 
 describe('spendable UTXO refresh readiness', () => {
   it.each([WalletSyncPhase.Stopped, WalletSyncPhase.Idle])('loads persisted UTXOs on first opening with sync %s and still blocks submission', async phase => {
     harness.phase = phase
     harness.syncIncomplete = true
-    harness.getTransactions.mockResolvedValueOnce(history([{
-      walletId: 'wallet-a', txid: 'saved', blockHeight: 20, date: new Date('2026-09-11T09:15:00Z'), confirmations: 0,
-      vout: [{n: 2, address: 'own', value: '0.00000001', spentTxId: ''}],
-    }]))
-    harness.getAddresses.mockResolvedValueOnce({receiving: [{walletId: 'wallet-a', address: 'own'}], change: []})
+    harness.getUtxos.mockResolvedValueOnce([selectedUtxo])
     expect(render()).toMatchObject({utxos: [], loading: true, localSnapshot: true})
     commitEffects()
     await flushPromises()
-    expect(render()).toMatchObject({
-      utxos: [{txid: 'saved', vout: 2, address: 'own', satoshis: 1n, height: 20, timestamp: new Date('2026-09-11T09:15:00Z'), confirmations: 0}],
-      loading: false, localSnapshot: true, error: null,
-    })
+    expect(render()).toMatchObject({utxos: [selectedUtxo], loading: false, localSnapshot: true, error: null})
     expect(selectionStatus(render()).canSubmit).toBe(false)
-    expect(harness.getTransactions).toHaveBeenCalledWith('wallet-a')
-    expect(harness.getAddresses).toHaveBeenCalledWith('wallet-a')
-    expect(harness.getUtxos).not.toHaveBeenCalled()
+    expect(harness.getUtxos).toHaveBeenCalledWith('wallet-a')
   })
 
   it('discards a paused read when sync resumes and loads authoritative UTXOs once synced', async () => {
     harness.phase = WalletSyncPhase.Stopped
     harness.syncIncomplete = true
-    const saved = Promise.withResolvers<WalletHistory>()
-    harness.getTransactions.mockReturnValueOnce(saved.promise)
-    harness.getAddresses.mockResolvedValueOnce({receiving: [], change: []})
+    const paused = Promise.withResolvers<SelectableUtxo[]>()
+    harness.getUtxos.mockReturnValueOnce(paused.promise)
     render()
     commitEffects()
 
@@ -153,17 +136,16 @@ describe('spendable UTXO refresh readiness', () => {
     render()
     commitEffects()
     await flushPromises()
-    saved.resolve(history([]))
+    paused.resolve([otherUtxo])
     await flushPromises()
     expect(render()).toMatchObject({utxos: [selectedUtxo], loading: false, localSnapshot: false})
   })
 
-  it('cancels paused reads on wallet changes and exposes local read failures without loading forever', async () => {
+  it('cancels paused reads on wallet changes and exposes read failures without loading forever', async () => {
     harness.phase = WalletSyncPhase.Stopped
     harness.syncIncomplete = true
-    const addresses = Promise.withResolvers<GetAddressesResponse>()
-    harness.getTransactions.mockResolvedValueOnce(history([])).mockResolvedValueOnce(history([]))
-    harness.getAddresses.mockReturnValueOnce(addresses.promise).mockRejectedValueOnce(new Error('local read failed'))
+    const paused = Promise.withResolvers<SelectableUtxo[]>()
+    harness.getUtxos.mockReturnValueOnce(paused.promise).mockRejectedValueOnce(new Error('local read failed'))
     render()
     commitEffects()
     harness.walletId = 'wallet-b'
@@ -172,12 +154,11 @@ describe('spendable UTXO refresh readiness', () => {
     await flushPromises()
     expect(render()).toMatchObject({utxos: [], loading: false, localSnapshot: true})
     expect(render().error).toContain('local read failed')
-    addresses.resolve({receiving: [], change: []})
+    paused.resolve([selectedUtxo])
     await flushPromises()
     expect(render().error).toContain('local read failed')
 
-    harness.getTransactions.mockResolvedValueOnce(history([]))
-    harness.getAddresses.mockResolvedValueOnce({receiving: [], change: []})
+    harness.getUtxos.mockResolvedValueOnce([])
     render().retry()
     expect(render()).toMatchObject({loading: true, error: null})
     commitEffects()
@@ -313,5 +294,15 @@ describe('spendable UTXO refresh readiness', () => {
     expect(render()).toMatchObject({utxos: [], loading: false, error: null})
     commitEffects()
     expect(harness.getUtxos).toHaveBeenCalledTimes(2)
+  })
+
+  it('toggles UTXO lock state in the snapshot after persisting via IPC', async () => {
+    await loadInitial()
+    harness.setUtxoLocked.mockResolvedValueOnce(undefined)
+
+    await render().toggleLock(selectedUtxo)
+    expect(harness.setUtxoLocked).toHaveBeenCalledWith('wallet-a', 'selected', 0, true)
+    expect(render().utxos).toEqual([{...selectedUtxo, isLocked: true}, otherUtxo])
+    expect(selectionStatus(render())).toEqual({canSubmit: false, unavailable: true})
   })
 })

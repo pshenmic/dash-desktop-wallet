@@ -1,5 +1,5 @@
 import SeedPhraseWarning from "./SeedPhraseWarning"
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Button, Text } from "@renderer/components/dash-ui-kit-extended"
 import { Switch } from "dash-ui-kit/react"
 import { BaseTexts, ImportSeedPhraseTexts } from "@renderer/constants"
@@ -15,11 +15,13 @@ type ImportSeedPhraseData = Pick<ImportSeedPhraseTexts, 'buttonContinue'> & {
 
 type ImportSeedPhraseProps = Pick<UseCreateWalletState, 'submitImportSeedPhrase'> & {
   data: ImportSeedPhraseData
+  initialWords?: string[]
+  children?: ReactNode
 }
 
-export default function ImportSeedPhrase({ submitImportSeedPhrase, data }: ImportSeedPhraseProps): React.JSX.Element {
-  const [wordCount, setWordCount] = useState<WordCount>(12)
-  const [words, setWords] = useState<string[]>(Array(12).fill(''))
+export default function ImportSeedPhrase({ submitImportSeedPhrase, data, initialWords, children }: ImportSeedPhraseProps): React.JSX.Element {
+  const [wordCount, setWordCount] = useState<WordCount>(initialWords?.length === 24 ? 24 : 12)
+  const [words, setWords] = useState<string[]>(() => initialWords?.length === wordCount ? initialWords : Array(wordCount).fill(''))
 
   const options = [
     { label: "12 words", value: 12 as const },
@@ -117,6 +119,7 @@ export default function ImportSeedPhrase({ submitImportSeedPhrase, data }: Impor
         ))}
       </div>
 
+      {children}
       <SeedPhraseWarning {...data.seedPhraseWarning} />
 
       <Button

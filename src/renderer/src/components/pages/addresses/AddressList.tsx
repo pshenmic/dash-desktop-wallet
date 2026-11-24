@@ -11,6 +11,7 @@ import AddAddressSection from './AddAddressSection'
 import SyncGateNotice from '@renderer/components/ui/SyncGateNotice'
 import { refreshAddresses, useAdresses } from '@renderer/hooks/useAdresses'
 import { refreshPlatformAddresses, usePlatformAddresses } from '@renderer/hooks/usePlatformAddresses'
+import { useReceiveRequests } from '@renderer/hooks/useReceiveRequests'
 import { useAuth } from '@renderer/contexts/AuthContext'
 import ListSkeleton from '@renderer/components/ui/Skeleton'
 import NoResults from '@renderer/components/ui/NoResults'
@@ -18,7 +19,9 @@ import RetryButton from '@renderer/components/ui/RetryButton'
 import { NoResultsTone } from '@renderer/enums/NoResultsTone'
 import type { AddressListProps } from '@renderer/types/ExportKey'
 import type { RetryButtonProps } from '@renderer/types/RetryButton'
+import { API } from '@renderer/api'
 import { WalletAddressDto } from '@renderer/api/types'
+import { resolveAddressLabel } from '@renderer/utils/addressLabels'
 
 function TabContent<T>({
   items,
@@ -81,16 +84,29 @@ export default function AddressList({ coreGated = false, onExportKey }: AddressL
     loading: platformLoading,
     err: platformErr,
   } = usePlatformAddresses(walletId)
+  const { labelsByAddress } = useReceiveRequests(walletId)
   const retryAddresses = walletId === undefined ? undefined : () => refreshAddresses(walletId)
   const retryPlatformAddresses = walletId === undefined ? undefined : () => refreshPlatformAddresses(walletId)
 
-  const renderAddress = (item: WalletAddressDto): React.JSX.Element => (
-    <AddressCard
-      key={item.address}
-      {...item}
-      onExportKey={onExportKey ? () => onExportKey({ address: item.address, path: item.derivationPath }) : undefined}
-    />
-  )
+  const handleSaveLabel = (address: string) => async (nextLabel: string): Promise<void> => {
+    if (!walletId) return
+    await API.setAddressLabel(walletId, address, nextLabel)
+    await refreshAddresses(walletId)
+  }
+
+  const renderAddress = (item: WalletAddressDto): React.JSX.Element => {
+    const resolved = resolveAddressLabel(item.label, labelsByAddress.get(item.address))
+    return (
+      <AddressCard
+        key={item.address}
+        {...item}
+        label={resolved.label}
+        labelLocked={resolved.lockedByReceive}
+        onSaveLabel={walletId && !resolved.lockedByReceive ? handleSaveLabel(item.address) : undefined}
+        onExportKey={onExportKey ? () => onExportKey({ address: item.address, path: item.derivationPath }) : undefined}
+      />
+    )
+  }
 
   const tabItems = [
     {
@@ -146,6 +162,7 @@ export default function AddressList({ coreGated = false, onExportKey }: AddressL
               <PlatformAddressCard
                 key={item.platformAddress}
                 {...item}
+                label={labelsByAddress.get(item.platformAddress) ?? null}
                 onExportKey={onExportKey ? () => onExportKey({ address: item.platformAddress }) : undefined}
               />
             )}

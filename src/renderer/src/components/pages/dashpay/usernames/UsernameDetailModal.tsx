@@ -2,7 +2,7 @@ import { HighlightedIdentifier, Text } from '@renderer/components/dash-ui-kit-ex
 import CopyButton from '@renderer/components/ui/CopyButton'
 import Modal from '@renderer/components/ui/Modal'
 import ModalActions from '@renderer/components/ui/ModalActions'
-import StatusPill from '@renderer/components/ui/StatusPill'
+import UsernameStatusPill from './UsernameStatusPill'
 import { USERNAME_DETAIL_COPY, USERNAME_VOTE_FORMS } from '@renderer/constants/dashPayUsernames'
 import { HIGHLIGHTED_IDENTIFIER_CLASS } from '@renderer/constants/identifier'
 import { USERNAME_PRESENTATION } from '@renderer/constants/dpns'
@@ -93,7 +93,7 @@ export default function UsernameDetailModal({
         )}
         <div className={"flex items-center justify-between gap-4"}>
           <Text size={12} weight={"medium"} color={"brand"} opacity={50}>{USERNAME_DETAIL_COPY.status}</Text>
-          <StatusPill tone={spec.tone}>{spec.label}</StatusPill>
+          <UsernameStatusPill presentation={row.presentation} />
         </div>
         {lines.map(line => <DetailLine key={line.label} label={line.label} value={line.value} />)}
         {username?.documentId != null && (

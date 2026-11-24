@@ -16,10 +16,13 @@ export interface AddressListProps {
 }
 
 export interface AddressCardProps extends WalletAddressDto {
+  labelLocked?: boolean
+  onSaveLabel?: (label: string) => Promise<void>
   onExportKey?: () => void
 }
 
 export interface PlatformAddressCardProps extends PlatformAddressDto {
+  label?: string | null
   onExportKey?: () => void
 }
 

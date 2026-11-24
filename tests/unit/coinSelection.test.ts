@@ -7,7 +7,7 @@ const FEE = (inputsCount: number): bigint => coreFeeDuffsFor(1, inputsCount, 1, 
 const ONE_DASH = 100_000_000n
 
 function utxo(satoshis: bigint, n = 0): SelectableUtxo {
-  return { txid: `tx${n}`, vout: n, satoshis, address: `addr${n}`, height: 1, timestamp: null, confirmations: 1 }
+  return { txid: `tx${n}`, vout: n, satoshis, address: `addr${n}`, height: 1, timestamp: null, confirmations: 1, isLocked: false }
 }
 
 const picked = (utxos: SelectableUtxo[]): CoreSpendSource =>
@@ -166,5 +166,17 @@ describe('spending a picked set of coins', () => {
 
     expect(res.change).toBe(0n)
     expect(res.inputs).toHaveLength(6)
+  })
+
+  it('skips locked UTXOs during automatic selection and refuses locked outpoint picks', () => {
+    const locked = {...utxo(ONE_DASH, 0), isLocked: true}
+    const unlocked = utxo(ONE_DASH / 2n, 1)
+
+    const res = selectCoins([locked, unlocked], ONE_DASH / 4n, FEE)
+    expect(res.inputs).toEqual([unlocked])
+    expect(maxSelectableAmount([locked, unlocked], FEE)).toBe(ONE_DASH / 2n - FEE(1))
+
+    expect(() => selectCoins([locked], ONE_DASH / 4n, FEE, picked([locked]))).toThrow('Insufficient funds')
+    expect(maxSelectableAmount([locked], FEE, picked([locked]))).toBe(0n)
   })
 })

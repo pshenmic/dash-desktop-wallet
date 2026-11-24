@@ -2,6 +2,10 @@
 // and the union on others let an unchecked value reach the IPC boundary.
 type Network = 'mainnet' | 'testnet'
 
+// Mirrors MasternodeKeyChain and ImportedMasternodeKey in src/main/src/types/Masternode.
+type MasternodeKeyRole = 'owner' | 'voting' | 'operator'
+type ImportedMasternodeKey = { role: MasternodeKeyRole; publicKey: string }
+
 // Mirrors src/main/src/types/CoinSelection, which the bundles do not share: an
 // address narrows the automatic selection, a picked outpoint list is spent whole.
 type CoreSpendSource =
@@ -57,6 +61,11 @@ export const apiDefinitions = (ipcRenderer) => ({
   getBalance: (address: string | string[], network: Network) => ipcRenderer.invoke('getBalance', address, network),
   getWalletBalance: (walletId: string) => ipcRenderer.invoke('getWalletBalance', walletId),
   getIdentities: (walletId: string) => ipcRenderer.invoke('getIdentities', walletId),
+  getMasternodes: (walletId: string) => ipcRenderer.invoke('getMasternodes', walletId),
+  getMasternodeCollaterals: (walletId: string) => ipcRenderer.invoke('getMasternodeCollaterals', walletId),
+  getImportedMasternodeKeys: (walletId: string) => ipcRenderer.invoke('getImportedMasternodeKeys', walletId),
+  importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => ipcRenderer.invoke('importMasternodeKey', walletId, role, privateKey),
+  removeMasternodeKey: (walletId: string, key: ImportedMasternodeKey) => ipcRenderer.invoke('removeMasternodeKey', walletId, key),
   updateIdentityKeys: (walletId: string, identifier: string, update: IdentityKeysUpdate, password: string) => ipcRenderer.invoke('updateIdentityKeys', walletId, identifier, update, password),
   getIdentityPrivateKeys: (walletId: string, identifier: string, password: string) => ipcRenderer.invoke('getIdentityPrivateKeys', walletId, identifier, password),
   getUsernames: (walletId: string) => ipcRenderer.invoke('getUsernames', walletId),
@@ -120,6 +129,7 @@ export const apiDefinitions = (ipcRenderer) => ({
   stopWalletSync: () => ipcRenderer.invoke('stopWalletSync'),
   resetWalletSync: (network: Network) => ipcRenderer.invoke('resetWalletSync', network),
   getUtxos: (walletId: string) => ipcRenderer.invoke('getUtxos', walletId),
+  setUtxoLocked: (walletId: string, txid: string, vout: number, locked: boolean) => ipcRenderer.invoke('setUtxoLocked', walletId, txid, vout, locked),
   hasSyncProgress: (walletId: string) => ipcRenderer.invoke('hasSyncProgress', walletId),
   broadcastTransaction: (txHex: string) => ipcRenderer.invoke('broadcastTransaction', txHex),
 
@@ -133,6 +143,10 @@ export const apiDefinitions = (ipcRenderer) => ({
   getContacts: (network?: Network) => ipcRenderer.invoke('getContacts', network),
   addContact: (label: string, address: string, network: Network) => ipcRenderer.invoke('addContact', label, address, network),
   deleteContact: (id: number) => ipcRenderer.invoke('deleteContact', id),
+
+  createPaymentRequest: (walletId: string, address: string, amountDuffs: bigint | null, label: string | null, message: string | null) => ipcRenderer.invoke('createPaymentRequest', walletId, address, amountDuffs, label, message),
+  getPaymentRequests: (walletId: string) => ipcRenderer.invoke('getPaymentRequests', walletId),
+  deletePaymentRequest: (walletId: string, id: number) => ipcRenderer.invoke('deletePaymentRequest', walletId, id),
 
   getShieldedStatus: () => ipcRenderer.invoke('getShieldedStatus'),
   getShieldedPoolInfo: (network: Network) => ipcRenderer.invoke('getShieldedPoolInfo', network),

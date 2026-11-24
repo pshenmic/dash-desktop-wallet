@@ -123,7 +123,7 @@ export const transactionsPage: TransactionsPage = {
     filters: {
       search: {
         label: 'Search transactions',
-        placeholder: 'Hash, address or identity',
+        placeholder: 'Search hash, address or name',
       },
       type: {
         label: 'Type',
@@ -135,7 +135,7 @@ export const transactionsPage: TransactionsPage = {
         received: 'Increase',
         sent: 'Decrease',
       },
-      noMatch: 'No transactions match the selected filter'
+      noMatch: 'No matching transactions'
     },
     showMore: 'Show more',
   },

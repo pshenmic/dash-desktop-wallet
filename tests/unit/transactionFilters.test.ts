@@ -7,7 +7,6 @@ import {
   changeTxFilterSource,
   computeTxTotals,
   filterTransactions,
-  isDefaultTxFilter,
   matchesTxFilter,
   transactionTypeOptions,
   txType,
@@ -212,14 +211,23 @@ describe('shared transaction filters', () => {
     expect(filterTransactions(history, { ...DEFAULT_TX_FILTER, search: '  ' })).toEqual(history)
   })
 
-  it('recognizes all active filter fields and treats a whitespace search as empty', () => {
-    expect(isDefaultTxFilter(DEFAULT_TX_FILTER)).toBe(true)
-    expect(isDefaultTxFilter({ ...DEFAULT_TX_FILTER, search: '   ' })).toBe(true)
-    expect(isDefaultTxFilter({ ...DEFAULT_TX_FILTER, source: 'platform' })).toBe(false)
-    expect(isDefaultTxFilter({ ...DEFAULT_TX_FILTER, balanceChange: TxBalanceChangeFilter.Unchanged })).toBe(false)
-    expect(isDefaultTxFilter({ ...DEFAULT_TX_FILTER, type: 'core:transfer' })).toBe(false)
-    expect(isDefaultTxFilter({ ...DEFAULT_TX_FILTER, status: 'unknown' })).toBe(false)
-    expect(isDefaultTxFilter({ ...DEFAULT_TX_FILTER, search: 'hash' })).toBe(false)
+  it('searches all usernames of known platform participants and respects the chain filter', () => {
+    const history = mergeWalletTransactions([coreTransaction()], [platformTransaction({
+      sender: [{ source: 'sender-id', amount: 1n }],
+      recipient: [{ source: 'recipient-id', amount: 1n }],
+    })], [
+      { identifier: 'sender-id', usernames: ['alice', 'alice-pay'] },
+      { identifier: 'recipient-id', usernames: ['bob'] },
+      { identifier: 'unrelated-id', usernames: ['charlie'] },
+    ])
+    const platform = history.find(tx => tx.kind === 'platform')
+    for (const search of ['@ALICE-PAY.dash', ' pay ', 'bob']) {
+      expect(filterTransactions(history, { ...DEFAULT_TX_FILTER, search })).toEqual([platform])
+    }
+    expect(filterTransactions(history, { ...DEFAULT_TX_FILTER, search: 'charlie' })).toEqual([])
+    expect(filterTransactions(history, { ...DEFAULT_TX_FILTER, source: 'core', search: 'alice' })).toEqual([])
+    expect(filterTransactions(history, { ...DEFAULT_TX_FILTER, search: '@' })).toEqual(history)
+    expect(filterTransactions(history, { ...DEFAULT_TX_FILTER, source: 'platform', search: ' @.dash ' })).toEqual([platform])
   })
 })
 
@@ -290,7 +298,7 @@ describe('transaction filter controls', () => {
       .toEqual({ ...filter, source: 'core', type: 'all' })
   })
 
-  it('makes every active condition visible, including types that narrow All sources', () => {
+  it('shows advanced filters as chips and leaves search in its own field', () => {
     expect(activeTxFilterChips({
       source: 'platform', balanceChange: TxBalanceChangeFilter.Decrease,
       type: 'platform:FUTURE_OPERATION', status: 'failed', search: ' hash ',
@@ -299,10 +307,9 @@ describe('transaction filter controls', () => {
       { field: 'balanceChange', label: 'Balance change: Decrease' },
       { field: 'type', label: 'Type: Evo: Future Operation' },
       { field: 'status', label: 'Status: Failed' },
-      { field: 'search', label: 'Search: hash' },
     ])
     expect(activeTxFilterChips({ ...DEFAULT_TX_FILTER, type: 'core:transfer' }))
       .toEqual([{ field: 'type', label: 'Type: Core: Transfers' }])
-    expect(activeTxFilterChips({ ...DEFAULT_TX_FILTER, search: '   ' })).toEqual([])
+    expect(activeTxFilterChips({ ...DEFAULT_TX_FILTER, search: 'hash' })).toEqual([])
   })
 })

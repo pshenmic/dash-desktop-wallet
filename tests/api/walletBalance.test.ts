@@ -14,6 +14,7 @@ const providerStub = (walletBalance: bigint): WalletProvider => ({
   getBalance: async () => { throw new Error('per-address balance is not the wallet total') },
   getWalletUtxos: async () => [],
   ensureReady: async () => undefined,
+  ensureReadyToList: async () => undefined,
   getConnectionStatus: async () => 'online',
   scanAddressUsage: async () => null,
   getUsedAddresses: async () => [],
@@ -22,6 +23,8 @@ const providerStub = (walletBalance: bigint): WalletProvider => ({
   getTransactionByHash: async () => { throw new Error('unused') },
   getTxLockStatus: async () => ({instantLocked: false, chainlocked: false, confirmed: false}),
   nextUnusedAddress: async () => '',
+  getMasternodes: async () => null,
+  watchMasternodes: async () => [],
 })
 
 describe('wallet balance', () => {

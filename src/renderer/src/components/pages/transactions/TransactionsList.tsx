@@ -1,8 +1,9 @@
-import { useDeferredValue, useMemo } from 'react'
+import { useDeferredValue, useMemo, useRef } from 'react'
 import { DateBlock } from 'dash-ui-kit/react'
 import { Text } from '@renderer/components/dash-ui-kit-extended'
 import { CloseIcon } from '@renderer/components/dash-ui-kit-extended/icons'
 import { transactionsPage } from '@renderer/constants'
+import { SEARCH_CLEAR_LABEL, TOOLBAR_SEARCH_CLASS } from '@renderer/constants/listToolbar'
 import { DEFAULT_TX_FILTER } from '@renderer/constants/transactionFilters'
 import { PAGE_HEADERS } from '@renderer/constants/pageHeaders'
 import { CHIP_ACTION } from '@renderer/constants/surfaces'
@@ -12,9 +13,12 @@ import PageHeader from '@renderer/components/ui/PageHeader'
 import ListSkeleton from '@renderer/components/ui/Skeleton'
 import NoResults from '@renderer/components/ui/NoResults'
 import PartialDataNotice from '@renderer/components/ui/PartialDataNotice'
+import SearchField from '@renderer/components/ui/SearchField'
 import SensitiveValue from '@renderer/components/ui/SensitiveValue'
+import { useAuth } from '@renderer/contexts/AuthContext'
 import { creditsToDash } from '@renderer/utils/balance'
 import { useBalanceVisibility } from '@renderer/hooks/useBalanceVisibility'
+import { useIdentities } from '@renderer/hooks/useIdentities'
 import { useScrollEndSentinel } from '@renderer/hooks/useScrollEndSentinel'
 import { activeTxFilterChips, computeTxTotals, filterTransactions } from '@renderer/utils/transactionFilters'
 import { mergeWalletTransactions, windowWalletHistory } from '@renderer/utils/walletTransactions'
@@ -34,23 +38,30 @@ export default function TransactionsList({
 }: TransactionsListProps): React.JSX.Element {
   const { filters, showMore } = transactionsPage.transactions
   const { isBalanceVisible } = useBalanceVisibility()
+  const { status } = useAuth()
+  const { identities } = useIdentities(status?.selectedWalletId ?? undefined)
   const appliedFilter = useDeferredValue(filter)
   const isFiltering = appliedFilter !== filter
-  const transactions = useMemo(() => mergeWalletTransactions(groups.flatMap((group) => group.transactions), platform), [groups, platform])
+  const transactions = useMemo(
+    () => mergeWalletTransactions(groups.flatMap((group) => group.transactions), platform, identities),
+    [groups, platform, identities],
+  )
   const filtered = useMemo(() => filterTransactions(transactions, appliedFilter), [transactions, appliedFilter])
   const view = useMemo(() => windowWalletHistory(filtered, visibleCount), [filtered, visibleCount])
   const totals = useMemo(() => computeTxTotals(filtered), [filtered])
   const hasData = transactions.length > 0
-  const showSkeleton = isFiltering || (loading && !hasData)
-  const showMoreVisible = view.hasMore && !showSkeleton
+  const showSkeleton = loading && !hasData
+  const showMoreVisible = view.hasMore && !showSkeleton && !isFiltering
   const sentinelRef = useScrollEndSentinel(showMoreVisible, onShowMore, visibleCount)
   const activeFilters = activeTxFilterChips(filter)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const changeSearch = (search: string): void => onFilterChange({ ...filter, search })
 
   return (
     <div className={'px-12 pb-8'}>
       <PageHeader title={PAGE_HEADERS.transactions.title} subtitle={PAGE_HEADERS.transactions.subtitle} />
       <div className={'flex flex-col gap-6 p-[.9375rem] rounded-3xl dash-card-base shadow-[0_0_32px_0_rgba(12,28,51,0.08)]'}>
-        {(hasData || activeFilters.length > 0) && (
+        {(hasData || activeFilters.length > 0 || filter.search !== '') && (
           <div className={'flex flex-wrap items-center justify-between gap-4'}>
             <div className={'flex flex-wrap items-center gap-3'}>
               <div className={'flex items-center gap-1.5'}>
@@ -74,7 +85,17 @@ export default function TransactionsList({
                 </Text>
               </div>
             </div>
-            <TransactionsFilter filter={filter} onChange={onFilterChange} transactions={platform} />
+            <div className={'ml-auto flex min-w-[min(100%,20rem)] flex-1 items-center justify-end gap-3'}>
+              <SearchField
+                ref={searchRef}
+                value={filter.search}
+                onChange={changeSearch}
+                placeholder={filters.search.placeholder}
+                ariaLabel={filters.search.label}
+                className={TOOLBAR_SEARCH_CLASS}
+              />
+              <TransactionsFilter active={activeFilters.length > 0} filter={filter} onChange={onFilterChange} transactions={platform} />
+            </div>
           </div>
         )}
         {activeFilters.length > 0 && (
@@ -93,19 +114,31 @@ export default function TransactionsList({
             ))}
             <button
               type={'button'}
-              onClick={() => onFilterChange(DEFAULT_TX_FILTER)}
+              onClick={() => onFilterChange({ ...DEFAULT_TX_FILTER, search: filter.search })}
               className={'px-2 py-1.5 cursor-pointer hover:opacity-80'}
             >
-              <Text size={12} weight={'medium'} color={'blue-mint'}>Clear all</Text>
+              <Text size={12} weight={'medium'} color={'blue-mint'}>Clear filters</Text>
             </button>
           </div>
         )}
-        <div className="flex flex-col gap-5" aria-busy={showSkeleton}>
+        <div className="flex flex-col gap-5" aria-busy={showSkeleton || isFiltering}>
           <PartialDataNotice platformFailed={platformFailed} />
           {showSkeleton && <ListSkeleton rows={3} rowClassName={'h-[4.25rem] rounded-[.875rem]'} />}
           {err && <NoResults noResults={'Failed to load transactions'} />}
           {!showSkeleton && !loading && !err && !hasData && <NoResults noResults={'No transactions found'} />}
-          {!showSkeleton && !loading && hasData && filtered.length === 0 && <NoResults noResults={filters.noMatch} />}
+          {!loading && !isFiltering && hasData && filtered.length === 0 && (
+            <NoResults
+              title={filters.noMatch}
+              action={filter.search.trim() !== '' && (
+                <button type={'button'} className={CHIP_ACTION} onClick={() => {
+                  searchRef.current?.focus()
+                  changeSearch('')
+                }}>
+                  {SEARCH_CLEAR_LABEL}
+                </button>
+              )}
+            />
+          )}
           {!showSkeleton && view.groups.map((group) => (
             <div key={group.date?.getTime() ?? 'unknown'} className={'flex flex-col gap-[.9375rem]'}>
               {group.date ? <DateBlock timestamp={group.date} format={'dateOnly'} /> : (

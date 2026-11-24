@@ -9,9 +9,12 @@ import {TransactionDAO} from '../database/TransactionDAO'
 import {WalletDAO} from '../database/WalletDAO'
 import {dashscanToWalletTransactions} from '../utils/dashscanTransactions'
 import {dedupeTransactions} from '../utils/dedupeTransactions'
+import {networkMasternode} from '../utils/masternodes'
+import {MasternodeKeyFilter, NetworkMasternode} from '../types/Masternode'
 import {
   DashscanAddressInfo,
   DashscanCursorPage,
+  DashscanMasternode,
   DashscanPage,
   DashscanTransaction,
   DashscanUTXO,
@@ -30,6 +33,7 @@ import {PENDING_SPEND_TTL_MS} from '../constants/chain'
 import {
   DASHSCAN_ADDRESS_CHUNK,
   DASHSCAN_BASE_URLS,
+  DASHSCAN_MASTERNODE_FILTER,
   DASHSCAN_REQUEST_TIMEOUT_MS,
   DASHSCAN_RETRY_DELAYS_MS,
   DASHSCAN_STATUS_INTERVAL_MS,
@@ -203,8 +207,12 @@ export class DashscanWalletProvider implements WalletProvider {
     // Dashscan keeps listing an outpoint as unspent until it indexes the
     // transaction that spent it, so a second send within that window would
     // reselect the same coins and every peer would drop it as a conflict.
-    const spends = await this.transactionDAO.getPendingSpends(this.walletId, Date.now() - PENDING_SPEND_TTL_MS)
+    const [spends, lockedOutpoints] = await Promise.all([
+      this.transactionDAO.getPendingSpends(this.walletId, Date.now() - PENDING_SPEND_TTL_MS),
+      this.transactionDAO.getLockedOutpoints(this.walletId),
+    ])
     const spent = new Set(spends.map(({txid, vout}) => `${txid}:${vout}`))
+    const locked = new Set(lockedOutpoints.map(({txid, vout}) => `${txid}:${vout}`))
 
     return collected
       .filter(utxo => utxo.prevTxHash != null && utxo.vOutIndex != null && utxo.scriptPubKeyHex != null)
@@ -218,6 +226,7 @@ export class DashscanWalletProvider implements WalletProvider {
         height: utxo.blockHeight ?? 0,
         timestamp: utxo.timestamp != null ? new Date(utxo.timestamp) : null,
         confirmations: utxo.confirmations ?? 0,
+        isLocked: locked.has(`${utxo.prevTxHash}:${utxo.vOutIndex}`),
       }))
   }
 
@@ -226,6 +235,10 @@ export class DashscanWalletProvider implements WalletProvider {
       signal: AbortSignal.timeout(DASHSCAN_REQUEST_TIMEOUT_MS),
     })
     if (!response.ok) throw new Error(`Dashscan status request failed (${response.status})`)
+  }
+
+  async ensureReadyToList(): Promise<void> {
+    return this.ensureReady()
   }
 
   // The renderer polls this every second, so it answers from cache and leaves
@@ -277,10 +290,10 @@ export class DashscanWalletProvider implements WalletProvider {
     }
   }
 
-  async nextUnusedAddress(): Promise<string> {
+  async nextUnusedAddress(exclude: Set<string> = new Set()): Promise<string> {
     const { receiving } = await this.addressDAO.getAddressesByWalletId(this.walletId)
     if (receiving.length === 0) throw new Error('Wallet has no receiving addresses')
-    const unused = receiving.find(a => !a.isUsed)
+    const unused = receiving.find(a => !a.isUsed && !exclude.has(a.address))
     return (unused ?? receiving[receiving.length - 1]).address
   }
 
@@ -313,6 +326,19 @@ export class DashscanWalletProvider implements WalletProvider {
 
     const infos = await this.addressInfo(addresses)
     return infos.filter(info => info.txCount > 0).map(info => info.address)
+  }
+
+  // Without a limit the endpoint answers every match in one page.
+  async getMasternodes(filter: MasternodeKeyFilter, values: string[]): Promise<NetworkMasternode[]> {
+    const pages = await Promise.all(this.chunkAddresses(values).map(chunk =>
+      requestJson<DashscanPage<DashscanMasternode>>(this.request, `/masternodes?${DASHSCAN_MASTERNODE_FILTER[filter]}=${chunk.join(',')}`)
+    ))
+    return pages.flatMap(({resultSet}) => resultSet.map(networkMasternode))
+  }
+
+  // Each list answer carries the live payout, so there is nothing to follow.
+  async watchMasternodes(): Promise<string[]> {
+    return []
   }
 
   // A provider instance serves one operation, and getTransactions runs once per

@@ -91,6 +91,12 @@ describe('orbitIdentifiers', () => {
 })
 
 describe('overviewActions', () => {
+  it('opens the usernames tab for a vote and holds registration while names are loading', () => {
+    const pending = identity('Pending', [], DASHPAY_KEYS)
+    const readiness = dashPayReadiness(pending)
+    expect(overviewActions(pending, readiness, OverviewAction.ViewUsernames)).toEqual([OverviewAction.ViewUsernames, OverviewAction.FindPeople])
+    expect(overviewActions(pending, readiness, null)).toEqual([OverviewAction.FindPeople])
+  })
   it('asks to create an identity when there is none', () => {
     expect(overviewActions(null, null)).toEqual([OverviewAction.CreateIdentity])
   })

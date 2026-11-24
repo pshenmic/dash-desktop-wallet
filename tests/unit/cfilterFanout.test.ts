@@ -120,6 +120,8 @@ describe('cfilter batch fan-out', () => {
       seedUtxos: [],
       unconfirmedInputOutpoints: [],
       cfilterCursor: TIP - 2,
+      watchedProviders: [],
+      foreignBlock: () => false,
     })
 
     await worker.start()

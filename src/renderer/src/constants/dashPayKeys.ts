@@ -4,6 +4,8 @@ export const READINESS_ALERT_COPY = {
   enable: 'Enable',
   noUsernameTitle: 'No username yet',
   noUsernameDescription: 'People can add you only by identity ID.',
+  checkingUsername: 'Checking username status…',
+  usernameStatusUnavailable: 'Username status unavailable',
   register: 'Register',
 } as const
 

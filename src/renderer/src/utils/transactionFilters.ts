@@ -4,11 +4,8 @@ import { BALANCE_CHANGE_BY_DIRECTION, TX_BALANCE_CHANGE_OPTIONS, TX_CORE_TYPE_OP
 import type { PlatformTransaction } from '../api/types'
 import type { FilterOption, TxFilter, TxFilterChip, TxTotals, WalletHistoryItem, WalletTxItem } from '../types/WalletTransaction'
 import { duffsToCredits } from './balance'
+import { matchesDpnsLabel, stripDpnsInput } from './dpnsLabel'
 import { platformTransactionTitle } from './platformTransactions'
-
-export function isDefaultTxFilter(filter: TxFilter): boolean {
-  return filter.source === 'all' && filter.balanceChange === TxBalanceChangeFilter.All && filter.type === 'all' && filter.status === 'all' && filter.search.trim() === ''
-}
 
 export function txType(tx: Pick<WalletTxItem, 'vout'>): Exclude<TxTypeFilter, TxTypeFilter.All> {
   return tx.vout.some((output) => !output.address) ? TxTypeFilter.AssetLock : TxTypeFilter.Transfer
@@ -43,7 +40,6 @@ export function activeTxFilterChips(filter: TxFilter): TxFilterChip[] {
       ?? `Evo: ${platformTransactionTitle(value.slice('platform:'.length))}`
     chips.push({ field, label: `${TX_FILTER_LABELS[field]}: ${label}` })
   }
-  if (filter.search.trim()) chips.push({ field: 'search', label: `${TX_FILTER_LABELS.search}: ${filter.search.trim()}` })
   return chips
 }
 
@@ -56,7 +52,9 @@ export function matchesTxFilter(tx: WalletHistoryItem, filter: TxFilter): boolea
   if (filter.type !== 'all' && tx.type !== filter.type) return false
   if (filter.status !== 'all' && tx.status !== filter.status) return false
   const search = filter.search.trim().toLowerCase()
-  return !search || tx.searchValues.some((value) => value?.toLowerCase().includes(search))
+  const label = stripDpnsInput(search)
+  return label === '' || tx.searchValues.some((value) => value?.toLowerCase().includes(search))
+    || (tx.searchNames !== undefined && matchesDpnsLabel(tx.searchNames, label))
 }
 
 export function filterTransactions(transactions: WalletHistoryItem[], filter: TxFilter): WalletHistoryItem[] {

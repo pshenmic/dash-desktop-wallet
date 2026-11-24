@@ -6,11 +6,13 @@ import {
   DashPayReadiness,
   DashPayTab,
   SearchResultState,
+  UsernameStatus,
 } from '@renderer/enums/DashPay'
 import { IdentityKeyPurpose, IdentityKeySecurityLevel } from '@renderer/enums/IdentityKeys'
 import { DestinationKind } from '@renderer/enums/DestinationKind'
 import { SourceKind } from '@renderer/enums/SourceKind'
 import type { CustomBadgeProps } from '@renderer/types/CustomBadge'
+import type { IdentitySwitcherStatus } from '@renderer/types/DashPayOverview'
 import type { UsernameSearchPage } from '@renderer/types/Dpns'
 import type { SegmentOption } from '@renderer/types/SegmentedControl'
 import { SURFACE_ROW } from './surfaces'
@@ -106,16 +108,18 @@ export const CONTACT_SORT_OPTIONS: SegmentOption<ContactSort>[] = [
   { value: ContactSort.Oldest, label: 'Oldest first' },
 ]
 
-export const DASHPAY_READINESS_BADGES: Record<DashPayReadiness, Pick<CustomBadgeProps, 'variant' | 'text'>> = {
+export const DASHPAY_READINESS_BADGES: Record<IdentitySwitcherStatus, Pick<CustomBadgeProps, 'variant' | 'text'>> = {
   [DashPayReadiness.Ready]: { variant: 'default', text: 'Ready' },
   [DashPayReadiness.NeedsKeys]: { variant: 'warning', text: 'Needs keys' },
   [DashPayReadiness.NoUsername]: { variant: 'muted', text: 'No username' },
+  [UsernameStatus.Voting]: { variant: 'accent', text: 'Username in vote' },
 }
 
-export const READINESS_TONE_CLASS: Record<DashPayReadiness, string> = {
+export const READINESS_TONE_CLASS: Record<IdentitySwitcherStatus, string> = {
   [DashPayReadiness.Ready]: 'dash-text-primary',
   [DashPayReadiness.NeedsKeys]: 'text-dash-orange',
   [DashPayReadiness.NoUsername]: '',
+  [UsernameStatus.Voting]: 'dash-text-primary',
 }
 
 export const RELATIONSHIP_BADGES: Record<DashPayContactRelationship, Pick<CustomBadgeProps, 'variant' | 'text'>> = {

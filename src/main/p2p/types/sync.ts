@@ -1,4 +1,5 @@
 import type {Network} from '../../src/types/Network'
+import type {NetworkMasternode} from '../../src/types/Masternode'
 import type {AppliedBlock, AppliedTx, GapExhausted, WalletSyncStatus} from './walletSync'
 import type {BroadcastResult} from './broadcast'
 
@@ -21,4 +22,5 @@ export interface SyncServiceEvents {
   chainLocked: (network: Network, height: number) => void
   evonodeDapiUrls: (network: Network, dapiUrls: string[]) => void
   platformQuorums: (network: Network, keys: Map<string, Uint8Array>) => void
+  masternodeList: (network: Network, masternodes: NetworkMasternode[]) => void
 }

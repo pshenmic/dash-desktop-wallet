@@ -65,6 +65,46 @@ export interface AuthTexts {
 
 export const AUTH_CTA_CLASS = 'rounded-[.9375rem] p-4.5'
 
+export const PASSPHRASE_PREVIEW = {
+  query: 'preview',
+  value: 'passphrase',
+  badge: 'BIP39 preview · Use test words only',
+  flowBadge: 'BIP39 preview · Simulated changes',
+  finishHint: 'Finish the preview to see the confirmation screen.',
+  finish: 'Finish preview',
+  success: {
+    title: 'BIP39 passphrase',
+    subtitle: 'Preview complete',
+    description: 'You completed the simulated wallet setup.',
+    buttonContinue: 'Done',
+  },
+} as const
+
+export const SEED_PASSPHRASE_COPY = {
+  create: 'Add a BIP39 passphrase',
+  import: 'Enter a BIP39 passphrase',
+  optional: 'Optional',
+  added: 'Added',
+  label: 'BIP39 passphrase',
+  confirm: 'Confirm BIP39 passphrase',
+  placeholder: 'Enter passphrase',
+  confirmPlaceholder: 'Repeat your passphrase',
+  show: 'Show passphrase',
+  infoLabel: 'About BIP39 passphrases',
+  info: 'A BIP39 passphrase adds a second secret to your backup. Your seed words and passphrase together determine your wallet. A different passphrase opens a different wallet.',
+  remove: 'Remove passphrase',
+  mismatch: 'Passphrases don’t match.',
+  createHint: 'Save it separately from your seed phrase. You’ll need both to restore this wallet.',
+  importHint: 'If you used a passphrase when creating this wallet, enter it exactly as saved.',
+  copyWords: 'Copy words',
+  walletPasswordTitle: 'Set wallet password',
+  walletPasswordHint: 'Unlocks this wallet on this device.',
+  walletPasswordConfirm: 'Confirm wallet password',
+  backupWords: 'Write these words down and store them somewhere safe.',
+  backupTitle: 'Save both recovery secrets',
+  warning: 'Anyone with your seed phrase and passphrase can spend your funds.',
+} as const
+
 export const CREATE_WALLET_PREVIOUS_STEPS: Partial<Record<CreateWalletStep, CreateWalletStep>> = {
   password: 'welcome',
   'seed-phrase': 'password',

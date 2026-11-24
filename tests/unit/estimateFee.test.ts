@@ -37,7 +37,7 @@ const ASSET_LOCK_FEE = (inputsCount: number): bigint =>
   coreFeeDuffsFor(DEFAULT_CORE_FEE_MULTIPLIER, inputsCount, 1, true, ASSET_LOCK_PAYLOAD_BYTES)
 
 function utxo(satoshis: bigint, index: number): UTXO {
-  return {address: CORE_ADDRESS, txId: `${index}`.padStart(64, '0'), vOut: 0, satoshis, script: new Script(), height: 1, timestamp: null, confirmations: 1}
+  return {address: CORE_ADDRESS, txId: `${index}`.padStart(64, '0'), vOut: 0, satoshis, script: new Script(), height: 1, timestamp: null, confirmations: 1, isLocked: false}
 }
 
 const outpoint = (index: number): {txid: string; vout: number} =>
@@ -70,7 +70,7 @@ function service(
   const addressDAO = {
     getAddressesByWalletId: async () => ({receiving: [{address: CORE_ADDRESS}], change: []}),
   }
-  const providers = {forWallet: () => ({getWalletUtxos: async () => utxos})}
+  const providers = {forWallet: () => ({getWalletUtxos: async () => utxos}), spendableUtxos: async () => utxos}
 
   const svc = new FeeService(
     walletDAO as unknown as WalletDAO,

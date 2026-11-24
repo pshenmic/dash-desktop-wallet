@@ -11,16 +11,26 @@ import VerifySeedPhrase from "../../components/pages/auth/VerifySeedPhrase";
 import Success from "../../components/pages/auth/Success";
 import WelcomeDashDesktopWallet from "@renderer/components/pages/auth/WelcomeDashDesktopWallet"
 import ImportSeedPhrase from "@renderer/components/pages/auth/ImportSeedPhrase";
+// import SeedPassphrase from '@renderer/components/pages/auth/SeedPassphrase'
 import ConnectionModeStep from '@renderer/components/pages/auth/ConnectionModeStep'
 import NetworkBadge from "@renderer/components/ui/NetworkBadge";
 import { useAuth } from "@renderer/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate /* , useSearchParams */ } from "react-router-dom";
 import { useEffect, type ReactNode } from "react";
 import { useWallets, refreshWallets } from "@renderer/hooks/useWallets";
-import { CREATE_WALLET_PROGRESS } from '@renderer/constants/auth'
-import type { CreateWalletStep, WalletCreationPath } from '@renderer/types/auth'
+import { CREATE_WALLET_PROGRESS, PASSPHRASE_PREVIEW, SEED_PASSPHRASE_COPY } from '@renderer/constants/auth'
+import { WALLET_PASSWORD_LABEL } from '@renderer/constants/password'
+import type { CreateWalletFlowProps, CreateWalletStep, WalletCreationPath } from '@renderer/types/auth'
 
 export default function CreateWalletWrapper(): React.JSX.Element {
+  // const [params] = useSearchParams()
+  // const passphrasePreview = import.meta.env.DEV && params.get(PASSPHRASE_PREVIEW.query) === PASSPHRASE_PREVIEW.value
+  // return <CreateWalletFlow key={String(passphrasePreview)} passphrasePreview={passphrasePreview} />
+  return <CreateWalletFlow passphrasePreview={false} />
+}
+
+function CreateWalletFlow({ passphrasePreview }: CreateWalletFlowProps): React.JSX.Element {
+  const passphraseAvailable = false // import.meta.env.DEV
   const {
     createWallet,
     saveYourSeedPhrase,
@@ -38,7 +48,10 @@ export default function CreateWalletWrapper(): React.JSX.Element {
     generateSeedPhrase,
     setPassword,
     password,
+    passphrase,
+    // setPassphrase,
     seedPhrase,
+    importedSeedPhrase,
     wordCount,
     setWordCount,
     verifySeedPhrase,
@@ -58,8 +71,9 @@ export default function CreateWalletWrapper(): React.JSX.Element {
     setBackgroundSyncEnabled,
     path,
     createdWalletId,
+    isPreviewFlow,
     creating
-  } = useCreateWallet()
+  } = useCreateWallet(passphrasePreview)
   const hoverAnimation = useRipple()
   const { isAuthenticated } = useAuth()
   const navigate = useNavigate()
@@ -67,8 +81,8 @@ export default function CreateWalletWrapper(): React.JSX.Element {
   const wallets = useWallets()
 
   useEffect(() => {
-    refreshWallets()
-  }, [])
+    if (!passphrasePreview) refreshWallets()
+  }, [passphrasePreview])
 
   const canExitWelcome = step === 'welcome' && (isAuthenticated || wallets.length > 0)
   const showBackButton = step !== 'welcome' || canExitWelcome
@@ -81,7 +95,7 @@ export default function CreateWalletWrapper(): React.JSX.Element {
   }
 
   const titles: Partial<Record<CreateWalletStep, ReactNode>> = {
-    password: createWallet.title,
+    password: passphraseAvailable ? SEED_PASSPHRASE_COPY.walletPasswordTitle : createWallet.title,
     'seed-phrase': saveYourSeedPhrase.title,
     verify: fillInYourSeedPhrase.title,
     welcome: (
@@ -91,18 +105,18 @@ export default function CreateWalletWrapper(): React.JSX.Element {
       </span>
     ),
     'import-seed-phrase': importSeedPhrase.title,
-    'password-import': 'Create Password',
+    'password-import': passphraseAvailable ? SEED_PASSPHRASE_COPY.walletPasswordTitle : 'Create Password',
     'connection-mode': connectionModeTexts.title,
   }
 
   const descriptions: Partial<Record<CreateWalletStep, string>> = {
-    password: createWallet.description,
-    'seed-phrase': saveYourSeedPhrase.description,
+    password: passphraseAvailable ? SEED_PASSPHRASE_COPY.walletPasswordHint : createWallet.description,
+    'seed-phrase': passphraseAvailable ? SEED_PASSPHRASE_COPY.backupWords : saveYourSeedPhrase.description,
     verify: fillInYourSeedPhrase.description,
     welcome: welcome.description,
     'import-seed-phrase': importSeedPhrase.description,
-    'password-import': createWallet.description,
-    'connection-mode': connectionModeTexts.description,
+    'password-import': passphraseAvailable ? SEED_PASSPHRASE_COPY.walletPasswordHint : createWallet.description,
+    'connection-mode': isPreviewFlow ? PASSPHRASE_PREVIEW.finishHint : connectionModeTexts.description,
   }
 
   const connectionModeActionLabels: Record<WalletCreationPath, string> = {
@@ -113,8 +127,21 @@ export default function CreateWalletWrapper(): React.JSX.Element {
   const title = titles[step] ?? ''
   const description = descriptions[step] ?? ''
   const progress = path === null ? null : CREATE_WALLET_PROGRESS[path]
+  const recoveryWarning = passphrase
+    ? path === 'create'
+      ? { title: SEED_PASSPHRASE_COPY.backupTitle, description: SEED_PASSPHRASE_COPY.createHint }
+      : { ...seedPhraseWarning, description: SEED_PASSPHRASE_COPY.warning }
+    : seedPhraseWarning
+  const passwordData = {
+    ...createWallet,
+    labelPassword: passphraseAvailable ? WALLET_PASSWORD_LABEL : createWallet.labelPassword,
+    labelConfirmPassword: passphraseAvailable ? SEED_PASSPHRASE_COPY.walletPasswordConfirm : createWallet.labelConfirmPassword,
+  }
 
-  if (step === 'success') return <Success data={path === 'create' ? success : successImport} walletId={createdWalletId} />
+  if (step === 'success') {
+    const data = isPreviewFlow ? PASSPHRASE_PREVIEW.success : path === 'create' ? success : successImport
+    return <Success data={data} walletId={createdWalletId} />
+  }
 
   return (
     <div className={"relative flex min-h-screen items-end"}>
@@ -162,7 +189,14 @@ export default function CreateWalletWrapper(): React.JSX.Element {
 
       <div className={"relative flex flex-col w-full h-full items-center justify-end p-12 pt-[max(9rem,25vh)]"}>
         <div className={"flex flex-col w-full mb-8"}>
-          <DashLogo  containerSize={50}/>
+          <div className={'flex items-center gap-3'}>
+            <DashLogo containerSize={50} />
+            {isPreviewFlow && (
+              <Text size={12} weight={'medium'} color={'brand'} opacity={60}>
+                {passphrasePreview ? PASSPHRASE_PREVIEW.badge : PASSPHRASE_PREVIEW.flowBadge}
+              </Text>
+            )}
+          </div>
           <Text as={"h1"} className={"mt-6 leading-[78%] tracking-[-0.03em]"} color={"brand"} size={64} weight={"extrabold"}>{title}</Text>
           <Text as={"p"} className={"mt-6"} color={"brand"}size={18} weight={"medium"} opacity={50}>{description}</Text>
         </div>
@@ -179,14 +213,7 @@ export default function CreateWalletWrapper(): React.JSX.Element {
             setPassword={setPassword}
             password={password}
             generateSeedPhrase={generateSeedPhrase}
-            data={{
-              labelConfirmPassword: createWallet.labelConfirmPassword,
-              placeholderConfirmPassword: createWallet.placeholderConfirmPassword,
-              buttonNext: createWallet.buttonNext,
-              labelPassword: createWallet.labelPassword,
-              placeholderPassword: createWallet.placeholderPassword,
-              slowCreationNotice: createWallet.slowCreationNotice
-            }}
+            data={passwordData}
           />
         }
 
@@ -195,53 +222,53 @@ export default function CreateWalletWrapper(): React.JSX.Element {
             setPassword={setPassword}
             password={password}
             continueImportedWallet={continueImportedWallet}
-            data={{
-              labelConfirmPassword: createWallet.labelConfirmPassword,
-              placeholderConfirmPassword: createWallet.placeholderConfirmPassword,
-              buttonNext: createWallet.buttonNext,
-              labelPassword: createWallet.labelPassword,
-              placeholderPassword: createWallet.placeholderPassword,
-              slowCreationNotice: createWallet.slowCreationNotice
-            }}
+            data={passwordData}
           />
         }
         {step === 'seed-phrase' &&
           <SeedPhrase
             data={{
               buttonContinue: saveYourSeedPhrase.buttonContinue,
-              buttonCopy: saveYourSeedPhrase.buttonCopy,
-              seedPhraseWarning: seedPhraseWarning
+              buttonCopy: passphraseAvailable ? SEED_PASSPHRASE_COPY.copyWords : saveYourSeedPhrase.buttonCopy,
+              seedPhraseWarning: recoveryWarning
             }}
             seedPhrase={seedPhrase}
             verifySeedPhrase={verifySeedPhrase}
             wordCount={wordCount}
             setWordCount={setWordCount}
-        />}
+          >
+            {/* {passphraseAvailable && <SeedPassphrase path={'create'} value={passphrase} onChange={setPassphrase} />} */}
+          </SeedPhrase>
+        }
         {step === 'verify' &&
           <VerifySeedPhrase
             verifyPhrase={verifyPhrase}
             verifyMissingWords={verifyMissingWords}
+            passphrase={passphrase}
             data={{
               buttonContinue: fillInYourSeedPhrase.buttonContinue,
-              seedPhraseWarning: seedPhraseWarning
+              seedPhraseWarning: recoveryWarning
             }}
         />}
 
         {step === 'import-seed-phrase' &&
           <ImportSeedPhrase
             submitImportSeedPhrase={submitImportSeedPhrase}
+            initialWords={passphraseAvailable ? importedSeedPhrase : undefined}
             data={{
               buttonContinue: importSeedPhrase.buttonContinue,
-              seedPhraseWarning: seedPhraseWarning
+              seedPhraseWarning: recoveryWarning
             }}
-          />
+          >
+            {/* {passphraseAvailable && <SeedPassphrase path={'import'} value={passphrase} onChange={setPassphrase} />} */}
+          </ImportSeedPhrase>
         }
 
         {step === 'connection-mode' && path !== null &&
           <ConnectionModeStep
             mode={connectionMode}
             backgroundSyncEnabled={backgroundSyncEnabled}
-            actionLabel={connectionModeActionLabels[path]}
+            actionLabel={isPreviewFlow ? PASSPHRASE_PREVIEW.finish : connectionModeActionLabels[path]}
             loadingNotice={createWallet.slowCreationNotice}
             onModeChange={setConnectionMode}
             onBackgroundSyncChange={setBackgroundSyncEnabled}

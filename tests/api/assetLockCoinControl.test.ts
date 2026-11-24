@@ -1,5 +1,6 @@
 import {describe, it, expect, beforeEach, vi} from 'vitest'
 import {Script, utils as sdkUtils} from 'dash-core-sdk'
+import type {Knex} from 'knex'
 import {CoreLockService} from '../../src/main/src/services/core/CoreLockService'
 import {WalletService} from '../../src/main/src/services/wallet/WalletService'
 import {CreateWalletHandler} from '../../src/main/src/api/wallet/createWallet'
@@ -23,13 +24,14 @@ const p2pkhScript = (address: string): Script => {
 }
 
 const utxo = (address: string, satoshis: bigint, txId: string): UTXO =>
-  ({address, satoshis, txId, vOut: 0, script: p2pkhScript(address), height: 2_300_000, timestamp: null, confirmations: 1})
+  ({address, satoshis, txId, vOut: 0, script: p2pkhScript(address), height: 2_300_000, timestamp: null, confirmations: 1, isLocked: false})
 
 const providerStub = (utxos: UTXO[]): WalletProvider => ({
   getWalletUtxos: async () => utxos,
   getWalletBalance: async () => 0n,
   getBalance: async () => 0n,
   ensureReady: async () => undefined,
+  ensureReadyToList: async () => undefined,
   getConnectionStatus: async () => 'online',
   scanAddressUsage: async () => null,
   getUsedAddresses: async () => [],
@@ -38,6 +40,8 @@ const providerStub = (utxos: UTXO[]): WalletProvider => ({
   getTransactionByHash: async () => { throw new Error('unused') },
   getTxLockStatus: async () => ({instantLocked: false, chainlocked: false, confirmed: false}),
   nextUnusedAddress: async () => '',
+  getMasternodes: async () => null,
+  watchMasternodes: async () => [],
 })
 
 const txid = (byte: string): string => byte.repeat(32)
@@ -53,9 +57,11 @@ describe('funding an asset lock from picked coins', () => {
   let walletId: string
   let seed: Uint8Array
   let owned: string[]
+  let knex: Knex
 
   beforeEach(async () => {
     const wired = await harness()
+    knex = wired.knex
     coreLockService = wired.coreLockService
     walletService = wired.walletService
     providers = wired.providers
@@ -89,6 +95,19 @@ describe('funding an asset lock from picked coins', () => {
     const built = await coreLockService.buildAssetLock(walletId, 1_000_000n, seed)
 
     expect(built.tx.inputs.map(i => i.txId)).toEqual([txid('aa')])
+  })
+
+  // Spending a collateral drops its masternode, so only a deliberate pick may.
+  it('passes over a masternode collateral when selecting automatically, but spends one picked', async () => {
+    await knex('masternodes').insert({wallet_id: walletId, pro_tx_hash: 'pro', collateral_txid: txid('aa'), collateral_vout: 0})
+    vi.spyOn(providers, 'forWallet').mockReturnValue(providerStub([
+      utxo(owned[0], 100_000_000_000n, txid('aa')),
+      utxo(owned[1], 20_000_000n, txid('bb')),
+    ]))
+
+    expect((await coreLockService.buildAssetLock(walletId, 1_000_000n, seed)).tx.inputs.map(i => i.txId)).toEqual([txid('bb')])
+    expect((await coreLockService.buildAssetLock(walletId, 1_000_000n, seed, undefined, outpointsOf(txid('aa')))).tx.inputs.map(i => i.txId))
+      .toEqual([txid('aa')])
   })
 
   it('refuses a pick that cannot cover the lock and its fee', async () => {

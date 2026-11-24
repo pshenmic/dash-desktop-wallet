@@ -1,6 +1,6 @@
 import { Input, Text } from '@renderer/components/dash-ui-kit-extended'
 import CopyableError from '@renderer/components/ui/CopyableError'
-import { WALLET_PASSWORD_LABEL, WALLET_PASSWORD_PLACEHOLDER } from '@renderer/constants/password'
+import { PASSWORD_FIELD_INPUT_CLASS, WALLET_PASSWORD_LABEL, WALLET_PASSWORD_PLACEHOLDER } from '@renderer/constants/password'
 import type { PasswordFieldProps } from '@renderer/types/PasswordField'
 
 export default function PasswordField({
@@ -27,7 +27,7 @@ export default function PasswordField({
         variant={"outlined"}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter') onSubmit() }}
-        className={"h-14.25 rounded-[1.25rem] bg-transparent!"}
+        className={PASSWORD_FIELD_INPUT_CLASS}
         colorScheme={error ? 'error' : 'primary'}
         aria-invalid={error ? true : undefined}
         disabled={disabled}

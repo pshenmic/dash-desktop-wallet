@@ -1,5 +1,6 @@
 import {LogLevel} from '../../src/types/Log'
 import {Network} from '../../src/types/Network'
+import {NetworkMasternode} from '../../src/types/Masternode'
 import {BroadcastPolicyOverrides, BroadcastResult} from './broadcast'
 import {PeerInfo, PeerOverrides, PeerProbeResult} from './pool'
 import {AppliedBlock, AppliedTx, GapExhausted, UnconfirmedInputOutpoint, WalletSyncStatus, WalletSyncUtxo, WatchAddress} from './walletSync'
@@ -26,6 +27,9 @@ export interface P2PStartMessage {
   unconfirmedInputOutpoints: UnconfirmedInputOutpoint[]
   // null = never synced. Worker resumes from max(birthday, cfilterCursor + 1).
   cfilterCursor: number | null
+  // The wallet's masternodes the scan already follows from registration, so a
+  // payout change in a block scanned before discovery runs again is still matched.
+  watchedProviders: string[]
   peerOverrides?: PeerOverrides
 }
 
@@ -52,6 +56,15 @@ export interface P2PAddWatchAddressesMessage {
   addresses: WatchAddress[]
   // Rewinds the cfilter cursor so historical filters re-match the new
   // addresses. Main picks the height — the worker does not decide.
+  rewindToHeight?: number
+}
+
+// Display-order proTxHashes whose ProUpRegTx the scan should match. A rewind
+// height catches up on a node's history from its registration.
+export interface P2PWatchProvidersMessage {
+  type: 'watchProviders'
+  walletId: string
+  proTxHashes: string[]
   rewindToHeight?: number
 }
 
@@ -122,6 +135,7 @@ export type P2PCommand =
   | P2PListenMessage
   | P2PStopMessage
   | P2PAddWatchAddressesMessage
+  | P2PWatchProvidersMessage
   | P2PBroadcastMessage
   | P2PWatchTxsMessage
   | P2PReseedUtxosMessage
@@ -225,6 +239,14 @@ export interface P2PPlatformQuorumsMessage {
   keys: Map<string, Uint8Array>
 }
 
+// The whole list, proven against our header chain, each node joined with its
+// indexed registration. Sent once every registration it needs has been read.
+export interface P2PMasternodeListMessage {
+  type: 'masternodeList'
+  network: Network
+  masternodes: NetworkMasternode[]
+}
+
 // A mempool tx paying one of our addresses, seen on the lock pool before any
 // block carries it. Recorded unconfirmed; its isdlock is what makes it final.
 export interface P2PIncomingTxMessage {
@@ -257,3 +279,4 @@ export type P2PEvent =
   | P2PPlatformQuorumsMessage
   | P2PChainRewoundMessage
   | P2PIncomingTxMessage
+  | P2PMasternodeListMessage

@@ -12,16 +12,40 @@ import { davToDash } from '@renderer/utils/balance'
 import { selectedChangeAddress } from '@renderer/utils/changeAddress'
 import { receiveCoreAddresses } from '@renderer/utils/receiveDefaults'
 
-export default function ChangeAddressField({compact = false, change, value, loading, error, previewOnly, onChange, onRetry}: ChangeAddressFieldProps): React.JSX.Element {
+export default function ChangeAddressField({
+  compact = false,
+  change,
+  value,
+  loading,
+  error,
+  previewOnly,
+  addressLabels,
+  onChange,
+  onRetry,
+}: ChangeAddressFieldProps): React.JSX.Element {
   const { status } = useAuth()
   const selected = selectedChangeAddress(change, value)
   const invalid = !!selected?.trim() && !isValidDashChangeAddress(selected, status?.network ?? undefined)
-  const options = receiveCoreAddresses(change).map(address => ({
-    value: address.address,
-    label: address.address,
-    description: `${davToDash(address.balance)} Dash`,
-  }))
-  const selectedDescription = options.find(option => option.value === selected?.trim())?.description
+  const unusedSet = new Set(receiveCoreAddresses(change).map(address => address.address))
+  const options = change
+    .filter(address => {
+      const badge = addressLabels?.get(address.address)?.trim() || address.label?.trim() || ''
+      return unusedSet.has(address.address) || badge !== ''
+    })
+    .map(address => {
+      const badge = addressLabels?.get(address.address)?.trim() || address.label?.trim() || undefined
+      return {
+        value: address.address,
+        label: address.address,
+        ...(badge ? { badge } : {}),
+        description: `${davToDash(address.balance)} Dash`,
+      }
+    })
+  const trimmedSelected = selected?.trim() ?? ''
+  const selectedBadge = trimmedSelected
+    ? (addressLabels?.get(trimmedSelected)?.trim() || change.find(address => address.address === trimmedSelected)?.label?.trim() || undefined)
+    : undefined
+  const selectedDescription = options.find(option => option.value === trimmedSelected)?.description
 
   return (
     <section className="flex min-w-0 flex-col gap-2">
@@ -29,6 +53,7 @@ export default function ChangeAddressField({compact = false, change, value, load
       <DropdownField
         ariaLabel="Change address"
         value={selected ?? ''}
+        valueBadge={selectedBadge}
         onChange={onChange}
         options={options}
         triggerClassName={`dash-block rounded-[.875rem] ${compact ? 'px-3.5 py-2' : 'px-4 py-3.5'} ${invalid ? FIELD_INVALID : ''}`}
@@ -46,7 +71,7 @@ export default function ChangeAddressField({compact = false, change, value, load
         </span> : undefined}
       />
       {invalid && <Text size={12} weight="medium" color="red" className="px-1">Enter a valid P2PKH Dash address for this network.</Text>}
-      {!previewOnly && !selected?.trim() && <Text size={12} weight="medium" color="brand" opacity={50}>Change address will be selected automatically.</Text>}
+      {!previewOnly && !trimmedSelected && <Text size={12} weight="medium" color="brand" opacity={50}>Change address will be selected automatically.</Text>}
       {!loading && !error && options.length === 0 && <Text size={12} weight="medium" color="brand" opacity={50}>No unused change addresses available. Enter an address manually.</Text>}
       {previewOnly && <Text size={12} weight="medium" color="brand" opacity={50}>
         Preview only. Sending currently uses the automatic change address.

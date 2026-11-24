@@ -144,7 +144,7 @@ describe('IdentitySelect header appearance', () => {
     const markup = select({ appearance: IdentitySelectAppearance.Header, identities, attention: true })
     expect(markup).toContain('aria-label="Acting identity: owl0.dash. Change identity. Other identities have requests"')
     expect(markup).toContain('bg-dash-orange')
-    expect(markup).toContain('aria-haspopup="listbox"')
+    expect(markup).toContain('aria-haspopup="dialog"')
   })
 
   it('shows the readiness meta on the trigger', () => {
@@ -182,7 +182,10 @@ describe('IdentitySelect popover search', () => {
     expect(markup).toContain(' · <b>2 requests</b>')
     expect(markup.match(/ · /g)).toHaveLength(2)
     expect(markup).toContain('Register new identity')
-    expect(markup).toContain('aria-selected="true"')
+    expect(markup).toContain('role="dialog"')
+    expect(markup).toContain('aria-current="true"')
+    expect(markup.match(/aria-label="Copy identity ID"/g)).toHaveLength(1)
+    expect(markup.match(/aria-label="Copy username"/g)).toHaveLength(1)
   })
 
   it('marks the selected option active when opened from the keyboard', () => {

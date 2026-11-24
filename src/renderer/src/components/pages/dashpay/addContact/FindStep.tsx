@@ -1,33 +1,27 @@
 import { useRef } from 'react'
 import { Text } from '@renderer/components/dash-ui-kit-extended'
 import ReadinessAlert from '@renderer/components/pages/dashpay/keys/ReadinessAlert'
-import CustomBadge from '@renderer/components/ui/CustomBadge'
+import IdentityReadinessBadge from '@renderer/components/pages/dashpay/IdentityReadinessBadge'
 import FadingScrollArea from '@renderer/components/ui/FadingScrollArea'
 import IdentitySelect from '@renderer/components/ui/IdentitySelect'
 import NoResults from '@renderer/components/ui/NoResults'
 import RetryButton from '@renderer/components/ui/RetryButton'
 import SearchField from '@renderer/components/ui/SearchField'
 import ListSkeleton from '@renderer/components/ui/Skeleton'
-import { DASHPAY_READINESS_BADGES } from '@renderer/constants/dashPay'
 import {
   ADD_CONTACT_COPY,
   ADD_CONTACT_PANEL_NOTE_CLASS,
   ADD_CONTACT_SKELETON_ROWS,
 } from '@renderer/constants/dashPayAddContact'
 import { IDENTITY_SELECT_NAVIGATION_KEYS } from '@renderer/constants/identitySelect'
+import { useAuth } from '@renderer/contexts/AuthContext'
 import { DashPayReadiness } from '@renderer/enums/DashPay'
 import { NoResultsTone } from '@renderer/enums/NoResultsTone'
-import type { IdentityApiDto } from '@renderer/hooks/useIdentities'
+import { useDashPayUsernames } from '@renderer/hooks/useDashPayUsernames'
 import type { FindStepProps } from '@renderer/types/DashPayAddContact'
 import { isSelectableResult } from '@renderer/utils/dashPayAddContact'
-import { dashPayReadiness } from '@renderer/utils/dashPayReadiness'
 import { nextListIndex } from '@renderer/utils/listNavigation'
 import SearchResultRow from './SearchResultRow'
-
-function readinessBadge(identity: IdentityApiDto): React.JSX.Element {
-  const badge = DASHPAY_READINESS_BADGES[dashPayReadiness(identity).readiness]
-  return <CustomBadge variant={badge.variant} text={badge.text} className={"shrink-0"} />
-}
 
 export default function FindStep({
   identities,
@@ -48,6 +42,8 @@ export default function FindStep({
   onAccept,
 }: FindStepProps): React.JSX.Element {
   const groupRef = useRef<HTMLDivElement>(null)
+  const { status } = useAuth()
+  const { identityStatus } = useDashPayUsernames(status?.selectedWalletId ?? undefined)
   const selectable = search.rows.filter(row => isSelectableResult(row.state))
   const focusId = selectable.some(row => row.identifier === selectedId) ? selectedId : selectable[0]?.identifier ?? null
 
@@ -126,7 +122,7 @@ export default function FindStep({
           onSelect={onSelectIdentity}
           onRetry={onRetryIdentities}
           searchable
-          renderBadge={readinessBadge}
+          renderBadge={entry => <IdentityReadinessBadge status={identityStatus(entry)} />}
           ariaLabel={ADD_CONTACT_COPY.fromIdentity}
         />
       </div>
