@@ -34,8 +34,12 @@ export const receivePage = {
 export const receiveCardCopy = {
   platformNote: 'Accepts Dash Platform credits only.',
   privateChip: 'Private',
+  shieldedTitle: 'Shielded address',
   shieldedUnlockPrompt: 'Enter your wallet password to show your shielded address.',
-  shieldedDerivePrompt: 'All unlocked shielded addresses have been requested. Enter your wallet password to derive a new one.',
+  shieldedDeriveTitle: 'New shielded addresses',
+  shieldedDerivePrompt: 'All unlocked shielded addresses have been requested. Enter your wallet password to derive new ones.',
+  generateAddresses: 'Generate addresses',
+  deriveFailed: "Couldn't generate addresses. Try again.",
   showAddress: 'Show address',
   loadFailed: "Couldn't load the address. Try again.",
   allShieldedFunded: 'Every shielded address already holds funds.',

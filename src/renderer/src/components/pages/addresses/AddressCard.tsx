@@ -16,6 +16,8 @@ import { DASH_UNIT } from '@renderer/constants/balance'
 export default function AddressCard({
   address,
   label,
+  labelLocked = false,
+  onSaveLabel,
   balance,
   txCount,
   isUsed,
@@ -31,6 +33,8 @@ export default function AddressCard({
       <AddressRow
         address={address}
         label={label}
+        labelLocked={labelLocked}
+        onSaveLabel={onSaveLabel}
         meta={
           <div className={"flex items-center gap-[.3125rem]"}>
             <Text size={10} weight={"medium"} color={"brand"} opacity={50}>

@@ -61,29 +61,6 @@ export const CoinControlListIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({
   </svg>
 )
 
-export const TransferChevronDownIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({
-  width = 10,
-  height = 6,
-  className = '',
-  ...props
-}) => (
-  <svg
-    {...props}
-    width={width}
-    height={height}
-    viewBox="0 0 10 6"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={className}
-  >
-    <path
-      d="M5.6566 5.1297C5.26608 5.52022 4.63291 5.52022 4.24239 5.1297L0.184715 1.07204C-0.0943881 0.792934 -0.0498969 0.328599 0.277126 0.107574C0.526412 -0.0609118 0.860169 -0.0289322 1.07293 0.183825L4.94949 4.06039L8.82605 0.183825C9.03881 -0.0289321 9.37257 -0.0609115 9.62185 0.107574C9.94888 0.3286 9.99337 0.792934 9.71426 1.07204L5.6566 5.1297Z"
-      fill="currentColor"
-      fillOpacity="0.24"
-    />
-  </svg>
-)
-
 export const ArrowIcon: React.FC<IconProps> = ({
   color = 'white',
   size = 14,
@@ -1686,5 +1663,28 @@ export const ContactsIcon: React.FC<IconProps> = ({
     <path d="M1.25 14.5C1.25 11.88 3.38 10.25 6 10.25C8.62 10.25 10.75 11.88 10.75 14.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     <path d="M10.25 2.585A2.5 2.5 0 1 1 10.25 6.915" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     <path d="M11.75 9.6C13.53 9.98 14.75 11.43 14.75 13.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+)
+
+export const AddressBookIcon: React.FC<IconProps> = ({
+  color = 'currentColor',
+  size = 16,
+  className = '',
+  onClick
+}) => (
+  <svg
+    className={className}
+    onClick={onClick}
+    color={color}
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <rect x="3.25" y="1.75" width="10.5" height="12.5" rx="2" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M1.75 4.75H3.75M1.75 8H3.75M1.75 11.25H3.75" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    <circle cx="8.75" cy="6.25" r="1.65" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M5.75 11.25C6.1 9.65 7.3 8.9 8.75 8.9C10.2 8.9 11.4 9.65 11.75 11.25" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
   </svg>
 )

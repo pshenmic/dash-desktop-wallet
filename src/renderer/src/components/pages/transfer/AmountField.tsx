@@ -7,7 +7,7 @@ export default function AmountField({
 }: AmountFieldProps): React.JSX.Element {
   return (
     <div className={"dash-block rounded-2xl px-5 py-3.5"}>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+      <div className="flex min-h-4 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <Text size={12} weight={"medium"} color={"brand"} opacity={50}>Amount</Text>
         {caption}
       </div>
@@ -19,7 +19,7 @@ export default function AmountField({
           disabled={disabled}
           inputMode={"decimal"}
           placeholder={"0"}
-          className={"flex-1 min-w-0 bg-transparent outline-none font-bold leading-none dash-text-default placeholder:opacity-30 disabled:cursor-default text-[2rem]"}
+          className={"flex-1 min-w-0 bg-transparent outline-none font-bold tabular-nums leading-none dash-text-default placeholder:opacity-30 disabled:cursor-default text-[2rem]"}
         />
         <div className={"shrink-0 flex items-center"}>{unit}</div>
         {!disabled && (
