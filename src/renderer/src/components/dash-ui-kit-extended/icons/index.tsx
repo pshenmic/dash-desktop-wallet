@@ -1652,6 +1652,17 @@ export const ServerIcon: React.FC<IconProps> = ({ color = 'var(--color-text)', s
   </svg>
 )
 
+export const EvoServerIcon: React.FC<IconProps> = ({ color = 'var(--color-text)', size = 16, className = '', onClick }) => (
+  <svg className={className} onClick={onClick} color={color} width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="1.25" width="12" height="13.5" rx="2" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M2 5.75H14M2 10.25H14" stroke="currentColor" strokeWidth="1.5" />
+    <circle cx="4.75" cy="3.5" r="0.85" fill="currentColor" />
+    <circle cx="4.75" cy="8" r="0.85" fill="currentColor" />
+    <circle cx="4.75" cy="12.5" r="0.85" fill="currentColor" />
+    <path d="M7.75 3.5H11.25M7.75 8H11.25M7.75 12.5H11.25" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+  </svg>
+)
+
 export const CardsViewIcon: React.FC<IconProps> = ({ color = 'var(--color-text)', size = 16, className = '', onClick }) => (
   <svg className={className} onClick={onClick} color={color} width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <rect x="1.5" y="1.5" width="5.25" height="5.25" rx="1.25" stroke="currentColor" strokeWidth="1.5" />

@@ -32,5 +32,12 @@ export interface PrepareCollateralSectionProps {
   addressesLoading: boolean
   addressesError: string | null
   onRetryAddresses: () => void
+  activeExactOutpoint: string | null
+  preparedOutpoint: string | null
+  utxosLoading: boolean
+  utxosError: string | null
+  onRetryUtxos: () => void
+  onSelectExactOutpoint: (outpoint: string) => void
+  onStartCombineMode: () => void
   onPrepared: (outpoint: string, refreshedUtxos: SelectableUtxo[]) => void
 }

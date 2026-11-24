@@ -25,7 +25,6 @@ import { useScrollEndSentinel } from '@renderer/hooks/useScrollEndSentinel'
 import type { SharedTabProps } from '@renderer/types/SharedRegistration'
 import { windowList } from '@renderer/utils/listWindow'
 import { filterNodes, sharedMasternodes } from '@renderer/utils/masternodeNodes'
-import ManageMasternodeKeysModal from '../nodes/ManageMasternodeKeysModal'
 import MasternodeViewSwitch from '../nodes/MasternodeViewSwitch'
 import NodeCard from '../nodes/NodeCard'
 import NodeTableRow from '../nodes/NodeTableRow'
@@ -39,13 +38,13 @@ export default function SharedTab({
   onShowMore,
   onOpenNode,
   onRegister,
+  onImportKeys,
 }: SharedTabProps): React.JSX.Element {
   const { desired, setDesired } = useConnectionModeContext()
   const { nodes, discovered, loading, err } = useMasternodes(walletId)
   const [viewMode, setViewMode] = useMasternodeViewMode()
   const { labelsByAddress } = useReceiveRequests(walletId)
   const [addOpen, setAddOpen] = useState(false)
-  const [keysOpen, setKeysOpen] = useState(false)
   const appliedQuery = useDeferredValue(query)
   const sharedNodes = useMemo(() => sharedMasternodes(nodes), [nodes])
   const filtered = useMemo(() => filterNodes(sharedNodes, appliedQuery), [sharedNodes, appliedQuery])
@@ -106,20 +105,7 @@ export default function SharedTab({
         <NoResults
           title={SHARED_TAB_COPY.emptyTitle}
           description={desired === 'p2p' && !discovered ? NODES_TAB_COPY.p2pSyncing : SHARED_TAB_COPY.emptyDescription}
-          action={(
-            <div className={'flex flex-wrap items-center justify-center gap-2'}>
-              {actionButton}
-              <Button
-                type={'button'}
-                size={'compact'}
-                colorScheme={'primary-light'}
-                onClick={onRegister}
-                className={'rounded-[.75rem]'}
-              >
-                {SHARED_TAB_COPY.participateButton}
-              </Button>
-            </div>
-          )}
+          action={actionButton}
         />
       </div>
     )
@@ -135,10 +121,7 @@ export default function SharedTab({
             ariaLabel={SHARED_TAB_COPY.searchLabel}
             className={'flex-1 min-w-[14rem] max-w-[22rem]'}
           />
-          <div className={'flex flex-wrap items-center gap-2'}>
-            <MasternodeViewSwitch value={viewMode} onChange={setViewMode} />
-            {actionButton}
-          </div>
+          <MasternodeViewSwitch value={viewMode} onChange={setViewMode} />
         </div>
         {filtered.length === 0 ? (
           <NoResults
@@ -178,14 +161,7 @@ export default function SharedTab({
           open={addOpen}
           onClose={() => setAddOpen(false)}
           onSelectParticipate={onRegister}
-          onSelectImport={() => setKeysOpen(true)}
-        />
-      )}
-      {keysOpen && (
-        <ManageMasternodeKeysModal
-          walletId={walletId}
-          open={keysOpen}
-          onClose={() => setKeysOpen(false)}
+          onSelectImport={onImportKeys}
         />
       )}
     </div>

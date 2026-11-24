@@ -8,9 +8,11 @@ import type {
 import { Text } from '@renderer/components/dash-ui-kit-extended'
 import TransferWizard from '@renderer/components/pages/transfer/TransferWizard'
 import PageHeader from '@renderer/components/ui/PageHeader'
-import { DASH_UNIT } from '@renderer/constants/balance'
-import { REGISTER_MASTERNODE_COPY } from '@renderer/constants/masternodeNodes'
-import { REGISTER_WIZARD_COPY, REGISTER_WIZARD_STEPS } from '@renderer/constants/masternodeRegistration'
+import {
+  COMBINE_COLLATERAL_SELECTION,
+  REGISTER_WIZARD_COPY,
+  REGISTER_WIZARD_STEPS,
+} from '@renderer/constants/masternodeRegistration'
 import { CHIP_ACTION, SURFACE_PANEL } from '@renderer/constants/surfaces'
 import { useAuth } from '@renderer/contexts/AuthContext'
 import { refreshMasternodes } from '@renderer/hooks/useMasternodes'
@@ -22,11 +24,9 @@ import type {
   RegisterWizardDraft,
   RegisterWizardProps,
 } from '@renderer/types/MasternodeRegistrationWizard'
-import { davToDash } from '@renderer/utils/balance'
 import { getErrorMessage } from '@renderer/utils/error'
 import {
   eligibleCollateralUtxos,
-  isConfirmingUtxo,
   resolveCollateralSource,
   validateRegistrationWizard,
 } from '@renderer/utils/masternodeActions'
@@ -117,34 +117,17 @@ export default function RegisterMasternodeWizard({
     () => eligibleCollateralUtxos(effectiveUtxos, draft.type),
     [effectiveUtxos, draft.type],
   )
-  const collateralOptions = useMemo(
-    () => collateralCoins.map(coin => {
-      const addrLabel = badgeFor(coin.address)
-      const confirming = isConfirmingUtxo(coin)
-      return {
-        value: `${coin.txid}:${coin.vout}`,
-        label: `${coin.txid.slice(0, 12)}…:${coin.vout}`,
-        ...(confirming
-          ? { badge: REGISTER_MASTERNODE_COPY.confirmingBadge }
-          : addrLabel
-            ? { badge: addrLabel }
-            : {}),
-        description: addrLabel && confirming ? `${addrLabel} · ${coin.address}` : coin.address,
-        metadata: [
-          `${davToDash(coin.satoshis)} ${DASH_UNIT}`,
-          confirming
-            ? REGISTER_MASTERNODE_COPY.confirmingBadge
-            : `${REGISTER_MASTERNODE_COPY.confirmedBlockPrefix}${coin.height.toLocaleString('en-US')}`,
-        ],
-      }
-    }),
-    [collateralCoins, badgeFor],
+  const activeExactOutpoint = useMemo(() => {
+    if (draft.selectedCollateral === COMBINE_COLLATERAL_SELECTION) return null
+    const matched = collateralCoins.find(coin => `${coin.txid}:${coin.vout}` === draft.selectedCollateral)
+      ?? collateralCoins[0]
+      ?? null
+    return matched != null ? `${matched.txid}:${matched.vout}` : null
+  }, [collateralCoins, draft.selectedCollateral])
+  const activeCollateral = activeExactOutpoint ?? (
+    draft.selectedCollateral === COMBINE_COLLATERAL_SELECTION ? COMBINE_COLLATERAL_SELECTION : ''
   )
-
-  const activeCollateral = collateralOptions.some(opt => opt.value === draft.selectedCollateral)
-    ? draft.selectedCollateral
-    : (collateralOptions[0]?.value ?? '')
-  const resolvedCollateralSource = resolveCollateralSource(draft.collateralSource, collateralOptions.length > 0)
+  const resolvedCollateralSource = resolveCollateralSource(draft.collateralSource)
 
   const validation = useMemo(
     () => validateRegistrationWizard({ ...draft, selectedCollateral: activeCollateral }, collateralCoins, effectiveUtxos, network, defaultPayoutAddress),
@@ -294,7 +277,6 @@ export default function RegisterMasternodeWizard({
         <RegisterStepCollateral
           {...sharedStepProps}
           resolvedCollateralSource={resolvedCollateralSource}
-          collateralOptions={collateralOptions}
           activeCollateral={activeCollateral}
           utxosLoading={utxosLoading}
           utxosError={utxosError}
@@ -314,10 +296,17 @@ export default function RegisterMasternodeWizard({
               addressesLoading={addressesLoading}
               addressesError={addressesError}
               onRetryAddresses={retryAddresses}
+              activeExactOutpoint={activeExactOutpoint}
+              preparedOutpoint={preparedOutpoint}
+              utxosLoading={utxosLoading}
+              utxosError={utxosError}
+              onRetryUtxos={retryUtxos}
+              onSelectExactOutpoint={outpoint => updateDraft({ collateralSource: 'prepare', selectedCollateral: outpoint })}
+              onStartCombineMode={() => updateDraft({ collateralSource: 'prepare', selectedCollateral: COMBINE_COLLATERAL_SELECTION })}
               onPrepared={(outpoint, refreshedUtxos) => {
                 if (refreshedUtxos.length > 0) setPrepUtxoSnapshot(refreshedUtxos)
                 setPreparedOutpoint(outpoint)
-                updateDraft({ collateralSource: 'wallet', selectedCollateral: outpoint })
+                updateDraft({ collateralSource: 'prepare', selectedCollateral: outpoint })
                 retryUtxos()
                 retryAddresses()
               }}

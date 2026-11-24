@@ -16,6 +16,11 @@ export const MASTERNODES_TAB_LABELS: Record<MasternodesTab, string> = {
   [MasternodesTab.Shared]: 'Shared',
 }
 
+export const MASTERNODES_HEADER_COPY = {
+  importButton: 'Import',
+  registerButton: 'Register',
+} as const
+
 export const MASTERNODES_PAGE_SIZE = 50
 export const MASTERNODE_CACHE_NAMESPACE = 'masternodes'
 export const MASTERNODE_IMPORTED_KEYS_NAMESPACE = 'masternode-imported-keys'

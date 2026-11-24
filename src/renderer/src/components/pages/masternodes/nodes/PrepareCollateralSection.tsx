@@ -5,25 +5,27 @@ import {
   Button,
   HighlightedIdentifier,
   InfoCircleIcon,
+  InfoTooltip,
   Text,
 } from '@renderer/components/dash-ui-kit-extended'
-import RecipientInput from '@renderer/components/pages/transfer/RecipientInput'
 import Alert from '@renderer/components/ui/Alert'
 import CheckRow from '@renderer/components/ui/CheckRow'
+import CopyButton from '@renderer/components/ui/CopyButton'
 import CopyableError from '@renderer/components/ui/CopyableError'
 import CustomBadge from '@renderer/components/ui/CustomBadge'
 import FadingScrollArea from '@renderer/components/ui/FadingScrollArea'
 import PasswordField from '@renderer/components/ui/PasswordField'
 import SegmentedControl from '@renderer/components/ui/SegmentedControl'
+import ListSkeleton from '@renderer/components/ui/Skeleton'
 import { INVALID_WALLET_PASSWORD_MESSAGE } from '@renderer/constants'
 import { ADDRESS_ROW_IDENTIFIER_CLASS } from '@renderer/constants/addressRow'
 import { DASH_UNIT } from '@renderer/constants/balance'
-import { MASTERNODE_YOUR_ADDRESSES_HEADING } from '@renderer/constants/masternodeAddresses'
 import {
   COLLATERAL_PREP_COIN_MODE_OPTIONS,
   MASTERNODE_COLLATERAL_PREP_COPY,
-  MASTERNODE_PREP_COLLATERAL_RECIPIENT_COPY,
 } from '@renderer/constants/masternodeCollateralPrep'
+import { REGISTER_MASTERNODE_COPY } from '@renderer/constants/masternodeNodes'
+import { REGISTER_WIZARD_COPY } from '@renderer/constants/masternodeRegistration'
 import { RECEIVE_LABEL_MAX_LENGTH } from '@renderer/constants/receivePage'
 import { CHIP_ACTION, SURFACE_SECTION } from '@renderer/constants/surfaces'
 import { AlertTone } from '@renderer/enums/AlertTone'
@@ -43,9 +45,10 @@ import { getErrorMessage } from '@renderer/utils/error'
 import { isConfirmingUtxo } from '@renderer/utils/masternodeActions'
 import {
   autoSelectCollateralPrepUtxos,
-  collateralTargetAddressOptions,
   defaultCollateralLabel,
   fallbackCollateralTargetAddress,
+  isExactCollateralCoin,
+  isSufficientPrepCoin,
   nextCollateralLabelOnAddressChange,
   pickFreshCollateralTargetAddress,
   planCollateralInvoiceSync,
@@ -55,6 +58,7 @@ import {
   resolveCreatedCollateralOutpoint,
   spendablePrepUtxos,
   summarizeCollateralPrepSelection,
+  unifiedCollateralStepCoins,
 } from '@renderer/utils/masternodeCollateralPrep'
 import MasternodeFieldInput from './MasternodeFieldInput'
 
@@ -71,16 +75,30 @@ export default function PrepareCollateralSection({
   addressesLoading,
   addressesError,
   onRetryAddresses,
+  activeExactOutpoint,
+  preparedOutpoint,
+  utxosLoading,
+  utxosError,
+  onRetryUtxos,
+  onSelectExactOutpoint,
+  onStartCombineMode,
   onPrepared,
 }: PrepareCollateralSectionProps): React.JSX.Element {
   const addressNetwork = network ?? undefined
   const requiredDuffs = requiredCollateralDuffs(type)
   const requiredDashText = `${davToDash(requiredDuffs)} ${DASH_UNIT}`
+  const allCoins = useMemo(() => unifiedCollateralStepCoins(utxos, requiredDuffs), [utxos, requiredDuffs])
   const coins = useMemo(() => spendablePrepUtxos(utxos), [utxos])
   const coinByKey = useMemo(() => new Map(coins.map(coin => [prepOutpointKey(coin), coin])), [coins])
-  const targetOptions = useMemo(
-    () => collateralTargetAddressOptions(receiving, claimedAddresses, labelsByAddress),
-    [receiving, claimedAddresses, labelsByAddress],
+  const activeExactCoin = useMemo(
+    () => (activeExactOutpoint == null
+      ? null
+      : allCoins.find(coin => prepOutpointKey(coin) === activeExactOutpoint) ?? null),
+    [allCoins, activeExactOutpoint],
+  )
+  const hasCombineCandidates = useMemo(
+    () => coins.some(coin => !isExactCollateralCoin(coin, requiredDuffs)),
+    [coins, requiredDuffs],
   )
 
   const [targetAddress, setTargetAddress] = useState('')
@@ -88,6 +106,7 @@ export default function PrepareCollateralSection({
   const [coinMode, setCoinMode] = useState<CollateralPrepCoinMode>('auto')
   const [manualKeys, setManualKeys] = useState<string[]>([])
   const [creatingAddress, setCreatingAddress] = useState(false)
+  const [deriveAddressError, setDeriveAddressError] = useState<string | null>(null)
   const [feeDuffs, setFeeDuffs] = useState<bigint | null>(null)
   const [feeEstimating, setFeeEstimating] = useState(false)
   const [feeError, setFeeError] = useState<string | null>(null)
@@ -108,17 +127,20 @@ export default function PrepareCollateralSection({
 
   const deriveFreshTargetAddress = async (): Promise<void> => {
     setCreatingAddress(true)
+    setDeriveAddressError(null)
     try {
       const created = await API.addWalletAddress(walletId, false)
       setTargetAddress(created)
       setLabel(current => nextCollateralLabelOnAddressChange('', created, current, badgeFor, type))
       invalidateAsyncCache('receiveAddress', walletId)
       void refreshAddresses(walletId)
-    } catch {
+    } catch (err) {
       const fallback = fallbackCollateralTargetAddress(receiving)
       if (fallback !== '') {
         setTargetAddress(fallback)
         setLabel(nextCollateralLabelOnAddressChange('', fallback, '', badgeFor, type))
+      } else {
+        setDeriveAddressError(getErrorMessage(err))
       }
     } finally {
       setCreatingAddress(false)
@@ -126,17 +148,27 @@ export default function PrepareCollateralSection({
   }
 
   useEffect(() => {
-    if (addressesLoading || targetAddress !== '' || creatingAddress) return
+    if (activeExactOutpoint != null || addressesLoading || targetAddress !== '' || creatingAddress) return
     const freshClean = pickFreshCollateralTargetAddress(receiving, claimedAddresses, labelsByAddress)
     if (freshClean != null) {
+      setDeriveAddressError(null)
       setTargetAddress(freshClean)
       return
     }
-    if (!autoDerivedRef.current && receiving.length > 0) {
+    if (!autoDerivedRef.current && addressesError == null) {
       autoDerivedRef.current = true
       void deriveFreshTargetAddress()
     }
-  }, [addressesLoading, targetAddress, creatingAddress, receiving, claimedAddresses, labelsByAddress])
+  }, [
+    activeExactOutpoint,
+    addressesLoading,
+    addressesError,
+    targetAddress,
+    creatingAddress,
+    receiving,
+    claimedAddresses,
+    labelsByAddress,
+  ])
 
   const selectedKeys = useMemo(
     () => resolveCollateralPrepSelectedKeys(coinMode, coins, requiredDuffs, manualKeys),
@@ -157,7 +189,7 @@ export default function PrepareCollateralSection({
   const addressValid = isValidDashChangeAddress(targetAddress, addressNetwork)
 
   useEffect(() => {
-    if (!addressValid || selectedOutpoints.length === 0 || selectedTotal < requiredDuffs) {
+    if (activeExactOutpoint != null || !addressValid || selectedOutpoints.length === 0 || selectedTotal < requiredDuffs) {
       setFeeDuffs(null)
       setFeeEstimating(false)
       setFeeError(null)
@@ -187,7 +219,7 @@ export default function PrepareCollateralSection({
     return () => {
       cancelled = true
     }
-  }, [walletId, targetAddress, addressValid, selectedOutpoints, selectedTotal, requiredDuffs])
+  }, [activeExactOutpoint, walletId, targetAddress, addressValid, selectedOutpoints, selectedTotal, requiredDuffs])
 
   const summary = useMemo(
     () => summarizeCollateralPrepSelection(coins, selectedKeySet, requiredDuffs, feeDuffs),
@@ -257,6 +289,10 @@ export default function PrepareCollateralSection({
       void refreshAddresses(walletId)
       void refreshBalance(walletId)
       setPassword('')
+      setTargetAddress('')
+      setDeriveAddressError(null)
+      autoDerivedRef.current = false
+      setLabel(defaultCollateralLabel(type))
       onPrepared(createdOutpoint, refreshedUtxos)
     } catch (err) {
       setSubmitError(getErrorMessage(err))
@@ -265,227 +301,390 @@ export default function PrepareCollateralSection({
     }
   }
 
+  const addressFailure = addressesError ?? deriveAddressError
+
   return (
     <div className={'flex flex-col gap-3'}>
-      <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
-        <div className={'flex flex-col gap-1.5'}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
-            {MASTERNODE_COLLATERAL_PREP_COPY.targetAddressSection}
-          </Text>
-          <RecipientInput
-            compact
-            hideAddressBook
-            hideValueBadge
-            value={targetAddress}
-            onChange={value => {
-              setSubmitError(null)
-              setLabel(current => nextCollateralLabelOnAddressChange(targetAddress, value, current, badgeFor, type))
-              setTargetAddress(value)
-            }}
-            data={MASTERNODE_PREP_COLLATERAL_RECIPIENT_COPY}
-            ariaLabel={MASTERNODE_PREP_COLLATERAL_RECIPIENT_COPY.label}
-            validate={addr => isValidDashChangeAddress(addr, addressNetwork)}
-            ownOptions={targetOptions}
-            ownOptionsHeading={MASTERNODE_YOUR_ADDRESSES_HEADING}
-            ownOptionsLoading={addressesLoading}
-            ownOptionsError={addressesError}
-            onRetryOwnOptions={onRetryAddresses}
-          />
-        </div>
-
-        <div className={'flex flex-col gap-1.5'}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
-            {MASTERNODE_COLLATERAL_PREP_COPY.labelField}
-          </Text>
-          <MasternodeFieldInput
-            value={label}
-            onChange={setLabel}
-            maxLength={RECEIVE_LABEL_MAX_LENGTH}
-            ariaLabel={MASTERNODE_COLLATERAL_PREP_COPY.labelField}
-            placeholder={MASTERNODE_COLLATERAL_PREP_COPY.labelPlaceholder}
-            disabled={submitting}
-          />
-        </div>
-      </div>
-
       <div className={`flex flex-col gap-2.5 ${SURFACE_SECTION}`}>
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
-            {MASTERNODE_COLLATERAL_PREP_COPY.coinsSection}
-          </Text>
-          <div className={'flex flex-wrap items-center gap-2'}>
-            {coinMode === 'manual' && coins.length > 0 && (
-              <div className={'flex items-center gap-1.5'}>
-                <button
-                  type={'button'}
-                  disabled={submitting}
-                  onClick={() => setManualKeys(coins.map(prepOutpointKey))}
-                  className={CHIP_ACTION}
-                >
-                  {MASTERNODE_COLLATERAL_PREP_COPY.selectAllButton}
-                </button>
-                <button
-                  type={'button'}
-                  disabled={submitting || selectedKeys.length === 0}
-                  onClick={() => setManualKeys([])}
-                  className={CHIP_ACTION}
-                >
-                  {MASTERNODE_COLLATERAL_PREP_COPY.clearSelectionButton}
-                </button>
-              </div>
-            )}
-            <SegmentedControl
-              appearance={SegmentedControlAppearance.Pill}
-              ariaLabel={MASTERNODE_COLLATERAL_PREP_COPY.coinModeAriaLabel}
-              options={COLLATERAL_PREP_COIN_MODE_OPTIONS}
-              value={coinMode}
-              onChange={handleCoinModeChange}
+          <div className={'flex items-center gap-1.5'}>
+            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
+              {MASTERNODE_COLLATERAL_PREP_COPY.coinsSection}
+            </Text>
+            <InfoTooltip
+              content={MASTERNODE_COLLATERAL_PREP_COPY.coinsTooltip}
+              ariaLabel={MASTERNODE_COLLATERAL_PREP_COPY.coinsSection}
+              className={'size-4 [&_svg]:size-3.5'}
             />
           </div>
+          {activeExactOutpoint == null && (
+            <div className={'flex flex-wrap items-center gap-2'}>
+              {coinMode === 'manual' && coins.length > 0 && (
+                <div className={'flex items-center gap-1.5'}>
+                  <button
+                    type={'button'}
+                    disabled={submitting}
+                    onClick={() => setManualKeys(coins.map(prepOutpointKey))}
+                    className={CHIP_ACTION}
+                  >
+                    {MASTERNODE_COLLATERAL_PREP_COPY.selectAllButton}
+                  </button>
+                  <button
+                    type={'button'}
+                    disabled={submitting || selectedKeys.length === 0}
+                    onClick={() => setManualKeys([])}
+                    className={CHIP_ACTION}
+                  >
+                    {MASTERNODE_COLLATERAL_PREP_COPY.clearSelectionButton}
+                  </button>
+                </div>
+              )}
+              <SegmentedControl
+                appearance={SegmentedControlAppearance.Pill}
+                ariaLabel={MASTERNODE_COLLATERAL_PREP_COPY.coinModeAriaLabel}
+                options={COLLATERAL_PREP_COIN_MODE_OPTIONS}
+                value={coinMode}
+                onChange={handleCoinModeChange}
+              />
+            </div>
+          )}
         </div>
 
-        {coins.length === 0 ? (
+        {utxosLoading && allCoins.length === 0 ? (
+          <ListSkeleton rows={2} rowClassName={'h-14 rounded-[.875rem]'} />
+        ) : utxosError != null && allCoins.length === 0 ? (
+          <Alert
+            tone={AlertTone.Warning}
+            icon={<InfoCircleIcon size={14} />}
+            title={utxosError}
+            actions={(
+              <Button type={'button'} size={'compact'} colorScheme={'primary-light'} onClick={onRetryUtxos}>
+                {REGISTER_WIZARD_COPY.retryButton}
+              </Button>
+            )}
+          />
+        ) : allCoins.length === 0 ? (
           <Text size={12} weight={'medium'} color={'brand'} opacity={60}>
             {MASTERNODE_COLLATERAL_PREP_COPY.noSpendableCoins}
           </Text>
         ) : (
-          <FadingScrollArea enabled className={'max-h-48 overflow-y-auto scrollbar-hide'}>
-            <div className={'flex flex-col gap-2 pr-0.5'}>
-              {coins.map(coin => {
-                const key = prepOutpointKey(coin)
-                const addrBadge = badgeFor(coin.address)
-                const confirming = isConfirmingUtxo(coin)
-                return (
-                  <CheckRow
-                    key={key}
-                    label={`Select ${coin.address}, ${key}`}
-                    checked={selectedKeySet.has(key)}
-                    disabled={submitting || coinMode === 'auto'}
-                    dimChildren={false}
-                    onChange={checked => toggleManualCoin(key, checked)}
-                  >
-                    <div className={'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5'}>
-                      <div className={'flex min-w-0 items-center gap-1.5'}>
-                        <HighlightedIdentifier className={ADDRESS_ROW_IDENTIFIER_CLASS}>
-                          {coin.address}
+          <>
+            {utxosError != null && (
+              <Alert
+                tone={AlertTone.Warning}
+                icon={<InfoCircleIcon size={14} />}
+                title={utxosError}
+                actions={(
+                  <Button type={'button'} size={'compact'} colorScheme={'primary-light'} onClick={onRetryUtxos}>
+                    {REGISTER_WIZARD_COPY.retryButton}
+                  </Button>
+                )}
+              />
+            )}
+            <FadingScrollArea enabled className={'max-h-48 overflow-y-auto scrollbar-hide'}>
+              <div className={'flex flex-col gap-2 pr-0.5'}>
+                {allCoins.map(coin => {
+                  const key = prepOutpointKey(coin)
+                  const addrBadge = badgeFor(coin.address)
+                  const confirming = isConfirmingUtxo(coin)
+                  const exact = isExactCollateralCoin(coin, requiredDuffs)
+                  const sufficient = !exact && isSufficientPrepCoin(coin, requiredDuffs)
+                  const isSuccessTone = exact || sufficient
+                  const checked = activeExactOutpoint != null
+                    ? key === activeExactOutpoint
+                    : selectedKeySet.has(key)
+                  const disabled = activeExactOutpoint != null
+                    ? submitting
+                    : submitting || (coinMode === 'auto' && !exact)
+
+                  return (
+                    <CheckRow
+                      key={key}
+                      label={`Select ${coin.address}, ${key}`}
+                      checked={checked}
+                      disabled={disabled}
+                      dimChildren={false}
+                      tone={isSuccessTone ? 'success' : 'default'}
+                      onChange={nextChecked => {
+                        setSubmitError(null)
+                        if (activeExactOutpoint != null) {
+                          if (exact) {
+                            onSelectExactOutpoint(key)
+                          } else {
+                            onStartCombineMode()
+                            setCoinMode('manual')
+                            setManualKeys([key])
+                          }
+                          return
+                        }
+                        if (exact) {
+                          onSelectExactOutpoint(key)
+                          return
+                        }
+                        if (coinMode === 'auto') {
+                          setCoinMode('manual')
+                          setManualKeys([key])
+                          return
+                        }
+                        toggleManualCoin(key, nextChecked)
+                      }}
+                    >
+                      <div className={'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5'}>
+                        <div className={'flex min-w-0 flex-wrap items-center gap-1.5'}>
+                          <HighlightedIdentifier className={ADDRESS_ROW_IDENTIFIER_CLASS}>
+                            {coin.address}
+                          </HighlightedIdentifier>
+                          {addrBadge && <CustomBadge variant={'accent'} size={'xs'} text={addrBadge} className={'shrink-0'} />}
+                          {isSuccessTone && (
+                            <span className={'inline-flex shrink-0 items-center rounded-full bg-dash-green-15 px-2 py-0.5 text-[10px] font-semibold text-dash-green'}>
+                              {exact ? MASTERNODE_COLLATERAL_PREP_COPY.exactCollateralBadge : MASTERNODE_COLLATERAL_PREP_COPY.sufficientCoinBadge}
+                            </span>
+                          )}
+                          {confirming && (
+                            <CustomBadge
+                              variant={'warning'}
+                              size={'xs'}
+                              text={MASTERNODE_COLLATERAL_PREP_COPY.confirmingCoinBadge}
+                              className={'shrink-0'}
+                            />
+                          )}
+                        </div>
+                        <Text
+                          reset
+                          size={14}
+                          weight={'bold'}
+                          color={'brand'}
+                          className={`whitespace-nowrap text-right tabular-nums ${isSuccessTone ? 'text-dash-green!' : ''}`}
+                        >
+                          {`${davToDash(coin.satoshis)} ${DASH_UNIT}`}
+                        </Text>
+                        <HighlightedIdentifier className={'col-span-2 min-w-0 font-mono! text-[0.625rem]! leading-[1.1rem]! break-all opacity-65'}>
+                          {key}
                         </HighlightedIdentifier>
-                        {addrBadge && <CustomBadge variant={'accent'} size={'xs'} text={addrBadge} className={'shrink-0'} />}
-                        {confirming && (
-                          <CustomBadge
-                            variant={'warning'}
-                            size={'xs'}
-                            text={MASTERNODE_COLLATERAL_PREP_COPY.confirmingCoinBadge}
-                            className={'shrink-0'}
-                          />
-                        )}
                       </div>
-                      <Text reset size={14} weight={'bold'} color={'brand'} className={'whitespace-nowrap text-right tabular-nums'}>
-                        {`${davToDash(coin.satoshis)} ${DASH_UNIT}`}
-                      </Text>
-                      <Text reset size={10} weight={'medium'} color={'brand'} opacity={50} className={'col-span-2 truncate font-mono'}>
-                        {key}
-                      </Text>
-                    </div>
-                  </CheckRow>
-                )
-              })}
+                    </CheckRow>
+                  )
+                })}
+              </div>
+            </FadingScrollArea>
+          </>
+        )}
+      </div>
+
+      {activeExactOutpoint != null ? (
+        <>
+          <Alert
+            tone={AlertTone.Success}
+            icon={<InfoCircleIcon size={14} />}
+            title={preparedOutpoint === activeExactOutpoint
+              ? MASTERNODE_COLLATERAL_PREP_COPY.preparedTitle
+              : MASTERNODE_COLLATERAL_PREP_COPY.exactSelectedReadyTitle}
+            description={preparedOutpoint === activeExactOutpoint
+              ? MASTERNODE_COLLATERAL_PREP_COPY.preparedDescription
+              : MASTERNODE_COLLATERAL_PREP_COPY.exactSelectedReadyDescription}
+          />
+          {activeExactCoin != null && isConfirmingUtxo(activeExactCoin) && (
+            <Alert
+              tone={AlertTone.Warning}
+              icon={<InfoCircleIcon size={14} />}
+              title={REGISTER_MASTERNODE_COPY.confirmingCollateralTitle}
+              description={REGISTER_MASTERNODE_COPY.confirmingCollateralDescription}
+            />
+          )}
+          {hasCombineCandidates && (
+            <div className={'flex items-center justify-start'}>
+              <button
+                type={'button'}
+                disabled={submitting}
+                onClick={() => {
+                  setSubmitError(null)
+                  onStartCombineMode()
+                }}
+                className={CHIP_ACTION}
+              >
+                {MASTERNODE_COLLATERAL_PREP_COPY.combineOtherCoinsButton}
+              </button>
             </div>
-          </FadingScrollArea>
-        )}
-      </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
+            <div className={'flex flex-col gap-1.5'}>
+              <div className={'flex items-center gap-1.5'}>
+                <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
+                  {MASTERNODE_COLLATERAL_PREP_COPY.targetAddressSection}
+                </Text>
+                <InfoTooltip
+                  content={MASTERNODE_COLLATERAL_PREP_COPY.targetAddressTooltip}
+                  ariaLabel={MASTERNODE_COLLATERAL_PREP_COPY.targetAddressSection}
+                  className={'size-4 [&_svg]:size-3.5'}
+                />
+              </div>
+              {(addressesLoading || creatingAddress) && targetAddress === '' ? (
+                <ListSkeleton rows={1} rowClassName={'h-[3.25rem] rounded-2xl'} />
+              ) : addressFailure != null && targetAddress === '' ? (
+                <Alert
+                  tone={AlertTone.Warning}
+                  icon={<InfoCircleIcon size={14} />}
+                  title={addressFailure}
+                  actions={(
+                    <Button
+                      type={'button'}
+                      size={'compact'}
+                      colorScheme={'primary-light'}
+                      onClick={() => {
+                        setDeriveAddressError(null)
+                        autoDerivedRef.current = false
+                        onRetryAddresses()
+                      }}
+                    >
+                      {REGISTER_WIZARD_COPY.retryButton}
+                    </Button>
+                  )}
+                />
+              ) : targetAddress === '' ? (
+                <ListSkeleton rows={1} rowClassName={'h-[3.25rem] rounded-2xl'} />
+              ) : (
+                <div className={'min-h-[3.25rem] flex items-center justify-between gap-2 rounded-2xl dash-block px-4 py-2.5'}>
+                  <HighlightedIdentifier className={'min-w-0 flex-1 font-mono! text-xs! break-all'}>
+                    {targetAddress}
+                  </HighlightedIdentifier>
+                  <CopyButton text={targetAddress} className={'shrink-0'} />
+                </div>
+              )}
+            </div>
 
-      <div className={`flex flex-col gap-2 ${SURFACE_SECTION}`}>
-        <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
-          {MASTERNODE_COLLATERAL_PREP_COPY.summarySection}
-        </Text>
-        <div className={'flex items-center justify-between gap-4'}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={60}>
-            {MASTERNODE_COLLATERAL_PREP_COPY.collateralOutputLabel}
-          </Text>
-          <Text size={12} weight={'extrabold'} color={'brand'} className={'tabular-nums'}>
-            {requiredDashText}
-          </Text>
-        </div>
-        <div className={'flex items-center justify-between gap-4'}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={60}>
-            {MASTERNODE_COLLATERAL_PREP_COPY.selectedInputsLabel}
-          </Text>
-          <Text size={12} weight={'medium'} color={'brand'} className={'tabular-nums'}>
-            {`${summary.selectedCount} · ${davToDash(summary.selectedTotal)} ${DASH_UNIT}`}
-          </Text>
-        </div>
-        <div className={'flex items-center justify-between gap-4'}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={60}>
-            {MASTERNODE_COLLATERAL_PREP_COPY.networkFeeLabel}
-          </Text>
-          <Text size={12} weight={'medium'} color={'brand'} className={'tabular-nums'}>
-            {feeEstimating
-              ? MASTERNODE_COLLATERAL_PREP_COPY.estimatingFee
-              : summary.feeDuffs != null
-                ? `${davToDash(summary.feeDuffs)} ${DASH_UNIT}`
-                : '—'}
-          </Text>
-        </div>
-        {summary.changeDuffs != null && (
-          <div className={'flex items-center justify-between gap-4'}>
-            <Text size={12} weight={'medium'} color={'brand'} opacity={60}>
-              {MASTERNODE_COLLATERAL_PREP_COPY.changeReturnedLabel}
-            </Text>
-            <Text size={12} weight={'medium'} color={'brand'} className={'tabular-nums'}>
-              {`${davToDash(summary.changeDuffs)} ${DASH_UNIT}`}
-            </Text>
+            <div className={'flex flex-col gap-1.5'}>
+              <div className={'flex items-center gap-1.5'}>
+                <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
+                  {MASTERNODE_COLLATERAL_PREP_COPY.labelField}
+                </Text>
+                <InfoTooltip
+                  content={MASTERNODE_COLLATERAL_PREP_COPY.labelTooltip}
+                  ariaLabel={MASTERNODE_COLLATERAL_PREP_COPY.labelField}
+                  className={'size-4 [&_svg]:size-3.5'}
+                />
+              </div>
+              <MasternodeFieldInput
+                value={label}
+                onChange={setLabel}
+                maxLength={RECEIVE_LABEL_MAX_LENGTH}
+                ariaLabel={MASTERNODE_COLLATERAL_PREP_COPY.labelField}
+                placeholder={MASTERNODE_COLLATERAL_PREP_COPY.labelPlaceholder}
+                disabled={submitting}
+              />
+            </div>
           </div>
-        )}
-      </div>
 
-      {summary.shortfallDuffs > 0n && (
-        <Alert
-          tone={AlertTone.Warning}
-          icon={<InfoCircleIcon size={16} color={'currentColor'} />}
-          title={`${MASTERNODE_COLLATERAL_PREP_COPY.insufficientPrefix} ${davToDash(summary.shortfallDuffs)} ${MASTERNODE_COLLATERAL_PREP_COPY.insufficientSuffix}`}
-        />
+          <div className={`flex flex-col gap-2 ${SURFACE_SECTION}`}>
+            <div className={'flex items-center gap-1.5'}>
+              <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
+                {MASTERNODE_COLLATERAL_PREP_COPY.summarySection}
+              </Text>
+              <InfoTooltip
+                content={MASTERNODE_COLLATERAL_PREP_COPY.summaryTooltip}
+                ariaLabel={MASTERNODE_COLLATERAL_PREP_COPY.summarySection}
+                className={'size-4 [&_svg]:size-3.5'}
+              />
+            </div>
+            <div className={'flex items-center justify-between gap-4'}>
+              <Text size={12} weight={'medium'} color={'brand'} opacity={60}>
+                {MASTERNODE_COLLATERAL_PREP_COPY.collateralOutputLabel}
+              </Text>
+              <Text size={12} weight={'extrabold'} color={'brand'} className={'tabular-nums'}>
+                {requiredDashText}
+              </Text>
+            </div>
+            <div className={'flex items-center justify-between gap-4'}>
+              <Text size={12} weight={'medium'} color={'brand'} opacity={60}>
+                {MASTERNODE_COLLATERAL_PREP_COPY.selectedInputsLabel}
+              </Text>
+              <Text size={12} weight={'medium'} color={'brand'} className={'tabular-nums'}>
+                {`${summary.selectedCount} · ${davToDash(summary.selectedTotal)} ${DASH_UNIT}`}
+              </Text>
+            </div>
+            <div className={'flex items-center justify-between gap-4'}>
+              <Text size={12} weight={'medium'} color={'brand'} opacity={60}>
+                {MASTERNODE_COLLATERAL_PREP_COPY.networkFeeLabel}
+              </Text>
+              <Text size={12} weight={'medium'} color={'brand'} className={'tabular-nums'}>
+                {feeEstimating
+                  ? MASTERNODE_COLLATERAL_PREP_COPY.estimatingFee
+                  : summary.feeDuffs != null
+                    ? `${davToDash(summary.feeDuffs)} ${DASH_UNIT}`
+                    : '—'}
+              </Text>
+            </div>
+            {summary.changeDuffs != null && (
+              <div className={'flex items-center justify-between gap-4'}>
+                <Text size={12} weight={'medium'} color={'brand'} opacity={60}>
+                  {MASTERNODE_COLLATERAL_PREP_COPY.changeReturnedLabel}
+                </Text>
+                <Text size={12} weight={'medium'} color={'brand'} className={'tabular-nums'}>
+                  {`${davToDash(summary.changeDuffs)} ${DASH_UNIT}`}
+                </Text>
+              </div>
+            )}
+          </div>
+
+          {summary.shortfallDuffs > 0n && (
+            <Alert
+              tone={AlertTone.Warning}
+              icon={<InfoCircleIcon size={16} color={'currentColor'} />}
+              title={`${MASTERNODE_COLLATERAL_PREP_COPY.insufficientPrefix} ${davToDash(summary.shortfallDuffs)} ${MASTERNODE_COLLATERAL_PREP_COPY.insufficientSuffix}`}
+            />
+          )}
+
+          {feeError != null && summary.shortfallDuffs === 0n && (
+            <Alert
+              tone={AlertTone.Warning}
+              icon={<InfoCircleIcon size={16} color={'currentColor'} />}
+              title={feeError}
+            />
+          )}
+
+          {submitError != null && <CopyableError message={submitError} />}
+
+          <div className={`flex flex-col gap-2.5 ${SURFACE_SECTION}`}>
+            <div className={'flex items-center gap-1.5'}>
+              <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
+                {MASTERNODE_COLLATERAL_PREP_COPY.authorizeLabel}
+              </Text>
+              <InfoTooltip
+                content={MASTERNODE_COLLATERAL_PREP_COPY.authorizeTooltip}
+                ariaLabel={MASTERNODE_COLLATERAL_PREP_COPY.authorizeLabel}
+                className={'size-4 [&_svg]:size-3.5'}
+              />
+            </div>
+            <PasswordField
+              id={'prepare-collateral-password'}
+              value={password}
+              onChange={value => {
+                setPasswordInvalid(false)
+                setSubmitError(null)
+                setPassword(value)
+              }}
+              onSubmit={() => { void handleSubmit() }}
+              error={passwordInvalid ? INVALID_WALLET_PASSWORD_MESSAGE : null}
+              disabled={submitting}
+              autoFocus={false}
+            />
+            <Button
+              type={'button'}
+              colorScheme={'primary'}
+              size={'md'}
+              disabled={!canSubmit}
+              onClick={() => { void handleSubmit() }}
+              className={'mt-1 w-full rounded-[.9375rem]'}
+            >
+              {submitting
+                ? MASTERNODE_COLLATERAL_PREP_COPY.submitting
+                : MASTERNODE_COLLATERAL_PREP_COPY.submitButton}
+            </Button>
+          </div>
+        </>
       )}
-
-      {feeError != null && summary.shortfallDuffs === 0n && (
-        <Alert
-          tone={AlertTone.Warning}
-          icon={<InfoCircleIcon size={16} color={'currentColor'} />}
-          title={feeError}
-        />
-      )}
-
-      {submitError != null && <CopyableError message={submitError} />}
-
-      <div className={`flex flex-col gap-2.5 ${SURFACE_SECTION}`}>
-        <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
-          {MASTERNODE_COLLATERAL_PREP_COPY.authorizeLabel}
-        </Text>
-        <PasswordField
-          id={'prepare-collateral-password'}
-          value={password}
-          onChange={value => {
-            setPasswordInvalid(false)
-            setSubmitError(null)
-            setPassword(value)
-          }}
-          onSubmit={() => { void handleSubmit() }}
-          error={passwordInvalid ? INVALID_WALLET_PASSWORD_MESSAGE : null}
-          disabled={submitting}
-          autoFocus={false}
-        />
-        <Button
-          type={'button'}
-          colorScheme={'primary'}
-          size={'md'}
-          disabled={!canSubmit}
-          onClick={() => { void handleSubmit() }}
-          className={'mt-1 w-full rounded-[.9375rem]'}
-        >
-          {submitting
-            ? MASTERNODE_COLLATERAL_PREP_COPY.submitting
-            : MASTERNODE_COLLATERAL_PREP_COPY.submitButton}
-        </Button>
-      </div>
     </div>
   )
 }

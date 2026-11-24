@@ -9,6 +9,8 @@ import type {
 } from '@renderer/types/MasternodeRegistrationWizard'
 import type { SegmentOption } from '@renderer/types/SegmentedControl'
 
+export const COMBINE_COLLATERAL_SELECTION = '__combine__'
+
 export const REGISTER_WIZARD_STEPS: readonly RegisterWizardStepMeta[] = [
   { id: 'type', label: 'Node Type' },
   { id: 'collateral', label: 'Prepare Wallet' },
@@ -19,7 +21,6 @@ export const REGISTER_WIZARD_STEPS: readonly RegisterWizardStepMeta[] = [
 
 export const REGISTER_WIZARD_COLLATERAL_SOURCE_OPTIONS: SegmentOption<ResolvedRegistrationCollateralSource>[] = [
   { value: 'prepare', label: 'Prepare wallet' },
-  { value: 'wallet', label: 'Wallet UTXO' },
   { value: 'manual', label: 'Manual outpoint' },
 ]
 
@@ -49,6 +50,28 @@ export const REGISTER_WIZARD_SERVICE_MODE_OPTIONS: SegmentOption<RegistrationSer
 ]
 
 export const OPERATOR_REWARD_PRESETS = ['0', '5', '10', '25'] as const
+
+export const REGISTER_WIZARD_TOOLTIPS = {
+  nodeType: 'Choose Regular (1,000 DASH collateral, Core L1 services, 1× DAO vote) or Evonode (4,000 DASH collateral, Core + Dash Platform/DAPI, 4× DAO vote).',
+  collateralStep: 'DIP-3 requires one unspent output matching the exact collateral amount in your wallet (or via a manual outpoint for an external/hardware wallet).',
+  manualTxid: '64-character hex transaction ID containing the exact collateral output (for example from an external or hardware wallet).',
+  manualVout: 'Zero-based output index (vout) of the exact collateral amount inside that transaction.',
+  addressesStep: 'Configure the DIP-3 payout address and owner, voting, and operator keys used to manage rewards, governance votes, and node updates.',
+  payoutKey: 'Dash Core address that receives the owner share of masternode block rewards.',
+  ownerKey: 'P2PKH owner key controlling registrar updates (ProUpRegTx). Defaults to a DIP-9 key derived from this wallet seed.',
+  votingKey: 'P2PKH key authorized to cast DAO governance votes for this masternode. Defaults to a DIP-9 key derived from this wallet.',
+  operatorKey: '96-hex-character BLS public key given to the server operator to sign blocks/quorums and submit ProUpServTx updates.',
+  operatorReward: 'Percentage (0–100%, stored in basis points) of block rewards shared with the masternode operator.',
+  operatorPayout: 'Optional Dash address for the operator reward share; finalized on-chain when the operator submits Update service.',
+  networkStep: 'Configure your node public IP:port endpoint (and Tenderdash Node ID and ports for Evonodes), or defer setup until the server is ready.',
+  serviceEndpoint: 'Assign the node public IPv4 address and Core P2P port now, or leave unassigned (0.0.0.0:0) so the operator can set it later via Update service.',
+  platformNodeId: '40-hex-character Tenderdash node ID generated on your Evonode server for Dash Platform consensus.',
+  platformPorts: 'Evonode Tenderdash ports: P2P (26656 mainnet / 36656 testnet) for Platform consensus and HTTP/DAPI (443 mainnet / 1443 testnet) for client queries.',
+  reviewStep: 'Verify the selected masternode tier and collateral outpoint before building and signing the ProRegTx registration.',
+  feePreview: 'Inspect the network fee, selected fee inputs, and change returned for the ProRegTx transaction.',
+  customFees: 'Override automatic coin selection to pay the ProRegTx network fee and receive change from a specific funded P2PKH wallet address.',
+  authorize: 'Enter your wallet password to unlock local keys, sign the ProRegTx transaction, and broadcast it to the Dash network.',
+} as const
 
 export const REGISTER_WIZARD_COPY = {
   pageTitle: 'Register masternode',

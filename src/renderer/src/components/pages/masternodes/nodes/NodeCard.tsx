@@ -1,5 +1,4 @@
 import {
-  CreditsIcon,
   HighlightedIdentifier,
   Text,
   Tooltip,
@@ -7,6 +6,7 @@ import {
 import {
   ChevronIcon,
   CopyIcon2,
+  EvoServerIcon,
   ExternalLinkIcon,
   ServerIcon,
 } from '@renderer/components/dash-ui-kit-extended/icons'
@@ -109,7 +109,7 @@ export default function NodeCard({ node, labelsByAddress, onOpen }: NodeCardProp
                   : 'border-dash-brand/20 bg-dash-brand/10 text-dash-brand dark:border-dash-mint/20 dark:bg-dash-mint/10 dark:text-dash-mint'
               }`}
             >
-              {isEvo ? <CreditsIcon size={16} color={'currentColor'} /> : <ServerIcon size={16} color={'currentColor'} />}
+              {isEvo ? <EvoServerIcon size={16} color={'currentColor'} /> : <ServerIcon size={16} color={'currentColor'} />}
             </span>
             <div className={'flex min-w-0 flex-1 flex-col gap-1'}>
               <Text reset size={14} weight={'extrabold'} color={'brand'} className={'truncate'}>

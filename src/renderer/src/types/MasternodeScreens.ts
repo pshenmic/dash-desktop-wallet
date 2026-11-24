@@ -12,6 +12,7 @@ export interface NodesTabProps extends MasternodesPageProps {
   onShowMore: () => void
   onOpenNode: (proTxHash: string) => void
   onRegister: () => void
+  onImportKeys: () => void
 }
 
 export interface NodeDetailProps extends MasternodesPageProps {

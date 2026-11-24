@@ -3,6 +3,7 @@ import { PrivateKey } from 'dash-core-sdk'
 import type { ConnectionType, MasternodeDto, MasternodeKeyRole, OwnedMasternodeShareDto } from '@renderer/api/types'
 import { DUFFS_PER_DASH } from '@renderer/constants/balance'
 import { MANAGE_KEYS_COPY, NODES_TAB_COPY, NODE_CARD_COPY, NODE_DETAIL_COPY } from '@renderer/constants/masternodeNodes'
+import { COMBINE_COLLATERAL_SELECTION } from '@renderer/constants/masternodeRegistration'
 import { REGISTERING_MASTERNODE_STATUS } from '@renderer/constants/masternodes'
 import { MasternodeViewMode, NodeSegment, PayoutChoiceKind, RegistrarKeyChoiceKind } from '@renderer/enums/Masternodes'
 import { StatusPillTone } from '@renderer/enums/StatusPillTone'
@@ -956,9 +957,10 @@ describe('Masternode action builders', () => {
     expect(customOwnerDiff.dto?.votingAddress).toBe(ownerAddr)
     expect(customOwnerDiff.dto?.operatorPublicKey).toBe('ab'.repeat(48))
 
-    expect(resolveCollateralSource('auto', false)).toBe('prepare')
-    expect(resolveCollateralSource('auto', true)).toBe('wallet')
-    expect(resolveCollateralSource('manual', true)).toBe('manual')
+    expect(resolveCollateralSource('auto')).toBe('prepare')
+    expect(resolveCollateralSource('wallet')).toBe('prepare')
+    expect(resolveCollateralSource('prepare')).toBe('prepare')
+    expect(resolveCollateralSource('manual')).toBe('manual')
 
     const autoNoCollateral = validateRegistrationWizard(
       { ...baseDraft, collateralSource: 'auto' },
@@ -966,7 +968,7 @@ describe('Masternode action builders', () => {
       [],
       'testnet',
     )
-    expect(autoNoCollateral.step1Error).toContain('internal collateral transfer')
+    expect(autoNoCollateral.step1Error).toBe('Create an internal collateral transfer or enter a manual outpoint')
 
     const autoWithCollateral = validateRegistrationWizard(
       { ...baseDraft, collateralSource: 'auto', selectedCollateral: '' },
@@ -976,6 +978,37 @@ describe('Masternode action builders', () => {
     )
     expect(autoWithCollateral.step1Error).toBeNull()
     expect(autoWithCollateral.selectedCoin).toEqual(collateralCoin)
+
+    const prepareCombineMode = validateRegistrationWizard(
+      { ...baseDraft, collateralSource: 'prepare', selectedCollateral: COMBINE_COLLATERAL_SELECTION },
+      [collateralCoin],
+      [collateralCoin],
+      'testnet',
+    )
+    expect(prepareCombineMode.step1Error).toBe(
+      'Select an exact collateral UTXO, create an internal collateral transfer, or enter a manual outpoint',
+    )
+    expect(prepareCombineMode.selectedCoin).toBeNull()
+    expect(prepareCombineMode.dto).toBeNull()
+
+    const prepareWithExact = validateRegistrationWizard(
+      { ...baseDraft, collateralSource: 'prepare', selectedCollateral: `${txid}:0` },
+      [collateralCoin],
+      [collateralCoin],
+      'testnet',
+    )
+    expect(prepareWithExact.step1Error).toBeNull()
+    expect(prepareWithExact.selectedCoin).toEqual(collateralCoin)
+
+    const manualMissing = validateRegistrationWizard(
+      { ...baseDraft, collateralSource: 'manual', manualTxid: 'b'.repeat(64), manualVout: '1' },
+      [collateralCoin],
+      [collateralCoin],
+      'testnet',
+    )
+    expect(manualMissing.step1Error).toBeNull()
+    expect(manualMissing.manualOutpointMissingFromWallet).toBe(true)
+    expect(manualMissing.dto?.collateral).toEqual({ txid: 'b'.repeat(64), vout: 1 })
 
     const pendingNode = makeNode({
       proTxHash: '00'.repeat(32),

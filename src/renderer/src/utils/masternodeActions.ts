@@ -6,6 +6,7 @@ import type {
   Network,
   SelectableUtxo,
 } from '@renderer/api/types'
+import { COMBINE_COLLATERAL_SELECTION } from '@renderer/constants/masternodeRegistration'
 import {
   EVO_MASTERNODE_TYPE,
   MAINNET_CORE_PORT,
@@ -303,10 +304,8 @@ export function buildServiceUpdate(form: UpdateServiceFormInput): {
 
 export function resolveCollateralSource(
   source: RegistrationCollateralSource,
-  hasWalletCollateral: boolean,
 ): ResolvedRegistrationCollateralSource {
-  if (source !== 'auto') return source
-  return hasWalletCollateral ? 'wallet' : 'prepare'
+  return source === 'manual' ? 'manual' : 'prepare'
 }
 
 export function validateRegistrationWizard(
@@ -317,21 +316,23 @@ export function validateRegistrationWizard(
   defaultPayoutAddress: string | null = null,
 ): RegisterWizardValidation {
   const addressNetwork = network ?? undefined
-  const resolvedSource = resolveCollateralSource(draft.collateralSource, collateralCoins.length > 0)
+  const resolvedSource = resolveCollateralSource(draft.collateralSource)
   let collateralOutpoint = ''
   let selectedCoin: SelectableUtxo | null = null
   let manualOutpointMissingFromWallet = false
   let step1Error: string | null = null
 
   if (resolvedSource === 'prepare') {
-    step1Error = 'Create an internal collateral transfer, select a wallet UTXO, or enter a manual outpoint'
-  } else if (resolvedSource === 'wallet') {
-    const active = collateralCoins.find(coin => `${coin.txid}:${coin.vout}` === draft.selectedCollateral) ?? collateralCoins[0] ?? null
-    if (active == null) {
-      step1Error = 'Select an eligible collateral UTXO or enter a manual outpoint'
+    if (draft.selectedCollateral === COMBINE_COLLATERAL_SELECTION) {
+      step1Error = 'Select an exact collateral UTXO, create an internal collateral transfer, or enter a manual outpoint'
     } else {
-      selectedCoin = active
-      collateralOutpoint = `${active.txid}:${active.vout}`
+      const active = collateralCoins.find(coin => `${coin.txid}:${coin.vout}` === draft.selectedCollateral) ?? collateralCoins[0] ?? null
+      if (active != null) {
+        selectedCoin = active
+        collateralOutpoint = `${active.txid}:${active.vout}`
+      } else {
+        step1Error = 'Create an internal collateral transfer or enter a manual outpoint'
+      }
     }
   } else {
     const parsed = parseOutpoint(`${draft.manualTxid.trim()}:${draft.manualVout.trim()}`)

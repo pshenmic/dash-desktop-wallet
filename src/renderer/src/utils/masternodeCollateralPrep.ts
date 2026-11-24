@@ -1,5 +1,4 @@
 import type { SelectableUtxo, WalletAddressDto } from '@renderer/api/types'
-import { DASH_UNIT } from '@renderer/constants/balance'
 import {
   COLLATERAL_PREP_FEE_BUFFER_DUFFS,
   MASTERNODE_COLLATERAL_PREP_COPY,
@@ -10,10 +9,8 @@ import type {
   CollateralPrepCoinMode,
   CollateralPrepSummary,
 } from '@renderer/types/MasternodeCollateralPrep'
-import type { DropdownFieldOption } from '@renderer/types/DropdownField'
 import type { FeeSelectableUtxo, MasternodeType } from '@renderer/types/MasternodeRegistrationWizard'
 import type { ReceiveRequestDto } from '@renderer/types/ReceiveRequest'
-import { davToDash } from '@renderer/utils/balance'
 import { receiveCoreAddresses } from '@renderer/utils/receiveDefaults'
 
 export function requiredCollateralDuffs(type: MasternodeType): bigint {
@@ -22,6 +19,40 @@ export function requiredCollateralDuffs(type: MasternodeType): bigint {
 
 export function prepOutpointKey(utxo: Pick<SelectableUtxo, 'txid' | 'vout'>): string {
   return `${utxo.txid}:${utxo.vout}`
+}
+
+export function isExactCollateralCoin(coin: FeeSelectableUtxo, requiredDuffs: bigint): boolean {
+  return coin.collateral !== true && coin.satoshis === requiredDuffs
+}
+
+export function isSufficientPrepCoin(
+  coin: FeeSelectableUtxo,
+  requiredDuffs: bigint,
+  feeBufferDuffs: bigint = COLLATERAL_PREP_FEE_BUFFER_DUFFS,
+): boolean {
+  return !coin.isLocked && coin.collateral !== true && coin.satoshis >= requiredDuffs + feeBufferDuffs
+}
+
+export function isSuitableGreenUtxo(
+  coin: FeeSelectableUtxo,
+  requiredDuffs: bigint,
+  feeBufferDuffs: bigint = COLLATERAL_PREP_FEE_BUFFER_DUFFS,
+): boolean {
+  return isExactCollateralCoin(coin, requiredDuffs) || isSufficientPrepCoin(coin, requiredDuffs, feeBufferDuffs)
+}
+
+export function unifiedCollateralStepCoins(
+  utxos: FeeSelectableUtxo[],
+  requiredDuffs: bigint,
+): FeeSelectableUtxo[] {
+  const exact = utxos.filter(coin => isExactCollateralCoin(coin, requiredDuffs))
+  const exactSorted = [
+    ...exact.filter(coin => coin.height > 0),
+    ...exact.filter(coin => coin.height <= 0),
+  ]
+  const exactKeys = new Set(exactSorted.map(prepOutpointKey))
+  const remaining = spendablePrepUtxos(utxos).filter(coin => !exactKeys.has(prepOutpointKey(coin)))
+  return [...exactSorted, ...remaining]
 }
 
 export function spendablePrepUtxos(utxos: FeeSelectableUtxo[]): FeeSelectableUtxo[] {
@@ -175,35 +206,6 @@ export function nextCollateralLabelOnAddressChange(
     return defaultCollateralLabel(type)
   }
   return currentLabel
-}
-
-export function collateralTargetAddressOptions(
-  receiving: ReadonlyArray<WalletAddressDto>,
-  claimedAddresses: ReadonlySet<string>,
-  labelsByAddress: ReadonlyMap<string, string>,
-): DropdownFieldOption[] {
-  const fresh = receiveCoreAddresses([...receiving])
-  const pool = fresh.length > 0 ? fresh : receiving.filter(addr => !addr.isLocked)
-  const clean: WalletAddressDto[] = []
-  const labeled: WalletAddressDto[] = []
-  for (const addr of pool) {
-    const existingLabel = labelsByAddress.get(addr.address)?.trim() ?? ''
-    if (claimedAddresses.has(addr.address) || existingLabel !== '') {
-      labeled.push(addr)
-    } else {
-      clean.push(addr)
-    }
-  }
-  return [...clean, ...labeled].map(addr => {
-    const badge = labelsByAddress.get(addr.address)?.trim() || undefined
-    return {
-      value: addr.address,
-      label: addr.address,
-      ...(badge ? { badge } : {}),
-      description: 'Your receiving address',
-      metadata: [`${davToDash(addr.balance)} ${DASH_UNIT}`, `Tx count: ${addr.txCount}`],
-    }
-  })
 }
 
 export function planCollateralInvoiceSync(

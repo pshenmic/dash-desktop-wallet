@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { WalletAddressDto } from '@renderer/api/types'
+import { COLLATERAL_PREP_FEE_BUFFER_DUFFS } from '@renderer/constants/masternodeCollateralPrep'
 import type { FeeSelectableUtxo } from '@renderer/types/MasternodeRegistrationWizard'
 import {
   autoSelectCollateralPrepUtxos,
-  collateralTargetAddressOptions,
   defaultCollateralLabel,
   fallbackCollateralTargetAddress,
+  isExactCollateralCoin,
+  isSufficientPrepCoin,
+  isSuitableGreenUtxo,
   nextCollateralLabelOnAddressChange,
   pickFreshCollateralTargetAddress,
   planCollateralInvoiceSync,
@@ -16,6 +19,7 @@ import {
   spendablePrepTotal,
   spendablePrepUtxos,
   summarizeCollateralPrepSelection,
+  unifiedCollateralStepCoins,
 } from '@renderer/utils/masternodeCollateralPrep'
 
 function addr(address: string, overrides: Partial<WalletAddressDto> = {}): WalletAddressDto {
@@ -212,32 +216,67 @@ describe('masternodeCollateralPrep', () => {
     ).toBe(defaultCollateralLabel('Evo'))
   })
 
-  it('orders clean unclaimed unused receiving addresses before invoice-labeled ones', () => {
-    const claimed = new Set(['yInvoice1', 'yInvoice2'])
-    const labels = new Map<string, string>([
-      ['yInvoice1', 'Freelance Invoice #104'],
-      ['yInvoice2', 'Coffee & Snacks'],
-    ])
-    const receiving = [
-      addr('yLocked1', { isLocked: true }),
-      addr('yUsed1', { isUsed: true, txCount: 1, balance: 50_000_000n }),
-      addr('yInvoice1', { index: 1 }),
-      addr('yInvoice2', { index: 2 }),
-      addr('yClean1', { index: 3, label: 'Ignored legacy label' }),
-      addr('yClean2', { index: 4 }),
-    ]
+  it('classifies exact collateral coins, sufficient prep coins, and suitable green UTXOs', () => {
+    const required = requiredCollateralDuffs('Regular')
+    const exactUnlocked = coin('a'.repeat(64), 0, required)
+    const exactLocked = coin('b'.repeat(64), 0, required, { isLocked: true })
+    const exactExistingCollateral = coin('c'.repeat(64), 0, required, { collateral: true })
+    const sufficientCoin = coin('d'.repeat(64), 0, required + COLLATERAL_PREP_FEE_BUFFER_DUFFS)
+    const sufficientLocked = coin('e'.repeat(64), 0, required + COLLATERAL_PREP_FEE_BUFFER_DUFFS, { isLocked: true })
+    const slightlyShort = coin('f'.repeat(64), 0, required + COLLATERAL_PREP_FEE_BUFFER_DUFFS - 1n)
 
-    const options = collateralTargetAddressOptions(receiving, claimed, labels)
-    expect(options.map(option => option.value)).toEqual([
-      'yClean1',
-      'yClean2',
-      'yInvoice1',
-      'yInvoice2',
+    expect(isExactCollateralCoin(exactUnlocked, required)).toBe(true)
+    expect(isExactCollateralCoin(exactLocked, required)).toBe(true)
+    expect(isExactCollateralCoin(exactExistingCollateral, required)).toBe(false)
+    expect(isExactCollateralCoin(sufficientCoin, required)).toBe(false)
+
+    expect(isSufficientPrepCoin(sufficientCoin, required)).toBe(true)
+    expect(isSufficientPrepCoin(exactUnlocked, required)).toBe(false)
+    expect(isSufficientPrepCoin(sufficientLocked, required)).toBe(false)
+    expect(isSufficientPrepCoin(exactExistingCollateral, required)).toBe(false)
+    expect(isSufficientPrepCoin(slightlyShort, required)).toBe(false)
+
+    expect(isSuitableGreenUtxo(exactUnlocked, required)).toBe(true)
+    expect(isSuitableGreenUtxo(exactLocked, required)).toBe(true)
+    expect(isSuitableGreenUtxo(sufficientCoin, required)).toBe(true)
+    expect(isSuitableGreenUtxo(sufficientLocked, required)).toBe(false)
+    expect(isSuitableGreenUtxo(exactExistingCollateral, required)).toBe(false)
+    expect(isSuitableGreenUtxo(slightlyShort, required)).toBe(false)
+  })
+
+  it('orders unified collateral step coins with exact confirmed first, exact confirming, then remaining spendable largest-first', () => {
+    const required = requiredCollateralDuffs('Regular')
+    const confirmingExact = coin('1'.repeat(64), 0, required, { height: 0, confirmations: 0 })
+    const confirmedExact = coin('2'.repeat(64), 0, required, { height: 120 })
+    const lockedExact = coin('3'.repeat(64), 0, required, { height: 100, isLocked: true })
+    const existingCollateral = coin('4'.repeat(64), 0, required, { height: 100, collateral: true })
+    const lockedLarge = coin('5'.repeat(64), 0, 200_000_000_000n, { height: 100, isLocked: true })
+    const confirmingLarge = coin('6'.repeat(64), 0, 150_000_000_000n, { height: 0, confirmations: 0 })
+    const confirmedSmall = coin('7'.repeat(64), 0, 40_000_000_000n, { height: 100 })
+    const confirmedLarge = coin('8'.repeat(64), 0, 120_000_000_000n, { height: 100 })
+
+    const ordered = unifiedCollateralStepCoins(
+      [
+        confirmingExact,
+        existingCollateral,
+        lockedLarge,
+        confirmingLarge,
+        confirmedSmall,
+        confirmedExact,
+        confirmedLarge,
+        lockedExact,
+      ],
+      required,
+    )
+
+    expect(ordered.map(prepOutpointKey)).toEqual([
+      `${'2'.repeat(64)}:0`,
+      `${'3'.repeat(64)}:0`,
+      `${'1'.repeat(64)}:0`,
+      `${'8'.repeat(64)}:0`,
+      `${'7'.repeat(64)}:0`,
+      `${'6'.repeat(64)}:0`,
     ])
-    expect(options[0].badge).toBeUndefined()
-    expect(options[1].badge).toBeUndefined()
-    expect(options[2].badge).toBe('Freelance Invoice #104')
-    expect(options[3].badge).toBe('Coffee & Snacks')
   })
 
   it('plans Receive invoice creation, rename replacement, and deletion without touching raw address labels', () => {

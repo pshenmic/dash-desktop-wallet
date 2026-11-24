@@ -1,24 +1,22 @@
 import {
   Button,
   CheckIcon,
-  CreditsIcon,
   HighlightedIdentifier,
   InfoCircleIcon,
+  InfoTooltip,
   SuccessIcon,
   Text,
 } from '@renderer/components/dash-ui-kit-extended'
-import { ServerIcon } from '@renderer/components/dash-ui-kit-extended/icons'
+import { EvoServerIcon, ServerIcon } from '@renderer/components/dash-ui-kit-extended/icons'
 import RecipientInput from '@renderer/components/pages/transfer/RecipientInput'
 import Alert from '@renderer/components/ui/Alert'
 import Checkbox from '@renderer/components/ui/Checkbox'
 import CopyButton from '@renderer/components/ui/CopyButton'
 import CopyableError from '@renderer/components/ui/CopyableError'
 import CustomBadge from '@renderer/components/ui/CustomBadge'
-import DropdownField from '@renderer/components/ui/DropdownField'
 import HashField from '@renderer/components/ui/HashField'
 import PasswordField from '@renderer/components/ui/PasswordField'
 import SegmentedControl from '@renderer/components/ui/SegmentedControl'
-import ListSkeleton from '@renderer/components/ui/Skeleton'
 import Spinner from '@renderer/components/ui/Spinner'
 import { INVALID_WALLET_PASSWORD_MESSAGE } from '@renderer/constants'
 import { DASH_UNIT } from '@renderer/constants/balance'
@@ -34,6 +32,7 @@ import {
 import { REGISTER_MASTERNODE_COPY } from '@renderer/constants/masternodeNodes'
 import { MASTERNODE_COLLATERAL_PREP_COPY } from '@renderer/constants/masternodeCollateralPrep'
 import {
+  COMBINE_COLLATERAL_SELECTION,
   MASTERNODE_TYPE_CARDS,
   OPERATOR_REWARD_PRESETS,
   REGISTER_WIZARD_COLLATERAL_SOURCE_OPTIONS,
@@ -42,13 +41,14 @@ import {
   REGISTER_WIZARD_OWNER_MODE_OPTIONS,
   REGISTER_WIZARD_PAYOUT_MODE_OPTIONS,
   REGISTER_WIZARD_SERVICE_MODE_OPTIONS,
+  REGISTER_WIZARD_TOOLTIPS,
   REGISTER_WIZARD_VOTING_MODE_OPTIONS,
 } from '@renderer/constants/masternodeRegistration'
 import {
   EVO_MASTERNODE_TYPE,
   UNASSIGNED_SERVICE_ADDRESS,
 } from '@renderer/constants/masternodes'
-import { CHIP_ACTION, FIELD_COMPACT, SURFACE_ROW, SURFACE_SECTION } from '@renderer/constants/surfaces'
+import { CHIP_ACTION, SURFACE_ROW, SURFACE_SECTION } from '@renderer/constants/surfaces'
 import { AlertTone } from '@renderer/enums/AlertTone'
 import { SegmentedControlAppearance } from '@renderer/enums/SegmentedControlAppearance'
 import type {
@@ -83,7 +83,14 @@ export function RegisterStepNodeType({
   return (
     <div className={'flex flex-col gap-3'}>
       <div className={'flex flex-col gap-1'}>
-        <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.typeLabel}</Text>
+        <div className={'flex items-center gap-1.5'}>
+          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.typeLabel}</Text>
+          <InfoTooltip
+            content={REGISTER_WIZARD_TOOLTIPS.nodeType}
+            ariaLabel={REGISTER_MASTERNODE_COPY.typeLabel}
+            className={'size-4 [&_svg]:size-3.5'}
+          />
+        </div>
         <Text size={12} weight={'medium'} color={'brand'} opacity={60} className={'leading-[135%]'}>
           {REGISTER_WIZARD_COPY.nodeTypeStepDescription}
         </Text>
@@ -91,7 +98,7 @@ export function RegisterStepNodeType({
       <div className={'grid grid-cols-1 sm:grid-cols-2 gap-3'}>
         {MASTERNODE_TYPE_CARDS.map(card => {
           const active = draft.type === card.type
-          const TypeIcon = card.type === EVO_MASTERNODE_TYPE ? CreditsIcon : ServerIcon
+          const TypeIcon = card.type === EVO_MASTERNODE_TYPE ? EvoServerIcon : ServerIcon
           return (
             <button
               key={card.type}
@@ -187,13 +194,7 @@ export function RegisterStepCollateral({
   updateDraft,
   validation,
   resolvedCollateralSource,
-  collateralOptions,
-  activeCollateral,
-  utxosLoading,
-  utxosError,
-  preparedOutpoint,
   prepareSection,
-  onRetryUtxos,
 }: RegisterStepCollateralProps): React.JSX.Element {
   const confirming = validation.selectedCoin != null && isConfirmingUtxo(validation.selectedCoin)
 
@@ -201,7 +202,14 @@ export function RegisterStepCollateral({
     <div className={'flex flex-col gap-3'}>
       <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.collateralLabel}</Text>
+          <div className={'flex items-center gap-1.5'}>
+            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.collateralLabel}</Text>
+            <InfoTooltip
+              content={REGISTER_WIZARD_TOOLTIPS.collateralStep}
+              ariaLabel={REGISTER_MASTERNODE_COPY.collateralLabel}
+              className={'size-4 [&_svg]:size-3.5'}
+            />
+          </div>
           <SegmentedControl
             appearance={SegmentedControlAppearance.Pill}
             ariaLabel={REGISTER_WIZARD_COPY.collateralSourceLabel}
@@ -215,49 +223,17 @@ export function RegisterStepCollateral({
           <Text size={12} weight={'medium'} color={'brand'} opacity={60} className={'leading-[135%]'}>
             {MASTERNODE_COLLATERAL_PREP_COPY.sectionDescription}
           </Text>
-        ) : resolvedCollateralSource === 'wallet' ? (
-          utxosLoading ? (
-            <ListSkeleton rows={1} rowClassName={'h-11 rounded-[.875rem]'} />
-          ) : utxosError != null ? (
-            <Alert
-              tone={AlertTone.Warning}
-              icon={<InfoCircleIcon size={14} />}
-              title={utxosError}
-              actions={(
-                <Button type={'button'} size={'compact'} colorScheme={'primary-light'} onClick={onRetryUtxos}>
-                  {REGISTER_WIZARD_COPY.retryButton}
-                </Button>
-              )}
-            />
-          ) : collateralOptions.length === 0 ? (
-            <Alert
-              tone={AlertTone.Info}
-              icon={<InfoCircleIcon size={14} />}
-              title={REGISTER_MASTERNODE_COPY.noCollateralUtxos}
-              actions={(
-                <Button
-                  type={'button'}
-                  size={'compact'}
-                  colorScheme={'primary'}
-                  onClick={() => updateDraft({ collateralSource: 'prepare' })}
-                >
-                  {REGISTER_WIZARD_COPY.switchToPrepareButton}
-                </Button>
-              )}
-            />
-          ) : (
-            <DropdownField
-              options={collateralOptions}
-              value={activeCollateral}
-              onChange={selectedCollateral => updateDraft({ selectedCollateral })}
-              ariaLabel={REGISTER_MASTERNODE_COPY.collateralLabel}
-              triggerClassName={FIELD_COMPACT}
-            />
-          )
         ) : (
           <div className={'grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-end gap-3'}>
             <div className={'flex flex-col gap-1.5'}>
-              <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.manualTxidLabel}</Text>
+              <div className={'flex items-center gap-1.5'}>
+                <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.manualTxidLabel}</Text>
+                <InfoTooltip
+                  content={REGISTER_WIZARD_TOOLTIPS.manualTxid}
+                  ariaLabel={REGISTER_WIZARD_COPY.manualTxidLabel}
+                  className={'size-4 [&_svg]:size-3.5'}
+                />
+              </div>
               <MasternodeFieldInput
                 value={draft.manualTxid}
                 onChange={manualTxid => updateDraft({ manualTxid })}
@@ -267,7 +243,14 @@ export function RegisterStepCollateral({
               />
             </div>
             <div className={'flex flex-col gap-1.5'}>
-              <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.manualVoutLabel}</Text>
+              <div className={'flex items-center gap-1.5'}>
+                <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.manualVoutLabel}</Text>
+                <InfoTooltip
+                  content={REGISTER_WIZARD_TOOLTIPS.manualVout}
+                  ariaLabel={REGISTER_WIZARD_COPY.manualVoutLabel}
+                  className={'size-4 [&_svg]:size-3.5'}
+                />
+              </div>
               <MasternodeFieldInput
                 value={draft.manualVout}
                 onChange={manualVout => updateDraft({ manualVout })}
@@ -280,16 +263,7 @@ export function RegisterStepCollateral({
           </div>
         )}
 
-        {preparedOutpoint != null && resolvedCollateralSource === 'wallet' && activeCollateral === preparedOutpoint && (
-          <Alert
-            tone={AlertTone.Success}
-            icon={<InfoCircleIcon size={14} />}
-            title={MASTERNODE_COLLATERAL_PREP_COPY.preparedTitle}
-            description={MASTERNODE_COLLATERAL_PREP_COPY.preparedDescription}
-          />
-        )}
-
-        {confirming && resolvedCollateralSource !== 'prepare' && (
+        {confirming && resolvedCollateralSource === 'manual' && (
           <Alert
             tone={AlertTone.Warning}
             icon={<InfoCircleIcon size={14} />}
@@ -330,9 +304,25 @@ export function RegisterStepAddresses({
 
   return (
     <div className={'flex flex-col gap-3'}>
+      <div className={'flex items-center gap-1.5 px-1'}>
+        <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.summaryAddressesSection}</Text>
+        <InfoTooltip
+          content={REGISTER_WIZARD_TOOLTIPS.addressesStep}
+          ariaLabel={REGISTER_WIZARD_COPY.summaryAddressesSection}
+          className={'size-4 [&_svg]:size-3.5'}
+        />
+      </div>
+
       <div className={`flex flex-col gap-2 ${SURFACE_SECTION}`}>
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.payoutKeyLabel}</Text>
+          <div className={'flex items-center gap-1.5'}>
+            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.payoutKeyLabel}</Text>
+            <InfoTooltip
+              content={REGISTER_WIZARD_TOOLTIPS.payoutKey}
+              ariaLabel={REGISTER_WIZARD_COPY.payoutKeyLabel}
+              className={'size-4 [&_svg]:size-3.5'}
+            />
+          </div>
           <SegmentedControl
             appearance={SegmentedControlAppearance.Pill}
             ariaLabel={REGISTER_WIZARD_COPY.payoutKeyLabel}
@@ -382,7 +372,14 @@ export function RegisterStepAddresses({
 
       <div className={`flex flex-col gap-2 ${SURFACE_SECTION}`}>
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.ownerKeyLabel}</Text>
+          <div className={'flex items-center gap-1.5'}>
+            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.ownerKeyLabel}</Text>
+            <InfoTooltip
+              content={REGISTER_WIZARD_TOOLTIPS.ownerKey}
+              ariaLabel={REGISTER_WIZARD_COPY.ownerKeyLabel}
+              className={'size-4 [&_svg]:size-3.5'}
+            />
+          </div>
           <SegmentedControl
             appearance={SegmentedControlAppearance.Pill}
             ariaLabel={REGISTER_WIZARD_COPY.ownerKeyLabel}
@@ -415,7 +412,14 @@ export function RegisterStepAddresses({
 
       <div className={`flex flex-col gap-2 ${SURFACE_SECTION}`}>
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.votingKeyLabel}</Text>
+          <div className={'flex items-center gap-1.5'}>
+            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.votingKeyLabel}</Text>
+            <InfoTooltip
+              content={REGISTER_WIZARD_TOOLTIPS.votingKey}
+              ariaLabel={REGISTER_WIZARD_COPY.votingKeyLabel}
+              className={'size-4 [&_svg]:size-3.5'}
+            />
+          </div>
           <SegmentedControl
             appearance={SegmentedControlAppearance.Pill}
             ariaLabel={REGISTER_WIZARD_COPY.votingKeyLabel}
@@ -448,7 +452,14 @@ export function RegisterStepAddresses({
 
       <div className={`flex flex-col gap-2 ${SURFACE_SECTION}`}>
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.operatorKeyLabel}</Text>
+          <div className={'flex items-center gap-1.5'}>
+            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.operatorKeyLabel}</Text>
+            <InfoTooltip
+              content={REGISTER_WIZARD_TOOLTIPS.operatorKey}
+              ariaLabel={REGISTER_WIZARD_COPY.operatorKeyLabel}
+              className={'size-4 [&_svg]:size-3.5'}
+            />
+          </div>
           <SegmentedControl
             appearance={SegmentedControlAppearance.Pill}
             ariaLabel={REGISTER_WIZARD_COPY.operatorKeyLabel}
@@ -474,7 +485,14 @@ export function RegisterStepAddresses({
 
       <div className={`flex flex-col gap-2.5 ${SURFACE_SECTION}`}>
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.operatorRewardLabel}</Text>
+          <div className={'flex items-center gap-1.5'}>
+            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.operatorRewardLabel}</Text>
+            <InfoTooltip
+              content={REGISTER_WIZARD_TOOLTIPS.operatorReward}
+              ariaLabel={REGISTER_MASTERNODE_COPY.operatorRewardLabel}
+              className={'size-4 [&_svg]:size-3.5'}
+            />
+          </div>
           <div className={'flex items-center gap-1.5'}>
             <Text size={12} weight={'medium'} color={'brand'} opacity={40}>{REGISTER_WIZARD_COPY.operatorRewardPresetsLabel}</Text>
             {OPERATOR_REWARD_PRESETS.map(preset => (
@@ -504,9 +522,16 @@ export function RegisterStepAddresses({
 
         {rewardBps != null && rewardBps > 0 && (
           <div className={'mt-1 flex flex-col gap-1.5 border-t border-dash-primary-dark-blue/8 pt-3 dark:border-white/10'}>
-            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
-              {MASTERNODE_OPERATOR_PAYOUT_RECIPIENT_COPY.label}
-            </Text>
+            <div className={'flex items-center gap-1.5'}>
+              <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
+                {MASTERNODE_OPERATOR_PAYOUT_RECIPIENT_COPY.label}
+              </Text>
+              <InfoTooltip
+                content={REGISTER_WIZARD_TOOLTIPS.operatorPayout}
+                ariaLabel={MASTERNODE_OPERATOR_PAYOUT_RECIPIENT_COPY.label}
+                className={'size-4 [&_svg]:size-3.5'}
+              />
+            </div>
             <RecipientInput
               compact
               value={draft.operatorPayoutAddress}
@@ -538,9 +563,25 @@ export function RegisterStepNetwork({
 }: RegisterStepSharedProps): React.JSX.Element {
   return (
     <div className={'flex flex-col gap-3'}>
+      <div className={'flex items-center gap-1.5 px-1'}>
+        <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.summaryNetworkSection}</Text>
+        <InfoTooltip
+          content={REGISTER_WIZARD_TOOLTIPS.networkStep}
+          ariaLabel={REGISTER_WIZARD_COPY.summaryNetworkSection}
+          className={'size-4 [&_svg]:size-3.5'}
+        />
+      </div>
+
       <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.serviceModeLabel}</Text>
+          <div className={'flex items-center gap-1.5'}>
+            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.serviceModeLabel}</Text>
+            <InfoTooltip
+              content={REGISTER_WIZARD_TOOLTIPS.serviceEndpoint}
+              ariaLabel={REGISTER_WIZARD_COPY.serviceModeLabel}
+              className={'size-4 [&_svg]:size-3.5'}
+            />
+          </div>
           <SegmentedControl
             appearance={SegmentedControlAppearance.Pill}
             ariaLabel={REGISTER_WIZARD_COPY.serviceModeLabel}
@@ -588,7 +629,14 @@ export function RegisterStepNetwork({
       {draft.type === EVO_MASTERNODE_TYPE && (
         <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
           <div className={'flex flex-col gap-1.5'}>
-            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.platformNodeIdLabel}</Text>
+            <div className={'flex items-center gap-1.5'}>
+              <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.platformNodeIdLabel}</Text>
+              <InfoTooltip
+                content={REGISTER_WIZARD_TOOLTIPS.platformNodeId}
+                ariaLabel={REGISTER_MASTERNODE_COPY.platformNodeIdLabel}
+                className={'size-4 [&_svg]:size-3.5'}
+              />
+            </div>
             <MasternodeFieldInput
               value={draft.platformNodeId}
               onChange={platformNodeId => updateDraft({ platformNodeId })}
@@ -599,7 +647,14 @@ export function RegisterStepNetwork({
           </div>
           <div className={'grid grid-cols-1 sm:grid-cols-2 sm:items-end gap-3'}>
             <div className={'flex flex-col gap-1.5'}>
-              <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.platformP2PPortLabel}</Text>
+              <div className={'flex items-center gap-1.5'}>
+                <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.platformP2PPortLabel}</Text>
+                <InfoTooltip
+                  content={REGISTER_WIZARD_TOOLTIPS.platformPorts}
+                  ariaLabel={REGISTER_MASTERNODE_COPY.platformP2PPortLabel}
+                  className={'size-4 [&_svg]:size-3.5'}
+                />
+              </div>
               <MasternodeFieldInput
                 value={draft.platformP2PPort}
                 onChange={platformP2PPort => updateDraft({ platformP2PPort })}
@@ -609,7 +664,14 @@ export function RegisterStepNetwork({
               />
             </div>
             <div className={'flex flex-col gap-1.5'}>
-              <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.platformHttpPortLabel}</Text>
+              <div className={'flex items-center gap-1.5'}>
+                <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.platformHttpPortLabel}</Text>
+                <InfoTooltip
+                  content={REGISTER_WIZARD_TOOLTIPS.platformPorts}
+                  ariaLabel={REGISTER_MASTERNODE_COPY.platformHttpPortLabel}
+                  className={'size-4 [&_svg]:size-3.5'}
+                />
+              </div>
               <MasternodeFieldInput
                 value={draft.platformHttpPort}
                 onChange={platformHttpPort => updateDraft({ platformHttpPort })}
@@ -664,7 +726,7 @@ export function RegisterStepReview({
     ?? (draft.payoutMode === 'wallet' ? (defaultPayoutAddress ?? '') : draft.payoutAddress.trim())
   const payoutBadge = resolvedPayout !== '' ? badgeFor(resolvedPayout) : undefined
   const collateralDisplay = draft.collateralSource !== 'manual'
-    ? activeCollateral
+    ? (activeCollateral !== '' && activeCollateral !== COMBINE_COLLATERAL_SELECTION ? activeCollateral : '—')
     : `${draft.manualTxid.trim()}:${draft.manualVout.trim()}`
   const serviceDisplay = draft.serviceMode === 'later' || dto?.serviceAddress == null
     ? UNASSIGNED_SERVICE_ADDRESS
@@ -675,7 +737,14 @@ export function RegisterStepReview({
   return (
     <div className={'flex flex-col gap-3'}>
       <div className={`flex flex-col gap-2.5 ${SURFACE_SECTION}`}>
-        <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.summaryCollateralSection}</Text>
+        <div className={'flex items-center gap-1.5'}>
+          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.summaryCollateralSection}</Text>
+          <InfoTooltip
+            content={REGISTER_WIZARD_TOOLTIPS.reviewStep}
+            ariaLabel={REGISTER_WIZARD_COPY.summaryCollateralSection}
+            className={'size-4 [&_svg]:size-3.5'}
+          />
+        </div>
         <div className={'flex items-center justify-between gap-4'}>
           <Text size={12} weight={'medium'} color={'brand'} opacity={60}>{REGISTER_MASTERNODE_COPY.typeLabel}</Text>
           <Text size={12} weight={'extrabold'} color={'brand'}>{draft.type === 'Evo' ? REGISTER_WIZARD_COPY.evoTitle : REGISTER_WIZARD_COPY.regularTitle}</Text>
@@ -786,14 +855,28 @@ export function RegisterStepReview({
 
       <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.previewTransactionSection}</Text>
-          <Checkbox
-            appearance={'subtle'}
-            className={'flex-row-reverse!'}
-            checked={draft.feeSourceMode === 'address'}
-            onChange={checked => updateDraft({ feeSourceMode: checked ? 'address' : 'auto' })}
-            label={<Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.customFeesCheckboxLabel}</Text>}
-          />
+          <div className={'flex items-center gap-1.5'}>
+            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.previewTransactionSection}</Text>
+            <InfoTooltip
+              content={REGISTER_WIZARD_TOOLTIPS.feePreview}
+              ariaLabel={REGISTER_WIZARD_COPY.previewTransactionSection}
+              className={'size-4 [&_svg]:size-3.5'}
+            />
+          </div>
+          <div className={'flex items-center gap-1.5'}>
+            <Checkbox
+              appearance={'subtle'}
+              className={'flex-row-reverse!'}
+              checked={draft.feeSourceMode === 'address'}
+              onChange={checked => updateDraft({ feeSourceMode: checked ? 'address' : 'auto' })}
+              label={<Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.customFeesCheckboxLabel}</Text>}
+            />
+            <InfoTooltip
+              content={REGISTER_WIZARD_TOOLTIPS.customFees}
+              ariaLabel={REGISTER_WIZARD_COPY.customFeesCheckboxLabel}
+              className={'size-4 [&_svg]:size-3.5'}
+            />
+          </div>
         </div>
 
         {draft.feeSourceMode === 'address' && (
@@ -897,7 +980,14 @@ export function RegisterStepReview({
 
       {canBroadcast && (
         <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.authorizeLabel}</Text>
+          <div className={'flex items-center gap-1.5'}>
+            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.authorizeLabel}</Text>
+            <InfoTooltip
+              content={REGISTER_WIZARD_TOOLTIPS.authorize}
+              ariaLabel={REGISTER_WIZARD_COPY.authorizeLabel}
+              className={'size-4 [&_svg]:size-3.5'}
+            />
+          </div>
           {broadcastError != null && <CopyableError message={broadcastError} />}
           <PasswordField
             id={'register-masternode-password'}

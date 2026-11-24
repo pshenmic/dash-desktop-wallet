@@ -23,7 +23,6 @@ import { windowList } from '@renderer/utils/listWindow'
 import { emptyNodesDescription, filterNodes, soloMasternodes } from '@renderer/utils/masternodeNodes'
 import type { NodesTabProps } from '@renderer/types/MasternodeScreens'
 import AddMasternodeModal from './AddMasternodeModal'
-import ManageMasternodeKeysModal from './ManageMasternodeKeysModal'
 import MasternodeViewSwitch from './MasternodeViewSwitch'
 import NodeCard from './NodeCard'
 import NodeTableRow from './NodeTableRow'
@@ -36,13 +35,13 @@ export default function NodesTab({
   onShowMore,
   onOpenNode,
   onRegister,
+  onImportKeys,
 }: NodesTabProps): React.JSX.Element {
   const { desired, setDesired } = useConnectionModeContext()
   const { nodes, discovered, loading, err } = useMasternodes(walletId)
   const [viewMode, setViewMode] = useMasternodeViewMode()
   const { labelsByAddress } = useReceiveRequests(walletId)
   const [addOpen, setAddOpen] = useState(false)
-  const [keysOpen, setKeysOpen] = useState(false)
   const appliedQuery = useDeferredValue(query)
   const soloNodes = useMemo(() => soloMasternodes(nodes), [nodes])
   const filtered = useMemo(() => filterNodes(soloNodes, appliedQuery), [soloNodes, appliedQuery])
@@ -111,10 +110,7 @@ export default function NodesTab({
             ariaLabel={NODES_TAB_COPY.searchLabel}
             className={'flex-1 min-w-[14rem] max-w-[22rem]'}
           />
-          <div className={'flex flex-wrap items-center gap-2'}>
-            <MasternodeViewSwitch value={viewMode} onChange={setViewMode} />
-            {actionButtons}
-          </div>
+          <MasternodeViewSwitch value={viewMode} onChange={setViewMode} />
         </div>
         {filtered.length === 0 ? (
           <NoResults
@@ -154,14 +150,7 @@ export default function NodesTab({
           open={addOpen}
           onClose={() => setAddOpen(false)}
           onSelectRegister={onRegister}
-          onSelectImport={() => setKeysOpen(true)}
-        />
-      )}
-      {keysOpen && (
-        <ManageMasternodeKeysModal
-          walletId={walletId}
-          open={keysOpen}
-          onClose={() => setKeysOpen(false)}
+          onSelectImport={onImportKeys}
         />
       )}
     </div>

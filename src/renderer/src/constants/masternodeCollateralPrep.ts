@@ -1,14 +1,5 @@
-import type { TransferPageType } from '@renderer/constants'
 import type { CollateralPrepCoinMode } from '@renderer/types/MasternodeCollateralPrep'
 import type { SegmentOption } from '@renderer/types/SegmentedControl'
-
-export const MASTERNODE_PREP_COLLATERAL_RECIPIENT_COPY: TransferPageType['recipient'] = {
-  label: 'Destination collateral address',
-  placeholder: 'Enter Address…',
-  addressBook: 'Address Book',
-  addressManagement: 'Address Management',
-  noResults: 'No addresses found',
-}
 
 export const COLLATERAL_PREP_COIN_MODE_OPTIONS: SegmentOption<CollateralPrepCoinMode>[] = [
   { value: 'auto', label: 'Auto-select' },
@@ -18,7 +9,7 @@ export const COLLATERAL_PREP_COIN_MODE_OPTIONS: SegmentOption<CollateralPrepCoin
 export const MASTERNODE_COLLATERAL_PREP_COPY = {
   buttonLabel: 'Prepare wallet',
   sectionTitle: 'Create collateral transfer',
-  sectionDescription: 'Combine existing wallet coins into a single exact collateral output and label its receiving address without leaving registration.',
+  sectionDescription: 'Select an existing exact collateral UTXO in your wallet or combine coins into a single exact collateral output without leaving registration.',
   emptyHintPrefix: 'No single exact collateral UTXO was found. Unlocked spendable coins total',
   targetAddressSection: 'Destination address',
   labelField: 'Label',
@@ -43,6 +34,16 @@ export const MASTERNODE_COLLATERAL_PREP_COPY = {
   submitting: 'Creating internal transfer…',
   preparedTitle: 'Prepared collateral UTXO selected',
   preparedDescription: 'Your collateral transaction has been broadcast and selected above. You can continue configuring your masternode steps now.',
+  exactCollateralBadge: 'Collateral ready',
+  sufficientCoinBadge: 'Sufficient funds',
+  exactSelectedReadyTitle: 'Exact collateral UTXO selected',
+  exactSelectedReadyDescription: 'This coin already matches the exact collateral amount and stays in your wallet. Click Continue below to configure masternode keys.',
+  combineOtherCoinsButton: 'Combine other coins into a new collateral UTXO',
+  coinsTooltip: 'Green "Collateral ready" coins match the exact collateral amount and can be selected immediately. Green "Sufficient funds" coins can cover the collateral and fee on their own; otherwise combine multiple coins into a new exact collateral output.',
+  targetAddressTooltip: 'Automatically assigned unused receiving address in this wallet that will hold the exact collateral UTXO under your control.',
+  labelTooltip: 'Optional wallet label saved for this collateral address so you can identify your node easily across Masternodes and Receive.',
+  summaryTooltip: 'Shows the exact collateral output sent to your wallet address, selected input coins, estimated network fee, and any change returned to this wallet.',
+  authorizeTooltip: 'Enter your wallet password to unlock local signing keys and broadcast this internal collateral transfer.',
   confirmingCoinBadge: 'Confirming',
   invalidAddressError: 'Choose or enter a valid wallet P2PKH address.',
   noCoinsSelectedError: 'Select at least one spendable UTXO.',

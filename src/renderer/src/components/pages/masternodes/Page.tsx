@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Button, KeyIcon, PlusIcon } from '@renderer/components/dash-ui-kit-extended'
 import PageHeader from '@renderer/components/ui/PageHeader'
 import PageTabs from '@renderer/components/ui/PageTabs'
-import { MASTERNODE_PARAMS, MASTERNODES_PAGE_SIZE, MASTERNODES_TAB_LABELS } from '@renderer/constants/masternodes'
+import {
+  MASTERNODE_PARAMS,
+  MASTERNODES_HEADER_COPY,
+  MASTERNODES_PAGE_SIZE,
+  MASTERNODES_TAB_LABELS,
+} from '@renderer/constants/masternodes'
 import { PAGE_HEADERS } from '@renderer/constants/pageHeaders'
 import { SURFACE_PANEL } from '@renderer/constants/surfaces'
 import { useAuth } from '@renderer/contexts/AuthContext'
@@ -14,6 +20,7 @@ import type { MasternodesNavigationState } from '@renderer/types/MasternodeNodes
 import type { MasternodesPageProps } from '@renderer/types/MasternodeScreens'
 import { getOrCreateRegisterWizardState, setRegisterWizardActive } from '@renderer/utils/masternodeRegistrationDraft'
 import { enumParam, withParams } from '@renderer/utils/searchParams'
+import ManageMasternodeKeysModal from './nodes/ManageMasternodeKeysModal'
 import NodeDetail from './nodes/NodeDetail'
 import NodesTab from './nodes/NodesTab'
 import RegisterMasternodeWizard from './nodes/RegisterMasternodeWizard'
@@ -30,6 +37,7 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
   const [nodeVisibleCount, setNodeVisibleCount] = useState(MASTERNODES_PAGE_SIZE)
   const [sharedQuery, setSharedQuery] = useState('')
   const [sharedVisibleCount, setSharedVisibleCount] = useState(MASTERNODES_PAGE_SIZE)
+  const [keysOpen, setKeysOpen] = useState(false)
   const tab = enumParam(MasternodesTab, searchParams.get(MASTERNODE_PARAMS.tab), MasternodesTab.Nodes)
   const detail = searchParams.get(MASTERNODE_PARAMS.node)
   const persistedWizard = getOrCreateRegisterWizardState(walletId, network ?? null)
@@ -138,6 +146,7 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
           onShowMore={() => setNodeVisibleCount(count => count + MASTERNODES_PAGE_SIZE)}
           onOpenNode={openDetail}
           onRegister={openRegister}
+          onImportKeys={() => setKeysOpen(true)}
         />
       ),
     },
@@ -153,6 +162,7 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
           onShowMore={() => setSharedVisibleCount(count => count + MASTERNODES_PAGE_SIZE)}
           onOpenNode={openDetail}
           onRegister={openParticipate}
+          onImportKeys={() => setKeysOpen(true)}
         />
       ),
     },
@@ -178,7 +188,34 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
           />
         ) : (
           <>
-            <PageHeader title={PAGE_HEADERS.masternodes.title} subtitle={PAGE_HEADERS.masternodes.subtitle} />
+            <PageHeader
+              title={PAGE_HEADERS.masternodes.title}
+              subtitle={PAGE_HEADERS.masternodes.subtitle}
+              actions={(
+                <div className={'flex flex-wrap items-center gap-2'}>
+                  <Button
+                    type={'button'}
+                    size={'compact'}
+                    colorScheme={'primary-light'}
+                    onClick={() => setKeysOpen(true)}
+                    className={'inline-flex items-center gap-1.5 rounded-[.75rem]'}
+                  >
+                    <KeyIcon size={12} color={'currentColor'} />
+                    {MASTERNODES_HEADER_COPY.importButton}
+                  </Button>
+                  <Button
+                    type={'button'}
+                    size={'compact'}
+                    colorScheme={'primary'}
+                    onClick={tab === MasternodesTab.Shared ? openParticipate : openRegister}
+                    className={'inline-flex items-center gap-1.5 rounded-[.75rem]'}
+                  >
+                    <PlusIcon size={12} color={'currentColor'} />
+                    {MASTERNODES_HEADER_COPY.registerButton}
+                  </Button>
+                </div>
+              )}
+            />
             <div className={`relative ${SURFACE_PANEL}`}>
               <PageTabs
                 items={items}
@@ -189,6 +226,7 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
           </>
         )}
       </div>
+      {keysOpen && <ManageMasternodeKeysModal walletId={walletId} open={keysOpen} onClose={() => setKeysOpen(false)} />}
     </div>
   )
 }

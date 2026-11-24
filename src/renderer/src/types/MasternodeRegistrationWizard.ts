@@ -11,8 +11,8 @@ import type { DropdownFieldOption } from './DropdownField'
 export type MasternodeType = MasternodeRegistrationDto['type']
 
 export type RegistrationKeySource = 'wallet' | 'external'
-export type ResolvedRegistrationCollateralSource = 'prepare' | 'wallet' | 'manual'
-export type RegistrationCollateralSource = 'auto' | ResolvedRegistrationCollateralSource
+export type ResolvedRegistrationCollateralSource = 'prepare' | 'manual'
+export type RegistrationCollateralSource = 'auto' | 'wallet' | ResolvedRegistrationCollateralSource
 export type RegistrationFeeSource = 'auto' | 'address'
 export type RegistrationServiceMode = 'now' | 'later'
 
@@ -99,7 +99,6 @@ export interface RegisterStepNodeTypeProps {
 
 export interface RegisterStepCollateralProps extends RegisterStepSharedProps {
   resolvedCollateralSource: ResolvedRegistrationCollateralSource
-  collateralOptions: DropdownFieldOption[]
   activeCollateral: string
   utxosLoading: boolean
   utxosError: string | null
