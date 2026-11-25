@@ -12,6 +12,11 @@ Things the code cannot tell you, and that a plausible-looking change breaks:
 - **chain.db is network-scoped and nothing under `p2p/` opens SQLite.** Wallet
   state arrives in the `start` command (`seedUtxos`, `cfilterCursor`) and leaves
   as `blockApplied` / `cursorAdvanced` for main to persist.
+- **Only a scan may raise a cursor.** A `null` `cfilterCursor` means genesis. A
+  new-address floor (`addWatchAddresses`'s `fromHeight` — a DashPay chain's
+  contact-request height) may lower an existing cursor, never create one: on a
+  wallet that has never scanned it would start the first scan above the wallet's
+  older history, which then never loads.
 - **An address belongs to exactly one pool.** `PoolService.takeAddresses()`
   *moves* rather than copies, because a node dialled twice from one host drops
   both connections.
