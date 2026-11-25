@@ -239,6 +239,15 @@ describe('p2p address discovery', () => {
       expect(await discovery.nextDashPayPayAddress(wallet, OURS, THEIRS, newXpub)).toBe(newFirst)
     })
 
+    it('leaves a never-scanned wallet starting at genesis', async () => {
+      const walletId = await walletWith({ownerId: OURS, toUserId: THEIRS, coreHeightCreatedAt: 2_352_368})
+      expect(await transactionDAO.getCursor(walletId)).toBeNull()
+
+      await discovery.discoverCoreAddresses(walletId)
+
+      expect(await transactionDAO.getCursor(walletId)).toBeNull()
+    })
+
     // Derived again after every start, a chain of ours rescans at most the margin
     // below the cursor: an earlier run watched it up to there.
     it("rescans a new chain of ours from its request's height, at most the margin below the cursor", async () => {
