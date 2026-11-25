@@ -64,6 +64,22 @@ describe('Platform transaction display', () => {
       .toMatchObject({ amount: 9_007_199_254_740_993n, direction: 'neutral' })
   })
 
+  it('uses netCredits rather than gross amountCredits for shielded spends with change on cards and totals', () => {
+    const raw = transaction({
+      type: 'SHIELDED_TRANSFER',
+      netCredits: -5_114_140_000n,
+      gasCredits: 114_140_000n,
+      amountCredits: 130_000_000_000n,
+      sender: [{ source: 'ownDiversifiedShielded', amount: 130_000_000_000n }],
+      recipient: [{ source: 'ownDefaultShielded', amount: 124_885_860_000n }],
+    })
+    expect(mapPlatformTransaction(raw)).toMatchObject({ amount: 5_114_140_000n, direction: 'out' })
+    expect(computeTxTotals(mergeWalletTransactions([], [raw]))).toEqual({
+      receivedCredits: 0n,
+      sentCredits: 5_114_140_000n,
+    })
+  })
+
   it('maps unavailable dates to null and falls back to the end the source named', () => {
     expect(mapPlatformTransaction(transaction({ date: new Date(0), recipient: [] })))
       .toMatchObject({ date: null, subtitleLabel: 'From', labelValue: 'senderIdentity' })
@@ -96,7 +112,7 @@ describe('Platform internal transfers', () => {
       core: new Set(['ownCore']),
       platform: new Set(['ownPlatform', 'otherOwnPlatform']),
       identities: new Set(['senderIdentity', 'recipientIdentity']),
-      shielded: new Set(),
+      shielded: new Set(['ownShielded', 'otherOwnShielded']),
     }
   }
 
@@ -165,7 +181,77 @@ describe('Platform internal transfers', () => {
       recipient: [{ source: 'ownPlatform', amount: 10_000_000_000n }],
     })
     expect(platformInternalTransferFee(raw, ownership())).toBeNull()
-    expect(mapPlatformTransaction(raw)).toMatchObject({ title: 'Unshield', amount: raw.amountCredits })
+    expect(mapPlatformTransaction(raw)).toMatchObject({ title: 'Unshield', amount: 90_000_000_000n })
+  })
+
+  it('recognizes internal SHIELDED_TRANSFER only when both ends are owned and net difference equals gas', () => {
+    const raw = transaction({
+      type: 'SHIELDED_TRANSFER',
+      netCredits: -114_140_000n,
+      gasCredits: 114_140_000n,
+      amountCredits: 130_114_140_000n,
+      sender: [{ source: 'ownShielded', amount: 130_114_140_000n }],
+      recipient: [{ source: 'otherOwnShielded', amount: 130_000_000_000n }],
+    })
+    expect(platformInternalTransferFee(structuredClone(raw), ownership())).toBe(114_140_000n)
+    // External shielded transfer where change went back to our own address must not be treated as internal.
+    expect(platformInternalTransferFee({
+      ...raw,
+      netCredits: -5_114_140_000n,
+      sender: [{ source: 'otherOwnShielded', amount: 130_000_000_000n }],
+      recipient: [{ source: 'ownShielded', amount: 124_885_860_000n }],
+    }, ownership())).toBeNull()
+    expect(platformInternalTransferFee({ ...raw, sender: [{ source: 'externalShielded', amount: 130_114_140_000n }] }, ownership())).toBeNull()
+    expect(platformInternalTransferFee({ ...raw, recipient: [{ source: 'externalShielded', amount: 130_000_000_000n }] }, ownership())).toBeNull()
+    expect(platformInternalTransferFee({ ...raw, recipient: [{ source: 'otherOwnShielded', amount: 130_114_140_000n }] }, ownership())).toBeNull()
+  })
+
+  it('recognizes internal SHIELD only with owned sources, shielded target and reconciled gas', () => {
+    const raw = transaction({
+      type: 'SHIELD',
+      netCredits: -162_851_200n,
+      gasCredits: 162_851_200n,
+      amountCredits: 200_162_851_200n,
+      sender: [{ source: 'ownPlatform', amount: 200_162_851_200n }],
+      recipient: [{ source: 'otherOwnShielded', amount: 200_000_000_000n }],
+    })
+    expect(platformInternalTransferFee(structuredClone(raw), ownership())).toBe(162_851_200n)
+    expect(platformInternalTransferFee({
+      ...raw,
+      recipient: [{ source: 'otherOwnShielded', amount: 190_000_000_000n }, { source: 'otherOwnPlatform', amount: 10_000_000_000n }],
+    }, ownership())).toBe(162_851_200n)
+    expect(platformInternalTransferFee({ ...raw, recipient: [{ source: 'externalShielded', amount: 200_000_000_000n }] }, ownership())).toBeNull()
+    expect(platformInternalTransferFee({ ...raw, recipient: [{ source: 'otherOwnPlatform', amount: 200_000_000_000n }] }, ownership())).toBeNull()
+    expect(platformInternalTransferFee({ ...raw, recipient: [{ source: 'otherOwnShielded', amount: 200_162_851_200n }] }, ownership())).toBeNull()
+  })
+
+  it('recognizes internal IDENTITY_CREATE_FROM_SHIELDED_POOL with owned shielded source, identity target and optional change', () => {
+    const raw = transaction({
+      type: 'IDENTITY_CREATE_FROM_SHIELDED_POOL',
+      netCredits: -7n,
+      gasCredits: 7n,
+      amountCredits: 1_307n,
+      sender: [{ source: 'ownShielded', amount: 1_307n }],
+      recipient: [{ source: 'recipientIdentity', amount: 1_000n }, { source: 'otherOwnShielded', amount: 300n }],
+    })
+    expect(platformInternalTransferFee(structuredClone(raw), ownership())).toBe(7n)
+    expect(platformInternalTransferFee({
+      ...raw,
+      sender: [{ source: 'ownShielded', amount: 1_300n }],
+    }, ownership())).toBe(7n)
+    expect(platformInternalTransferFee({ ...raw, sender: [{ source: 'externalShielded', amount: 1_307n }] }, ownership())).toBeNull()
+    expect(platformInternalTransferFee({
+      ...raw,
+      recipient: [{ source: 'recipientIdentity', amount: 1_000n }, { source: 'externalShielded', amount: 300n }],
+    }, ownership())).toBeNull()
+    expect(platformInternalTransferFee({
+      ...raw,
+      recipient: [{ source: 'recipientIdentity', amount: 500n }, { source: 'senderIdentity', amount: 800n }],
+    }, ownership())).toBeNull()
+    expect(platformInternalTransferFee({
+      ...raw,
+      recipient: [{ source: 'recipientIdentity', amount: 999n }, { source: 'otherOwnShielded', amount: 300n }],
+    }, ownership())).toBeNull()
   })
 
   it.each(['IDENTITY_TOP_UP_FROM_ADDRESSES', 'IDENTITY_CREATE_FROM_ADDRESSES'])

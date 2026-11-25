@@ -7,9 +7,14 @@ export function coreOwnedAddresses(walletId: string | undefined, addresses: GetA
     .map(address => address.address))
 }
 
-export function platformOwnedParticipants(addresses: PlatformAddressDto[], identities: Pick<IdentityApiDto, 'identifier'>[]): Set<string> {
+export function platformOwnedParticipants(
+  addresses: PlatformAddressDto[],
+  identities: Pick<IdentityApiDto, 'identifier'>[],
+  shieldedAddresses: string[] = [],
+): Set<string> {
   return new Set([
     ...addresses.map(address => address.platformAddress),
     ...identities.map(identity => identity.identifier),
+    ...shieldedAddresses,
   ].filter(Boolean))
 }

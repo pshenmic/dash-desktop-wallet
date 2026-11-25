@@ -78,8 +78,15 @@ describe('Core and Evo monetary flows', () => {
       { ...evo, hash: 'unknown-status', status: null, netCredits: 2n, amountCredits: 2n },
     ], days, now)
     expect(flows[0]).toMatchObject({ source: 'core', received: 10_000n, sent: 2_000n })
-    expect(flows[1]).toMatchObject({ source: 'evo', received: 3n, sent: 10n })
-    expect(flows[1].days[29]).toEqual({ date: new Date(2026, 8, 24), received: 3n, sent: 10n })
+    expect(flows[1]).toMatchObject({ source: 'evo', received: 3n, sent: 8n })
+    expect(flows[1].days[29]).toEqual({ date: new Date(2026, 8, 24), received: 3n, sent: 8n })
+  })
+
+  it('uses netCredits rather than gross amountCredits for shielded spends with change', () => {
+    const flows = buildStatFlows([], [
+      { ...evo, hash: 'shielded-spend', type: 'SHIELDED_TRANSFER', netCredits: -5_114_140_000n, amountCredits: 130_000_000_000n },
+    ], days, now)
+    expect(flows[1]).toMatchObject({ source: 'evo', received: 0n, sent: 5_114_140_000n })
   })
 
   it('finds each source largest single receive across all history, preserving credit precision', () => {
@@ -104,8 +111,8 @@ describe('Core and Evo monetary flows', () => {
 
   it('keeps selected totals and chart totals aligned, excluding undated amounts even for all time', () => {
     const platform = [
-      { ...evo, hash: 'old', date: new Date(2024, 1, 1), amountCredits: 100n },
-      { ...evo, hash: 'undated', date: new Date(0), amountCredits: 200n },
+      { ...evo, hash: 'old', date: new Date(2024, 1, 1), netCredits: 100n, amountCredits: 100n },
+      { ...evo, hash: 'undated', date: new Date(0), netCredits: 200n, amountCredits: 200n },
       evo,
     ]
     const flows = buildStatFlows([], platform, days, now)
@@ -125,7 +132,7 @@ describe('Core and Evo monetary flows', () => {
   ] as const)('filters counts, totals and largest receives to the shared %s period', (period, count, received, largest) => {
     const dates = [now, new Date(2026, 8, 18), new Date(2026, 7, 26), new Date(2026, 5, 27), new Date(2024, 1, 1)]
     const transactions = dates.map((date, index) => ({ ...core, id: String(index), date, amount: BigInt((index + 1) * 10) }))
-    const platform = dates.map((date, index) => ({ ...evo, hash: String(index), date, amountCredits: BigInt(index + 1) }))
+    const platform = dates.map((date, index) => ({ ...evo, hash: String(index), date, netCredits: BigInt(index + 1), amountCredits: BigInt(index + 1) }))
     const range = buildDashboardAnalytics(transactions, platform, period, now)
     const start = range.days[0].date
     const selectedCore = filterStatTransactions(transactions, start, now)

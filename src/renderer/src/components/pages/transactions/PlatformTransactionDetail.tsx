@@ -24,6 +24,7 @@ import { formatApproxFiat } from '@renderer/utils/approxFiat'
 import { useFiat } from '@renderer/hooks/useFiat'
 import { usePlatformAddresses } from '@renderer/hooks/usePlatformAddresses'
 import { useIdentities } from '@renderer/hooks/useIdentities'
+import { useShieldedAddresses } from '@renderer/hooks/useShieldedAddresses'
 import { platformOwnedParticipants } from '@renderer/utils/ownedAddresses'
 import DetailToken from './TransactionDetailToken'
 
@@ -31,9 +32,14 @@ export default function PlatformTransactionDetail({ transaction, onBack }: Platf
   const { status } = useAuth()
   const { isBalanceVisible } = useBalanceVisibility()
   const network = status?.network
-  const { platformAddresses } = usePlatformAddresses(status?.selectedWalletId ?? undefined)
-  const { identities } = useIdentities(status?.selectedWalletId ?? undefined)
-  const ownedParticipants = useMemo(() => platformOwnedParticipants(platformAddresses, identities), [platformAddresses, identities])
+  const walletId = status?.selectedWalletId ?? undefined
+  const { platformAddresses } = usePlatformAddresses(walletId)
+  const { identities } = useIdentities(walletId)
+  const { addresses: shieldedAddresses } = useShieldedAddresses(walletId)
+  const ownedParticipants = useMemo(
+    () => platformOwnedParticipants(platformAddresses, identities, shieldedAddresses ?? []),
+    [platformAddresses, identities, shieldedAddresses],
+  )
   const [qrAddress, setQrAddress] = useState<string | null>(null)
   const { theme } = useTheme()
   const { format: formatFiat, rateReady } = useFiat()

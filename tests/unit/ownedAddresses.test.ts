@@ -18,17 +18,20 @@ describe('transaction address ownership', () => {
     expect(coreOwnedAddresses('wallet-b', addresses)).toEqual(new Set(['foreign']))
   })
 
-  it('recognizes Platform addresses and identities without marking unknown participants or empty sources as owned', () => {
+  it('recognizes Platform addresses, identities and shielded addresses without marking unknown participants or empty sources as owned', () => {
     const owned = platformOwnedParticipants([
       { platformAddress: 'platform-address', balanceCredits: 0n, nonce: 1 },
       { platformAddress: '', balanceCredits: 0n, nonce: 0 },
-    ], [{ identifier: 'identity-id' }, { identifier: '' }])
+    ], [{ identifier: 'identity-id' }, { identifier: '' }], ['shielded-address', ''])
     expect(owned.has('platform-address')).toBe(true)
     expect(owned.has('external-address')).toBe(false)
     expect(owned.has('identity-id')).toBe(true)
     expect(owned.has('external-identity')).toBe(false)
+    expect(owned.has('shielded-address')).toBe(true)
+    expect(owned.has('external-shielded')).toBe(false)
     expect(owned.has('')).toBe(false)
     expect(platformOwnedParticipants([], []).size).toBe(0)
     expect(platformOwnedParticipants([], [{ identifier: 'identity-id' }])).toEqual(new Set(['identity-id']))
+    expect(platformOwnedParticipants([], [], ['shielded-address'])).toEqual(new Set(['shielded-address']))
   })
 })

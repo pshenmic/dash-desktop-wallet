@@ -289,7 +289,7 @@ describe('asset lock history without a persisted link', () => {
     expect(platformInternalTransferFee(history.platform[0], ownership)).toBeNull()
     expect(mergeWalletTransactions([core], history.platform)).toEqual(expect.arrayContaining([
       expect.objectContaining({kind: 'core', title: 'Send', amount: 100_062_124n, direction: 'out'}),
-      expect.objectContaining({kind: 'platform', title: 'Address Funding From Asset Lock', amount: 100_000_000_000n, direction: 'in'}),
+      expect.objectContaining({kind: 'platform', title: 'Address Funding From Asset Lock', amount: 100_062_000_000n, direction: 'in'}),
     ]))
   })
 })
