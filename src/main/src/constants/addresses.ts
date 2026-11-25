@@ -46,16 +46,16 @@ export const PLATFORM_ADDRESS_WINDOW: AddressWindowPolicy = {
 // list the user sees, and note discovery does not depend on it — one incoming
 // viewing key covers every diversifier whether or not its index was revealed.
 export const SHIELDED_ADDRESS_WINDOW: AddressWindowPolicy = {
-  gapLimit: 5,
-  batch: 5,
+  gapLimit: 20,
+  batch: 20,
   maxRounds: 50,
 }
 
 // DashPay (DIP-15), two chains per contact: DIP-15's own gap, which key-wallet
 // uses for both. Only one payer ever uses a chain, so a short gap covers it.
 export const DASHPAY_ADDRESS_WINDOW: AddressWindowPolicy = {
-  gapLimit: 10,
-  batch: 10,
+  gapLimit: 50,
+  batch: 20,
   maxRounds: 50,
 }
 
