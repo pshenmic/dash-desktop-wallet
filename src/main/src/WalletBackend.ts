@@ -31,6 +31,7 @@ import { GetIdentitiesHandler } from './api/wallet/getIdentities'
 import { GetMasternodesHandler } from './api/masternodes/getMasternodes'
 import { GetMasternodeCollateralsHandler } from './api/masternodes/getMasternodeCollaterals'
 import { GetImportedMasternodeKeysHandler } from './api/masternodes/getImportedMasternodeKeys'
+import { GetUnmatchedImportedMasternodeKeysHandler } from './api/masternodes/getUnmatchedImportedMasternodeKeys'
 import { ImportMasternodeKeyHandler } from './api/masternodes/importMasternodeKey'
 import { RemoveMasternodeKeyHandler } from './api/masternodes/removeMasternodeKey'
 import { SignAndBroadcastMasternodeRegistrationHandler } from './api/masternodes/signAndBroadcastMasternodeRegistration'
@@ -233,6 +234,7 @@ export class WalletBackend {
     registerHandler('getMasternodes', new GetMasternodesHandler(this.masternodeService).handle)
     registerHandler('getMasternodeCollaterals', new GetMasternodeCollateralsHandler(this.masternodeService).handle)
     registerHandler('getImportedMasternodeKeys', new GetImportedMasternodeKeysHandler(this.masternodeService).handle)
+    registerHandler('getUnmatchedImportedMasternodeKeys', new GetUnmatchedImportedMasternodeKeysHandler(this.masternodeService).handle)
     registerHandler('importMasternodeKey', new ImportMasternodeKeyHandler(this.masternodeService).handle)
     registerHandler('removeMasternodeKey', new RemoveMasternodeKeyHandler(this.masternodeService).handle)
     registerHandler('previewMasternodeRegistration', new PreviewMasternodeRegistrationHandler(this.masternodeService).handle)

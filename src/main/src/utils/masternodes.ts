@@ -163,6 +163,13 @@ export function carriesKey(node: NetworkMasternode, {role, publicKey}: Pick<Impo
   return nodeKeyValues(role, node).some(key => values.includes(key))
 }
 
+// The imported keys none of the listed nodes carries. A key can be unmatched
+// while its registration is still indexing, so this is advisory — the UI offers
+// removal rather than dropping the key silently.
+export function unmatchedImportedKeys(imported: ImportedMasternodeKey[], nodes: NetworkMasternode[]): ImportedMasternodeKey[] {
+  return imported.filter(key => !nodes.some(node => carriesKey(node, key)))
+}
+
 export function collateralUtxos(utxos: UTXO[]): UTXO[] {
   return utxos.filter(utxo => Object.values(MASTERNODE_COLLATERAL_DUFFS).includes(utxo.satoshis))
 }

@@ -99,6 +99,7 @@ export const apiDefinitions = (ipcRenderer) => ({
   getMasternodeIdentities: (walletId: string) => ipcRenderer.invoke('getMasternodeIdentities', walletId),
   getMasternodeCollaterals: (walletId: string) => ipcRenderer.invoke('getMasternodeCollaterals', walletId),
   getImportedMasternodeKeys: (walletId: string) => ipcRenderer.invoke('getImportedMasternodeKeys', walletId),
+  getUnmatchedImportedMasternodeKeys: (walletId: string) => ipcRenderer.invoke('getUnmatchedImportedMasternodeKeys', walletId),
   importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string, password?: string) => ipcRenderer.invoke('importMasternodeKey', walletId, role, privateKey, password),
   removeMasternodeKey: (walletId: string, key: ImportedMasternodeKey) => ipcRenderer.invoke('removeMasternodeKey', walletId, key),
   signAndBroadcastMasternodeRegistration: (walletId: string, unsignedHex: string, password: string) => ipcRenderer.invoke('signAndBroadcastMasternodeRegistration', walletId, unsignedHex, password),
