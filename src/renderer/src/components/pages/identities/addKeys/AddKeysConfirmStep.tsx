@@ -14,11 +14,11 @@ export default function AddKeysConfirmStep({ identity, requests, feeCredits }: A
   return (
     <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
       <div className={KEYS_FACT_ROW_CLASS}>
-        <Text size={12} weight={"medium"} color={"brand"} opacity={50}>{ADD_KEYS_COPY.identity}</Text>
+        <Text size={12} weight={"medium"} color={"brand"} opacity={50} className={"shrink-0"}>{ADD_KEYS_COPY.identity}</Text>
         <Text size={14} weight={"medium"} color={"brand"} className={"min-w-0 break-all text-right"}>{identityLabel(identity)}</Text>
       </div>
       <div className={"flex items-start justify-between gap-4"}>
-        <Text size={12} weight={"medium"} color={"brand"} opacity={50}>{ADD_KEYS_COPY.keys}</Text>
+        <Text size={12} weight={"medium"} color={"brand"} opacity={50} className={"shrink-0"}>{ADD_KEYS_COPY.keys}</Text>
         <div className={"flex min-w-0 flex-col items-end gap-1"}>
           {requests.map((request, index) => (
             <Text key={ids[index]} size={14} weight={"medium"} color={"brand"} className={"min-w-0 wrap-anywhere text-right"}>

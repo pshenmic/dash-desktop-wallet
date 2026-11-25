@@ -32,3 +32,8 @@ export enum IdentityKeyDashPayImpact {
   StopsDashPay = 'stops-dashpay',
   ContactRequests = 'contact-requests',
 }
+
+export enum KeyBudgetUnit {
+  Dash = 'dash',
+  Credits = 'credits',
+}

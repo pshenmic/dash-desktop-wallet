@@ -455,4 +455,53 @@ describe('estimateFee', () => {
     await expect(svc.requireFee(WALLET, 'identityToIdentity', params({identityId: null})))
       .rejects.toThrow(/Could not price/)
   })
+
+  it('builds cache keys for identity key updates carrying BigInt totalBudget without losing bigint feeParams', () => {
+    const requestA = operationFeeRequest(WALLET, TransferOperation.IdentityUpdateKeys, {
+      amountCredits: 0n,
+      recipient: '',
+      identityId: IDENTITY,
+      destinationValid: true,
+      keys: [{
+        purpose: 'AUTHENTICATION',
+        securityLevel: 'HIGH',
+        contractBounds: null,
+        totalBudget: 10_000_000_000n,
+        expiresAt: 1_800_000_000_000,
+      }],
+    })
+    const requestB = operationFeeRequest(WALLET, TransferOperation.IdentityUpdateKeys, {
+      amountCredits: 0n,
+      recipient: '',
+      identityId: IDENTITY,
+      destinationValid: true,
+      keys: [{
+        purpose: 'AUTHENTICATION',
+        securityLevel: 'HIGH',
+        contractBounds: null,
+        totalBudget: 20_000_000_000n,
+        expiresAt: 1_800_000_000_000,
+      }],
+    })
+    const requestSame = operationFeeRequest(WALLET, TransferOperation.IdentityUpdateKeys, {
+      amountCredits: 0n,
+      recipient: '',
+      identityId: IDENTITY,
+      destinationValid: true,
+      keys: [{
+        purpose: 'AUTHENTICATION',
+        securityLevel: 'HIGH',
+        contractBounds: null,
+        totalBudget: 10_000_000_000n,
+        expiresAt: 1_800_000_000_000,
+      }],
+    })
+
+    expect(requestA).not.toBeNull()
+    expect(requestA!.feeParams.keys?.[0]?.totalBudget).toBe(10_000_000_000n)
+    expect(typeof requestA!.feeParams.keys?.[0]?.totalBudget).toBe('bigint')
+    expect(requestA!.maxKey).not.toBe(requestB!.maxKey)
+    expect(requestA!.key).not.toBe(requestB!.key)
+    expect(requestA!.key).toBe(requestSame!.key)
+  })
 })

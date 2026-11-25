@@ -17,6 +17,14 @@ export function isIdentityKeyActive(key: Pick<IdentityKeyDto, 'disabledAt'>): bo
   return key.disabledAt == null
 }
 
+export function isIdentityKeyExpired(key: Pick<IdentityKeyDto, 'disabledAt' | 'expiresAt'>, now: number = Date.now()): boolean {
+  return key.disabledAt == null && key.expiresAt != null && key.expiresAt <= now
+}
+
+export function isIdentityKeyUsable(key: Pick<IdentityKeyDto, 'disabledAt' | 'expiresAt'>, now: number = Date.now()): boolean {
+  return isIdentityKeyActive(key) && !isIdentityKeyExpired(key, now)
+}
+
 export function activeKeysCount(keys: IdentityKeyDto[]): number {
   return keys.filter(isIdentityKeyActive).length
 }

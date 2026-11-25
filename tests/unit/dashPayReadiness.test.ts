@@ -76,6 +76,37 @@ describe('dashPayMissingKeys', () => {
     const lowercase = [key(0, 'authentication', 'high'), key(1, 'encryption', 'medium'), key(2, 'decryption', 'medium')]
     expect(dashPayMissingKeys(lowercase)).toEqual([])
   })
+
+  it('treats keys with expiresAt <= now as unusable while accepting expiresAt > now', () => {
+    const NOW = 1_700_000_000_000
+    const atBoundary = [
+      key(0, 'AUTHENTICATION', 'MASTER'),
+      key(1, 'AUTHENTICATION', 'HIGH', { expiresAt: NOW }),
+      key(2, 'ENCRYPTION', 'MEDIUM', { contractBounds: DASHPAY_KEY_BOUNDS, expiresAt: NOW - 1 }),
+      key(3, 'DECRYPTION', 'MEDIUM', { contractBounds: DASHPAY_KEY_BOUNDS, expiresAt: NOW + 1 }),
+    ]
+    expect(dashPayMissingKeys(atBoundary, NOW)).toEqual([ENC, AUTH_HIGH])
+    expect(dashPayReadiness(identity(atBoundary), NOW)).toEqual({
+      readiness: DashPayReadiness.NeedsKeys,
+      canSend: false,
+      canRegister: false,
+      missingKeys: [ENC, AUTH_HIGH],
+    })
+
+    const stillValid = [
+      key(0, 'AUTHENTICATION', 'MASTER'),
+      key(1, 'AUTHENTICATION', 'HIGH', { expiresAt: NOW + 1 }),
+      key(2, 'ENCRYPTION', 'MEDIUM', { contractBounds: DASHPAY_KEY_BOUNDS, expiresAt: NOW + 1 }),
+      key(3, 'DECRYPTION', 'MEDIUM', { contractBounds: DASHPAY_KEY_BOUNDS, expiresAt: NOW + 1 }),
+    ]
+    expect(dashPayMissingKeys(stillValid, NOW)).toEqual([])
+    expect(dashPayReadiness(identity(stillValid), NOW)).toEqual({
+      readiness: DashPayReadiness.Ready,
+      canSend: true,
+      canRegister: true,
+      missingKeys: [],
+    })
+  })
 })
 
 describe('dashPayReadiness', () => {

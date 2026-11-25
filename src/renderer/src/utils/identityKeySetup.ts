@@ -1,6 +1,7 @@
 import type { IdentityKeyDto } from '@renderer/api/types'
 import {
   EMPTY_KEY_BOUNDS_DRAFT,
+  EMPTY_KEY_LIMITS_DRAFT,
   IDENTITY_KEY_LABEL_SEPARATOR,
   IDENTITY_KEY_LEVEL_LABELS,
   IDENTITY_KEY_PURPOSE_LABELS,
@@ -9,15 +10,26 @@ import {
   KEY_COUNT_COPY,
   KEY_VARIANT_ORDER,
 } from '@renderer/constants/identityKeys'
-import { IdentityKeyVariant } from '@renderer/enums/IdentityKeys'
+import { IdentityKeyVariant, KeyBudgetUnit } from '@renderer/enums/IdentityKeys'
 import type {
   IdentityKeyVariantDefinition,
   KeyBoundsDraftMap,
   KeyContractBoundsDraft,
+  KeyLimitsDraft,
+  KeyLimitsDraftMap,
   KeyVariantCaption,
 } from '@renderer/types/IdentityKeys'
 import { dashPayMissingKeys } from './dashPayReadiness'
-import { keyBoundsLabel, keyLabel, validateKeyContractBounds, variantOfRequest } from './identityKeyRequests'
+import {
+  convertBudgetDraftUnit,
+  formatLocalDateTimeInput,
+  keyBoundsLabel,
+  keyLabel,
+  keyLimitsSummaryParts,
+  validateKeyContractBounds,
+  validateKeyLimits,
+  variantOfRequest,
+} from './identityKeyRequests'
 
 export function sortedIdentityKeys(keys: IdentityKeyDto[]): IdentityKeyDto[] {
   return [...keys].sort((a, b) => a.keyId - b.keyId)
@@ -40,8 +52,44 @@ export function updateKeyBoundsDraft(
   return { ...current, [variant]: next }
 }
 
-export function presetKeyVariants(keys: IdentityKeyDto[]): IdentityKeyVariant[] {
-  const variants = dashPayMissingKeys(keys).map(variantOfRequest)
+export function updateKeyLimitsDraft(
+  current: KeyLimitsDraftMap,
+  variant: IdentityKeyVariant,
+  patch: Partial<KeyLimitsDraft>,
+): KeyLimitsDraftMap {
+  const next = { ...(current[variant] ?? EMPTY_KEY_LIMITS_DRAFT), ...patch }
+  if (next.totalBudget === '' && next.expiresAt === '' && next.budgetUnit === EMPTY_KEY_LIMITS_DRAFT.budgetUnit) {
+    const { [variant]: _, ...rest } = current
+    return rest
+  }
+  return { ...current, [variant]: next }
+}
+
+export function toggleKeyBudgetUnit(
+  current: KeyLimitsDraftMap,
+  variant: IdentityKeyVariant,
+): KeyLimitsDraftMap {
+  const existing = current[variant] ?? EMPTY_KEY_LIMITS_DRAFT
+  const nextUnit = existing.budgetUnit === KeyBudgetUnit.Dash ? KeyBudgetUnit.Credits : KeyBudgetUnit.Dash
+  return updateKeyLimitsDraft(current, variant, {
+    budgetUnit: nextUnit,
+    totalBudget: convertBudgetDraftUnit(existing.totalBudget, existing.budgetUnit, nextUnit),
+  })
+}
+
+export function applyKeyExpiryPreset(
+  current: KeyLimitsDraftMap,
+  variant: IdentityKeyVariant,
+  durationMs: number,
+  now: number = Date.now(),
+): KeyLimitsDraftMap {
+  return updateKeyLimitsDraft(current, variant, {
+    expiresAt: formatLocalDateTimeInput(now + durationMs),
+  })
+}
+
+export function presetKeyVariants(keys: IdentityKeyDto[], now: number = Date.now()): IdentityKeyVariant[] {
+  const variants = dashPayMissingKeys(keys, now).map(variantOfRequest)
   return KEY_VARIANT_ORDER.filter(variant => variants.includes(variant))
 }
 
@@ -53,15 +101,21 @@ export function keyVariantTitle(definition: IdentityKeyVariantDefinition): strin
 export function keyVariantCaption(
   definition: IdentityKeyVariantDefinition,
   checked: boolean,
-  draft?: KeyContractBoundsDraft,
+  boundsDraft?: KeyContractBoundsDraft,
+  limitsDraft?: KeyLimitsDraft,
+  now: number = Date.now(),
 ): KeyVariantCaption {
-  if (!checked || !definition.canBind) return { text: definition.caption, mono: false }
-  const validation = validateKeyContractBounds(draft)
-  if (validation.bounds == null) return { text: definition.caption, mono: false }
-  const label = keyBoundsLabel(validation.bounds)!
+  if (!checked) return { text: definition.caption, mono: false }
+  const bounds = definition.canBind ? validateKeyContractBounds(boundsDraft).bounds : null
+  const boundsLabel = bounds == null ? null : keyBoundsLabel(bounds)
+  const limitParts = definition.canLimit ? keyLimitsSummaryParts(validateKeyLimits(limitsDraft, now).limits) : []
+  const base = boundsLabel == null
+    ? definition.caption
+    : (boundsLabel.isDashPay ? `${KEY_BOUNDS_COPY.boundPrefix} ${boundsLabel.text}` : boundsLabel.text)
+  const parts = base == null ? limitParts : [base, ...limitParts]
   return {
-    text: label.isDashPay ? `${KEY_BOUNDS_COPY.boundPrefix} ${label.text}` : label.text,
-    mono: !label.isDashPay,
+    text: parts.length > 0 ? parts.join(IDENTITY_KEY_LABEL_SEPARATOR) : null,
+    mono: boundsLabel != null && !boundsLabel.isDashPay,
   }
 }
 
