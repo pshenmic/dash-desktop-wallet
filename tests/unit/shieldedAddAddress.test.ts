@@ -83,7 +83,8 @@ describe('the shielded address window', () => {
 
     await svc.getAddresses(WALLET, PASSWORD)
 
-    expect(rows().map(row => row.index)).toEqual([0, 1, 2, 3, 4])
+    expect(rows().map(row => row.index))
+      .toEqual(Array.from({length: SHIELDED_ADDRESS_WINDOW.gapLimit}, (_, index) => index))
   })
 
   it('flags the indexes the notes prove were used', async () => {
