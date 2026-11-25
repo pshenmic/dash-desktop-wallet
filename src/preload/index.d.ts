@@ -430,6 +430,7 @@ declare global {
       getMasternodeIdentities: (walletId: string) => Promise<MasternodeIdentityInfoDTO[]>
       getMasternodeCollaterals: (walletId: string) => Promise<MasternodeCollateralDTO[]>
       getImportedMasternodeKeys: (walletId: string) => Promise<ImportedMasternodeKeyDTO[]>
+      getUnmatchedImportedMasternodeKeys: (walletId: string) => Promise<ImportedMasternodeKeyDTO[] | null>
       importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string, password?: string) => Promise<MasternodeDTO[] | null>
       removeMasternodeKey: (walletId: string, key: ImportedMasternodeKeyDTO) => Promise<void>
       signAndBroadcastMasternodeRegistration: (walletId: string, unsignedHex: string, password: string) => Promise<MasternodeRegistrationResultDTO>

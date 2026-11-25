@@ -16,6 +16,7 @@ import {dashPayContacts} from '../../utils/dashPayContacts'
 import {dashPayAccountPath} from '../../utils/dashPayKeys'
 import {Logger} from '../../utils/logger'
 import {requireSelectedWallet, requireWallet} from '../../utils/requireWallet'
+import {unverifiedUsername} from '../../utils/username'
 import {withUnlockedWallet} from '../../utils/walletSeed'
 import {PlatformWorkerService} from './PlatformWorkerService'
 
@@ -113,11 +114,14 @@ export class IdentityService {
     const known = cache.requests ?? []
 
     const since = Math.max(0, ...known.map(request => request.createdAt))
-    const pages = await Promise.all(identifiers.map(identifier => this.platform.request('dashPayContactRequests', wallet.network, {identifier, since})))
-    const fresh = pages.flatMap(({sent, received}) => [...sent, ...received])
+    const pages = await Promise.allSettled(identifiers.map(identifier => this.platform.request('dashPayContactRequests', wallet.network, {identifier, since})))
+    const fresh = pages.flatMap(page => page.status === 'fulfilled' ? [...page.value.sent, ...page.value.received] : [])
     const requests = new Map([...known, ...fresh].map(request => [request.id, request]))
 
     cache.requests = [...requests.values()].sort((a, b) => a.createdAt - b.createdAt)
+
+    const failed = pages.find((page): page is PromiseRejectedResult => page.status === 'rejected')
+    if (failed != null) throw failed.reason
   }
 
   // Every name with its contest, contact request and contact name, from the
@@ -136,7 +140,8 @@ export class IdentityService {
     const identifiers = (await this.identityDAO.getIdentitiesByWalletId(walletId)).map(entry => entry.identifier)
     const cache = this.dashPayCache.wallet(walletId)
 
-    await this.refreshDashPayRequests(walletId)
+    // A contact request that does not arrive must not hold back names and contests.
+    await this.refreshDashPayRequests(walletId).catch(err => log.warn(`${walletId}: contact requests not refreshed:`, err))
     const requests = cache.requests ?? []
     const contactIds = [...new Set(dashPayContacts(requests, identifiers, cache.contactKeys).map(contact => contact.contactId))]
 
@@ -153,25 +158,27 @@ export class IdentityService {
     // A contested name has no domain document while its vote runs, so one this
     // process knows stays listed. Last wins: a contest gives only the normalized label.
     const found = [
-      ...contests,
-      ...(cache.usernames ?? []).filter(username => username.status === 'voting'),
-      ...identifiers.flatMap(identifier => (names.get(identifier) ?? []).map(name => ({identifier, label: name.split('.')[0]}))),
+      ...contests.map(contest => ({...contest, contested: true})),
+      ...(cache.usernames ?? []).filter(username => username.status === 'voting')
+        .map(({identifier, label}) => ({identifier, label, contested: true})),
+      ...identifiers.flatMap(identifier => (names.get(identifier) ?? []).map(name => ({identifier, label: name.split('.')[0], contested: false}))),
     ]
 
-    const candidates = new Map(found.map(({identifier, label}) => [`${identifier}:${convertToHomographSafeChars(label)}`, {identifier, label}]))
-    // A name whose check fails keeps what was known of it.
-    const usernames = await Promise.all([...candidates.values()].map(async ({identifier, label}): Promise<Username | undefined> => {
+    const candidates = new Map(found.map(({identifier, label, contested}) => [`${identifier}:${convertToHomographSafeChars(label)}`, {identifier, label, contested}]))
+    // A name whose check fails keeps what was known of it, or stays listed unverified.
+    const usernames = await Promise.all([...candidates.values()].map(async ({identifier, label, contested}): Promise<Username> => {
       const normalizedLabel = convertToHomographSafeChars(label)
       try {
         return {...await this.platform.request('usernameStatus', wallet.network, {identifier, label}), identifier, label, normalizedLabel}
       } catch (err) {
         log.warn(`${label}: username check failed:`, err)
         return cache.usernames?.find(username => username.identifier === identifier && username.normalizedLabel === normalizedLabel)
+          ?? unverifiedUsername(identifier, label, normalizedLabel, contested)
       }
     }))
 
     cache.contactNames = new Map(contactIds.map(contactId => [contactId, names.get(contactId) ?? []]))
-    cache.usernames = usernames.filter(username => username != null)
+    cache.usernames = usernames
     log.info(`${walletId}: refreshed ${cache.usernames.length} name(s), ${requests.length} contact request(s)`)
   }
 

@@ -2,7 +2,7 @@ import {describe, expect, it} from 'vitest'
 import {hexToBytes} from '@noble/hashes/utils.js'
 import {Script} from 'dash-core-sdk'
 import {DashscanMasternode} from '../../src/main/src/types/Dashscan'
-import {Masternode, NetworkMasternode} from '../../src/main/src/types/Masternode'
+import {ImportedMasternodeKey, Masternode, NetworkMasternode} from '../../src/main/src/types/Masternode'
 import {UTXO} from '../../src/main/src/types/UTXO'
 import {masternodeKeyDeriver, masternodeKeys} from '../../src/main/src/utils/masternodeKeys'
 import {
@@ -19,6 +19,7 @@ import {
   requireCollateral,
   requirePayout,
   revocableNode,
+  unmatchedImportedKeys,
   collateralsToStore,
   withCollateralFlag,
   withoutCollaterals,
@@ -226,6 +227,31 @@ describe('ownedMasternodes', () => {
       {proTxHash: 'a', txid: 'c'.repeat(64), vout: 0, address: 'Xheld'},
       {proTxHash: 'b', txid: 'c'.repeat(64), vout: 1, address: null},
     ])
+  })
+})
+
+describe('unmatchedImportedKeys', () => {
+  const keys = masternodeKeys(SEED, 'mainnet')
+  const operator1 = masternodeKeyDeriver(keys, 'mainnet', 'operator').derive(1).address
+
+  it('keeps only the keys no listed node carries', () => {
+    const imported: ImportedMasternodeKey[] = [
+      {role: 'operator', publicKey: OPERATOR_0, hasPrivateKey: false},
+      {role: 'operator', publicKey: operator1, hasPrivateKey: true},
+      {role: 'voting', publicKey: 'Xvoting', hasPrivateKey: false},
+    ]
+    const listed = [node('a', {operatorPublicKey: OPERATOR_0, votingAddress: 'Xvoting'})]
+    expect(unmatchedImportedKeys(imported, listed).map(({publicKey}) => publicKey)).toEqual([operator1])
+  })
+
+  it('matches an operator key registered in legacy encoding', () => {
+    const imported: ImportedMasternodeKey[] = [{role: 'operator', publicKey: OPERATOR_0, hasPrivateKey: false}]
+    expect(unmatchedImportedKeys(imported, [node('a', {operatorPublicKey: OPERATOR_0_LEGACY})])).toEqual([])
+  })
+
+  it('treats a key carried in another role as unmatched', () => {
+    const imported: ImportedMasternodeKey[] = [{role: 'operator', publicKey: OPERATOR_0, hasPrivateKey: false}]
+    expect(unmatchedImportedKeys(imported, [node('a', {ownerAddress: OPERATOR_0})]).map(({publicKey}) => publicKey)).toEqual([OPERATOR_0])
   })
 })
 

@@ -61,6 +61,7 @@ import {
   requireCollateral,
   requirePayout,
   revocableNode,
+  unmatchedImportedKeys,
   unusedKeyIndex,
   withoutCollaterals,
 } from '../../utils/masternodes'
@@ -152,18 +153,31 @@ export class MasternodeService {
   // is encrypted under the seed, so the key can sign later.
   async importKey(walletId: string, role: MasternodeKeyChain, privateKey: string, password?: string): Promise<Masternode[] | null> {
     if (!MASTERNODE_KEY_CHAINS.includes(role)) throw new Error(`Unknown masternode key role: ${role}`)
+
     const wallet = await requireWallet(this.walletDAO, walletId)
     const trimmed = privateKey.trim()
     const key = {role, publicKey: masternodePublicKey(role, trimmed, wallet.network)}
     const encryptedPrivateKey = await this.encryptImportedSecret(walletId, trimmed, password)
+
     await this.masternodeKeyDAO.saveImportedKey(walletId, key, encryptedPrivateKey)
+
     log.info(`wallet ${walletId}: imported a ${role} key`)
     await this.discover(walletId)
+
     return this.listed.get(walletId)?.filter(node => carriesKey(node, key)) ?? null
   }
 
   async getImportedKeySecret(walletId: string, role: MasternodeKeyChain, publicKey: string): Promise<string | null> {
     return this.masternodeKeyDAO.getImportedKeySecret(walletId, role, publicKey)
+  }
+
+  // Imported keys no listed node carries, surfaced so the user can remove stale
+  // keys. Null while no list has arrived — not "all unmatched".
+  async getUnmatchedImportedKeys(walletId: string): Promise<ImportedMasternodeKey[] | null> {
+    if (!this.listed.has(walletId)) await this.discover(walletId)
+    const listed = this.listed.get(walletId)
+    if (listed == null) return null
+    return unmatchedImportedKeys(await this.masternodeKeyDAO.getImportedKeys(walletId), listed)
   }
 
   // What this wallet can contribute to a shared registration prepared elsewhere:
