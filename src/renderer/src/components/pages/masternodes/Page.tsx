@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { Button, KeyIcon, PlusIcon } from '@renderer/components/dash-ui-kit-extended'
+import { Button, KeyIcon } from '@renderer/components/dash-ui-kit-extended'
 import PageHeader from '@renderer/components/ui/PageHeader'
 import PageTabs from '@renderer/components/ui/PageTabs'
 import {
@@ -208,9 +208,8 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
                     size={'compact'}
                     colorScheme={'primary'}
                     onClick={tab === MasternodesTab.Shared ? openParticipate : openRegister}
-                    className={'inline-flex items-center gap-1.5 rounded-[.75rem]'}
+                    className={'rounded-[.75rem]'}
                   >
-                    <PlusIcon size={12} color={'currentColor'} />
                     {MASTERNODES_HEADER_COPY.registerButton}
                   </Button>
                 </div>

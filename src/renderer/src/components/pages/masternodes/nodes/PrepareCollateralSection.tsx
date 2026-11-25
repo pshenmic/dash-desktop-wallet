@@ -308,7 +308,7 @@ export default function PrepareCollateralSection({
       <div className={`flex flex-col gap-2.5 ${SURFACE_SECTION}`}>
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
           <div className={'flex items-center gap-1.5'}>
-            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
+            <Text size={12} weight={'bold'} color={'brand'}>
               {MASTERNODE_COLLATERAL_PREP_COPY.coinsSection}
             </Text>
             <InfoTooltip
@@ -512,7 +512,7 @@ export default function PrepareCollateralSection({
           <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
             <div className={'flex flex-col gap-1.5'}>
               <div className={'flex items-center gap-1.5'}>
-                <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
+                <Text size={12} weight={'bold'} color={'brand'}>
                   {MASTERNODE_COLLATERAL_PREP_COPY.targetAddressSection}
                 </Text>
                 <InfoTooltip
@@ -557,7 +557,7 @@ export default function PrepareCollateralSection({
 
             <div className={'flex flex-col gap-1.5'}>
               <div className={'flex items-center gap-1.5'}>
-                <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
+                <Text size={12} weight={'bold'} color={'brand'}>
                   {MASTERNODE_COLLATERAL_PREP_COPY.labelField}
                 </Text>
                 <InfoTooltip
@@ -579,7 +579,7 @@ export default function PrepareCollateralSection({
 
           <div className={`flex flex-col gap-2 ${SURFACE_SECTION}`}>
             <div className={'flex items-center gap-1.5'}>
-              <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
+              <Text size={12} weight={'bold'} color={'brand'}>
                 {MASTERNODE_COLLATERAL_PREP_COPY.summarySection}
               </Text>
               <InfoTooltip
@@ -648,9 +648,11 @@ export default function PrepareCollateralSection({
 
           <div className={`flex flex-col gap-2.5 ${SURFACE_SECTION}`}>
             <div className={'flex items-center gap-1.5'}>
-              <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
-                {MASTERNODE_COLLATERAL_PREP_COPY.authorizeLabel}
-              </Text>
+              <label htmlFor={'prepare-collateral-password'}>
+                <Text size={12} weight={'bold'} color={'brand'}>
+                  {MASTERNODE_COLLATERAL_PREP_COPY.authorizeLabel}
+                </Text>
+              </label>
               <InfoTooltip
                 content={MASTERNODE_COLLATERAL_PREP_COPY.authorizeTooltip}
                 ariaLabel={MASTERNODE_COLLATERAL_PREP_COPY.authorizeLabel}
@@ -659,6 +661,7 @@ export default function PrepareCollateralSection({
             </div>
             <PasswordField
               id={'prepare-collateral-password'}
+              hideLabel
               value={password}
               onChange={value => {
                 setPasswordInvalid(false)

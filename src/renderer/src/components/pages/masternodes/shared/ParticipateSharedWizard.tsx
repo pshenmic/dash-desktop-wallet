@@ -292,7 +292,7 @@ export default function ParticipateSharedWizard({
       ) : (
         <div className={`mx-auto flex w-full max-w-170 flex-col gap-4 ${SURFACE_PANEL}`}>
           <div className={'flex flex-wrap items-center justify-between gap-3'}>
-            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{SHARED_WIZARD_COPY.stageLabel}</Text>
+            <Text size={12} weight={'bold'} color={'brand'}>{SHARED_WIZARD_COPY.stageLabel}</Text>
             <SegmentedControl
               appearance={SegmentedControlAppearance.Pill}
               ariaLabel={SHARED_WIZARD_COPY.stageLabel}
@@ -305,7 +305,7 @@ export default function ParticipateSharedWizard({
 
           <div className={`flex flex-col gap-2 ${SURFACE_SECTION}`}>
             <label htmlFor={inputId}>
-              <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{SHARED_WIZARD_COPY.txHexLabel}</Text>
+              <Text size={12} weight={'bold'} color={'brand'}>{SHARED_WIZARD_COPY.txHexLabel}</Text>
             </label>
             <div className={`flex w-full flex-col items-stretch py-3 ${FIELD_COMPACT} ${previewError != null ? FIELD_INVALID : ''}`}>
               <textarea
@@ -350,7 +350,7 @@ export default function ParticipateSharedWizard({
               )}
 
               <div className={`flex flex-col gap-2.5 ${SURFACE_SECTION}`}>
-                <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{SHARED_WIZARD_COPY.summarySection}</Text>
+                <Text size={12} weight={'bold'} color={'brand'}>{SHARED_WIZARD_COPY.summarySection}</Text>
                 <div className={'flex items-center justify-between gap-4'}>
                   <Text size={12} weight={'medium'} color={'brand'} opacity={60}>{SHARED_WIZARD_COPY.consentHashLabel}</Text>
                   <div className={'flex min-w-0 items-center gap-2'}>
@@ -383,7 +383,7 @@ export default function ParticipateSharedWizard({
               </div>
 
               <div className={`flex flex-col gap-2 ${SURFACE_SECTION}`}>
-                <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{SHARED_WIZARD_COPY.sharesSection}</Text>
+                <Text size={12} weight={'bold'} color={'brand'}>{SHARED_WIZARD_COPY.sharesSection}</Text>
                 <div className={'flex flex-col gap-1.5'}>
                   {preview.shares.map((share) => {
                     const owned = signableShareSet.has(share.index)
@@ -439,7 +439,7 @@ export default function ParticipateSharedWizard({
               </div>
 
               <div className={`flex flex-col gap-2 ${SURFACE_SECTION}`}>
-                <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{SHARED_WIZARD_COPY.fundingInputsSection}</Text>
+                <Text size={12} weight={'bold'} color={'brand'}>{SHARED_WIZARD_COPY.fundingInputsSection}</Text>
                 {preview.fundingInputs.length === 0 ? (
                   <Text size={12} weight={'medium'} color={'brand'} opacity={60}>
                     {SHARED_WIZARD_COPY.noWalletFundingInputs}
@@ -462,7 +462,7 @@ export default function ParticipateSharedWizard({
                   </div>
                 )}
 
-                <Text size={12} weight={'medium'} color={'brand'} opacity={50} className={'pt-2'}>
+                <Text size={12} weight={'bold'} color={'brand'} className={'pt-2'}>
                   {SHARED_WIZARD_COPY.outputsSection}
                 </Text>
                 <div className={'flex flex-col gap-1.5'}>
@@ -510,9 +510,12 @@ export default function ParticipateSharedWizard({
 
               {eligibility.canSign && (
                 <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
+                  <label htmlFor={passwordId}>
+                    <Text size={12} weight={'bold'} color={'brand'}>{SHARED_WIZARD_COPY.authorizeLabel}</Text>
+                  </label>
                   <PasswordField
                     id={passwordId}
-                    label={SHARED_WIZARD_COPY.authorizeLabel}
+                    hideLabel
                     value={password}
                     onChange={(value) => {
                       setPasswordInvalid(false)

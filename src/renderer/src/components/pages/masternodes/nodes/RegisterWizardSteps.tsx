@@ -84,7 +84,7 @@ export function RegisterStepNodeType({
     <div className={'flex flex-col gap-3'}>
       <div className={'flex flex-col gap-1'}>
         <div className={'flex items-center gap-1.5'}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.typeLabel}</Text>
+          <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_MASTERNODE_COPY.typeLabel}</Text>
           <InfoTooltip
             content={REGISTER_WIZARD_TOOLTIPS.nodeType}
             ariaLabel={REGISTER_MASTERNODE_COPY.typeLabel}
@@ -203,7 +203,7 @@ export function RegisterStepCollateral({
       <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
           <div className={'flex items-center gap-1.5'}>
-            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.collateralLabel}</Text>
+            <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_MASTERNODE_COPY.collateralLabel}</Text>
             <InfoTooltip
               content={REGISTER_WIZARD_TOOLTIPS.collateralStep}
               ariaLabel={REGISTER_MASTERNODE_COPY.collateralLabel}
@@ -227,7 +227,7 @@ export function RegisterStepCollateral({
           <div className={'grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-end gap-3'}>
             <div className={'flex flex-col gap-1.5'}>
               <div className={'flex items-center gap-1.5'}>
-                <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.manualTxidLabel}</Text>
+                <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_WIZARD_COPY.manualTxidLabel}</Text>
                 <InfoTooltip
                   content={REGISTER_WIZARD_TOOLTIPS.manualTxid}
                   ariaLabel={REGISTER_WIZARD_COPY.manualTxidLabel}
@@ -244,7 +244,7 @@ export function RegisterStepCollateral({
             </div>
             <div className={'flex flex-col gap-1.5'}>
               <div className={'flex items-center gap-1.5'}>
-                <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.manualVoutLabel}</Text>
+                <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_WIZARD_COPY.manualVoutLabel}</Text>
                 <InfoTooltip
                   content={REGISTER_WIZARD_TOOLTIPS.manualVout}
                   ariaLabel={REGISTER_WIZARD_COPY.manualVoutLabel}
@@ -305,7 +305,7 @@ export function RegisterStepAddresses({
   return (
     <div className={'flex flex-col gap-3'}>
       <div className={'flex items-center gap-1.5 px-1'}>
-        <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.summaryAddressesSection}</Text>
+        <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_WIZARD_COPY.summaryAddressesSection}</Text>
         <InfoTooltip
           content={REGISTER_WIZARD_TOOLTIPS.addressesStep}
           ariaLabel={REGISTER_WIZARD_COPY.summaryAddressesSection}
@@ -316,7 +316,7 @@ export function RegisterStepAddresses({
       <div className={`flex flex-col gap-2 ${SURFACE_SECTION}`}>
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
           <div className={'flex items-center gap-1.5'}>
-            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.payoutKeyLabel}</Text>
+            <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_WIZARD_COPY.payoutKeyLabel}</Text>
             <InfoTooltip
               content={REGISTER_WIZARD_TOOLTIPS.payoutKey}
               ariaLabel={REGISTER_WIZARD_COPY.payoutKeyLabel}
@@ -373,7 +373,7 @@ export function RegisterStepAddresses({
       <div className={`flex flex-col gap-2 ${SURFACE_SECTION}`}>
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
           <div className={'flex items-center gap-1.5'}>
-            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.ownerKeyLabel}</Text>
+            <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_WIZARD_COPY.ownerKeyLabel}</Text>
             <InfoTooltip
               content={REGISTER_WIZARD_TOOLTIPS.ownerKey}
               ariaLabel={REGISTER_WIZARD_COPY.ownerKeyLabel}
@@ -413,7 +413,7 @@ export function RegisterStepAddresses({
       <div className={`flex flex-col gap-2 ${SURFACE_SECTION}`}>
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
           <div className={'flex items-center gap-1.5'}>
-            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.votingKeyLabel}</Text>
+            <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_WIZARD_COPY.votingKeyLabel}</Text>
             <InfoTooltip
               content={REGISTER_WIZARD_TOOLTIPS.votingKey}
               ariaLabel={REGISTER_WIZARD_COPY.votingKeyLabel}
@@ -453,7 +453,7 @@ export function RegisterStepAddresses({
       <div className={`flex flex-col gap-2 ${SURFACE_SECTION}`}>
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
           <div className={'flex items-center gap-1.5'}>
-            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.operatorKeyLabel}</Text>
+            <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_WIZARD_COPY.operatorKeyLabel}</Text>
             <InfoTooltip
               content={REGISTER_WIZARD_TOOLTIPS.operatorKey}
               ariaLabel={REGISTER_WIZARD_COPY.operatorKeyLabel}
@@ -486,7 +486,7 @@ export function RegisterStepAddresses({
       <div className={`flex flex-col gap-2.5 ${SURFACE_SECTION}`}>
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
           <div className={'flex items-center gap-1.5'}>
-            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.operatorRewardLabel}</Text>
+            <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_MASTERNODE_COPY.operatorRewardLabel}</Text>
             <InfoTooltip
               content={REGISTER_WIZARD_TOOLTIPS.operatorReward}
               ariaLabel={REGISTER_MASTERNODE_COPY.operatorRewardLabel}
@@ -523,7 +523,7 @@ export function RegisterStepAddresses({
         {rewardBps != null && rewardBps > 0 && (
           <div className={'mt-1 flex flex-col gap-1.5 border-t border-dash-primary-dark-blue/8 pt-3 dark:border-white/10'}>
             <div className={'flex items-center gap-1.5'}>
-              <Text size={12} weight={'medium'} color={'brand'} opacity={50}>
+              <Text size={12} weight={'bold'} color={'brand'}>
                 {MASTERNODE_OPERATOR_PAYOUT_RECIPIENT_COPY.label}
               </Text>
               <InfoTooltip
@@ -564,7 +564,7 @@ export function RegisterStepNetwork({
   return (
     <div className={'flex flex-col gap-3'}>
       <div className={'flex items-center gap-1.5 px-1'}>
-        <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.summaryNetworkSection}</Text>
+        <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_WIZARD_COPY.summaryNetworkSection}</Text>
         <InfoTooltip
           content={REGISTER_WIZARD_TOOLTIPS.networkStep}
           ariaLabel={REGISTER_WIZARD_COPY.summaryNetworkSection}
@@ -575,7 +575,7 @@ export function RegisterStepNetwork({
       <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
           <div className={'flex items-center gap-1.5'}>
-            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.serviceModeLabel}</Text>
+            <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_WIZARD_COPY.serviceModeLabel}</Text>
             <InfoTooltip
               content={REGISTER_WIZARD_TOOLTIPS.serviceEndpoint}
               ariaLabel={REGISTER_WIZARD_COPY.serviceModeLabel}
@@ -598,7 +598,7 @@ export function RegisterStepNetwork({
         ) : (
           <div className={'grid grid-cols-1 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] sm:items-end gap-3'}>
             <div className={'flex flex-col gap-1.5'}>
-              <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.serviceIpLabel}</Text>
+              <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_WIZARD_COPY.serviceIpLabel}</Text>
               <MasternodeFieldInput
                 value={draft.serviceIp}
                 onChange={value => {
@@ -613,7 +613,7 @@ export function RegisterStepNetwork({
               />
             </div>
             <div className={'flex flex-col gap-1.5'}>
-              <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.servicePortLabel}</Text>
+              <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_WIZARD_COPY.servicePortLabel}</Text>
               <MasternodeFieldInput
                 value={draft.servicePort}
                 onChange={servicePort => updateDraft({ servicePort })}
@@ -630,7 +630,7 @@ export function RegisterStepNetwork({
         <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
           <div className={'flex flex-col gap-1.5'}>
             <div className={'flex items-center gap-1.5'}>
-              <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.platformNodeIdLabel}</Text>
+              <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_MASTERNODE_COPY.platformNodeIdLabel}</Text>
               <InfoTooltip
                 content={REGISTER_WIZARD_TOOLTIPS.platformNodeId}
                 ariaLabel={REGISTER_MASTERNODE_COPY.platformNodeIdLabel}
@@ -648,7 +648,7 @@ export function RegisterStepNetwork({
           <div className={'grid grid-cols-1 sm:grid-cols-2 sm:items-end gap-3'}>
             <div className={'flex flex-col gap-1.5'}>
               <div className={'flex items-center gap-1.5'}>
-                <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.platformP2PPortLabel}</Text>
+                <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_MASTERNODE_COPY.platformP2PPortLabel}</Text>
                 <InfoTooltip
                   content={REGISTER_WIZARD_TOOLTIPS.platformPorts}
                   ariaLabel={REGISTER_MASTERNODE_COPY.platformP2PPortLabel}
@@ -665,7 +665,7 @@ export function RegisterStepNetwork({
             </div>
             <div className={'flex flex-col gap-1.5'}>
               <div className={'flex items-center gap-1.5'}>
-                <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_MASTERNODE_COPY.platformHttpPortLabel}</Text>
+                <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_MASTERNODE_COPY.platformHttpPortLabel}</Text>
                 <InfoTooltip
                   content={REGISTER_WIZARD_TOOLTIPS.platformPorts}
                   ariaLabel={REGISTER_MASTERNODE_COPY.platformHttpPortLabel}
@@ -738,7 +738,7 @@ export function RegisterStepReview({
     <div className={'flex flex-col gap-3'}>
       <div className={`flex flex-col gap-2.5 ${SURFACE_SECTION}`}>
         <div className={'flex items-center gap-1.5'}>
-          <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.summaryCollateralSection}</Text>
+          <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_WIZARD_COPY.summaryCollateralSection}</Text>
           <InfoTooltip
             content={REGISTER_WIZARD_TOOLTIPS.reviewStep}
             ariaLabel={REGISTER_WIZARD_COPY.summaryCollateralSection}
@@ -756,7 +756,7 @@ export function RegisterStepReview({
       </div>
 
       <div className={`flex flex-col gap-2.5 ${SURFACE_SECTION}`}>
-        <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.summaryAddressesSection}</Text>
+        <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_WIZARD_COPY.summaryAddressesSection}</Text>
         <div className={'flex items-center justify-between gap-4'}>
           <Text size={12} weight={'medium'} color={'brand'} opacity={60}>{REGISTER_MASTERNODE_COPY.payoutLabel}</Text>
           <div className={'flex min-w-0 items-center gap-2'}>
@@ -834,7 +834,7 @@ export function RegisterStepReview({
       </div>
 
       <div className={`flex flex-col gap-2.5 ${SURFACE_SECTION}`}>
-        <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.summaryNetworkSection}</Text>
+        <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_WIZARD_COPY.summaryNetworkSection}</Text>
         <div className={'flex items-center justify-between gap-4'}>
           <Text size={12} weight={'medium'} color={'brand'} opacity={60}>{REGISTER_MASTERNODE_COPY.serviceLabel}</Text>
           <Text size={12} weight={'medium'} color={'brand'} className={'tabular-nums'}>{serviceDisplay}</Text>
@@ -856,7 +856,7 @@ export function RegisterStepReview({
       <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
         <div className={'flex flex-wrap items-center justify-between gap-2'}>
           <div className={'flex items-center gap-1.5'}>
-            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.previewTransactionSection}</Text>
+            <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_WIZARD_COPY.previewTransactionSection}</Text>
             <InfoTooltip
               content={REGISTER_WIZARD_TOOLTIPS.feePreview}
               ariaLabel={REGISTER_WIZARD_COPY.previewTransactionSection}
@@ -959,12 +959,12 @@ export function RegisterStepReview({
 
       {!previewLoading && preview != null && (
         <details className={SURFACE_SECTION}>
-          <summary className={'cursor-pointer text-xs font-medium dash-text-default'}>
+          <summary className={'cursor-pointer text-xs font-bold text-dash-primary-dark-blue dark:text-white'}>
             {REGISTER_WIZARD_COPY.unsignedHexSummary}
           </summary>
           <div className={'mt-3 flex flex-col gap-2'}>
             <div className={'flex items-center justify-between gap-2'}>
-              <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.unsignedHexLabel}</Text>
+              <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_WIZARD_COPY.unsignedHexLabel}</Text>
               <CopyButton text={preview.unsignedHex} />
             </div>
             <textarea
@@ -981,7 +981,9 @@ export function RegisterStepReview({
       {canBroadcast && (
         <div className={`flex flex-col gap-3 ${SURFACE_SECTION}`}>
           <div className={'flex items-center gap-1.5'}>
-            <Text size={12} weight={'medium'} color={'brand'} opacity={50}>{REGISTER_WIZARD_COPY.authorizeLabel}</Text>
+            <label htmlFor={'register-masternode-password'}>
+              <Text size={12} weight={'bold'} color={'brand'}>{REGISTER_WIZARD_COPY.authorizeLabel}</Text>
+            </label>
             <InfoTooltip
               content={REGISTER_WIZARD_TOOLTIPS.authorize}
               ariaLabel={REGISTER_WIZARD_COPY.authorizeLabel}
@@ -991,6 +993,7 @@ export function RegisterStepReview({
           {broadcastError != null && <CopyableError message={broadcastError} />}
           <PasswordField
             id={'register-masternode-password'}
+            hideLabel
             value={password}
             onChange={onPasswordChange}
             onSubmit={onSubmit}
