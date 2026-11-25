@@ -1,5 +1,5 @@
-import type { IdentityKeyDto, IdentityKeyRequestDto } from '@renderer/api/types'
-import type { IdentityKeyAction, IdentityKeyPurpose, IdentityKeySecurityLevel, IdentityKeyVariant } from '@renderer/enums/IdentityKeys'
+import type { IdentityKeyBoundsDto, IdentityKeyDto, IdentityKeyRequestDto } from '@renderer/api/types'
+import type { IdentityKeyAction, IdentityKeyPurpose, IdentityKeySecurityLevel, IdentityKeyVariant, KeyBudgetUnit } from '@renderer/enums/IdentityKeys'
 import type { IdentityApiDto } from '@renderer/hooks/useIdentities'
 
 export interface IdentityKeyVariantDefinition {
@@ -7,6 +7,8 @@ export interface IdentityKeyVariantDefinition {
   purpose: IdentityKeyPurpose
   securityLevel: IdentityKeySecurityLevel
   dashPayBound: boolean
+  canBind: boolean
+  canLimit: boolean
   caption: string | null
 }
 
@@ -24,6 +26,7 @@ export interface KeyBoundsLabel {
 
 export interface KeyTableRowProps {
   identityKey: IdentityKeyDto
+  now: number
   onAction: (identityKey: IdentityKeyDto, action: IdentityKeyAction) => void
 }
 
@@ -76,12 +79,79 @@ export interface KeyVariantGroup {
   definitions: IdentityKeyVariantDefinition[]
 }
 
+export interface KeyContractBoundsDraft {
+  contractId: string
+  documentType: string
+}
+
+export type KeyBoundsDraftMap = Partial<Record<IdentityKeyVariant, KeyContractBoundsDraft>>
+
+export interface KeyContractBoundsValidation {
+  bounds: IdentityKeyBoundsDto | null
+  contractIdError: string | null
+  documentTypeError: string | null
+  valid: boolean
+}
+
+export interface KeyVariantCaption {
+  text: string | null
+  mono: boolean
+}
+
+export interface IdentityKeyLimits {
+  totalBudget: bigint | null
+  expiresAt: number | null
+}
+
+export interface KeyLimitsDraft {
+  totalBudget: string
+  budgetUnit: KeyBudgetUnit
+  expiresAt: string
+}
+
+export type KeyLimitsDraftMap = Partial<Record<IdentityKeyVariant, KeyLimitsDraft>>
+
+export interface KeyLimitsValidation {
+  limits: IdentityKeyLimits | null
+  totalBudgetError: string | null
+  expiresAtError: string | null
+  valid: boolean
+}
+
+export interface KeyLimitsPreset {
+  label: string
+  durationMs: number
+}
+
+export interface KeyBoundsFieldsProps {
+  variantLabel: string
+  draft: KeyContractBoundsDraft
+  validation: KeyContractBoundsValidation
+  onChange: (patch: Partial<KeyContractBoundsDraft>) => void
+}
+
+export interface KeyLimitsFieldsProps {
+  variantLabel: string
+  draft: KeyLimitsDraft
+  validation: KeyLimitsValidation
+  onChange: (patch: Partial<KeyLimitsDraft>) => void
+  onSelectExpiryPreset: (durationMs: number) => void
+  onToggleBudgetUnit: () => void
+}
+
 export interface KeyVariantListProps {
   existing: IdentityKeyDto[]
   selected: IdentityKeyVariant[]
   recommended: IdentityKeyVariant[]
+  boundsDrafts: KeyBoundsDraftMap
+  limitsDrafts: KeyLimitsDraftMap
+  now: number
   check: KeySelectionCheck
   onToggle: (variant: IdentityKeyVariant, checked: boolean) => void
+  onChangeBounds: (variant: IdentityKeyVariant, patch: Partial<KeyContractBoundsDraft>) => void
+  onChangeLimits: (variant: IdentityKeyVariant, patch: Partial<KeyLimitsDraft>) => void
+  onSelectExpiryPreset: (variant: IdentityKeyVariant, durationMs: number) => void
+  onToggleBudgetUnit: (variant: IdentityKeyVariant) => void
 }
 
 export interface AddKeysConfirmStepProps {

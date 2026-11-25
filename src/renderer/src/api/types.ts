@@ -104,6 +104,8 @@ export interface IdentityKeyRequestDto {
   purpose: 'AUTHENTICATION' | 'ENCRYPTION' | 'DECRYPTION' | 'TRANSFER'
   securityLevel: 'MASTER' | 'CRITICAL' | 'HIGH' | 'MEDIUM'
   contractBounds: IdentityKeyBoundsDto | null
+  totalBudget?: bigint | null
+  expiresAt?: number | null
 }
 
 export interface IdentityKeysUpdateDto {
@@ -136,6 +138,8 @@ export interface IdentityKeyDto {
   readOnly: boolean
   disabledAt: number | null
   contractBounds: IdentityKeyBoundsDto | null
+  totalBudget?: bigint | null
+  expiresAt?: number | null
 }
 
 // estimateFee — the one fee endpoint. What gets priced for each operation is

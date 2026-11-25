@@ -24,15 +24,26 @@ import { NoResultsTone } from '@renderer/enums/NoResultsTone'
 import { TransferOperation } from '@renderer/enums/TransferOperation'
 import { TxEndpointKind } from '@renderer/enums/TxEndpointKind'
 import { refreshIdentities, useIdentities } from '@renderer/hooks/useIdentities'
+import { useNow } from '@renderer/hooks/useNow'
 import { useOperationFee } from '@renderer/hooks/useOperationFee'
 import type { DashPayNavigationState } from '@renderer/types/DashPay'
-import type { AddKeysProps, AddKeysWizardProps, KeysAddedResult } from '@renderer/types/IdentityKeys'
+import type { AddKeysProps, AddKeysWizardProps, KeyBoundsDraftMap, KeyLimitsDraftMap, KeysAddedResult } from '@renderer/types/IdentityKeys'
 import { feeShortfall } from '@renderer/utils/dashPayShortfall'
 import { platformTransactionUrl } from '@renderer/utils/explorer'
 import { identityLabel } from '@renderer/utils/identifierFormat'
 import { identityAddKeysHref, identityHref } from '@renderer/utils/identities'
-import { keyRequestLabel, validateKeySelection, variantRequest } from '@renderer/utils/identityKeyRequests'
-import { identityKeysCountLabel, keysAddedLabel, keySelectionLabel, presetKeyVariants, toggleKeyVariant } from '@renderer/utils/identityKeySetup'
+import { buildKeyRequests, keyRequestLabel, validateKeySelection } from '@renderer/utils/identityKeyRequests'
+import {
+  applyKeyExpiryPreset,
+  identityKeysCountLabel,
+  keysAddedLabel,
+  keySelectionLabel,
+  presetKeyVariants,
+  toggleKeyBudgetUnit,
+  toggleKeyVariant,
+  updateKeyBoundsDraft,
+  updateKeyLimitsDraft,
+} from '@renderer/utils/identityKeySetup'
 import AddKeysConfirmStep from './AddKeysConfirmStep'
 import KeyVariantList from './KeyVariantList'
 
@@ -48,10 +59,13 @@ function AddKeysWizard({
 }: AddKeysWizardProps): React.JSX.Element {
   const { status } = useAuth()
   const network = status?.network ?? null
-  const recommended = useMemo(() => presetKeyVariants(identity.keys), [identity.keys])
+  const now = useNow()
+  const recommended = useMemo(() => presetKeyVariants(identity.keys, now), [identity.keys, now])
   const [selected, setSelected] = useState<IdentityKeyVariant[]>([])
+  const [boundsDrafts, setBoundsDrafts] = useState<KeyBoundsDraftMap>({})
+  const [limitsDrafts, setLimitsDrafts] = useState<KeyLimitsDraftMap>({})
   const [submitOpen, setSubmitOpen] = useState(false)
-  const requests = useMemo(() => selected.map(variantRequest), [selected])
+  const { requests, valid: inputsValid } = useMemo(() => buildKeyRequests(selected, boundsDrafts, limitsDrafts, now), [selected, boundsDrafts, limitsDrafts, now])
   const check = validateKeySelection(selected)
   const balance = identity.balance.amount
 
@@ -60,11 +74,11 @@ function AddKeysWizard({
     recipient: '',
     identityId: identity.identifier,
     keys: requests,
-    destinationValid: requests.length > 0,
+    destinationValid: requests.length > 0 && inputsValid,
   })
-  const feeCredits = fee.loading || fee.err != null ? null : fee.feeCredits
-  const shortfall = check.empty ? null : feeShortfall(fee.err != null, balance, feeCredits)
-  const ready = !check.empty && !check.overLimit && feeCredits != null && shortfall == null
+  const feeCredits = !inputsValid || fee.loading || fee.err != null ? null : fee.feeCredits
+  const shortfall = check.empty || !inputsValid ? null : feeShortfall(fee.err != null, balance, feeCredits)
+  const ready = !check.empty && !check.overLimit && inputsValid && feeCredits != null && shortfall == null
   const name = identityLabel(identity)
 
   const run = async (password: string): Promise<KeysAddedResult> => {
@@ -97,8 +111,15 @@ function AddKeysWizard({
         existing={identity.keys}
         selected={selected}
         recommended={recommended}
+        boundsDrafts={boundsDrafts}
+        limitsDrafts={limitsDrafts}
+        now={now}
         check={check}
         onToggle={(variant, checked) => setSelected(current => toggleKeyVariant(current, variant, checked))}
+        onChangeBounds={(variant, patch) => setBoundsDrafts(current => updateKeyBoundsDraft(current, variant, patch))}
+        onChangeLimits={(variant, patch) => setLimitsDrafts(current => updateKeyLimitsDraft(current, variant, patch))}
+        onSelectExpiryPreset={(variant, durationMs) => setLimitsDrafts(current => applyKeyExpiryPreset(current, variant, durationMs, now))}
+        onToggleBudgetUnit={variant => setLimitsDrafts(current => toggleKeyBudgetUnit(current, variant))}
       />
       {!check.empty && (
         <div className={`flex flex-col gap-2 ${SURFACE_SECTION}`}>

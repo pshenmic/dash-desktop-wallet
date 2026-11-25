@@ -12,6 +12,7 @@ export function operationFeeRequest(walletId: string | null, operation: Transfer
     ? `outputs:${Array.isArray(recipient) ? Math.max(recipient.length, 1) : 1}`
     : JSON.stringify(recipient)
   const noteKey = shieldedSource == null ? '' : `${shieldedSource.kind}:${shieldedSource.noteIndexes.join(',')}`
-  const maxKey = `${walletId}:${operation}:${recipientKey}:${coreSpendSourceKey(coreSource)}:${platformSpendSourceKey(platformSource)}:${identityId}:${noteKey}:${JSON.stringify(keys ?? [])}:${JSON.stringify(keyIds ?? [])}`
+  const keysKey = JSON.stringify(keys ?? [], (_k, v) => (typeof v === 'bigint' ? v.toString() : v))
+  const maxKey = `${walletId}:${operation}:${recipientKey}:${coreSpendSourceKey(coreSource)}:${platformSpendSourceKey(platformSource)}:${identityId}:${noteKey}:${keysKey}:${JSON.stringify(keyIds ?? [])}`
   return { walletId, operation, feeParams, maxKey, key: `${maxKey}:${amountCredits}:${amountDuffs}` }
 }

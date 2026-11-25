@@ -58,16 +58,54 @@ describe('dashPayMissingKeys', () => {
     expect(dashPayMissingKeys(withoutHigh)).toEqual([AUTH_HIGH])
   })
 
-  it('accepts unbound encryption keys but not disabled or non-ECDSA ones', () => {
+  it('accepts unbound encryption keys but not disabled, non-ECDSA, or other-contract keys', () => {
     const unbound = [...LEGACY_KEYS, key(4, 'ENCRYPTION', 'MEDIUM'), key(5, 'DECRYPTION', 'MEDIUM')]
     expect(dashPayMissingKeys(unbound)).toEqual([])
     const unusable = [...LEGACY_KEYS, key(4, 'ENCRYPTION', 'MEDIUM', { disabledAt: DISABLED_AT }), key(5, 'DECRYPTION', 'MEDIUM', { keyType: 'BLS12_381' })]
     expect(dashPayMissingKeys(unusable)).toEqual([ENC, DEC])
+    const foreign = [
+      key(0, 'AUTHENTICATION', 'MASTER'),
+      key(1, 'AUTHENTICATION', 'HIGH', { contractBounds: { contractId: 'GWRSAVFMjXx8HpQFaNJMqBV7MBgMK4br5UESsB4S31Ec', documentType: null } }),
+      key(2, 'ENCRYPTION', 'MEDIUM', { contractBounds: { contractId: 'GWRSAVFMjXx8HpQFaNJMqBV7MBgMK4br5UESsB4S31Ec', documentType: 'note' } }),
+      key(3, 'DECRYPTION', 'MEDIUM', { contractBounds: { contractId: DASHPAY_KEY_BOUNDS.contractId, documentType: null } }),
+    ]
+    expect(dashPayMissingKeys(foreign)).toEqual([ENC, AUTH_HIGH])
   })
 
   it('compares purposes and levels case-insensitively', () => {
     const lowercase = [key(0, 'authentication', 'high'), key(1, 'encryption', 'medium'), key(2, 'decryption', 'medium')]
     expect(dashPayMissingKeys(lowercase)).toEqual([])
+  })
+
+  it('treats keys with expiresAt <= now as unusable while accepting expiresAt > now', () => {
+    const NOW = 1_700_000_000_000
+    const atBoundary = [
+      key(0, 'AUTHENTICATION', 'MASTER'),
+      key(1, 'AUTHENTICATION', 'HIGH', { expiresAt: NOW }),
+      key(2, 'ENCRYPTION', 'MEDIUM', { contractBounds: DASHPAY_KEY_BOUNDS, expiresAt: NOW - 1 }),
+      key(3, 'DECRYPTION', 'MEDIUM', { contractBounds: DASHPAY_KEY_BOUNDS, expiresAt: NOW + 1 }),
+    ]
+    expect(dashPayMissingKeys(atBoundary, NOW)).toEqual([ENC, AUTH_HIGH])
+    expect(dashPayReadiness(identity(atBoundary), NOW)).toEqual({
+      readiness: DashPayReadiness.NeedsKeys,
+      canSend: false,
+      canRegister: false,
+      missingKeys: [ENC, AUTH_HIGH],
+    })
+
+    const stillValid = [
+      key(0, 'AUTHENTICATION', 'MASTER'),
+      key(1, 'AUTHENTICATION', 'HIGH', { expiresAt: NOW + 1 }),
+      key(2, 'ENCRYPTION', 'MEDIUM', { contractBounds: DASHPAY_KEY_BOUNDS, expiresAt: NOW + 1 }),
+      key(3, 'DECRYPTION', 'MEDIUM', { contractBounds: DASHPAY_KEY_BOUNDS, expiresAt: NOW + 1 }),
+    ]
+    expect(dashPayMissingKeys(stillValid, NOW)).toEqual([])
+    expect(dashPayReadiness(identity(stillValid), NOW)).toEqual({
+      readiness: DashPayReadiness.Ready,
+      canSend: true,
+      canRegister: true,
+      missingKeys: [],
+    })
   })
 })
 

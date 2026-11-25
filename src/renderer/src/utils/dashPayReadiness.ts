@@ -1,20 +1,28 @@
-import type { IdentityKeyDto, IdentityKeyRequestDto } from '@renderer/api/types'
+import type { IdentityKeyBoundsDto, IdentityKeyDto, IdentityKeyRequestDto } from '@renderer/api/types'
 import { DASHPAY_REQUIRED_KEYS, DASHPAY_SETUP_COPY, DASHPAY_SIGNING_KEY } from '@renderer/constants/dashPay'
 import { IDENTITY_KEY_TYPE_ECDSA } from '@renderer/constants/identityKeys'
 import { DashPayReadiness, DashPaySetupStep, SetupStepState } from '@renderer/enums/DashPay'
 import type { IdentityApiDto } from '@renderer/hooks/useIdentities'
 import type { DashPayReadinessInfo, SetupStepModel } from '@renderer/types/DashPay'
-import { isIdentityKeyActive } from './identities'
+import { isIdentityKeyUsable } from './identities'
 
-function keySatisfies(key: IdentityKeyDto, request: IdentityKeyRequestDto): boolean {
-  return isIdentityKeyActive(key)
+function boundsSatisfy(actual: IdentityKeyBoundsDto | null, required: IdentityKeyBoundsDto | null): boolean {
+  if (actual == null) return true
+  if (required == null) return false
+  return actual.contractId === required.contractId
+    && (actual.documentType == null || actual.documentType === required.documentType)
+}
+
+function keySatisfies(key: IdentityKeyDto, request: IdentityKeyRequestDto, now: number = Date.now()): boolean {
+  return isIdentityKeyUsable(key, now)
     && key.keyType.toUpperCase() === IDENTITY_KEY_TYPE_ECDSA
     && key.purpose.toUpperCase() === request.purpose
     && key.securityLevel.toUpperCase() === request.securityLevel
+    && boundsSatisfy(key.contractBounds, request.contractBounds)
 }
 
-export function dashPayMissingKeys(keys: IdentityKeyDto[]): IdentityKeyRequestDto[] {
-  return DASHPAY_REQUIRED_KEYS.filter(required => !keys.some(key => keySatisfies(key, required)))
+export function dashPayMissingKeys(keys: IdentityKeyDto[], now: number = Date.now()): IdentityKeyRequestDto[] {
+  return DASHPAY_REQUIRED_KEYS.filter(required => !keys.some(key => keySatisfies(key, required, now)))
 }
 
 function readinessOf(missing: number, hasUsername: boolean): DashPayReadiness {
@@ -22,12 +30,12 @@ function readinessOf(missing: number, hasUsername: boolean): DashPayReadiness {
   return hasUsername ? DashPayReadiness.Ready : DashPayReadiness.NoUsername
 }
 
-export function dashPayReadiness(identity: Pick<IdentityApiDto, 'usernames' | 'keys'>): DashPayReadinessInfo {
-  const missingKeys = dashPayMissingKeys(identity.keys)
+export function dashPayReadiness(identity: Pick<IdentityApiDto, 'usernames' | 'keys'>, now: number = Date.now()): DashPayReadinessInfo {
+  const missingKeys = dashPayMissingKeys(identity.keys, now)
   return {
     readiness: readinessOf(missingKeys.length, identity.usernames.length > 0),
     canSend: missingKeys.length === 0,
-    canRegister: identity.keys.some(key => keySatisfies(key, DASHPAY_SIGNING_KEY)),
+    canRegister: identity.keys.some(key => keySatisfies(key, DASHPAY_SIGNING_KEY, now)),
     missingKeys,
   }
 }
