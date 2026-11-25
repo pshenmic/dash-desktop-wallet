@@ -11,6 +11,8 @@ import {
   NODE_MATCHED_FORMS,
   NODE_SHARES_COPY,
   NODE_SHARES_FORMS,
+  REMOVE_IMPORTED_KEYS_COPY,
+  UNMATCHED_IMPORTED_KEYS_COPY,
 } from '@renderer/constants/masternodeNodes'
 import {
   ENABLED_MASTERNODE_STATUS,
@@ -368,4 +370,25 @@ function rolePillFromOrigin(role: MasternodeKeyRole, origin: NodeRoleOrigin): No
 
 export function nodeRolePills(node: MasternodeDto): NodeRolePill[] {
   return WALLET_ROLE_ORDER.map(role => rolePillFromOrigin(role, resolveRoleOrigin(node, role)))
+}
+
+export function importedKeyRowId(key: Pick<ImportedMasternodeKeyDto, 'role' | 'publicKey'>): string {
+  return `${key.role}:${key.publicKey}`
+}
+
+export function unmatchedImportedKeysTitle(count: number): string {
+  return count === 1
+    ? UNMATCHED_IMPORTED_KEYS_COPY.bannerSingle
+    : UNMATCHED_IMPORTED_KEYS_COPY.bannerPlural.replace('{count}', String(count))
+}
+
+export function removeImportedKeysConfirmLabel(count: number, removing: boolean): string {
+  if (removing) return REMOVE_IMPORTED_KEYS_COPY.removing
+  return count === 1
+    ? REMOVE_IMPORTED_KEYS_COPY.confirmSingle
+    : REMOVE_IMPORTED_KEYS_COPY.confirmPlural.replace('{count}', String(count))
+}
+
+export function hasUnmatchedRpcOwnerKey(keys: ImportedMasternodeKeyDto[], connectionMode: ConnectionType): boolean {
+  return connectionMode === 'rpc' && keys.some(key => key.role === 'owner')
 }

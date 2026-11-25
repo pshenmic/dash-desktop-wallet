@@ -64,6 +64,13 @@ export interface RemoveImportedKeysModalProps {
   onNodeRemoved: () => void
 }
 
+export interface UnmatchedImportedKeysModalProps {
+  walletId: string
+  unmatchedKeys: ImportedMasternodeKeyDto[]
+  open: boolean
+  onClose: () => void
+}
+
 export interface MasternodeFieldInputProps {
   value: string
   onChange: (value: string) => void

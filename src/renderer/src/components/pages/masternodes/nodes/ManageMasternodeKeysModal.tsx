@@ -24,7 +24,13 @@ import { useConnectionModeContext } from '@renderer/contexts/ConnectionModeConte
 import { AlertTone } from '@renderer/enums/AlertTone'
 import { ModalSize } from '@renderer/enums/ModalSize'
 import { SegmentedControlAppearance } from '@renderer/enums/SegmentedControlAppearance'
-import { refreshImportedMasternodeKeys, refreshMasternodes, useImportedMasternodeKeys, useMasternodes } from '@renderer/hooks/useMasternodes'
+import {
+  refreshImportedMasternodeKeys,
+  refreshMasternodes,
+  refreshUnmatchedImportedMasternodeKeys,
+  useImportedMasternodeKeys,
+  useMasternodes,
+} from '@renderer/hooks/useMasternodes'
 import type { DetectedMasternodeKeyItem } from '@renderer/types/MasternodeKeyDetection'
 import type { KeyImportNotice, ManageMasternodeKeysModalProps } from '@renderer/types/MasternodeNodes'
 import { countLabel } from '@renderer/utils/countLabel'
@@ -130,7 +136,11 @@ export default function ManageMasternodeKeysModal({
 
       if (importedList.length === 1) {
         const matched = await API.importMasternodeKey(walletId, importedList[0].role, importedList[0].key, password)
-        await Promise.all([refreshImportedMasternodeKeys(walletId), refreshMasternodes(walletId)])
+        await Promise.all([
+          refreshImportedMasternodeKeys(walletId),
+          refreshUnmatchedImportedMasternodeKeys(walletId),
+          refreshMasternodes(walletId),
+        ])
         if (requestId === requestIdRef.current) {
           setImportNotice({
             tone: desired === 'rpc' && importedList[0].role === 'owner' && matched != null && matched.length === 0
@@ -153,7 +163,11 @@ export default function ManageMasternodeKeysModal({
           if (desired === 'rpc' && entry.role === 'owner' && matched.length === 0) anyRpcOwnerUnmatched = true
         }
       }
-      await Promise.all([refreshImportedMasternodeKeys(walletId), refreshMasternodes(walletId)])
+      await Promise.all([
+        refreshImportedMasternodeKeys(walletId),
+        refreshUnmatchedImportedMasternodeKeys(walletId),
+        refreshMasternodes(walletId),
+      ])
       if (requestId === requestIdRef.current) {
         const base = MANAGE_KEYS_COPY.multiImportedNoticeTemplate.replace('{count}', String(importedList.length))
         const message = anyNullMatch

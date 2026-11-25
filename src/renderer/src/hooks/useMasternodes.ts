@@ -7,6 +7,8 @@ import {
   MASTERNODE_IMPORTED_KEYS_NAMESPACE,
   MASTERNODE_LOAD_ERROR,
   MASTERNODE_REFRESH_MS,
+  MASTERNODE_UNMATCHED_KEYS_ERROR,
+  MASTERNODE_UNMATCHED_KEYS_NAMESPACE,
 } from '@renderer/constants/masternodes'
 import {
   mergePendingMasternodes,
@@ -59,4 +61,25 @@ export function useImportedMasternodeKeys(walletId: string) {
 export function refreshImportedMasternodeKeys(walletId: string): Promise<void> {
   invalidateAsyncCache(MASTERNODE_IMPORTED_KEYS_NAMESPACE, walletId)
   return prefetchAsyncCache(MASTERNODE_IMPORTED_KEYS_NAMESPACE, walletId, () => API.getImportedMasternodeKeys(walletId))
+}
+
+export function useUnmatchedImportedMasternodeKeys(walletId: string): {
+  unmatchedKeys: ImportedMasternodeKeyDto[]
+  resolved: boolean
+  loading: boolean
+  err: string | null
+} {
+  const { data, loading, err } = useAsyncWithCache<ImportedMasternodeKeyDto[] | null>(
+    MASTERNODE_UNMATCHED_KEYS_NAMESPACE,
+    walletId,
+    () => API.getUnmatchedImportedMasternodeKeys(walletId),
+    null,
+    { errorMessage: MASTERNODE_UNMATCHED_KEYS_ERROR, refreshIntervalMs: MASTERNODE_REFRESH_MS }
+  )
+  return { unmatchedKeys: data ?? [], resolved: data !== null, loading, err }
+}
+
+export function refreshUnmatchedImportedMasternodeKeys(walletId: string): Promise<void> {
+  invalidateAsyncCache(MASTERNODE_UNMATCHED_KEYS_NAMESPACE, walletId)
+  return prefetchAsyncCache(MASTERNODE_UNMATCHED_KEYS_NAMESPACE, walletId, () => API.getUnmatchedImportedMasternodeKeys(walletId))
 }

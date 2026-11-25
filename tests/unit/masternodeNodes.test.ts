@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { PrivateKey } from 'dash-core-sdk'
 import type { ConnectionType, MasternodeDto, MasternodeKeyRole, OwnedMasternodeShareDto } from '@renderer/api/types'
 import { DUFFS_PER_DASH } from '@renderer/constants/balance'
-import { MANAGE_KEYS_COPY, NODES_TAB_COPY, NODE_CARD_COPY, NODE_DETAIL_COPY } from '@renderer/constants/masternodeNodes'
+import {
+  MANAGE_KEYS_COPY,
+  NODES_TAB_COPY,
+  NODE_CARD_COPY,
+  NODE_DETAIL_COPY,
+  REMOVE_IMPORTED_KEYS_COPY,
+  UNMATCHED_IMPORTED_KEYS_COPY,
+} from '@renderer/constants/masternodeNodes'
 import { COMBINE_COLLATERAL_SELECTION } from '@renderer/constants/masternodeRegistration'
 import { REGISTERING_MASTERNODE_STATUS } from '@renderer/constants/masternodes'
 import { MasternodeViewMode, NodeSegment, PayoutChoiceKind, RegistrarKeyChoiceKind } from '@renderer/enums/Masternodes'
@@ -34,7 +41,9 @@ import {
   formatServiceAddress,
   formatSharePercent,
   hasRoleInWallet,
+  hasUnmatchedRpcOwnerKey,
   hasVotingKey,
+  importedKeyRowId,
   importedKeyStatusMessage,
   isOwnedShare,
   isSharedNode,
@@ -55,12 +64,14 @@ import {
   nodeVotingWeightDisplay,
   nodeWalletRoles,
   parseMasternodeViewMode,
+  removeImportedKeysConfirmLabel,
   revokeNodeDisabledReason,
   shareOriginBadge,
   shareRatio,
   sharedMasternodes,
   shortProTxHash,
   soloMasternodes,
+  unmatchedImportedKeysTitle,
   updateRegistrarDisabledReason,
   updateServiceDisabledReason,
 } from '@renderer/utils/masternodeNodes'
@@ -1260,5 +1271,39 @@ describe('Masternode view mode and card display helpers', () => {
       inWallet: false,
       canSign: false,
     })
+  })
+})
+
+describe('Unmatched imported keys helpers', () => {
+  it('builds stable importedKeyRowId values from role and publicKey', () => {
+    expect(importedKeyRowId({ role: 'owner', publicKey: 'XownerKey' })).toBe('owner:XownerKey')
+    expect(importedKeyRowId({ role: 'voting', publicKey: 'XvotingKey' })).toBe('voting:XvotingKey')
+    expect(importedKeyRowId({ role: 'operator', publicKey: 'ab'.repeat(48) })).toBe(`operator:${'ab'.repeat(48)}`)
+  })
+
+  it('formats unmatchedImportedKeysTitle for single and plural counts', () => {
+    expect(unmatchedImportedKeysTitle(1)).toBe(UNMATCHED_IMPORTED_KEYS_COPY.bannerSingle)
+    expect(unmatchedImportedKeysTitle(0)).toBe('0 unmatched imported keys')
+    expect(unmatchedImportedKeysTitle(3)).toBe('3 unmatched imported keys')
+  })
+
+  it('formats removeImportedKeysConfirmLabel for removing, single, and plural counts', () => {
+    expect(removeImportedKeysConfirmLabel(1, true)).toBe(REMOVE_IMPORTED_KEYS_COPY.removing)
+    expect(removeImportedKeysConfirmLabel(3, true)).toBe(REMOVE_IMPORTED_KEYS_COPY.removing)
+    expect(removeImportedKeysConfirmLabel(1, false)).toBe(REMOVE_IMPORTED_KEYS_COPY.confirmSingle)
+    expect(removeImportedKeysConfirmLabel(0, false)).toBe('Remove 0 keys')
+    expect(removeImportedKeysConfirmLabel(3, false)).toBe('Remove 3 keys')
+  })
+
+  it('detects unmatched owner keys only in rpc mode', () => {
+    const ownerKey = { role: 'owner' as const, publicKey: 'Xowner', hasPrivateKey: false }
+    const votingKey = { role: 'voting' as const, publicKey: 'Xvoting', hasPrivateKey: true }
+    const operatorKey = { role: 'operator' as const, publicKey: 'ab'.repeat(48), hasPrivateKey: true }
+
+    expect(hasUnmatchedRpcOwnerKey([], 'rpc')).toBe(false)
+    expect(hasUnmatchedRpcOwnerKey([votingKey, operatorKey], 'rpc')).toBe(false)
+    expect(hasUnmatchedRpcOwnerKey([votingKey, ownerKey], 'rpc')).toBe(true)
+    expect(hasUnmatchedRpcOwnerKey([ownerKey], 'p2p')).toBe(false)
+    expect(hasUnmatchedRpcOwnerKey([], 'p2p')).toBe(false)
   })
 })

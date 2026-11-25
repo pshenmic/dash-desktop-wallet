@@ -187,6 +187,10 @@ export class API {
     return this.api.getImportedMasternodeKeys(walletId)
   }
 
+  static async getUnmatchedImportedMasternodeKeys(walletId: string): Promise<ImportedMasternodeKeyDto[] | null> {
+    return this.api.getUnmatchedImportedMasternodeKeys(walletId)
+  }
+
   // Owner and voting keys are WIF, an operator key the hex BLS secret. Every
   // imported key needs the wallet password, since its secret is encrypted so it
   // can sign consent, funding, a vote or an operator update. Answers the nodes

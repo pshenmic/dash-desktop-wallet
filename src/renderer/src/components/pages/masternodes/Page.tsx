@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button, KeyIcon } from '@renderer/components/dash-ui-kit-extended'
+import Alert from '@renderer/components/ui/Alert'
 import PageHeader from '@renderer/components/ui/PageHeader'
 import PageTabs from '@renderer/components/ui/PageTabs'
+import { UNMATCHED_IMPORTED_KEYS_COPY } from '@renderer/constants/masternodeNodes'
 import {
   MASTERNODE_PARAMS,
   MASTERNODES_HEADER_COPY,
@@ -12,18 +14,22 @@ import {
 import { PAGE_HEADERS } from '@renderer/constants/pageHeaders'
 import { SURFACE_PANEL } from '@renderer/constants/surfaces'
 import { useAuth } from '@renderer/contexts/AuthContext'
+import { AlertTone } from '@renderer/enums/AlertTone'
 import { MasternodesTab } from '@renderer/enums/Masternodes'
 import { prefetchAddresses } from '@renderer/hooks/useAdresses'
 import { useDetailScrollRestore } from '@renderer/hooks/useDetailScrollRestore'
+import { useUnmatchedImportedMasternodeKeys } from '@renderer/hooks/useMasternodes'
 import { prefetchReceiveRequests } from '@renderer/hooks/useReceiveRequests'
 import type { MasternodesNavigationState } from '@renderer/types/MasternodeNodes'
 import type { MasternodesPageProps } from '@renderer/types/MasternodeScreens'
+import { unmatchedImportedKeysTitle } from '@renderer/utils/masternodeNodes'
 import { getOrCreateRegisterWizardState, setRegisterWizardActive } from '@renderer/utils/masternodeRegistrationDraft'
 import { enumParam, withParams } from '@renderer/utils/searchParams'
 import ManageMasternodeKeysModal from './nodes/ManageMasternodeKeysModal'
 import NodeDetail from './nodes/NodeDetail'
 import NodesTab from './nodes/NodesTab'
 import RegisterMasternodeWizard from './nodes/RegisterMasternodeWizard'
+import UnmatchedImportedKeysModal from './nodes/UnmatchedImportedKeysModal'
 import ParticipateSharedWizard from './shared/ParticipateSharedWizard'
 import SharedTab from './shared/SharedTab'
 
@@ -38,6 +44,8 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
   const [sharedQuery, setSharedQuery] = useState('')
   const [sharedVisibleCount, setSharedVisibleCount] = useState(MASTERNODES_PAGE_SIZE)
   const [keysOpen, setKeysOpen] = useState(false)
+  const [unmatchedOpen, setUnmatchedOpen] = useState(false)
+  const { unmatchedKeys } = useUnmatchedImportedMasternodeKeys(walletId)
   const tab = enumParam(MasternodesTab, searchParams.get(MASTERNODE_PARAMS.tab), MasternodesTab.Nodes)
   const detail = searchParams.get(MASTERNODE_PARAMS.node)
   const persistedWizard = getOrCreateRegisterWizardState(walletId, network ?? null)
@@ -215,6 +223,26 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
                 </div>
               )}
             />
+            {unmatchedKeys.length > 0 && (
+              <Alert
+                tone={AlertTone.Info}
+                icon={<KeyIcon size={16} color={'currentColor'} />}
+                title={unmatchedImportedKeysTitle(unmatchedKeys.length)}
+                description={UNMATCHED_IMPORTED_KEYS_COPY.bannerDescription}
+                className={'mb-4'}
+                actions={(
+                  <Button
+                    type={'button'}
+                    size={'compact'}
+                    colorScheme={'lightBlue-mint'}
+                    onClick={() => setUnmatchedOpen(true)}
+                    className={'rounded-[.75rem]'}
+                  >
+                    {UNMATCHED_IMPORTED_KEYS_COPY.bannerAction}
+                  </Button>
+                )}
+              />
+            )}
             <div className={`relative ${SURFACE_PANEL}`}>
               <PageTabs
                 items={items}
@@ -226,6 +254,14 @@ export default function MasternodesPage({ walletId }: MasternodesPageProps): Rea
         )}
       </div>
       {keysOpen && <ManageMasternodeKeysModal walletId={walletId} open={keysOpen} onClose={() => setKeysOpen(false)} />}
+      {unmatchedOpen && unmatchedKeys.length > 0 && (
+        <UnmatchedImportedKeysModal
+          walletId={walletId}
+          unmatchedKeys={unmatchedKeys}
+          open={unmatchedOpen}
+          onClose={() => setUnmatchedOpen(false)}
+        />
+      )}
     </div>
   )
 }

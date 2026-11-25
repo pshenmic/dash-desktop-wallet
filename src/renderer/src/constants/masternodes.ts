@@ -24,9 +24,11 @@ export const MASTERNODES_HEADER_COPY = {
 export const MASTERNODES_PAGE_SIZE = 50
 export const MASTERNODE_CACHE_NAMESPACE = 'masternodes'
 export const MASTERNODE_IMPORTED_KEYS_NAMESPACE = 'masternode-imported-keys'
+export const MASTERNODE_UNMATCHED_KEYS_NAMESPACE = 'masternode-unmatched-keys'
 export const MASTERNODE_COLLATERALS_NAMESPACE = 'masternode-collaterals'
 export const MASTERNODE_LOAD_ERROR = 'Failed to load masternodes'
 export const MASTERNODE_IMPORTED_KEYS_ERROR = 'Failed to load imported masternode keys'
+export const MASTERNODE_UNMATCHED_KEYS_ERROR = 'Failed to load unmatched imported masternode keys'
 export const MASTERNODE_REFRESH_MS = 15_000
 
 export const MASTERNODE_TABLE_GRID = 'grid-cols-[minmax(0,2.25fr)_5.75rem_minmax(0,0.85fr)_minmax(0,1.1fr)_1rem]'

@@ -219,6 +219,19 @@ export const REMOVE_IMPORTED_KEYS_COPY = {
   removing: 'Removing…',
 } as const
 
+export const UNMATCHED_IMPORTED_KEYS_COPY = {
+  bannerSingle: '1 unmatched imported key',
+  bannerPlural: '{count} unmatched imported keys',
+  bannerDescription: 'Imported keys not carried by any masternode in the current network list. They may belong to a removed node or still await indexing.',
+  bannerAction: 'Review keys',
+  title: 'Unmatched imported keys',
+  description: 'These imported keys do not match any masternode in the current network list. Removing a key deletes its stored secret from this wallet.',
+  keysLabel: 'Unmatched keys in this wallet',
+  watchOnlyBadge: 'Watch-only',
+  rpcOwnerTitle: 'Share-owner keys match in P2P mode',
+  rpcOwnerDescription: 'In RPC mode, imported owner keys for shared masternodes appear unmatched because individual share owners are indexed only in P2P mode.',
+} as const
+
 export const REGISTER_MASTERNODE_COPY = {
   title: 'Register masternode',
   description: 'Register a Regular masternode (1,000 DASH) or Evonode (4,000 DASH) with keys derived by this wallet.',

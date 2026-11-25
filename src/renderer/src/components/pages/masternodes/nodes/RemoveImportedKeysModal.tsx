@@ -1,23 +1,27 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { API } from '@renderer/api'
-import type { ImportedMasternodeKeyDto } from '@renderer/api/types'
 import { HighlightedIdentifier, Text } from '@renderer/components/dash-ui-kit-extended'
 import CheckRow from '@renderer/components/ui/CheckRow'
 import CopyableError from '@renderer/components/ui/CopyableError'
 import CustomBadge from '@renderer/components/ui/CustomBadge'
 import Modal from '@renderer/components/ui/Modal'
 import ModalActions from '@renderer/components/ui/ModalActions'
-import { MASTERNODE_KEY_ROLE_LABELS, REMOVE_IMPORTED_KEYS_COPY } from '@renderer/constants/masternodeNodes'
+import {
+  MASTERNODE_KEY_ROLE_LABELS,
+  REMOVE_IMPORTED_KEYS_COPY,
+  UNMATCHED_IMPORTED_KEYS_COPY,
+} from '@renderer/constants/masternodeNodes'
 import { CHIP_ACTION, SURFACE_SECTION } from '@renderer/constants/surfaces'
 import { ModalActionTone } from '@renderer/enums/ModalActionTone'
 import { ModalSize } from '@renderer/enums/ModalSize'
-import { refreshImportedMasternodeKeys, refreshMasternodes } from '@renderer/hooks/useMasternodes'
+import {
+  refreshImportedMasternodeKeys,
+  refreshMasternodes,
+  refreshUnmatchedImportedMasternodeKeys,
+} from '@renderer/hooks/useMasternodes'
 import type { RemoveImportedKeysModalProps } from '@renderer/types/MasternodeNodes'
 import { getErrorMessage } from '@renderer/utils/error'
-
-function keyId(key: ImportedMasternodeKeyDto): string {
-  return `${key.role}:${key.publicKey}`
-}
+import { importedKeyRowId, removeImportedKeysConfirmLabel } from '@renderer/utils/masternodeNodes'
 
 export default function RemoveImportedKeysModal({
   walletId,
@@ -27,20 +31,33 @@ export default function RemoveImportedKeysModal({
   onClose,
   onNodeRemoved,
 }: RemoveImportedKeysModalProps): React.JSX.Element {
-  const [selectedIds, setSelectedIds] = useState<string[]>(() => matchedKeys.map(keyId))
+  const [selectedIds, setSelectedIds] = useState<string[]>(() => matchedKeys.map(importedKeyRowId))
   const [removing, setRemoving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const wasOpenRef = useRef(false)
 
   useEffect(() => {
-    if (!open) return
-    setSelectedIds(matchedKeys.map(keyId))
-    setRemoving(false)
-    setError(null)
+    if (!open) {
+      wasOpenRef.current = false
+      return
+    }
+    if (!wasOpenRef.current) {
+      wasOpenRef.current = true
+      setSelectedIds(matchedKeys.map(importedKeyRowId))
+      setRemoving(false)
+      setError(null)
+      return
+    }
+    const validIds = new Set(matchedKeys.map(importedKeyRowId))
+    setSelectedIds((prev) => {
+      const next = prev.filter(id => validIds.has(id))
+      return next.length === prev.length ? prev : next
+    })
   }, [open, matchedKeys])
 
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
   const selectedKeys = useMemo(
-    () => matchedKeys.filter(key => selectedSet.has(keyId(key))),
+    () => matchedKeys.filter(key => selectedSet.has(importedKeyRowId(key))),
     [matchedKeys, selectedSet],
   )
 
@@ -53,28 +70,30 @@ export default function RemoveImportedKeysModal({
     if (removing || selectedKeys.length === 0) return
     setRemoving(true)
     setError(null)
+    let succeeded = false
     try {
       for (const key of selectedKeys) {
         await API.removeMasternodeKey(walletId, key)
       }
-      await Promise.all([refreshImportedMasternodeKeys(walletId), refreshMasternodes(walletId)])
+      succeeded = true
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      await Promise.all([
+        refreshImportedMasternodeKeys(walletId),
+        refreshUnmatchedImportedMasternodeKeys(walletId),
+        refreshMasternodes(walletId),
+      ]).catch(() => {})
+      setRemoving(false)
+    }
+    if (succeeded) {
       const latest = await API.getMasternodes(walletId).catch(() => null)
       onClose()
       if (latest != null && !latest.some(entry => entry.proTxHash === node.proTxHash)) {
         onNodeRemoved()
       }
-    } catch (err) {
-      setError(getErrorMessage(err))
-    } finally {
-      setRemoving(false)
     }
   }
-
-  const confirmLabel = removing
-    ? REMOVE_IMPORTED_KEYS_COPY.removing
-    : selectedKeys.length === 1
-      ? REMOVE_IMPORTED_KEYS_COPY.confirmSingle
-      : REMOVE_IMPORTED_KEYS_COPY.confirmPlural.replace('{count}', String(selectedKeys.length))
 
   return (
     <Modal
@@ -96,7 +115,7 @@ export default function RemoveImportedKeysModal({
                 <button
                   type={'button'}
                   disabled={removing}
-                  onClick={() => setSelectedIds(matchedKeys.map(keyId))}
+                  onClick={() => setSelectedIds(matchedKeys.map(importedKeyRowId))}
                   className={CHIP_ACTION}
                 >
                   {REMOVE_IMPORTED_KEYS_COPY.selectAll}
@@ -115,7 +134,7 @@ export default function RemoveImportedKeysModal({
 
           <div className={'flex max-h-56 flex-col gap-1.5 overflow-y-auto scrollbar-custom'}>
             {matchedKeys.map((item) => {
-              const id = keyId(item)
+              const id = importedKeyRowId(item)
               return (
                 <CheckRow
                   key={id}
@@ -127,6 +146,9 @@ export default function RemoveImportedKeysModal({
                 >
                   <div className={'flex min-w-0 items-center gap-2'}>
                     <CustomBadge variant={'accent'} text={MASTERNODE_KEY_ROLE_LABELS[item.role]} className={'shrink-0'} />
+                    {!item.hasPrivateKey && (
+                      <CustomBadge variant={'muted'} text={UNMATCHED_IMPORTED_KEYS_COPY.watchOnlyBadge} className={'shrink-0'} />
+                    )}
                     <HighlightedIdentifier className={'min-w-0 text-xs! font-medium!'}>{item.publicKey}</HighlightedIdentifier>
                   </div>
                 </CheckRow>
@@ -146,7 +168,7 @@ export default function RemoveImportedKeysModal({
           disabled: removing,
         }}
         primary={{
-          label: confirmLabel,
+          label: removeImportedKeysConfirmLabel(selectedKeys.length, removing),
           onClick: () => { void handleConfirm() },
           disabled: selectedKeys.length === 0 || removing,
           loading: removing,
