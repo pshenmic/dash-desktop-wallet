@@ -56,6 +56,9 @@ export interface DashscanTransaction {
   chainLocked: boolean
   coinjoin: boolean
   multisig: boolean
+  // Decoded DIP-2 payload, served in the same SDK JSON shape the p2p path
+  // builds; `{raw}` for a type the indexer could not decode.
+  extraPayload: Record<string, unknown> | null
 }
 
 export interface DashscanUTXO {

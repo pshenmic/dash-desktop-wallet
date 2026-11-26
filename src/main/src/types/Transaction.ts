@@ -55,6 +55,14 @@ export interface TransactionOutput {
   spentHeight: number
 }
 
+// A DIP-2 special transaction's payload, decoded to the SDK's JSON form so both
+// providers describe the same fields. `type` is the payload class name; null
+// keeps a payload this SDK cannot decode, whose only field is `raw`.
+export interface TransactionExtraPayload {
+  type: string | null
+  payload: Record<string, unknown>
+}
+
 export interface Transaction {
   address: string
   direction: number
@@ -78,4 +86,6 @@ export interface Transaction {
   // Whether this wallet broadcast it. Only meaningful while unconfirmed, and
   // null from sources that cannot know — the chain does not record provenance.
   isLocal: boolean | null
+  // Null for an ordinary payment; set on a special transaction.
+  extraPayload: TransactionExtraPayload | null
 }

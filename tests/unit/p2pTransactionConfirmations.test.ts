@@ -28,6 +28,7 @@ const stored = (txid: string, blockHeight: number): Transaction => ({
   instantLocked: false,
   chainlocked: false,
   isLocal: false,
+  extraPayload: null,
 })
 
 const provider = (transactions: Transaction[], tipHeight = TIP): P2PWalletProvider => {

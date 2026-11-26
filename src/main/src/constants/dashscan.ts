@@ -16,6 +16,25 @@ export const DASHSCAN_MASTERNODE_FILTER: Record<MasternodeKeyFilter, string> = {
 export const DASHSCAN_ADDRESS_CHUNK = 100
 
 export const XPUB_PAGE_LIMIT = 100
+
+// Dashscan names the DIP-2 type as its own enum member; the SDK names the
+// payload class instead, and the transaction DTO uses the SDK's name in both
+// modes. CLASSIC carries no payload and is deliberately absent.
+export const DASHSCAN_EXTRA_PAYLOAD_TYPE: Record<string, string> = {
+  PROVIDER_REGISTRATION: 'ProRegTx',
+  PROVIDER_UPDATE_SERVICE: 'ProUpServTx',
+  PROVIDER_UPDATE_REGISTRAR: 'ProUpRegTx',
+  PROVIDER_UPDATE_REVOCATION: 'ProUpRevTx',
+  COINBASE: 'CbTx',
+  QUORUM_COMMITMENT: 'QcTx',
+  MASTERNODE_HARD_FORK_SIGNAL: 'MnHfTx',
+  ASSET_LOCK: 'AssetLockTx',
+  ASSET_UNLOCK: 'AssetUnlockTx',
+  PROVIDER_DISSOLVE: 'ProDisTx',
+  PROVIDER_UPDATE_SHARE: 'ProUpShareTx',
+  PROVIDER_UPDATE_SHARED_REGISTRAR: 'ProUpSharedRegTx',
+}
+
 // A cursor that does not advance would otherwise spin the page walk forever.
 export const XPUB_MAX_PAGES = 200
 

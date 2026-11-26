@@ -354,6 +354,12 @@ interface TransactionOutputDTO {
   spentHeight: number
 }
 
+interface TransactionExtraPayloadDTO {
+  // Payload class name from the SDK; null when only raw bytes could be kept.
+  type: string | null
+  payload: Record<string, unknown>
+}
+
 interface TransactionDTO {
   address: string
   direction: number
@@ -373,6 +379,8 @@ interface TransactionDTO {
   instantLocked: boolean
   chainlocked: boolean
   isLocal: boolean | null
+  // Null for an ordinary payment; set on a DIP-2 special transaction.
+  extraPayload: TransactionExtraPayloadDTO | null
 }
 
 // Mirrors src/main/src/types/WalletHistory: both chains of one wallet, kept in

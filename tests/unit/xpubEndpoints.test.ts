@@ -46,6 +46,7 @@ const tx = (hash: string, blockHeight: number | null): DashscanTransaction => ({
   chainLocked: false,
   coinjoin: false,
   multisig: false,
+  extraPayload: null,
 })
 
 const daos = (): {addressDAO: AddressDAO; walletDAO: WalletDAO; transactionDAO: TransactionDAO} => ({

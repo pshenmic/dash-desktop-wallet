@@ -22,6 +22,7 @@ function tx(overrides: Partial<Transaction>): Transaction {
     instantLocked: false,
     chainlocked: false,
     isLocal: true,
+    extraPayload: null,
     ...overrides,
   }
 }

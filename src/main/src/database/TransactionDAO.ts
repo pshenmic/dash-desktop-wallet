@@ -1,7 +1,7 @@
 import type {Knex} from 'knex'
 import type {AppliedBlock, AppliedTx, UnconfirmedInputOutpoint, WalletSyncUtxo} from '../../p2p/types/walletSync'
 import type {AddressInfo} from '../types/AddressInfo'
-import type {PrevOutRef, ResolvedPrevOut, Transaction, TransactionInput, TransactionOutput, UnresolvedInput} from '../types/Transaction'
+import type {PrevOutRef, ResolvedPrevOut, Transaction, TransactionExtraPayload, TransactionInput, TransactionOutput, UnresolvedInput} from '../types/Transaction'
 import type {TxLockStatus} from '../types/TxLockStatus'
 import type {UtxoRow} from '../types/UTXO'
 import type {Outpoint} from '../types/CoinSelection'
@@ -11,6 +11,7 @@ import {PendingTx} from '../types/PendingTx'
 import {COINBASE_PREV_TXID} from '../constants/chain'
 import {INSERT_CHUNK_SIZE, SELECT_CHUNK_SIZE} from '../constants/database'
 import {chunk} from '../utils/chunk'
+import {readExtraPayload} from '../utils/transactionExtraPayload'
 import {Logger} from '../utils/logger'
 
 const log = new Logger('walletSync')
@@ -621,9 +622,12 @@ export class TransactionDAO {
   }
 
   getTransactionsByWallet = async (walletId: string): Promise<Transaction[]> => {
-    const rows = await this.transactionRows(walletId).orderBy(['t.txid', 'o.vout', 'i.vin'])
+    const [rows, payloads] = await Promise.all([
+      this.transactionRows(walletId).orderBy(['t.txid', 'o.vout', 'i.vin']),
+      this.extraPayloads(walletId),
+    ])
 
-    return shapeRowsToTransactions(rows, walletId)
+    return shapeRowsToTransactions(rows, walletId, payloads)
   }
 
   getTransactionsByAddress = async (walletId: string, address: string): Promise<Transaction[]> => {
@@ -639,16 +643,38 @@ export class TransactionDAO {
     const rows = await this.transactionRows(walletId)
       .whereIn('t.txid', txidsForAddress)
       .orderBy(['t.txid', 'o.vout', 'i.vin'])
+    const payloads = await this.extraPayloads(walletId, rows.map(row => row.t_txid as string))
 
-    return shapeRowsToTransactions(rows, walletId)
+    return shapeRowsToTransactions(rows, walletId, payloads)
   }
 
   getTransactionByTxid = async (walletId: string, txid: string): Promise<Transaction | undefined> => {
     const rows = await this.transactionRows(walletId)
       .andWhere('t.txid', txid)
       .orderBy(['o.vout', 'i.vin'])
+    const payloads = await this.extraPayloads(walletId, [txid])
 
-    return shapeRowsToTransactions(rows, walletId)[0]
+    return shapeRowsToTransactions(rows, walletId, payloads)[0]
+  }
+
+  // A payload lives in the stored serialization, so it is read beside the join
+  // rather than through it: the join fans one tx out over every input × output.
+  private extraPayloads = async (walletId: string, txids?: string[]): Promise<Map<string, TransactionExtraPayload>> => {
+    const payloads = new Map<string, TransactionExtraPayload>()
+    const unique = txids == null ? null : [...new Set(txids)]
+    if (unique?.length === 0) return payloads
+
+    for (const slice of unique == null ? [null] : chunk(unique, SELECT_CHUNK_SIZE)) {
+      const query = this.knex('transactions').select('txid', 'raw').where('wallet_id', walletId)
+      if (slice) query.whereIn('txid', slice)
+
+      for (const row of await query) {
+        const payload = readExtraPayload(row.raw as Uint8Array)
+        if (payload != null) payloads.set(row.txid as string, payload)
+      }
+    }
+
+    return payloads
   }
 }
 
@@ -670,7 +696,7 @@ async function abandonWithinTrx(trx: Knex.Transaction, walletId: string, txid: s
 // Direction, amounts and primary address come from the is_mine column on each
 // output, and on the prev output for inputs.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function shapeRowsToTransactions(rows: any[], walletId: string): Transaction[] {
+function shapeRowsToTransactions(rows: any[], walletId: string, payloads: Map<string, TransactionExtraPayload>): Transaction[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const byTxid = new Map<string, {blockHeight: number; blockTime: number; firstSeenAt: number | null; size: number; instantLocked: boolean; chainlocked: boolean; isLocal: boolean; outputs: Map<number, any>; inputs: Map<number, any>}>()
 
@@ -758,6 +784,7 @@ function shapeRowsToTransactions(rows: any[], walletId: string): Transaction[] {
       instantLocked: acc.instantLocked,
       chainlocked: acc.chainlocked,
       isLocal: acc.isLocal,
+      extraPayload: payloads.get(txid) ?? null,
     })
   }
 

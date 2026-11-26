@@ -50,6 +50,7 @@ function tx(overrides: Partial<DashscanTransaction> = {}): DashscanTransaction {
     chainLocked: true,
     coinjoin: false,
     multisig: false,
+    extraPayload: null,
     ...overrides,
   }
 }
@@ -139,6 +140,31 @@ describe('dashscanToWalletTransactions', () => {
     expect(result.address).toBe(OURS)
     expect(result.vin).toEqual([])
     expect(result.vout).toHaveLength(1)
+  })
+
+  it('carries the decoded extra payload of a special transaction', () => {
+    const payload = {version: 1, count: 1, outputs: []}
+    const [result] = dashscanToWalletTransactions([tx({type: 'ASSET_LOCK', extraPayload: payload})], 'w1', [OURS])
+
+    expect(result.extraPayload).toEqual({type: 'AssetLockTx', payload})
+  })
+
+  // A payload newer than the SDK is served as `{raw}`; the tx is still usable,
+  // so its type is all that is missing.
+  it('keeps an undecodable payload as raw bytes without a type name', () => {
+    const [result] = dashscanToWalletTransactions(
+      [tx({type: 'SOMETHING_NEW', extraPayload: {raw: '0102'}})],
+      'w1',
+      [OURS],
+    )
+
+    expect(result.extraPayload).toEqual({type: null, payload: {raw: '0102'}})
+  })
+
+  it('leaves an ordinary transaction without a payload', () => {
+    const [result] = dashscanToWalletTransactions([tx()], 'w1', [OURS])
+
+    expect(result.extraPayload).toBeNull()
   })
 
   it('survives a transaction with neither side, as QUORUM_COMMITMENT arrives', () => {

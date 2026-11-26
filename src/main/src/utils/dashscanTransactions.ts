@@ -1,6 +1,7 @@
 import {Transaction, TransactionInput, TransactionOutput} from '../types/Transaction'
 import {DashscanTransaction, DashscanVOut} from '../types/Dashscan'
 import {DUFFS_PER_DASH} from '../constants/chain'
+import {DASHSCAN_EXTRA_PAYLOAD_TYPE} from '../constants/dashscan'
 
 const duffs = (value: string | number | null): bigint => {
   if (value == null) return 0n
@@ -77,6 +78,11 @@ export const dashscanToWalletTransactions = (
       spentHeight: output.spentHeight ?? 0,
     }))
 
+    const extraPayload = tx.extraPayload == null ? null : {
+      type: tx.type != null ? DASHSCAN_EXTRA_PAYLOAD_TYPE[tx.type] ?? null : null,
+      payload: tx.extraPayload,
+    }
+
     return {
       address,
       direction,
@@ -96,6 +102,7 @@ export const dashscanToWalletTransactions = (
       instantLocked: tx.instantLock != null,
       chainlocked: tx.chainLocked === true,
       isLocal: null,
+      extraPayload,
     }
   })
 }

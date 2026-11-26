@@ -52,6 +52,7 @@ const dashscanPage = {
     chainLocked: false,
     coinjoin: false,
     multisig: false,
+    extraPayload: null,
   }],
   pagination: {limit: 100, nextCursor: null},
 }
