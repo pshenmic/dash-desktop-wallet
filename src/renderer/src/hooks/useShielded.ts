@@ -5,6 +5,7 @@ import { ShieldedSyncPhase } from '@renderer/enums/ShieldedSyncPhase'
 import { ShieldedProverState } from '@renderer/enums/ShieldedProverState'
 import { toast } from '@renderer/components/ui/Toast'
 import {
+  SHIELDED_ADDRESSES_CACHE_NS,
   SHIELDED_NOTES_INFO_CACHE_NS,
   SHIELDED_NOTES_INFO_POLL_MS,
   SHIELDED_POOL_REFRESH_MS,
@@ -125,7 +126,10 @@ export function useShieldedSyncState(walletId: string | null | undefined, notify
         previousError = error
         setState(prev => isSameSyncState(prev, next) ? prev : next)
         running = next.phase === ShieldedSyncPhase.Syncing || next.phase === ShieldedSyncPhase.Recovering
-        if (wasRunning && !running) invalidateAsyncCache(SHIELDED_NOTES_INFO_CACHE_NS, walletId)
+        if (wasRunning && !running) {
+          invalidateAsyncCache(SHIELDED_NOTES_INFO_CACHE_NS, walletId)
+          invalidateAsyncCache(SHIELDED_ADDRESSES_CACHE_NS, walletId)
+        }
         wasRunning = running
       } catch {
         /* keep last state, retry */

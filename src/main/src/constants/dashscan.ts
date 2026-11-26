@@ -1,9 +1,18 @@
+import {MasternodeKeyFilter} from '../types/Masternode'
+
 export const DASHSCAN_BASE_URLS: Record<'mainnet' | 'testnet', string> = {
   mainnet: 'https://dashscan.pshenmic.dev',
   testnet: 'https://testnet.dashscan.pshenmic.dev'
 }
 
-// The batch endpoints reject more than 100 addresses per call.
+export const DASHSCAN_MASTERNODE_FILTER: Record<MasternodeKeyFilter, string> = {
+  owner: 'owner_address',
+  voting: 'voting_address',
+  operator: 'pub_key_operator',
+  collateral: 'collateral_address',
+}
+
+// The batch endpoints, masternode filters included, reject more than 100 values per call.
 export const DASHSCAN_ADDRESS_CHUNK = 100
 
 export const XPUB_PAGE_LIMIT = 100

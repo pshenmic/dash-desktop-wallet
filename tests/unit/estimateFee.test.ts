@@ -70,7 +70,7 @@ function service(
   const addressDAO = {
     getAddressesByWalletId: async () => ({receiving: [{address: CORE_ADDRESS}], change: []}),
   }
-  const providers = {forWallet: () => ({getWalletUtxos: async () => utxos})}
+  const providers = {forWallet: () => ({getWalletUtxos: async () => utxos}), spendableUtxos: async () => utxos}
 
   const svc = new FeeService(
     walletDAO as unknown as WalletDAO,

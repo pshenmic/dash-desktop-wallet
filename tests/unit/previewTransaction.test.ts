@@ -85,7 +85,10 @@ function service(options: {utxos?: UTXO[]; candidates?: PlatformSourceCandidate[
       ],
     }),
   }
-  const providers = {forWallet: () => ({ensureReady, getWalletUtxos: async () => options.utxos ?? []})}
+  const providers = {
+    forWallet: () => ({ensureReady, getWalletUtxos: async () => options.utxos ?? []}),
+    spendableUtxos: async () => options.utxos ?? [],
+  }
 
   const svc = new FeeService(
     walletDAO as unknown as WalletDAO,

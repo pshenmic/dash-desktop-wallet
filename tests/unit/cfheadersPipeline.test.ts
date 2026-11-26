@@ -92,6 +92,8 @@ describe('cfheaders pipelining', () => {
       seedUtxos: [],
       unconfirmedInputOutpoints: [],
       cfilterCursor: null,
+      watchedProviders: [],
+      foreignBlock: () => false,
     })
     await worker.start()
     pool.sent = []

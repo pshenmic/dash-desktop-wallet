@@ -88,3 +88,24 @@ export interface DashscanAddressInfo {
   balance: string
   txCount: number
 }
+
+// /masternodes, straight from Core's `masternodelist json`. `outpoint` is the
+// collateral as `txid-vout`; `lastPaidTime` is an ISO date, the epoch for never.
+export interface DashscanMasternode {
+  proTxHash: string
+  address: string
+  payee: string
+  status: string
+  type: string
+  posPenaltyScore: number
+  lastPaidTime: string
+  lastPaidBlock: number
+  ownerAddress: string
+  votingAddress: string
+  collateralAddress: string
+  pubKeyOperator: string
+  outpoint: string
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHTTPPort: number | null
+}

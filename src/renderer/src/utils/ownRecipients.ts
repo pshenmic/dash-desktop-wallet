@@ -1,38 +1,186 @@
+import type { Contact, WalletAddressDto } from '../api/types'
+import { RECIPIENT_AUTOCOMPLETE_MIN_CHARS } from '../constants/addressField'
 import { DestinationKind } from '../enums/DestinationKind'
 import type { DropdownFieldOption } from '../types/DropdownField'
+import type { ReceiveRequestDto, ReceiveRequestKind } from '../types/ReceiveRequest'
+import type { SendRecipientDraft } from '../types/SendDraft'
 import type { OwnRecipientInventory } from '../types/SendRecipients'
 import { creditsToDash, davToDash } from './balance'
+import { addressLabelsByAddress } from './receiveDefaults'
+
+export function walletAddressLabels(
+  requests: ReadonlyArray<Pick<ReceiveRequestDto, 'address' | 'label'>> | undefined,
+  receiving: WalletAddressDto[],
+  change: WalletAddressDto[],
+): Map<string, string> {
+  const labels = addressLabelsByAddress(requests ?? [])
+  for (const address of [...receiving, ...change]) {
+    const trimmed = address.label?.trim() ?? ''
+    if (trimmed !== '' && !labels.has(address.address)) {
+      labels.set(address.address, trimmed)
+    }
+  }
+  return labels
+}
+
+export function recipientAddressBadge(
+  address: string,
+  walletLabels?: ReadonlyMap<string, string>,
+  contacts?: ReadonlyArray<Pick<Contact, 'address' | 'label'>>,
+): string | undefined {
+  const trimmed = address.trim()
+  if (trimmed === '') return undefined
+  const walletLabel = walletLabels?.get(trimmed)?.trim()
+  if (walletLabel) return walletLabel
+  const contactLabel = contacts?.find(contact => contact.address.trim() === trimmed)?.label.trim()
+  return contactLabel || undefined
+}
+
+export function optionMatchesQuery(option: DropdownFieldOption, needle: string): boolean {
+  const badge = option.badge?.trim()
+  if (badge && badge.toLowerCase().includes(needle)) return true
+  if (option.value.toLowerCase().includes(needle)) return true
+  return Boolean(option.searchTerms?.some(term => term.toLowerCase().includes(needle)))
+}
+
+export function matchingOwnOptions(
+  options: DropdownFieldOption[],
+  query: string,
+  minChars = RECIPIENT_AUTOCOMPLETE_MIN_CHARS,
+): DropdownFieldOption[] {
+  const trimmed = query.trim()
+  if (trimmed.length < minChars || options.some(option => option.value === trimmed)) return []
+  const needle = trimmed.toLowerCase()
+  return options.filter(option => optionMatchesQuery(option, needle))
+}
+
+export function availableOwnRecipientOptions(
+  options: DropdownFieldOption[] | undefined,
+  recipients: SendRecipientDraft[],
+  currentId: string,
+): DropdownFieldOption[] | undefined {
+  if (options == null) return undefined
+  const taken = new Set(
+    recipients
+      .filter(recipient => recipient.id !== currentId)
+      .map(recipient => recipient.address.trim())
+      .filter(Boolean),
+  )
+  if (taken.size === 0) return options
+  return options.filter(option => !taken.has(option.value))
+}
+
+function labelForAddress(
+  address: string,
+  labelsByAddress: ReadonlyMap<string, string> | undefined,
+  fallback?: string | null,
+): string | undefined {
+  const fromMap = labelsByAddress?.get(address)?.trim()
+  if (fromMap) return fromMap
+  const fromAddress = fallback?.trim()
+  return fromAddress || undefined
+}
+
+function labeledRequestFallbacks(
+  requests: ReadonlyArray<Pick<ReceiveRequestDto, 'address' | 'label' | 'kind'>> | undefined,
+  kind: ReceiveRequestKind,
+  labelsByAddress: ReadonlyMap<string, string> | undefined,
+  description?: string,
+): DropdownFieldOption[] {
+  if (!requests) return []
+  const options: DropdownFieldOption[] = []
+  for (const request of requests) {
+    if (request.kind !== kind) continue
+    const badge = labelForAddress(request.address, labelsByAddress, request.label)
+    if (!badge) continue
+    options.push({
+      value: request.address,
+      label: request.address,
+      badge,
+      ...(description ? { description } : {}),
+    })
+  }
+  return options
+}
 
 export function ownRecipientOptions(kind: DestinationKind, inventory: OwnRecipientInventory): DropdownFieldOption[] {
   let options: DropdownFieldOption[]
   switch (kind) {
     case DestinationKind.CoreAddress:
-      options = [...inventory.receiving, ...inventory.change]
-        .filter(address => !address.isUsed && address.balance === 0n && address.txCount === 0)
-        .map(address => ({
-          value: address.address,
-          label: address.address,
-          metadata: [`${davToDash(address.balance)} Dash`, `Tx count: ${address.txCount}`],
-          description: [address.isChange ? 'Your change address' : 'Your receiving address', address.label].filter(Boolean).join(' · '),
-        }))
+      options = [
+        ...[...inventory.receiving, ...inventory.change]
+          .filter(address => {
+            const badge = labelForAddress(address.address, inventory.labelsByAddress, address.label)
+            return badge != null || (!address.isUsed && address.balance === 0n && address.txCount === 0)
+          })
+          .map(address => {
+            const badge = labelForAddress(address.address, inventory.labelsByAddress, address.label)
+            return {
+              value: address.address,
+              label: address.address,
+              ...(badge ? { badge } : {}),
+              metadata: [`${davToDash(address.balance)} Dash`, `Tx count: ${address.txCount}`],
+              description: address.isChange ? 'Your change address' : 'Your receiving address',
+            }
+          }),
+        ...labeledRequestFallbacks(inventory.receiveRequests, 'core', inventory.labelsByAddress, 'Your receiving address'),
+      ]
       break
     case DestinationKind.PlatformAddress:
-      options = inventory.platformAddresses
-        .filter(address => address.balanceCredits === 0n && address.nonce === 0)
-        .map(address => ({
-          value: address.platformAddress,
-          label: address.platformAddress,
-          metadata: [`${creditsToDash(address.balanceCredits)} Dash`, `Nonce: ${address.nonce}`],
-        }))
+      options = [
+        ...inventory.platformAddresses
+          .filter(address => {
+            const badge = labelForAddress(address.platformAddress, inventory.labelsByAddress)
+            return badge != null || (address.balanceCredits === 0n && address.nonce === 0)
+          })
+          .map(address => {
+            const badge = labelForAddress(address.platformAddress, inventory.labelsByAddress)
+            return {
+              value: address.platformAddress,
+              label: address.platformAddress,
+              ...(badge ? { badge } : {}),
+              metadata: [`${creditsToDash(address.balanceCredits)} Dash`, `Nonce: ${address.nonce}`],
+            }
+          }),
+        ...labeledRequestFallbacks(inventory.receiveRequests, 'platform', inventory.labelsByAddress),
+      ]
       break
     case DestinationKind.Shielded: {
-      if (inventory.shieldedNotes === null) return []
+      if (inventory.shieldedNotes === null) {
+        options = [
+          ...inventory.shieldedAddresses.flatMap(address => {
+            const badge = labelForAddress(address, inventory.labelsByAddress)
+            return badge ? [{ value: address, label: address, badge }] : []
+          }),
+          ...labeledRequestFallbacks(inventory.receiveRequests, 'shielded', inventory.labelsByAddress),
+        ]
+        break
+      }
       const usedAddresses = new Set(inventory.shieldedNotes.map(note => note.address))
-      options = inventory.shieldedAddresses.filter(address => !usedAddresses.has(address)).map(address => ({
-        value: address,
-        label: address,
-        metadata: ['0 Dash'],
-      }))
+      const balancesByAddress = new Map<string, bigint>()
+      for (const note of inventory.shieldedNotes) {
+        if (!note.spent) {
+          balancesByAddress.set(note.address, (balancesByAddress.get(note.address) ?? 0n) + note.amount)
+        }
+      }
+      options = [
+        ...inventory.shieldedAddresses
+          .filter(address => {
+            const badge = labelForAddress(address, inventory.labelsByAddress)
+            return badge != null || !usedAddresses.has(address)
+          })
+          .map(address => {
+            const badge = labelForAddress(address, inventory.labelsByAddress)
+            const noteBalance = balancesByAddress.get(address) ?? 0n
+            return {
+              value: address,
+              label: address,
+              ...(badge ? { badge } : {}),
+              metadata: [usedAddresses.has(address) ? `${creditsToDash(noteBalance)} Dash` : '0 Dash'],
+            }
+          }),
+        ...labeledRequestFallbacks(inventory.receiveRequests, 'shielded', inventory.labelsByAddress),
+      ]
       break
     }
     case DestinationKind.Identity:
@@ -40,11 +188,18 @@ export function ownRecipientOptions(kind: DestinationKind, inventory: OwnRecipie
         value: identity.identifier,
         label: identity.identifier,
         description: identity.usernames[0],
+        searchTerms: identity.usernames,
         metadata: [`${creditsToDash(identity.balance.amount)} Dash`],
       }))
       break
     default:
       return []
   }
-  return Array.from(new Map(options.map(option => [option.value, option])).values())
+  const deduped = new Map<string, DropdownFieldOption>()
+  for (const option of options) {
+    if (!deduped.has(option.value)) {
+      deduped.set(option.value, option)
+    }
+  }
+  return Array.from(deduped.values())
 }
