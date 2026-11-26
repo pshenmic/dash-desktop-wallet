@@ -12,6 +12,9 @@ export const DUST_THRESHOLD_DUFFS = 546n
 export const MASTERNODE_COLLATERAL_DUFFS: Record<MasternodeType, bigint> = {Regular: 1_000n * DUFFS_PER_DASH, Evo: 4_000n * DUFFS_PER_DASH}
 // nType of a ProTx.
 export const MASTERNODE_TYPE_CODE: Record<MasternodeType, number> = {Regular: 0, Evo: 1}
+// Core's shared_sign reports this when a registration has no early-exit cost.
+export const SHARED_REGISTRATION_NO_PENALTY_WARNING =
+  'This registration has no early-exit penalty: any participant can dissolve without cost beyond the transaction fee.'
 // Basic-scheme BLS. Valid before and after v24; v3 (ExtNetInfo) only after it.
 export const PROTX_VERSION = 2
 // 100%, in the hundredths of a percent ProRegTx carries.

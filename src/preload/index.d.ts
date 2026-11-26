@@ -78,6 +78,7 @@ interface MasternodeShareDTO {
 interface OwnedMasternodeShareDTO extends MasternodeShareDTO {
   keyIndex: number | null
   imported: boolean
+  canSign: boolean
 }
 
 interface MasternodeCollateralDTO {
@@ -90,6 +91,78 @@ interface MasternodeCollateralDTO {
 interface ImportedMasternodeKeyDTO {
   role: MasternodeKeyRole
   publicKey: string
+  hasPrivateKey: boolean
+}
+
+// Mirrors SharedRegistrationPreview and its rows in src/main/src/types/Masternode.
+interface SharedRegistrationShareDTO {
+  index: number
+  amountDuffs: bigint
+  ownerAddress: string
+  refundAddress: string | null
+  rewardAddress: string | null
+}
+
+interface SharedRegistrationFundingInputDTO {
+  index: number
+  address: string
+  amountDuffs: bigint
+}
+
+interface SharedRegistrationOutputDTO {
+  address: string | null
+  amountDuffs: bigint
+  collateral: boolean
+}
+
+interface SharedRegistrationPreviewDTO {
+  consentHash: string
+  shares: SharedRegistrationShareDTO[]
+  signableShares: number[]
+  outputs: SharedRegistrationOutputDTO[]
+  collateralDuffs: bigint
+  warning: string | null
+}
+
+interface SharedRegistrationFundingPreviewDTO extends SharedRegistrationPreviewDTO {
+  fundingInputs: SharedRegistrationFundingInputDTO[]
+  fundingTotalDuffs: bigint
+  unresolvedInputs: number
+}
+
+interface SharedRegistrationSignatureDTO {
+  shareIndex: number
+  signature: string
+}
+
+interface SharedRegistrationConsentResultDTO {
+  preview: SharedRegistrationPreviewDTO
+  signatures: SharedRegistrationSignatureDTO[]
+}
+
+interface SharedRegistrationFundingResultDTO {
+  preview: SharedRegistrationFundingPreviewDTO
+  signedHex: string
+  signedInputs: number[]
+}
+
+// Mirrors MasternodeIdentityInfo; empty until Platform indexes the registration.
+interface MasternodeIdentityInfoDTO {
+  proTxHash: string
+  role: 'owner' | 'voter'
+  identifier: string
+  usernames: string[]
+  keys: Array<{
+    keyId: number
+    purpose: string
+    securityLevel: string
+    keyType: string
+    data: string
+    readOnly: boolean
+    disabledAt: number | null
+    contractBounds: { contractId: string; documentType: string | null } | null
+  }>
+  balance: { amount: bigint; usdAmount: string }
 }
 
 interface MasternodeDTO {
@@ -109,6 +182,7 @@ interface MasternodeDTO {
   votingKeyIndex: number | null
   operatorKeyIndex: number | null
   importedRoles: MasternodeKeyRole[]
+  importedSigningRoles: MasternodeKeyRole[]
   platformNodeId: string | null
   platformP2PPort: number | null
   platformHttpPort: number | null
@@ -137,6 +211,9 @@ interface MasternodeRegistrationDTO {
   serviceAddress: string | null
   payoutAddress: string
   operatorReward: number
+  ownerAddress: string | null
+  votingAddress: string | null
+  operatorPublicKey: string | null
   platformNodeId: string | null
   platformP2PPort: number | null
   platformHttpPort: number | null
@@ -146,6 +223,28 @@ interface MasternodeRegistrationResultDTO {
   proTxHash: string
   fee: bigint
   peersAcked: number
+}
+
+// Mirrors MasternodeRegistrationPreview; a null key index is a caller-supplied key.
+interface MasternodeRegistrationPreviewDTO {
+  type: 'Regular' | 'Evo'
+  collateral: { txid: string; vout: number }
+  ownerAddress: string
+  votingAddress: string
+  operatorPublicKey: string
+  serviceAddress: string | null
+  payoutAddress: string
+  operatorReward: number
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+  ownerKeyIndex: number | null
+  votingKeyIndex: number | null
+  operatorKeyIndex: number | null
+  inputs: PreviewEntry[]
+  outputs: PreviewEntry[]
+  feeDuffs: bigint
+  unsignedHex: string
 }
 
 // Mirrors MasternodeRegistrarUpdate and MasternodeUpdateResult in
@@ -193,6 +292,37 @@ interface ProposalTallyDTO {
   no: number
   abstain: number
 }
+
+// Mirrors ContestedResource in src/main/src/types/Governance. Index values stay
+// base64 of their serialized form, which is what a vote transition carries.
+interface ContestedResourceDTO {
+  contractId: string
+  documentTypeName: string
+  indexName: string
+  indexValues: string[]
+  // Text-decoded index values, null where the value is not text.
+  indexValuesText: Array<string | null>
+  endsAt: number
+  vote: {
+    contenders: Array<{identifier: string; votes: number}>
+    lockVotes: number
+    abstainVotes: number
+    outcome: 'WonByIdentity' | 'Locked' | 'NoWinner' | null
+    winner: string | null
+  }
+}
+
+interface ContestedResourceVoteRequestDTO {
+  contractId: string
+  documentTypeName: string
+  indexName: string
+  indexValues: string[]
+}
+
+type ContestedResourceVoteChoiceDTO =
+  | {kind: 'towardsIdentity'; identifier: string}
+  | {kind: 'lock'}
+  | {kind: 'abstain'}
 
 type VoteOutcomeDTO = 'yes' | 'no' | 'abstain'
 
@@ -297,17 +427,25 @@ declare global {
       getBalance: (address: string | string[], network: Network) => Promise<unknown>
       getIdentities: (walletId: string) => Promise<unknown>
       getMasternodes: (walletId: string) => Promise<MasternodeDTO[] | null>
+      getMasternodeIdentities: (walletId: string) => Promise<MasternodeIdentityInfoDTO[]>
       getMasternodeCollaterals: (walletId: string) => Promise<MasternodeCollateralDTO[]>
       getImportedMasternodeKeys: (walletId: string) => Promise<ImportedMasternodeKeyDTO[]>
-      importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => Promise<MasternodeDTO[] | null>
+      getUnmatchedImportedMasternodeKeys: (walletId: string) => Promise<ImportedMasternodeKeyDTO[] | null>
+      importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string, password?: string) => Promise<MasternodeDTO[] | null>
       removeMasternodeKey: (walletId: string, key: ImportedMasternodeKeyDTO) => Promise<void>
-      registerMasternode: (walletId: string, registration: MasternodeRegistrationDTO, password: string) => Promise<MasternodeRegistrationResultDTO>
+      signAndBroadcastMasternodeRegistration: (walletId: string, unsignedHex: string, password: string) => Promise<MasternodeRegistrationResultDTO>
+      previewMasternodeRegistration: (walletId: string, registration: MasternodeRegistrationDTO) => Promise<MasternodeRegistrationPreviewDTO>
+      previewSharedMasternodeRegistration: (walletId: string, txHex: string) => Promise<SharedRegistrationFundingPreviewDTO>
+      signSharedMasternodeRegistrationConsent: (walletId: string, txHex: string, password: string) => Promise<SharedRegistrationConsentResultDTO>
+      signSharedMasternodeRegistrationFunding: (walletId: string, txHex: string, password: string) => Promise<SharedRegistrationFundingResultDTO>
       updateMasternodeRegistrar: (walletId: string, proTxHash: string, update: MasternodeRegistrarUpdateDTO, password: string) => Promise<MasternodeUpdateResultDTO>
       updateMasternodeService: (walletId: string, proTxHash: string, update: MasternodeServiceUpdateDTO, password: string) => Promise<MasternodeUpdateResultDTO>
       revokeMasternode: (walletId: string, proTxHash: string, reason: RevocationReasonDTO, password: string) => Promise<MasternodeUpdateResultDTO>
       getGovernanceProposals: (walletId: string) => Promise<ProposalDTO[] | null>
       refreshGovernance: (walletId: string, proposalHash?: string) => Promise<void>
       getProposalTally: (walletId: string, proposalHash: string) => Promise<ProposalTallyDTO | null>
+      getContestedResources: (walletId: string) => Promise<ContestedResourceDTO[]>
+      voteContestedResource: (walletId: string, proTxHash: string, resource: ContestedResourceVoteRequestDTO, choice: ContestedResourceVoteChoiceDTO, password: string) => Promise<{stHash: string}>
       voteProposal: (walletId: string, proposalHash: string, outcome: VoteOutcomeDTO, proTxHashes: string[], password: string) => Promise<VoteResultDTO[]>
       getUsernames: (walletId: string) => Promise<unknown>
       refreshDashPay: (walletId: string) => Promise<void>
@@ -327,6 +465,7 @@ declare global {
       selectWallet: (walletId: string) => Promise<void>
       getWalletBalance: (walletId: string) => Promise<unknown>
       setAddressLabel: (walletId: string, address: string, label: string) => Promise<void>
+      setAddressLocked: (walletId: string, address: string, locked: boolean) => Promise<void>
       setWalletLabel: (walletId: string, label: string | null) => Promise<void>
       sendTransaction: (walletId: string, recipients: CoreRecipient[], password: string, source?: CoreSpendSource, changeTo?: string) => Promise<unknown>
       getTxLockStatus: (walletId: string, txid: string) => Promise<unknown>

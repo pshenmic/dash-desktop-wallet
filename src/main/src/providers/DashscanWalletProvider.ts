@@ -210,9 +210,10 @@ export class DashscanWalletProvider implements WalletProvider {
     // Dashscan keeps listing an outpoint as unspent until it indexes the
     // transaction that spent it, so a second send within that window would
     // reselect the same coins and every peer would drop it as a conflict.
-    const [spends, lockedOutpoints] = await Promise.all([
+    const [spends, lockedOutpoints, lockedAddresses] = await Promise.all([
       this.transactionDAO.getPendingSpends(this.walletId, Date.now() - PENDING_SPEND_TTL_MS),
       this.transactionDAO.getLockedOutpoints(this.walletId),
+      this.addressDAO.getLockedAddresses(this.walletId),
     ])
     const spent = new Set(spends.map(({txid, vout}) => `${txid}:${vout}`))
     const locked = new Set(lockedOutpoints.map(({txid, vout}) => `${txid}:${vout}`))
@@ -229,7 +230,7 @@ export class DashscanWalletProvider implements WalletProvider {
         height: utxo.blockHeight ?? 0,
         timestamp: utxo.timestamp != null ? new Date(utxo.timestamp) : null,
         confirmations: utxo.confirmations ?? 0,
-        isLocked: locked.has(`${utxo.prevTxHash}:${utxo.vOutIndex}`),
+        isLocked: locked.has(`${utxo.prevTxHash}:${utxo.vOutIndex}`) || lockedAddresses.has(utxo.address ?? ''),
       }))
   }
 
@@ -296,8 +297,11 @@ export class DashscanWalletProvider implements WalletProvider {
   async nextUnusedAddress(exclude: Set<string> = new Set()): Promise<string> {
     const { receiving } = await this.addressDAO.getAddressesByWalletId(this.walletId)
     if (receiving.length === 0) throw new Error('Wallet has no receiving addresses')
-    const unused = receiving.find(a => !a.isUsed && !exclude.has(a.address))
-    return (unused ?? receiving[receiving.length - 1]).address
+    const available = receiving.filter(a => !a.isLocked)
+    if (available.length === 0) throw new Error('Every receiving address is locked')
+
+    const unused = available.find(a => !a.isUsed && !exclude.has(a.address))
+    return (unused ?? available[available.length - 1]).address
   }
 
   // Only branch, index and usage are kept: a server-supplied address string

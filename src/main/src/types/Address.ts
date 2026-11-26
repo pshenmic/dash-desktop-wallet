@@ -6,6 +6,7 @@ export interface Address {
   index: number
   isChange: boolean
   isUsed: boolean
+  isLocked: boolean
   label: string | null
   balance?: bigint | null
   usdBalance?: string | null

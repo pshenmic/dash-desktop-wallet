@@ -86,6 +86,10 @@ export const MASTERNODE_KEY_WINDOW: AddressWindowPolicy = {
   batch: 20,
   maxRounds: 50,
 }
+// The deepest index a walk can open: the first window plus one gap per widening
+// round. A consent scan must reach as far as discovery did, or it misses a share
+// owner key past the first window.
+export const MASTERNODE_KEY_MAX_INDEX = MASTERNODE_KEY_WINDOW.gapLimit * (MASTERNODE_KEY_WINDOW.maxRounds + 1) - 1
 
 // The p2p child tracks the gap of the two BIP-44 chains by index; a DashPay
 // address sits below both frontiers, so it never moves either.

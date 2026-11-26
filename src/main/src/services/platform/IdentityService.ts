@@ -4,16 +4,19 @@ import {HD_VERSIONS} from '../../constants/addresses'
 import {MAX_KEYS_PER_TRANSITION, MAX_KEYS_TO_DISABLE} from '../../constants/credits'
 import {DashPayCache} from '../../database/DashPayCache'
 import {IdentityDAO} from '../../database/IdentityDAO'
+import {MasternodeIdentityDAO} from '../../database/MasternodeIdentityDAO'
 import {WalletDAO} from '../../database/WalletDAO'
 import {Username, UsernameSearchResult} from '../../types/Username'
 import {DashPayContact} from '../../types/DashPay'
-import {Identity, IdentityInfo} from '../../types/Identity'
+import {Identity, IdentityInfo, PlatformIdentityInfo} from '../../types/Identity'
+import {MasternodeIdentityInfo} from '../../types/MasternodeIdentity'
 import {IdentityKeysUpdate, IdentityPrivateKey} from '../../types/IdentityKeys'
 import {Network} from '../../types/Network'
 import {dashPayContacts} from '../../utils/dashPayContacts'
 import {dashPayAccountPath} from '../../utils/dashPayKeys'
 import {Logger} from '../../utils/logger'
 import {requireSelectedWallet, requireWallet} from '../../utils/requireWallet'
+import {unverifiedUsername} from '../../utils/username'
 import {withUnlockedWallet} from '../../utils/walletSeed'
 import {PlatformWorkerService} from './PlatformWorkerService'
 
@@ -24,13 +27,15 @@ const log = new Logger('identities')
 export class IdentityService {
   private walletDAO: WalletDAO
   private identityDAO: IdentityDAO
+  private masternodeIdentityDAO: MasternodeIdentityDAO
   private dashPayCache: DashPayCache
   private platform: PlatformWorkerService
   private dashPayRefreshes = new Map<string, Promise<void>>()
 
-  constructor(walletDAO: WalletDAO, identityDAO: IdentityDAO, dashPayCache: DashPayCache, platform: PlatformWorkerService) {
+  constructor(walletDAO: WalletDAO, identityDAO: IdentityDAO, masternodeIdentityDAO: MasternodeIdentityDAO, dashPayCache: DashPayCache, platform: PlatformWorkerService) {
     this.walletDAO = walletDAO
     this.identityDAO = identityDAO
+    this.masternodeIdentityDAO = masternodeIdentityDAO
     this.dashPayCache = dashPayCache
     this.platform = platform
   }
@@ -39,11 +44,7 @@ export class IdentityService {
     const wallet = await requireWallet(this.walletDAO, walletId)
 
     const stored = await this.identityDAO.getIdentitiesByWalletId(walletId)
-    const {infos} = await this.platform.request('identityInfos', wallet.network, {
-      identifiers: stored.map(entry => entry.identifier),
-      skipDPNS: false,
-    })
-    const byIdentifier = new Map(infos.map(info => [info.identifier, info]))
+    const byIdentifier = await this.platformIdentityInfos(wallet.network, stored.map(entry => entry.identifier))
 
     // An identity the worker could not resolve is not registered yet — skipped.
     return stored.flatMap(entry => {
@@ -65,6 +66,38 @@ export class IdentityService {
     })
   }
 
+  // Not seed-derived, so it is not in getIdentities; an identity Platform does
+  // not serve yet is still pending.
+  async getMasternodeIdentities(walletId: string): Promise<MasternodeIdentityInfo[]> {
+    const wallet = await requireWallet(this.walletDAO, walletId)
+    const stored = await this.masternodeIdentityDAO.getByWalletId(walletId)
+    if (stored.length === 0) return []
+
+    const byIdentifier = await this.platformIdentityInfos(wallet.network, stored.map(entry => entry.identifier))
+
+    return stored.flatMap(entry => {
+      const info = byIdentifier.get(entry.identifier)
+      if (info == null) return []
+      // TODO: Implement read usd amount
+      return [{
+        proTxHash: entry.proTxHash,
+        role: entry.role,
+        identifier: info.identifier,
+        usernames: info.usernames,
+        keys: info.keys,
+        balance: {
+          amount: info.balance,
+          usdAmount: '0.0'
+        },
+      }]
+    })
+  }
+
+  private async platformIdentityInfos(network: Network, identifiers: string[]): Promise<Map<string, PlatformIdentityInfo>> {
+    const {infos} = await this.platform.request('identityInfos', network, {identifiers, skipDPNS: false})
+    return new Map(infos.map(info => [info.identifier, info]))
+  }
+
   private async requireIdentity(walletId: string, identifier: string): Promise<Identity> {
     const identity = await this.identityDAO.getByIdentifier(walletId, identifier)
     if (identity == null) {
@@ -81,11 +114,14 @@ export class IdentityService {
     const known = cache.requests ?? []
 
     const since = Math.max(0, ...known.map(request => request.createdAt))
-    const pages = await Promise.all(identifiers.map(identifier => this.platform.request('dashPayContactRequests', wallet.network, {identifier, since})))
-    const fresh = pages.flatMap(({sent, received}) => [...sent, ...received])
+    const pages = await Promise.allSettled(identifiers.map(identifier => this.platform.request('dashPayContactRequests', wallet.network, {identifier, since})))
+    const fresh = pages.flatMap(page => page.status === 'fulfilled' ? [...page.value.sent, ...page.value.received] : [])
     const requests = new Map([...known, ...fresh].map(request => [request.id, request]))
 
     cache.requests = [...requests.values()].sort((a, b) => a.createdAt - b.createdAt)
+
+    const failed = pages.find((page): page is PromiseRejectedResult => page.status === 'rejected')
+    if (failed != null) throw failed.reason
   }
 
   // Every name with its contest, contact request and contact name, from the
@@ -104,7 +140,8 @@ export class IdentityService {
     const identifiers = (await this.identityDAO.getIdentitiesByWalletId(walletId)).map(entry => entry.identifier)
     const cache = this.dashPayCache.wallet(walletId)
 
-    await this.refreshDashPayRequests(walletId)
+    // A contact request that does not arrive must not hold back names and contests.
+    await this.refreshDashPayRequests(walletId).catch(err => log.warn(`${walletId}: contact requests not refreshed:`, err))
     const requests = cache.requests ?? []
     const contactIds = [...new Set(dashPayContacts(requests, identifiers, cache.contactKeys).map(contact => contact.contactId))]
 
@@ -121,25 +158,27 @@ export class IdentityService {
     // A contested name has no domain document while its vote runs, so one this
     // process knows stays listed. Last wins: a contest gives only the normalized label.
     const found = [
-      ...contests,
-      ...(cache.usernames ?? []).filter(username => username.status === 'voting'),
-      ...identifiers.flatMap(identifier => (names.get(identifier) ?? []).map(name => ({identifier, label: name.split('.')[0]}))),
+      ...contests.map(contest => ({...contest, contested: true})),
+      ...(cache.usernames ?? []).filter(username => username.status === 'voting')
+        .map(({identifier, label}) => ({identifier, label, contested: true})),
+      ...identifiers.flatMap(identifier => (names.get(identifier) ?? []).map(name => ({identifier, label: name.split('.')[0], contested: false}))),
     ]
 
-    const candidates = new Map(found.map(({identifier, label}) => [`${identifier}:${convertToHomographSafeChars(label)}`, {identifier, label}]))
-    // A name whose check fails keeps what was known of it.
-    const usernames = await Promise.all([...candidates.values()].map(async ({identifier, label}): Promise<Username | undefined> => {
+    const candidates = new Map(found.map(({identifier, label, contested}) => [`${identifier}:${convertToHomographSafeChars(label)}`, {identifier, label, contested}]))
+    // A name whose check fails keeps what was known of it, or stays listed unverified.
+    const usernames = await Promise.all([...candidates.values()].map(async ({identifier, label, contested}): Promise<Username> => {
       const normalizedLabel = convertToHomographSafeChars(label)
       try {
         return {...await this.platform.request('usernameStatus', wallet.network, {identifier, label}), identifier, label, normalizedLabel}
       } catch (err) {
         log.warn(`${label}: username check failed:`, err)
         return cache.usernames?.find(username => username.identifier === identifier && username.normalizedLabel === normalizedLabel)
+          ?? unverifiedUsername(identifier, label, normalizedLabel, contested)
       }
     }))
 
     cache.contactNames = new Map(contactIds.map(contactId => [contactId, names.get(contactId) ?? []]))
-    cache.usernames = usernames.filter(username => username != null)
+    cache.usernames = usernames
     log.info(`${walletId}: refreshed ${cache.usernames.length} name(s), ${requests.length} contact request(s)`)
   }
 

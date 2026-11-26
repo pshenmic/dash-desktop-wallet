@@ -142,19 +142,32 @@ export function ownerNode(owned: Masternode[], proTxHash: string): Masternode & 
   return {...node, ownerKeyIndex}
 }
 
-// A node whose operator key the wallet derives, which is what lets it sign as operator.
-export function operatedNode(owned: Masternode[], proTxHash: string): Masternode & {operatorKeyIndex: number} {
+// A node whose service the operator signs for. The key may be seed-derived or
+// imported, so the index is not required here; the signer decides.
+export function operatedNode(owned: Masternode[], proTxHash: string): Masternode {
   const node = owned.find(entry => entry.proTxHash === proTxHash)
   if (node == null) throw new Error('Not a masternode of this wallet')
-  const {operatorKeyIndex} = node
-  if (operatorKeyIndex == null) throw new Error("This wallet does not derive the masternode's operator key")
-  if (node.isShared) throw new Error('Shared masternode interactions are not supported yet')
-  return {...node, operatorKeyIndex}
+  return node
 }
 
-export function carriesKey(node: NetworkMasternode, {role, publicKey}: ImportedMasternodeKey): boolean {
+// A revoked shared node's registrar comes back only by every share owner
+// signing a ProUpSharedRegTx, which this wallet cannot do.
+export function revocableNode(owned: Masternode[], proTxHash: string): Masternode {
+  const node = operatedNode(owned, proTxHash)
+  if (node.isShared) throw new Error('A shared masternode cannot be revoked: restoring it needs every share owner')
+  return node
+}
+
+export function carriesKey(node: NetworkMasternode, {role, publicKey}: Pick<ImportedMasternodeKey, 'role' | 'publicKey'>): boolean {
   const values = masternodeFilterValues(role, publicKey)
   return nodeKeyValues(role, node).some(key => values.includes(key))
+}
+
+// The imported keys none of the listed nodes carries. A key can be unmatched
+// while its registration is still indexing, so this is advisory — the UI offers
+// removal rather than dropping the key silently.
+export function unmatchedImportedKeys(imported: ImportedMasternodeKey[], nodes: NetworkMasternode[]): ImportedMasternodeKey[] {
+  return imported.filter(key => !nodes.some(node => carriesKey(node, key)))
 }
 
 export function collateralUtxos(utxos: UTXO[]): UTXO[] {
@@ -219,11 +232,12 @@ export function ownedMasternodes(
       votingKeyIndex: matches.voting.get(node.proTxHash) ?? null,
       operatorKeyIndex: matches.operator.get(node.proTxHash) ?? null,
       importedRoles: MASTERNODE_KEY_CHAINS.filter(role => imported.some(key => key.role === role && carriesKey(node, key))),
-      shares: node.shares?.map(share => ({
-        ...share,
-        keyIndex: ownerIndexes.get(share.ownerAddress) ?? null,
-        imported: imported.some(key => key.role === 'owner' && key.publicKey === share.ownerAddress),
-      })) ?? null,
+      importedSigningRoles: MASTERNODE_KEY_CHAINS.filter(role => imported.some(key => key.role === role && key.hasPrivateKey && carriesKey(node, key))),
+      shares: node.shares?.map(share => {
+        const keyIndex = ownerIndexes.get(share.ownerAddress) ?? null
+        const importedKey = imported.find(key => key.role === 'owner' && key.publicKey === share.ownerAddress)
+        return {...share, keyIndex, imported: importedKey != null, canSign: keyIndex != null || importedKey?.hasPrivateKey === true}
+      }) ?? null,
     }))
     .filter(node => outpoints.has(`${node.collateralTxid}:${node.collateralVout}`)
       || node.importedRoles.length > 0

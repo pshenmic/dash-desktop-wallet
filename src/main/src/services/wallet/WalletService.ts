@@ -152,7 +152,7 @@ export class WalletService {
       const deriver = coreAddressDeriver(coreXpub, network, isChange)
       for (let index = 0; index < CORE_ADDRESS_WINDOW.gapLimit; index++) {
         const {address, derivationPath} = deriver.derive(index)
-        addresses.push({walletId, accountId, address, derivationPath, index, isChange, isUsed: false, label: null})
+        addresses.push({walletId, accountId, address, derivationPath, index, isChange, isUsed: false, isLocked: false, label: null})
       }
     }
 
@@ -246,6 +246,10 @@ export class WalletService {
     return this.addressDAO.setAddressLabel(walletId, address, label)
   }
 
+  async setAddressLocked(walletId: string, address: string, locked: boolean): Promise<void> {
+    return this.addressDAO.setAddressLocked(walletId, address, locked)
+  }
+
   async setWalletLabel(walletId: string, label: string | null): Promise<void> {
     return this.walletDAO.updateLabel(walletId, label)
   }
@@ -275,6 +279,7 @@ export class WalletService {
       index,
       isChange,
       isUsed: false,
+      isLocked: false,
       label: null
     }
     await this.addressDAO.insertAddresses([row])

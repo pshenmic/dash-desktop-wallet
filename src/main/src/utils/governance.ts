@@ -9,8 +9,8 @@ import {
   VOTE_OUTCOME_CODE,
 } from '../constants/chain'
 import {DashscanProposal} from '../types/Dashscan'
-import {GovernanceVote, Proposal, ProposalTally, VoteOutcome, VotingNode} from '../types/Governance'
-import {Masternode, MasternodeType, NetworkMasternode} from '../types/Masternode'
+import {GovernanceVote, Proposal, ProposalTally, VoteOutcome, VotingKeyNode, VotingNode} from '../types/Governance'
+import {ImportedMasternodeKey, Masternode, MasternodeType, NetworkMasternode} from '../types/Masternode'
 import {Network} from '../types/Network'
 import {isHash, requireProTxHash} from './providerTx'
 
@@ -100,20 +100,47 @@ export function lastVoteTime(votes: GovernanceVote[], {collateralTxid, collatera
   return own.length === 0 ? null : Math.max(...own.map(({time}) => time))
 }
 
-// The checks Core's own wallet runs before relaying. `votes` is null where the
-// source has none to check the hour against; `time` is the new vote's, unix seconds.
-export function requireVotingNode(owned: Masternode[], proTxHash: string, votes: GovernanceVote[] | null, time: number): VotingNode {
+// The imported voting keys whose secret is stored, which are the ones that can sign.
+export function signableImportedVotingKeys(imported: ImportedMasternodeKey[]): Set<string> {
+  return new Set(imported
+    .filter(({role, hasPrivateKey}) => role === 'voting' && hasPrivateKey)
+    .map(({publicKey}) => publicKey))
+}
+
+// The voting key a node signs with, derived or imported with its secret stored.
+// signableImportedVoting holds imported voting addresses whose secret is stored.
+export function votingKeyOf(
+  owned: Masternode[],
+  proTxHash: string,
+  signableImportedVoting: ReadonlySet<string> = new Set(),
+): {node: Masternode; key: VotingKeyNode} {
   const node = owned.find(candidate => candidate.proTxHash === proTxHash)
   if (node == null) throw new Error(`Masternode ${proTxHash} is not one of this wallet's`)
+  const {votingKeyIndex, votingAddress} = node
+  if (votingKeyIndex == null && !signableImportedVoting.has(votingAddress)) {
+    throw new Error(`Masternode ${proTxHash} carries a voting key this wallet does not derive`)
+  }
+  return {node, key: {proTxHash, votingKeyIndex, votingAddress}}
+}
+
+// The checks Core's own wallet runs before relaying. `votes` is null where the
+// source has none to check the hour against; `time` is the new vote's, unix seconds.
+export function requireVotingNode(
+  owned: Masternode[],
+  proTxHash: string,
+  votes: GovernanceVote[] | null,
+  time: number,
+  signableImportedVoting: ReadonlySet<string> = new Set(),
+): VotingNode {
+  const {node, key} = votingKeyOf(owned, proTxHash, signableImportedVoting)
   if (node.status === POSE_BANNED_STATUS) throw new Error(`Masternode ${proTxHash} is PoSe-banned`)
-  const {votingKeyIndex, votingAddress, collateralTxid, collateralVout} = node
-  if (votingKeyIndex == null) throw new Error(`Masternode ${proTxHash} carries a voting key this wallet does not derive`)
+  const {collateralTxid, collateralVout} = node
   if (collateralTxid == null || collateralVout == null) throw new Error(`Masternode ${proTxHash} has no known collateral yet`)
   const last = votes == null ? null : lastVoteTime(votes, node)
   if (last != null && last > time - GOVERNANCE_UPDATE_MIN_SECONDS) {
     throw new Error(`Masternode ${proTxHash} voted on this proposal at ${new Date(last * 1000).toISOString()}; Core drops another vote within the hour`)
   }
-  return {proTxHash, votingKeyIndex, votingAddress, collateralTxid, collateralVout}
+  return {...key, collateralTxid, collateralVout}
 }
 
 // Core keeps each node's latest vote per signal and drops one whose key is not

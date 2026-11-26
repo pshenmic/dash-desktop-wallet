@@ -1,6 +1,7 @@
 import {describe, it, expect, beforeEach, vi} from 'vitest'
 import {IdentityService} from '../../src/main/src/services/platform/IdentityService'
 import {IdentityDAO} from '../../src/main/src/database/IdentityDAO'
+import {MasternodeIdentityDAO} from '../../src/main/src/database/MasternodeIdentityDAO'
 import {CreateWalletHandler} from '../../src/main/src/api/wallet/createWallet'
 import {UsernameCheck} from '../../src/main/src/types/Username'
 import {DashPayContactRequest} from '../../src/main/src/types/DashPay'
@@ -58,6 +59,7 @@ async function answer(kind: string, _network: string, payload: {identifier: stri
 describe('listing identities', () => {
   let identities: IdentityService
   let identityDAO: IdentityDAO
+  let masternodeIdentityDAO: MasternodeIdentityDAO
   let dashPayCache: DashPayCache
   let walletService: WalletService
   let createWalletHandler: CreateWalletHandler
@@ -68,6 +70,7 @@ describe('listing identities', () => {
     const wired = await harness()
     identities = wired.identityService
     identityDAO = wired.identityDAO
+    masternodeIdentityDAO = wired.masternodeIdentityDAO
     dashPayCache = wired.dashPayCache
     walletService = wired.walletService
     createWalletHandler = wired.createWalletHandler
@@ -98,6 +101,32 @@ describe('listing identities', () => {
     request.mockResolvedValue({infos: []})
 
     expect(await identities.getIdentities(walletId)).toEqual([])
+  })
+
+  // Platform creates these from the ProRegTx; one it does not serve yet is a
+  // registration still waiting to be indexed, not an error.
+  it('lists the node identities Platform serves and leaves a pending one out', async () => {
+    const proTxHash = 'ab'.repeat(32)
+    await masternodeIdentityDAO.save(walletId, [
+      {proTxHash, role: 'owner', identifier: IDENTIFIER},
+      {proTxHash, role: 'voter', identifier: ALICE},
+    ])
+    request.mockImplementationOnce(async (_kind: string, _network: string, payload: {identifiers: string[]}) => ({
+      infos: payload.identifiers.filter(identifier => identifier === IDENTIFIER)
+        .map(identifier => ({identifier, balance: 7n, usernames: [], keys: []})),
+    }))
+
+    expect(await identities.getMasternodeIdentities(walletId)).toEqual([{
+      proTxHash, role: 'owner', identifier: IDENTIFIER, usernames: [], keys: [],
+      balance: {amount: 7n, usdAmount: '0.0'},
+    }])
+  })
+
+  it('asks Platform nothing when the wallet tracks no node identity', async () => {
+    request.mockClear()
+
+    expect(await identities.getMasternodeIdentities(walletId)).toEqual([])
+    expect(request).not.toHaveBeenCalled()
   })
 
   // Only this process knows the contest: no domain document lists it until it wins.
@@ -168,6 +197,38 @@ describe('listing identities', () => {
     network.status = () => { throw new Error('DAPI down') }
     await identities.refreshDashPay(walletId)
     expect(await identities.getUsernames(walletId)).toMatchObject([{label: 'owl', status: 'registered', documentId: 'doc'}])
+  })
+
+  // Contact requests are one read among several; an outage there must not hide names or a running vote.
+  it('refreshes names and contests when contact requests time out', async () => {
+    network.contests.set('0w1', [IDENTIFIER])
+    network.status = () => ({...UNCHECKED, status: 'voting', voteEndsAt: 9})
+    request.mockImplementation(async (kind: string, ...rest: [string, never]) =>
+      kind === 'dashPayContactRequests' ? Promise.reject(new Error('timed out')) : answer(kind, ...rest))
+
+    await expect(identities.refreshDashPay(walletId)).resolves.toBeUndefined()
+    expect(await identities.getUsernames(walletId)).toMatchObject([{label: '0w1', status: 'voting'}])
+    // The retrying caller still sees the failure.
+    await expect(identities.refreshDashPayRequests(walletId)).rejects.toThrow('timed out')
+  })
+
+  // A transient status failure on a start must not hide a name, or its vote, until the next refresh.
+  it('keeps a new contest name whose status read fails before anything is cached', async () => {
+    network.contests.set('0w1', [IDENTIFIER])
+    network.status = () => { throw new Error('DAPI down') }
+
+    expect(await identities.getUsernames(walletId)).toMatchObject([
+      {identifier: IDENTIFIER, label: '0w1', status: 'voting', isContested: true},
+    ])
+  })
+
+  it('keeps a registered name whose status read fails before anything is cached', async () => {
+    network.names.set(IDENTIFIER, ['owl.dash'])
+    network.status = () => { throw new Error('DAPI down') }
+
+    expect(await identities.getUsernames(walletId)).toMatchObject([
+      {identifier: IDENTIFIER, label: 'owl', status: 'registered', isContested: false, documentId: null},
+    ])
   })
 
   it('shares one refresh between reads that arrive together', async () => {

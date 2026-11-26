@@ -1,7 +1,10 @@
+import type {Script, Transaction} from 'dash-core-sdk'
+import type {ProRegTX} from 'dash-core-sdk/src/types/ExtraPayload/ProRegTX.js'
 import type {WalletProvider} from '../providers/WalletProvider'
 import type {ProviderPayload, ProviderTxSigner} from './CoreTransaction'
 import type {GroupedAddresses} from './GroupedAddresses'
 import type {Network} from './Network'
+import type {PreviewEntry} from './TransactionPreview'
 import type {UTXO} from './UTXO'
 
 export type MasternodeKeyRole = 'collateral' | 'voting' | 'owner' | 'operator' | 'platformNode'
@@ -20,12 +23,17 @@ export interface MasternodePlatformFields {
 
 // operatorReward is in hundredths of a percent, as ProRegTx carries it. A null
 // serviceAddress registers without one, left to the operator's ProUpServTx.
+// A null owner, voting or operator key takes the wallet's next unused key; owner
+// and voting are P2PKH addresses, operator is a BLS basic public key.
 export interface MasternodeRegistration extends MasternodePlatformFields {
   type: MasternodeType
   collateral: {txid: string; vout: number}
   serviceAddress: string | null
   payoutAddress: string
   operatorReward: number
+  ownerAddress: string | null
+  votingAddress: string | null
+  operatorPublicKey: string | null
 }
 
 // A ProUpServTx restates the whole service, so every field is the new value.
@@ -75,6 +83,18 @@ export interface ProviderTxPlan {
   spendable: UTXO[]
 }
 
+// A registration plan plus the keys it resolved: null indexes are keys the
+// caller supplied rather than ones the wallet derives.
+export interface MasternodeRegistrationPlan extends ProviderTxPlan {
+  payload: ProRegTX
+  ownerAddress: string
+  votingAddress: string
+  operatorPublicKey: string
+  ownerKeyIndex: number | null
+  votingKeyIndex: number | null
+  operatorKeyIndex: number | null
+}
+
 // The network's own list, which carries a node exactly while its collateral is
 // unspent; askedAt is when the lock pool asked for it, 0 for one it did not ask for.
 export interface ListedMasternodes {
@@ -93,6 +113,24 @@ export interface MasternodeRegistrationResult {
   proTxHash: string
   fee: bigint
   peersAcked: number
+}
+
+// A registration read back from a ProRegTx: the payload always carries all three
+// keys, unlike the caller's request where a null one means "the wallet's next".
+export interface ParsedMasternodeRegistration extends MasternodeRegistration {
+  ownerAddress: string
+  votingAddress: string
+  operatorPublicKey: string
+}
+
+export interface MasternodeRegistrationPreview extends ParsedMasternodeRegistration {
+  ownerKeyIndex: number | null
+  votingKeyIndex: number | null
+  operatorKeyIndex: number | null
+  inputs: PreviewEntry[]
+  outputs: PreviewEntry[]
+  feeDuffs: bigint
+  unsignedHex: string
 }
 
 // One entry of the network's masternode list. Times are unix seconds, 0 = never.
@@ -129,27 +167,111 @@ export interface MasternodeShare {
 }
 
 // A share with the wallet's marks: keyIndex is the owner-chain index holding it,
-// null when the seed does not derive it; imported is an imported owner key.
+// null when the seed does not derive it; imported is an imported owner key, and
+// canSign says its secret is stored, so it can consent and fund.
 export interface OwnedMasternodeShare extends MasternodeShare {
   keyIndex: number | null
   imported: boolean
+  canSign: boolean
 }
 
 // A masternode this wallet holds a key or the collateral of. A null index is a
-// key the seed does not derive; importedRoles are the ones held by an imported key.
+// key the seed does not derive; importedRoles are the ones held by an imported key,
+// importedSigningRoles the subset whose secret is stored.
 export interface Masternode extends NetworkMasternode {
   ownerKeyIndex: number | null
   votingKeyIndex: number | null
   operatorKeyIndex: number | null
   importedRoles: MasternodeKeyChain[]
+  importedSigningRoles: MasternodeKeyChain[]
   shares: OwnedMasternodeShare[] | null
 }
 
 // publicKey is what the list carries for the role: the address for owner and
-// voting, the hex public key for operator.
+// voting, the hex public key for operator. hasPrivateKey is true when the
+// secret is stored, which is what lets a key sign.
 export interface ImportedMasternodeKey {
   role: MasternodeKeyChain
   publicKey: string
+  hasPrivateKey: boolean
+}
+
+// One row of a shared registration's share table, already resolved for display.
+export interface SharedRegistrationShare {
+  index: number
+  amountDuffs: bigint
+  ownerAddress: string
+  refundAddress: string | null
+  rewardAddress: string | null
+}
+
+// A funding input of the prepared registration that this wallet can sign.
+export interface SharedRegistrationFundingInput {
+  index: number
+  address: string
+  amountDuffs: bigint
+}
+
+// How to obtain the key for one funding input: a wallet derivation path, or an
+// imported owner/voting key whose secret is stored.
+export type SharedRegistrationFundingSource =
+  | {kind: 'wallet'; index: number; address: string; amountDuffs: bigint; script: Script; derivationPath: string}
+  | {kind: 'imported'; index: number; address: string; amountDuffs: bigint; script: Script; role: 'owner' | 'voting'; publicKey: string}
+
+// One output of a prepared registration, so a participant sees where the coins
+// go: the collateral output has no address and is flagged.
+export interface SharedRegistrationOutput {
+  address: string | null
+  amountDuffs: bigint
+  collateral: boolean
+}
+
+// What any shared registration step shows before signing.
+export interface SharedRegistrationPreview {
+  consentHash: string
+  shares: SharedRegistrationShare[]
+  signableShares: number[]
+  outputs: SharedRegistrationOutput[]
+  collateralDuffs: bigint
+  warning: string | null
+}
+
+// The preview plus this wallet's funding side: the inputs it can sign and the
+// ones it could not match to a coin or key it holds.
+export interface SharedRegistrationFundingPreview extends SharedRegistrationPreview {
+  fundingInputs: SharedRegistrationFundingInput[]
+  fundingTotalDuffs: bigint
+  unresolvedInputs: number
+}
+
+// One share owner's consent, base64 compact signature as shared_combine expects.
+export interface SharedRegistrationSignature {
+  shareIndex: number
+  signature: string
+}
+
+export interface SharedRegistrationConsentResult {
+  preview: SharedRegistrationPreview
+  signatures: SharedRegistrationSignature[]
+}
+
+export interface SharedRegistrationFundingResult {
+  preview: SharedRegistrationFundingPreview
+  signedHex: string
+  signedInputs: number[]
+}
+
+// A shared registration read back before either side signs: its shares, the keys
+// this wallet holds for them, and which of those keys have a stored secret.
+export interface SharedRegistrationBase {
+  tx: Transaction
+  network: Network
+  shares: SharedRegistrationShare[]
+  keys: MasternodeKeys | null
+  imported: ImportedMasternodeKey[]
+  ownerIndexes: Map<string, number>
+  importedOwners: Set<string>
+  signableShares: number[]
 }
 
 // What outlives the list: the coin a send must not spend, and whether the p2p

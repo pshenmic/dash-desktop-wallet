@@ -20,7 +20,10 @@ const OURS = 'yeRZBWYfeNE4yVUHV4ZLs83Ppn9aMRH57A'
 
 const provider = (list: NetworkMasternode[] | null): P2PWalletProvider => {
   const walletSyncService = {getMasternodeList: () => list, getStatus: () => ({tipHeight: 100})} as unknown as WalletSyncService
-  const addressDAO = {getAddressesByWalletId: async () => ({receiving: [{address: OURS}], change: []})} as unknown as AddressDAO
+  const addressDAO = {
+    getAddressesByWalletId: async () => ({receiving: [{address: OURS}], change: []}),
+    getLockedAddresses: async () => new Set<string>(),
+  } as unknown as AddressDAO
   const transactionDAO = {
     getUtxosByAddresses: async () => [{txid: 'c'.repeat(64), vout: 0, satoshis: '100000000000', address: OURS, height: 5, blockTime: 0}],
     getLockedOutpoints: async () => [],
