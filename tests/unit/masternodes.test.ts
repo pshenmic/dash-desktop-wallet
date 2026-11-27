@@ -59,6 +59,8 @@ describe('networkMasternode', () => {
     })
   })
 
+  // A node the indexer has not read the share table of yet, i.e. the API
+  // before the shares deploy.
   it('reads a comma-joined owner list as shared, without amounts', () => {
     const row: DashscanMasternode = {
       proTxHash: 'p', address: '[::]:0', payee: 'ypayee1, ypayee2', status: 'POSE_BANNED', type: 'Regular', posPenaltyScore: 0,
@@ -67,6 +69,45 @@ describe('networkMasternode', () => {
       platformNodeId: null, platformP2PPort: null, platformHTTPPort: null,
     }
     expect(networkMasternode(row)).toMatchObject({isShared: true, ownerAddress: null, payeeAddress: null, shares: null})
+  })
+
+  it('reads the share table, owner list and all', () => {
+    const row: DashscanMasternode = {
+      proTxHash: 'p', address: '[::]:0', payee: 'ypayee1, ypayee2', status: 'ENABLED', type: 'Regular', posPenaltyScore: 0,
+      lastPaidTime: '1970-01-01T00:00:00.000Z', lastPaidBlock: 0, ownerAddress: ['yowner1', 'yowner2'], votingAddress: 'yvoting',
+      collateralAddress: 'UNKNOWN', pubKeyOperator: 'A73D', outpoint: `${'ab'.repeat(32)}-3`,
+      platformNodeId: null, platformP2PPort: null, platformHTTPPort: null,
+      shares: [
+        {ownerAddress: 'yowner1', amountDuffs: 20000000000, refundAddress: 'yrefund1', rewardAddress: 'yreward1'},
+        {ownerAddress: 'yowner2', amountDuffs: 30000000000, refundAddress: 'yrefund2', rewardAddress: 'yreward2'},
+      ],
+    }
+
+    const node = networkMasternode(row)
+
+    expect(node).toMatchObject({isShared: true, ownerAddress: null, payeeAddress: null})
+    expect(node.shares).toEqual([
+      {ownerAddress: 'yowner1', amountDuffs: 20000000000n},
+      {ownerAddress: 'yowner2', amountDuffs: 30000000000n},
+    ])
+    expect([...matchMasternodeKeys('owner', [{index: 4, address: 'yowner2', derivationPath: 'm/9/5/0/0/4'}], [node])])
+      .toEqual([['p', 4]])
+  })
+
+  // A one-share registration has no comma in ownerAddress, so the share table is
+  // what tells it apart from a regular node.
+  it('reads a single-share registration as shared, and keeps a regular node regular', () => {
+    const row = (fields: Partial<DashscanMasternode>): DashscanMasternode => ({
+      proTxHash: 'p', address: '[::]:0', payee: 'ypayee', status: 'ENABLED', type: 'Regular', posPenaltyScore: 0,
+      lastPaidTime: '1970-01-01T00:00:00.000Z', lastPaidBlock: 0, ownerAddress: 'yowner', votingAddress: 'yvoting',
+      collateralAddress: 'UNKNOWN', pubKeyOperator: 'A73D', outpoint: `${'ab'.repeat(32)}-3`,
+      platformNodeId: null, platformP2PPort: null, platformHTTPPort: null, ...fields,
+    })
+    const share = {ownerAddress: 'yowner', amountDuffs: 400000000000, refundAddress: null, rewardAddress: null}
+
+    expect(networkMasternode(row({shares: [share]}))).toMatchObject({isShared: true, ownerAddress: null})
+    expect(networkMasternode(row({shares: []}))).toMatchObject({isShared: false, ownerAddress: 'yowner', shares: []})
+    expect(networkMasternode(row({outpoint: null}))).toMatchObject({collateralTxid: null, collateralVout: null})
   })
 })
 

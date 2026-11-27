@@ -19,20 +19,27 @@ import {
 import {UTXO} from '../types/UTXO'
 
 export function networkMasternode(row: DashscanMasternode): NetworkMasternode {
-  const [collateralTxid, collateralVout] = row.outpoint.split('-')
-  // A shared node's owner and payee are comma-joined share lists; no amounts are served.
-  const shared = row.ownerAddress.includes(',')
+  const [collateralTxid, collateralVout] = row.outpoint?.split('-') ?? []
+  const owners = row.ownerAddress == null ? []
+    : typeof row.ownerAddress === 'string'
+      ? row.ownerAddress.split(',').map(owner => owner.trim()).filter(Boolean)
+      : row.ownerAddress
+  const shares = row.shares?.map(({ownerAddress, amountDuffs}) => ({ownerAddress, amountDuffs: BigInt(amountDuffs)})) ?? null
+  // An indexer without the share table serves a shared node's owners
+  // comma-joined, which still tells a shared node from a regular one.
+  const shared = owners.length > 1 || (shares?.length ?? 0) > 0
   return {
     proTxHash: row.proTxHash,
     type: row.type,
     status: row.status,
     posePenaltyScore: row.posPenaltyScore,
-    collateralTxid,
-    collateralVout: Number(collateralVout),
+    collateralTxid: collateralTxid ?? null,
+    collateralVout: collateralVout == null ? null : Number(collateralVout),
     collateralAddress: row.collateralAddress,
     serviceAddress: row.address,
     payeeAddress: shared ? null : row.payee,
-    ownerAddress: shared ? null : row.ownerAddress,
+    // A shared registration has no top-level owner key.
+    ownerAddress: shared ? null : owners[0] ?? null,
     votingAddress: row.votingAddress,
     operatorPublicKey: row.pubKeyOperator.toLowerCase(),
     platformNodeId: row.platformNodeId,
@@ -42,7 +49,7 @@ export function networkMasternode(row: DashscanMasternode): NetworkMasternode {
     lastPaidTime: Math.floor(Date.parse(row.lastPaidTime) / 1000),
     registeredHeight: null,
     isShared: shared,
-    shares: null,
+    shares,
   }
 }
 
