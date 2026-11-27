@@ -1,12 +1,12 @@
 import type {Block} from 'dash-core-sdk'
 import {HASH_LEN} from '../constants'
-import {wireToDisplayHex} from './byteOrder'
+import {displayHexToWire, wireToDisplayHex} from './byteOrder'
 import {doubleSHA256} from './hash'
 
-// A txid is the double-SHA256 of the serialised transaction; the SDK's hash()
-// is that digest reversed for display, so the leaves are taken here instead.
+// Leaves are txids. A v2 asset unlock hashes with its quorum fields zeroed, so
+// hashing the serialised bytes would not reach the root Core committed to.
 export function txsMatchMerkleRoot(block: Block): boolean {
-  const root = merkleRoot(block.txs.map(tx => doubleSHA256(tx.bytes())))
+  const root = merkleRoot(block.txs.map(tx => displayHexToWire(tx.hash())))
   return root != null && wireToDisplayHex(root) === block.blockHeader.merkleRoot
 }
 

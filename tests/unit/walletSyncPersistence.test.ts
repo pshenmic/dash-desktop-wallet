@@ -58,6 +58,7 @@ describe('WalletSyncService block persistence', () => {
     applyBlock: ReturnType<typeof vi.fn>
     advanceCursor: ReturnType<typeof vi.fn>
     resetCursor: ReturnType<typeof vi.fn>
+    getCursor: ReturnType<typeof vi.fn>
     resetSyncDataByNetwork: ReturnType<typeof vi.fn>
     getInitialScanComplete: ReturnType<typeof vi.fn>
     recordPendingTx: ReturnType<typeof vi.fn>
@@ -72,6 +73,7 @@ describe('WalletSyncService block persistence', () => {
       applyBlock: vi.fn().mockResolvedValue(undefined),
       advanceCursor: vi.fn().mockResolvedValue(undefined),
       resetCursor: vi.fn().mockResolvedValue(undefined),
+      getCursor: vi.fn().mockResolvedValue(900_000),
       resetSyncDataByNetwork: vi.fn().mockResolvedValue(undefined),
       getInitialScanComplete: vi.fn().mockResolvedValue(false),
       recordPendingTx: vi.fn().mockResolvedValue(undefined),

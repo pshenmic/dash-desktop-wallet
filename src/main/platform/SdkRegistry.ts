@@ -1,5 +1,5 @@
 import {DashPlatformSDK, GRPCConnectionPool} from 'dash-platform-sdk'
-import {ShieldedBuilderWASM} from 'pshenmic-dpp'
+import {DashPlatformShielded, ShieldedBuilderWASM} from 'dash-platform-shielded'
 import {Network} from '../src/types/Network'
 import {Logger} from '../src/utils/logger'
 
@@ -26,6 +26,8 @@ export class SdkRegistry implements SdkSource {
   private readonly latestDapiUrls = new Map<Network, string[]>()
   private readonly refills = new Set<Network>()
   private readonly quorumKeyProviders = new Map(NETWORKS.map(network => [network, new P2PQuorumKeyProvider(network)]))
+  private shieldedModule: DashPlatformShielded | null = null
+  private shieldedLoadErrorLogged = false
   private builder: ShieldedBuilderWASM | null = null
   private warming: Promise<void> | null = null
   private dapi: Dapi = {mode: 'dynamic', mainnet: [], testnet: []}
@@ -51,6 +53,7 @@ export class SdkRegistry implements SdkSource {
       network,
       grpc: {dapiUrl: dapiUrls == null ? undefined : [...dapiUrls]},
       quorumKeyProvider: this.quorumKeyProviders.get(network),
+      shielded: this.getShielded(),
     })
     // init assigns the builder before its first await; the warmed builder's
     // own init is memoised.
@@ -116,14 +119,31 @@ export class SdkRegistry implements SdkSource {
     return pool instanceof GRPCConnectionPool ? [...pool.dapiUrls] : []
   }
 
+  // Loading the module binds the native prover; the Halo2 key warmup builds is
+  // what is slow. Doing it on the first request keeps shielded reads working
+  // before warmup finishes.
+  private getShielded(): DashPlatformShielded | undefined {
+    if (this.shieldedModule != null) return this.shieldedModule
+    try {
+      this.shieldedModule = new DashPlatformShielded()
+    } catch (err) {
+      if (!this.shieldedLoadErrorLogged) {
+        this.shieldedLoadErrorLogged = true
+        log.error('shielded module failed to load:', err)
+      }
+    }
+    return this.shieldedModule ?? undefined
+  }
+
   getBuilder(): ShieldedBuilderWASM | null {
     return this.builder
   }
 
   // The Halo2 proving key is built once and the one builder injected into every
-  // network's shielded controller. Sharing it across networks is correct rather
-  // than a shortcut: the builder carries no network, which enters only through
-  // the gRPC pool that reads anchors/nullifiers and broadcasts.
+  // network's shielded controller. Sharing it, and the module that loads the
+  // prover, across networks is correct rather than a shortcut: neither carries
+  // a network, which enters only through the gRPC pool that reads
+  // anchors/nullifiers and broadcasts.
   //
   // ShieldedBuilderWASM memoises the raw builder on a private static, so this
   // would converge without injection — but a dependency's private static is not
@@ -131,11 +151,15 @@ export class SdkRegistry implements SdkSource {
   warmup(): Promise<void> {
     if (this.warming != null) return this.warming
     this.warming = (async () => {
+      const shielded = this.getShielded()
+      if (shielded == null) throw new Error('Shielded module failed to load')
       const builder = new ShieldedBuilderWASM()
       await builder.init()
       this.builder = builder
       for (const network of NETWORKS) {
-        await this.get(network).shielded.init(builder)
+        const sdk = this.get(network)
+        sdk.setShielded(shielded)
+        await sdk.shielded.init(builder)
       }
     })().catch(err => {
       // Let a later request retry rather than caching the failure forever.

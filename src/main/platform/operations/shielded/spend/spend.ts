@@ -1,4 +1,5 @@
-import {IdentityCreateFromShieldedPoolTransitionWASM, RecoveredNoteWASM} from 'pshenmic-dpp'
+import {IdentityCreateFromShieldedPoolTransitionWASM} from 'pshenmic-dpp'
+import {RecoveredNoteWASM} from 'dash-platform-shielded'
 import {
   bundleActions,
   maxSpendableCredits,

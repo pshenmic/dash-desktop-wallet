@@ -631,7 +631,7 @@ export class SyncService {
     }
     const displayTxid = reverseHex(msg.txid)
     const matched = this.watchedTxids.has(displayTxid)
-    locks.info(`isdlock received wire=${msg.txid} display=${displayTxid} matched=${matched} watching=[${[...this.watchedTxids].join(',')}]`)
+    locks.debug(`isdlock received wire=${msg.txid} display=${displayTxid} matched=${matched} watching=[${[...this.watchedTxids].join(',')}]`)
     if (!matched) return
     this.watchedTxids.delete(displayTxid)
     // Serialized for InstantAssetLockProof construction in main. We broadcast L1
