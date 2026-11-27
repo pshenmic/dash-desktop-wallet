@@ -54,6 +54,7 @@ appx:
   displayName: Dash Desktop Wallet
   backgroundColor: '#4C7EFF'
 mac:
+  icon: buildResources/icon-mac.png
   entitlements: buildResources/entitlements.mac.plist
   entitlementsInherit: buildResources/entitlements.mac.plist
   # The prebuilt N-API binaries are one file per arch, identical in both halves
@@ -67,6 +68,7 @@ mac:
 dmg:
   artifactName: ${name}-${version}-${os}-${arch}.${ext}
 linux:
+  icon: buildResources/icon.png
   # No arch here: a target's own arch overrides --x64/--arm64, and the native
   # modules are compiled from source, so each arch is built on its own runner.
   target:

@@ -883,8 +883,8 @@ export class CFilterSyncWorker extends Worker {
   // detection needs an output recorded before the block spending it. Draining as
   // the scan runs is what lets gap exhaustion be caught mid-scan rather than
   // after it — and it keeps matched blocks from piling up in memory.
-  private async drainMatched(): Promise<void> {
-    if (this.draining || this.gapPausedAt != null || this.awaitingReseed) return
+  private async drainMatched(): Promise<boolean> {
+    if (this.draining || this.gapPausedAt != null || this.awaitingReseed) return false
     this.draining = true
     try {
       const settled = this.settledHeight()
@@ -896,10 +896,11 @@ export class CFilterSyncWorker extends Worker {
         const exhausted = this.watchSet.exhaustedChain()
         if (exhausted != null) {
           this.holdForGap(exhausted, height)
-          return
+          return false
         }
       }
       if (settled > 0) this.emit('cursorAdvanced', {walletId: this.walletId, height: settled})
+      return true
     } finally {
       this.draining = false
     }
@@ -931,7 +932,8 @@ export class CFilterSyncWorker extends Worker {
 
   private async maybeDrainAndFinish(): Promise<void> {
     if (this.phase !== 'cfilters') return
-    await this.drainMatched()
+
+    if (!await this.drainMatched()) return
     if (this.gapPausedAt != null) return
     if (this.cfilter.cursor <= this.effectiveScanTipHeight()) return
     if (this.cfilter.inflightBatches.size > 0) return
@@ -940,6 +942,9 @@ export class CFilterSyncWorker extends Worker {
       log.info(`scan reached tip; waiting on ${waiting.length} block(s): ${waiting.slice(0, 10).join(',')}${waiting.length > 10 ? '…' : ''}`)
       return
     }
+
+    if (this.matchedBlocks.size > 0) return
+
     this.emit('cursorAdvanced', {walletId: this.walletId, height: this.effectiveScanTipHeight()})
     this.emitStatus('synced')
 

@@ -12,6 +12,7 @@ import {IdentityDAO} from '../../src/main/src/database/IdentityDAO'
 import {DashPayCache} from '../../src/main/src/database/DashPayCache'
 import {PlatformAddressDAO} from '../../src/main/src/database/PlatformAddressDAO'
 import {PlatformTransactionDAO} from '../../src/main/src/database/PlatformTransactionDAO'
+import {ShieldedAddressDAO} from '../../src/main/src/database/ShieldedAddressDAO'
 import {MasternodeKeyDAO} from '../../src/main/src/database/MasternodeKeyDAO'
 import {MasternodeDAO} from '../../src/main/src/database/MasternodeDAO'
 import {MasternodeIdentityDAO} from '../../src/main/src/database/MasternodeIdentityDAO'
@@ -101,7 +102,7 @@ export async function harness(): Promise<Harness> {
   } as unknown as PlatformHistoryService
 
   const walletService = new WalletService(
-    walletDAO, addressDAO, transactionDAO, paymentRequestDAO, identityDAO, new PlatformTransactionDAO(knex), masternodeKeyDAO, masternodeDAO, identityService, platformHistoryService, walletSyncService, platform,
+    walletDAO, addressDAO, transactionDAO, paymentRequestDAO, identityDAO, new PlatformTransactionDAO(knex), new ShieldedAddressDAO(knex), masternodeKeyDAO, masternodeDAO, identityService, platformHistoryService, walletSyncService, platform,
     providers, coreDiscoveryService, coreTransactionService, preferences, TEST_PBKDF2_ITERATIONS,
   )
 

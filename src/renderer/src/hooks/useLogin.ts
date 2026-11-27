@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { API } from '@renderer/api'
 import { WalletDto } from '@renderer/api/types'
 import { toast } from '@renderer/components/ui/Toast'
+import { startShieldedSyncWithAddressPool } from '@renderer/hooks/useShieldedAddresses'
 import { getErrorMessage } from '@renderer/utils/error'
 
 export interface UseLoginReturn {
@@ -64,7 +65,7 @@ export function useLogin(): UseLoginReturn {
       return false
     }
 
-    API.startShieldedSync(selectedWalletId, password).catch(() => {})
+    startShieldedSyncWithAddressPool(selectedWalletId, password).catch(() => {})
 
     return true
   }, [selectedWalletId, password])

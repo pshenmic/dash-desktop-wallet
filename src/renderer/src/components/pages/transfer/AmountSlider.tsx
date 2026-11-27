@@ -1,7 +1,7 @@
 import { Text } from "@renderer/components/dash-ui-kit-extended";
+import { SLIDER_STOPS } from "@renderer/constants/allocationAmountRow";
 import type { AmountSliderProps } from '@renderer/types/Amount'
 
-const SLIDER_STOPS = [0, 25, 50, 75, 100]
 const THUMB_SIZE_PX = 16
 
 function trackOffset(percent: number): string {
@@ -33,16 +33,16 @@ export default function AmountSlider({percent, onPercentChange, disabled = false
           className={"absolute inset-x-0 h-4 appearance-none bg-transparent cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-dash-primary-dark-blue/20 [&::-webkit-slider-thumb]:shadow-sm"}
         />
       </div>
-      <div className={"flex justify-between"}>
+      <div className={"flex justify-between gap-1"}>
         {SLIDER_STOPS.map(stop => (
           <button
             key={stop}
             type={"button"}
             onClick={() => onPercentChange(stop)}
             disabled={disabled}
-            className={"cursor-pointer disabled:cursor-not-allowed"}
+            className={`rounded-md px-2 py-0.5 transition-colors cursor-pointer disabled:cursor-not-allowed ${percent === stop ? 'dash-block-accent-15' : 'hover:dash-block-5'}`}
           >
-            <Text size={10} weight={"medium"} color={percent === stop ? "blue-mint" : "brand"} opacity={percent === stop ? 100 : 40}>{stop}%</Text>
+            <Text size={10} weight={"medium"} color={percent === stop ? "blue-mint" : "brand"} opacity={percent === stop ? 100 : 50}>{stop}%</Text>
           </button>
         ))}
       </div>
