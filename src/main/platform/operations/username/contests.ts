@@ -15,7 +15,13 @@ export async function usernameContests({identifiers}: Payload, ctx: OperationCon
   for (;;) {
     const groups = await ctx.sdk.contestedResources.getVotePollsByEndDate({timeMs: start, included: true}, undefined, PROVED_QUERY_LIMIT)
     const polls = groups.flatMap(group => group.votePolls)
-    const domains = polls.filter(poll => poll.contractId.base58() === DPNS_DATA_CONTRACT_ID && poll.documentTypeName === 'domain' && poll.indexName === DPNS_CONTESTED_INDEX)
+    // Protocol v15 lists yes/no decision-proposal polls here too, whose
+    // contested-resource accessors throw.
+    const domains = polls.filter(poll =>
+      poll.kind === 'contestedDocumentResourceVotePoll' &&
+      poll.contractId.base58() === DPNS_DATA_CONTRACT_ID &&
+      poll.documentTypeName === 'domain' &&
+      poll.indexName === DPNS_CONTESTED_INDEX)
     // An index value comes as base64 of its serialized platform value.
     domains.forEach(poll => labels.add(indexBytesToString(base64.decode(poll.indexValues[1]))))
 
