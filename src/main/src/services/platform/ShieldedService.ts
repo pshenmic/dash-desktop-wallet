@@ -1,4 +1,4 @@
-import { OrchardAddressWASM } from 'pshenmic-dpp'
+import { OrchardAddressWASM } from 'dash-platform-shielded'
 import { CoreSpendSource } from '../../types/CoinSelection'
 import { Network } from '../../types/Network'
 import { WalletDAO } from '../../database/WalletDAO'

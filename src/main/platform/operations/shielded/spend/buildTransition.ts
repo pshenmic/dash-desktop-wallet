@@ -1,12 +1,6 @@
 import {DashPlatformSDK} from 'dash-platform-sdk'
-import {
-  OrchardAddressWASM,
-  PlatformVersionWASM,
-  ShieldedMemoWASM,
-  ShieldedOutputWASM,
-  SpendableNoteWASM,
-  StateTransitionWASM,
-} from 'pshenmic-dpp'
+import {OrchardAddressWASM, ShieldedOutputWASM, SpendableNoteWASM} from 'dash-platform-shielded'
+import {PlatformVersionWASM, StateTransitionWASM} from 'pshenmic-dpp'
 import {Network} from '../../../../src/types/Network'
 import {coreAddressToScript} from '../../../../src/utils/coreScript'
 import {PlatformOperations} from '../../../types/messages'
@@ -37,7 +31,7 @@ export async function buildTransition(
   }
   // A multi-output bundle carries a memo per output instead of one for the
   // transition, so the memo is not part of what every spend shares.
-  const base = {...spendInputs, memo: ShieldedMemoWASM.empty() as unknown as string}
+  const base = {...spendInputs, memo: ''}
 
   switch (payload.kind) {
     case 'shieldedTransfer':
@@ -47,7 +41,7 @@ export async function buildTransition(
           outputs: recipients.map(recipient => new ShieldedOutputWASM(
             OrchardAddressWASM.fromBech32m(recipient.address),
             recipient.amountCredits,
-            ShieldedMemoWASM.empty(),
+            new Uint8Array(0),
           )),
         })
       }

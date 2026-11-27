@@ -2,8 +2,10 @@ import {KeyPairController} from 'dash-platform-sdk/src/keyPair/index.js'
 import {Network} from '../types/Network'
 import {AddressDeriver} from '../types/AddressWindow'
 import {COIN_TYPE, SHIELDED_ACCOUNT} from '../constants/addresses'
+import {DashPlatformShielded} from "dash-platform-shielded";
 
-const keyPair = new KeyPairController()
+
+const keyPair = new KeyPairController(new DashPlatformShielded())
 
 // ZIP-32 diversified addresses of one Orchard account. Unlike DIP-17 and BIP-44
 // there is no watch-only key to derive from, so this needs the seed and can only
