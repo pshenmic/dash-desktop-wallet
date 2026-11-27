@@ -9,10 +9,11 @@ import {
   ADDRESS_HIGHLIGHT_CLASSES,
   ADDRESS_INPUT,
   ADDRESS_INPUT_TEXT_SIZES,
+  RECIPIENT_AUTOCOMPLETE_MIN_CHARS,
 } from '@renderer/constants/addressField'
 import { POPOVER, POPOVER_OPTION } from '@renderer/constants/surfaces'
 import type { DropdownFieldProps } from '@renderer/types/DropdownField'
-import { matchingOptionsByLabel } from '@renderer/utils/ownRecipients'
+import { matchingOwnOptions } from '@renderer/utils/ownRecipients'
 
 export default function DropdownField({
   options,
@@ -32,6 +33,12 @@ export default function DropdownField({
   valueBadge,
   hideValueBadge = false,
   hasExtraMatches,
+  minAutocompleteChars = RECIPIENT_AUTOCOMPLETE_MIN_CHARS,
+  disableMenuToggle = false,
+  onActionClick,
+  actionAriaLabel,
+  actionTitle,
+  actionIcon,
   toggleIcon,
   onOpenChange,
   children,
@@ -44,7 +51,9 @@ export default function DropdownField({
   const trimmedValue = value.trim()
   const selected = options.find((option) => option.value === value || (editable && option.value === trimmedValue))
   const exactMatch = editable && trimmedValue !== '' && options.some((option) => option.value === trimmedValue)
-  const labelMatches = editable && !exactMatch ? matchingOptionsByLabel(options, trimmedValue) : []
+  const optionMatches = editable && !exactMatch
+    ? matchingOwnOptions(options, trimmedValue, minAutocompleteChars)
+    : []
   const extraMatches = editable && trimmedValue !== '' && !exactMatch && Boolean(hasExtraMatches?.(value))
   const activeBadge = !inputInvalid && !hideValueBadge
     ? (valueBadge?.trim() || selected?.badge?.trim() || undefined)
@@ -52,10 +61,15 @@ export default function DropdownField({
   const showValue = highlightValue && !focused && trimmedValue !== ''
 
   let visibleOptions = options
-  if (editable && trimmedValue !== '' && !exactMatch) {
-    if (labelMatches.length > 0) visibleOptions = labelMatches
-    else if (extraMatches) visibleOptions = []
+  if (editable) {
+    if (disableMenuToggle) {
+      visibleOptions = optionMatches
+    } else if (trimmedValue !== '' && !exactMatch) {
+      if (optionMatches.length > 0) visibleOptions = optionMatches
+      else if (extraMatches) visibleOptions = []
+    }
   }
+  const showPopover = open && (visibleOptions.length > 0 || Boolean(children))
 
   const changeOpen = (next: boolean): void => {
     if (next && ref.current) {
@@ -96,9 +110,9 @@ export default function DropdownField({
               onChange(nextValue)
               const nextTrimmed = nextValue.trim()
               const nextExact = nextTrimmed !== '' && options.some(option => option.value === nextTrimmed)
-              const nextLabelMatches = nextExact ? [] : matchingOptionsByLabel(options, nextTrimmed)
+              const nextMatches = nextExact ? [] : matchingOwnOptions(options, nextTrimmed, minAutocompleteChars)
               const nextExtraMatches = nextTrimmed !== '' && !nextExact && Boolean(hasExtraMatches?.(nextValue))
-              if (nextLabelMatches.length > 0 || nextExtraMatches) {
+              if (nextMatches.length > 0 || nextExtraMatches) {
                 if (!open) changeOpen(true)
               } else if (open) {
                 changeOpen(false)
@@ -106,7 +120,7 @@ export default function DropdownField({
             }}
             onFocus={() => {
               setFocused(true)
-              if (!exactMatch && (labelMatches.length > 0 || extraMatches) && !open) {
+              if (!exactMatch && (optionMatches.length > 0 || extraMatches) && !open) {
                 changeOpen(true)
               }
             }}
@@ -128,15 +142,28 @@ export default function DropdownField({
           </span>}
         </div>
         {inputSuffix != null && <span className="shrink-0 whitespace-nowrap">{inputSuffix}</span>}
-        <button
-          type="button"
-          aria-label={`Choose ${ariaLabel.toLowerCase()}`}
-          aria-expanded={open}
-          onClick={() => changeOpen(!open)}
-          className="shrink-0 flex items-center justify-center cursor-pointer hover:opacity-70 transition-opacity"
-        >
-          {toggleIcon ? toggleIcon(open) : <ChevronIcon size={12} color="currentColor" className={`dash-text-default transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />}
-        </button>
+        {(onActionClick || !disableMenuToggle) && (
+          <button
+            type="button"
+            aria-label={onActionClick ? (actionAriaLabel ?? `Open ${ariaLabel.toLowerCase()}`) : `Choose ${ariaLabel.toLowerCase()}`}
+            title={onActionClick ? actionTitle : undefined}
+            aria-haspopup={onActionClick ? 'dialog' : undefined}
+            aria-expanded={onActionClick ? undefined : open}
+            onClick={() => {
+              if (onActionClick) {
+                closeMenu()
+                onActionClick()
+              } else {
+                changeOpen(!open)
+              }
+            }}
+            className="shrink-0 flex items-center justify-center cursor-pointer hover:opacity-70 transition-opacity"
+          >
+            {onActionClick
+              ? actionIcon
+              : (toggleIcon ? toggleIcon(open) : <ChevronIcon size={12} color="currentColor" className={`dash-text-default transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />)}
+          </button>
+        )}
       </div> : <button
         type="button"
         aria-label={ariaLabel}
@@ -151,7 +178,7 @@ export default function DropdownField({
         <ChevronIcon size={12} color="currentColor" className={`dash-text-default shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>}
 
-      {open && (options.length > 0 || children != null) && (
+      {showPopover && (
         <div
           style={menuLayout.maxHeight != null ? { maxHeight: `${menuLayout.maxHeight}px` } : undefined}
           className={`absolute left-0 right-0 ${menuLayout.openUpward ? 'bottom-[calc(100%+.375rem)]' : 'top-[calc(100%+.375rem)]'} z-30 max-h-60 overflow-y-auto scrollbar-custom ${POPOVER}`}

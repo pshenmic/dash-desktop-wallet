@@ -59,8 +59,8 @@ export const PLATFORM_ADDRESS_WINDOW: AddressWindowPolicy = {
 // list the user sees, and note discovery does not depend on it — one incoming
 // viewing key covers every diversifier whether or not its index was revealed.
 export const SHIELDED_ADDRESS_WINDOW: AddressWindowPolicy = {
-  gapLimit: 5,
-  batch: 5,
+  gapLimit: 20,
+  batch: 20,
   maxRounds: 50,
 }
 

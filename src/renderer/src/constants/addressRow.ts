@@ -17,4 +17,16 @@ export const ADDRESS_ROW_LOCKED_BADGE = 'Locked'
 
 export const ADDRESS_LOCK_TOGGLE_FAILED = 'Failed to update address lock'
 
+export const ADDRESS_ROW_ADD_LABEL = 'Add label'
+
+export const ADDRESS_ROW_EDIT_LABEL = 'Edit label'
+
+export const ADDRESS_ROW_LABEL_LOCKED_TOOLTIP = 'Label is managed by a Receive payment request'
+
+export const ADDRESS_ROW_LABEL_PLACEHOLDER = 'Enter label (empty to clear)'
+
+export const ADDRESS_ROW_LABEL_SAVE_ERROR = 'Could not save address label'
+
 export const ADDRESS_ROW_ICON_BUTTON_CLASS = 'size-5 shrink-0 rounded-[.3125rem] flex items-center justify-center dash-block-5 hover:opacity-80 transition-opacity duration-200 cursor-pointer'
+
+export const ADDRESS_ROW_DISABLED_ICON_BUTTON_CLASS = 'size-5 shrink-0 rounded-[.3125rem] flex items-center justify-center dash-block-5 opacity-35 cursor-not-allowed'

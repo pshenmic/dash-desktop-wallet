@@ -5,7 +5,7 @@ import {
   MASTERNODE_RECEIVING_ADDRESS_DESCRIPTION,
 } from '@renderer/constants/masternodeAddresses'
 import { masternodeWalletAddressOptions } from '@renderer/utils/masternodeAddressOptions'
-import { matchingOptionsByLabel, walletAddressLabels } from '@renderer/utils/ownRecipients'
+import { matchingOwnOptions, walletAddressLabels } from '@renderer/utils/ownRecipients'
 
 function makeAddress(overrides: Partial<WalletAddressDto> = {}): WalletAddressDto {
   return {
@@ -31,7 +31,7 @@ describe('masternodeWalletAddressOptions', () => {
       makeAddress({ address: 'yUsedLabeled', isUsed: true, txCount: 4, balance: 500_000_000n, label: 'Fallback label' }),
       makeAddress({ address: 'yUsedUnlabeled', isUsed: true, txCount: 2, balance: 0n, derivationPath: "m/44'/1'/0'/0/1" }),
       makeAddress({ address: 'yUnusedUnlabeled', balance: 0n, derivationPath: "m/44'/1'/0'/0/2" }),
-      makeAddress({ address: 'yUnusedWithRawLabel', balance: 0n, label: 'Ignored raw label', derivationPath: "m/44'/1'/0'/0/3" }),
+      makeAddress({ address: 'yUnusedWithRawLabel', balance: 0n, label: 'Core savings', derivationPath: "m/44'/1'/0'/0/3" }),
       makeAddress({ address: 'yFundedWithRequest', derivationPath: "m/44'/1'/0'/0/4" }),
     ]
     const change: WalletAddressDto[] = [
@@ -47,7 +47,7 @@ describe('masternodeWalletAddressOptions', () => {
       { address: '0xPlatformAddr', label: 'Ignore platform', kind: 'platform' as const },
     ]
 
-    const labels = walletAddressLabels(requests)
+    const labels = walletAddressLabels(requests, receiving, change)
     const options = masternodeWalletAddressOptions(receiving, change, requests, labels)
 
     expect(options).toEqual([
@@ -67,6 +67,7 @@ describe('masternodeWalletAddressOptions', () => {
       {
         value: 'yUnusedWithRawLabel',
         label: 'yUnusedWithRawLabel',
+        badge: 'Core savings',
         description: MASTERNODE_RECEIVING_ADDRESS_DESCRIPTION,
         metadata: ['0 Dash', 'Tx count: 0'],
       },
@@ -99,9 +100,9 @@ describe('masternodeWalletAddressOptions', () => {
     ])
 
     expect(options.some(option => option.description?.includes("m/44'"))).toBe(false)
-    expect(matchingOptionsByLabel(options, 'primary').map(opt => opt.value)).toEqual(['yUsedLabeled'])
-    expect(matchingOptionsByLabel(options, 'vault').map(opt => opt.value)).toEqual(['yChangeLabeled'])
-    expect(matchingOptionsByLabel(options, 'cold').map(opt => opt.value)).toEqual(['yRequestOnlyCore'])
+    expect(matchingOwnOptions(options, 'primary').map(opt => opt.value)).toEqual(['yUsedLabeled'])
+    expect(matchingOwnOptions(options, 'vault').map(opt => opt.value)).toEqual(['yChangeLabeled'])
+    expect(matchingOwnOptions(options, 'cold').map(opt => opt.value)).toEqual(['yRequestOnlyCore'])
   })
 
   it('deduplicates duplicate addresses while preserving first occurrence', () => {

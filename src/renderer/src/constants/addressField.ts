@@ -29,9 +29,11 @@ export const FIELD_INVALID = 'outline outline-1 outline-dash-red'
 
 export const FIELD_SUBTLE = 'min-h-[2.8125rem] rounded-[.875rem] border border-transparent dash-block-5 px-3 focus-within:border-dash-brand dark:focus-within:border-dash-mint'
 
+export const RECIPIENT_AUTOCOMPLETE_MIN_CHARS = 3
+
 export const RECIPIENT_FIELD_STYLES: Record<RecipientInputAppearance, RecipientFieldStyle> = {
-  default: { field: FIELD_COMPACT, textSize: 14, searchIconSize: 18 },
-  subtle: { field: FIELD_SUBTLE, textSize: 12, searchIconSize: 14 },
+  default: { field: FIELD_COMPACT, textSize: 14, bookIconSize: 18 },
+  subtle: { field: FIELD_SUBTLE, textSize: 12, bookIconSize: 14 },
 }
 
 export const CONTACT_IDENTIFIER_CLASS = `min-w-0 font-medium! ${HIGHLIGHTED_IDENTIFIER_CLASS}`

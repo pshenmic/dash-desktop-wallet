@@ -18,6 +18,8 @@ export interface AddressListProps {
 export interface AddressCardProps extends WalletAddressDto {
   lockBusy?: boolean
   onToggleLock?: () => void
+  labelLocked?: boolean
+  onSaveLabel?: (label: string) => Promise<void>
   onExportKey?: () => void
 }
 

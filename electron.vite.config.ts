@@ -6,7 +6,7 @@ export default defineConfig({
   main: {
     build: {
       rollupOptions: {
-        external: ['pshenmic-dpp', 'crypto-toothpick'],
+        external: ['pshenmic-dpp', 'dash-platform-shielded', 'crypto-toothpick'],
         input: {
           index: resolve('src/main/index.ts'),
           p2p: resolve('src/main/p2p/index.ts'),

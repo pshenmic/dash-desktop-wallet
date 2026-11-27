@@ -8,6 +8,7 @@ export interface DropdownFieldOption {
   badge?: string
   description?: string
   metadata?: string[]
+  searchTerms?: string[]
 }
 
 export interface DropdownFieldProps {
@@ -28,6 +29,12 @@ export interface DropdownFieldProps {
   valueBadge?: string
   hideValueBadge?: boolean
   hasExtraMatches?: (query: string) => boolean
+  minAutocompleteChars?: number
+  disableMenuToggle?: boolean
+  onActionClick?: () => void
+  actionAriaLabel?: string
+  actionTitle?: string
+  actionIcon?: ReactNode
   toggleIcon?: (open: boolean) => ReactNode
   onOpenChange?: (open: boolean) => void
   children?: ReactNode

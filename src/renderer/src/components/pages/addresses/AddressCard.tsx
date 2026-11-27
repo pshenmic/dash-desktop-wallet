@@ -16,6 +16,8 @@ import { DASH_UNIT } from '@renderer/constants/balance'
 export default function AddressCard({
   address,
   label,
+  labelLocked = false,
+  onSaveLabel,
   balance,
   txCount,
   isUsed,
@@ -34,6 +36,8 @@ export default function AddressCard({
       <AddressRow
         address={address}
         label={label}
+        labelLocked={labelLocked}
+        onSaveLabel={onSaveLabel}
         isLocked={isLocked}
         lockBusy={lockBusy}
         onToggleLock={onToggleLock}

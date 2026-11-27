@@ -21,8 +21,10 @@ import RetryButton from '@renderer/components/ui/RetryButton'
 import { NoResultsTone } from '@renderer/enums/NoResultsTone'
 import type { AddressListProps } from '@renderer/types/ExportKey'
 import type { RetryButtonProps } from '@renderer/types/RetryButton'
+import { API } from '@renderer/api'
 import { WalletAddressDto } from '@renderer/api/types'
 import { toggleWalletAddressLock } from '@renderer/utils/addressLock'
+import { resolveAddressLabel } from '@renderer/utils/addressLabels'
 
 function TabContent<T>({
   items,
@@ -102,16 +104,27 @@ export default function AddressList({ coreGated = false, onExportKey }: AddressL
     }
   }
 
-  const renderAddress = (item: WalletAddressDto): React.JSX.Element => (
-    <AddressCard
-      key={item.address}
-      {...item}
-      label={labelsByAddress.get(item.address) ?? null}
-      lockBusy={lockingAddress === item.address}
-      onToggleLock={walletId == null ? undefined : () => { void handleToggleLock(item) }}
-      onExportKey={onExportKey ? () => onExportKey({ address: item.address, path: item.derivationPath }) : undefined}
-    />
-  )
+  const handleSaveLabel = (address: string) => async (nextLabel: string): Promise<void> => {
+    if (!walletId) return
+    await API.setAddressLabel(walletId, address, nextLabel)
+    await refreshAddresses(walletId)
+  }
+
+  const renderAddress = (item: WalletAddressDto): React.JSX.Element => {
+    const resolved = resolveAddressLabel(item.label, labelsByAddress.get(item.address))
+    return (
+      <AddressCard
+        key={item.address}
+        {...item}
+        label={resolved.label}
+        labelLocked={resolved.lockedByReceive}
+        onSaveLabel={walletId && !resolved.lockedByReceive ? handleSaveLabel(item.address) : undefined}
+        lockBusy={lockingAddress === item.address}
+        onToggleLock={walletId == null ? undefined : () => { void handleToggleLock(item) }}
+        onExportKey={onExportKey ? () => onExportKey({ address: item.address, path: item.derivationPath }) : undefined}
+      />
+    )
+  }
 
   const tabItems = [
     {

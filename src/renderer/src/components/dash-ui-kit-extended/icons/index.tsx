@@ -1712,3 +1712,26 @@ export const ContactsIcon: React.FC<IconProps> = ({
     <path d="M11.75 9.6C13.53 9.98 14.75 11.43 14.75 13.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
   </svg>
 )
+
+export const AddressBookIcon: React.FC<IconProps> = ({
+  color = 'currentColor',
+  size = 16,
+  className = '',
+  onClick
+}) => (
+  <svg
+    className={className}
+    onClick={onClick}
+    color={color}
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <rect x="3.25" y="1.75" width="10.5" height="12.5" rx="2" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M1.75 4.75H3.75M1.75 8H3.75M1.75 11.25H3.75" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    <circle cx="8.75" cy="6.25" r="1.65" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M5.75 11.25C6.1 9.65 7.3 8.9 8.75 8.9C10.2 8.9 11.4 9.65 11.75 11.25" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+  </svg>
+)

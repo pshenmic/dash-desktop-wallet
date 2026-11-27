@@ -23,9 +23,13 @@ import { useWalletBalance, refreshBalance } from "@renderer/hooks/useWalletBalan
 import { refreshTransactions } from "@renderer/hooks/useWalletTransactions";
 import { usePlatformAddresses, refreshPlatformAddresses } from "@renderer/hooks/usePlatformAddresses";
 import { useAdresses } from "@renderer/hooks/useAdresses";
+import { useAddressBook } from "@renderer/hooks/useAddressBook";
 import { useReceiveRequests, refreshReceiveRequests } from "@renderer/hooks/useReceiveRequests";
 import { useSavedShieldedAddresses } from "@renderer/hooks/useSavedShieldedAddresses";
-import { matchingOptionsByLabel, ownRecipientOptions } from "@renderer/utils/ownRecipients";
+import { matchingOwnOptions, ownRecipientOptions, recipientAddressBadge, walletAddressLabels } from "@renderer/utils/ownRecipients";
+import { RECIPIENT_AUTOCOMPLETE_MIN_CHARS } from "@renderer/constants/addressField";
+import { isValidDestinationAddress } from "@renderer/utils/destinationAddress";
+import { autocompleteContacts } from "@renderer/utils/matchingContacts";
 import { useIdentities, prefetchIdentities, refreshIdentities } from "@renderer/hooks/useIdentities";
 import { useShieldedStatus, useShieldedSyncState } from "@renderer/hooks/useShielded";
 import { useOperationFee } from "@renderer/hooks/useOperationFee";
@@ -202,11 +206,16 @@ function WalletTransferHub(): React.JSX.Element {
   const { format: formatFiat, rateReady } = useFiat()
   const { balance } = useWalletBalance(walletId ?? undefined)
   const { receiving, change, loading: coreAddressesLoading, err: coreAddressesError } = useAdresses(walletId ?? undefined)
-  const { allRequests: receiveRequests, labelsByAddress: walletLabels, loading: receiveRequestsLoading, err: receiveRequestsError } = useReceiveRequests(walletId ?? undefined)
+  const { contacts, err: contactsError } = useAddressBook()
+  const { allRequests: receiveRequests, loading: receiveRequestsLoading, err: receiveRequestsError } = useReceiveRequests(walletId ?? undefined)
   const { platformAddresses, loading: platformAddressesLoading, err: platformAddressesError } = usePlatformAddresses(walletId ?? undefined)
   const { identities, loading: identitiesLoading, err: identitiesError } = useIdentities(walletId ?? undefined)
   const shieldedSync = useShieldedSyncState(walletId, true)
   const savedShielded = useSavedShieldedAddresses(toKind === DestinationKind.Shielded, shieldedSync.phase)
+  const walletLabels = useMemo(
+    () => walletAddressLabels(receiveRequests, receiving, change),
+    [receiveRequests, receiving, change],
+  )
   const ownRecipients = useMemo(() => ownRecipientOptions(toKind, {
     receiving,
     change,
@@ -220,6 +229,7 @@ function WalletTransferHub(): React.JSX.Element {
   const prover = useShieldedStatus()
   useErrorToast(utxosError)
   useErrorToast(coreAddressesError)
+  useErrorToast(contactsError)
   useErrorToast(receiveRequestsError)
   useErrorToast(platformAddressesError)
   useErrorToast(identitiesError)
@@ -485,9 +495,15 @@ function WalletTransferHub(): React.JSX.Element {
       && !advancedMulti && fundingAddresses.includes(trimmedTo))
     || (operation === TransferOperation.IdentityToIdentity && destinationValid && selectedIdentity != null && trimmedTo === selectedIdentity.identifier)
 
-  const hasSimpleLabelMatch = !advanced && trimmedTo.length > 0 && matchingOptionsByLabel(ownRecipients, trimmedTo).length > 0
+  const hasSimpleQueryMatch = !advanced
+    && trimmedTo.length >= RECIPIENT_AUTOCOMPLETE_MIN_CHARS
+    && !destinationValid
+    && (
+      matchingOwnOptions(ownRecipients, trimmedTo).length > 0
+      || autocompleteContacts(contacts, trimmedTo, address => isValidDestinationAddress(toKind, address, network)).length > 0
+    )
   let destinationError: string | null = null
-  if (toKind !== DestinationKind.NewIdentity && trimmedTo.length > 0 && !hasSimpleLabelMatch) {
+  if (toKind !== DestinationKind.NewIdentity && trimmedTo.length > 0 && !hasSimpleQueryMatch) {
     if (!destinationValid) {
       destinationError = INVALID_DESTINATION_MESSAGES[toKind].replace('{network}', network ?? '')
     } else if (selfSend) {
@@ -533,6 +549,7 @@ function WalletTransferHub(): React.JSX.Element {
     loading={coreAddressesLoading}
     error={coreAddressesError}
     previewOnly={operation !== TransferOperation.CoreSend}
+    addressLabels={walletLabels}
     onChange={changeAddress => updateAdvancedRoute({changeAddress})}
     onRetry={() => { if (walletId) invalidateAsyncCache('addresses', walletId) }}
   /> : null
@@ -618,7 +635,7 @@ function WalletTransferHub(): React.JSX.Element {
     }
   }
 
-  const coreRecipientInput = !advanced && toKind === DestinationKind.CoreAddress && operation != null
+  const simpleRecipientInput = !advanced && toKind !== DestinationKind.NewIdentity && operation != null
   const ownRecipientsLoading = {
     [DestinationKind.CoreAddress]: coreAddressesLoading || (ownRecipients.length === 0 && receiveRequestsLoading),
     [DestinationKind.PlatformAddress]: platformAddressesLoading || (ownRecipients.length === 0 && receiveRequestsLoading),
@@ -654,7 +671,7 @@ function WalletTransferHub(): React.JSX.Element {
     updateDraft(current => setSendAdvanced(current, mode))
     setWizardKey(key => key + 1)
   }
-  const simpleValueBadge = walletLabels.get(toValue.trim())
+  const simpleValueBadge = recipientAddressBadge(toValue, walletLabels, contacts)
   let recipientControl: React.ReactNode
   if (usesRecipientEditor) {
     recipientControl = (
@@ -668,15 +685,21 @@ function WalletTransferHub(): React.JSX.Element {
         onClick={() => setRecipientsOpen(true)}
       />
     )
-  } else if (coreRecipientInput) {
+  } else if (simpleRecipientInput) {
     recipientControl = (
       <RecipientInput
         compact
+        destination={toKind}
+        ariaLabel={toKind === DestinationKind.Identity ? 'Recipient identity ID' : 'Recipient address'}
         value={toValue}
         valueBadge={simpleValueBadge}
+        valueAvatar={toKind === DestinationKind.Identity}
+        validate={address => isValidDestinationAddress(toKind, address, network)}
+        invalid={destinationError != null}
         onChange={setToValue}
-        data={sendPageData.recipient}
+        data={{ ...sendPageData.recipient, placeholder: destinationPlaceholder }}
         ownOptions={ownRecipients}
+        ownOptionsHeading={toKind === DestinationKind.Identity ? 'Your identities' : 'Your addresses'}
         ownOptionsLoading={ownRecipientsLoading}
         ownOptionsError={ownRecipientsError}
         onRetryOwnOptions={retryOwnRecipients}
@@ -723,18 +746,13 @@ function WalletTransferHub(): React.JSX.Element {
             kind={toKind}
             kinds={destinationKinds}
             onKindChange={changeDestinationKind}
-            value={coreRecipientInput ? trimmedTo : toValue}
-            valueBadge={!advanced ? simpleValueBadge : undefined}
+            value={toValue}
             onValueChange={setToValue}
             placeholder={destinationPlaceholder}
-            error={usesRecipientEditor ? null : destinationError}
-            showValueInput={!advanced && !coreRecipientInput && operation != null}
-            ownOptions={!advanced ? ownRecipients : undefined}
-            ownOptionsLoading={!advanced && ownRecipientsLoading}
-            ownOptionsError={!advanced ? ownRecipientsError : null}
-            onRetryOwnOptions={retryOwnRecipients}
+            error={usesRecipientEditor || simpleRecipientInput ? null : destinationError}
+            showValueInput={!advanced && !simpleRecipientInput && operation != null}
           />
-          {coreRecipientInput && <>
+          {simpleRecipientInput && <>
             {destinationError && <Text size={12} weight={"medium"} color={"red"} className={"px-1"}>{destinationError}</Text>}
           </>}
           {!advanced && operation != null && toKind !== DestinationKind.NewIdentity && <>
