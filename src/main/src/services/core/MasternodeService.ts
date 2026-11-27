@@ -152,12 +152,10 @@ export class MasternodeService {
   // search — p2p before its first proven list — which is not "none". The secret
   // is encrypted under the seed, so the key can sign later.
   async importKey(walletId: string, role: MasternodeKeyChain, privateKey: string, password?: string): Promise<Masternode[] | null> {
-    if (!MASTERNODE_KEY_CHAINS.includes(role)) throw new Error(`Unknown masternode key role: ${role}`)
-
     const wallet = await requireWallet(this.walletDAO, walletId)
-    const trimmed = privateKey.trim()
-    const key = {role, publicKey: masternodePublicKey(role, trimmed, wallet.network)}
-    const encryptedPrivateKey = await this.encryptImportedSecret(walletId, trimmed, password)
+    const secret = privateKey.trim()
+    const key = this.keyFromSecret(role, secret, wallet.network)
+    const encryptedPrivateKey = await this.encryptImportedSecret(walletId, secret, password)
 
     await this.masternodeKeyDAO.saveImportedKey(walletId, key, encryptedPrivateKey)
 
@@ -165,6 +163,15 @@ export class MasternodeService {
     await this.discover(walletId)
 
     return this.listed.get(walletId)?.filter(node => carriesKey(node, key)) ?? null
+  }
+
+  // Reads the list without storing the key, so an import can show what it is
+  // first. Null while no list has arrived to search, which is not "no node".
+  async checkKey(walletId: string, role: MasternodeKeyChain, privateKey: string): Promise<NetworkMasternode[] | null> {
+    const wallet = await requireWallet(this.walletDAO, walletId)
+    const {publicKey} = this.keyFromSecret(role, privateKey.trim(), wallet.network)
+    const provider = this.providers.forWallet(walletId, wallet.network)
+    return provider.getMasternodes(role, masternodeFilterValues(role, publicKey))
   }
 
   async getImportedKeySecret(walletId: string, role: MasternodeKeyChain, publicKey: string): Promise<string | null> {
@@ -408,6 +415,11 @@ export class MasternodeService {
     const indexes = new Map<string, number>()
     for (let index = 0; index <= ownerScanLimit(used); index++) indexes.set(deriver.derive(index).address, index)
     return indexes
+  }
+
+  private keyFromSecret(role: MasternodeKeyChain, secret: string, network: Network): Pick<ImportedMasternodeKey, 'role' | 'publicKey'> {
+    if (!MASTERNODE_KEY_CHAINS.includes(role)) throw new Error(`Unknown masternode key role: ${role}`)
+    return {role, publicKey: masternodePublicKey(role, secret, network)}
   }
 
   private async encryptImportedSecret(walletId: string, privateKey: string, password?: string): Promise<string> {

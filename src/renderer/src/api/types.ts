@@ -280,6 +280,37 @@ export interface SharedRegistrationFundingResultDto {
   signedInputs: number[]
 }
 
+export interface MasternodeShareDto {
+  ownerAddress: string
+  amountDuffs: bigint
+}
+
+// checkMasternodeKey — a node as the network's list carries it, before any of
+// its keys are stored; null while the source has no list. Times are unix
+// seconds, 0 = never. A null field is one the connection mode cannot give.
+export interface NetworkMasternodeDto {
+  proTxHash: string
+  type: string
+  status: string
+  posePenaltyScore: number | null
+  collateralTxid: string | null
+  collateralVout: number | null
+  collateralAddress: string | null
+  serviceAddress: string | null
+  payeeAddress: string | null
+  ownerAddress: string | null
+  votingAddress: string
+  operatorPublicKey: string
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+  lastPaidBlock: number | null
+  lastPaidTime: number | null
+  registeredHeight: number | null
+  isShared: boolean | null
+  shares: MasternodeShareDto[] | null
+}
+
 // getMasternodes — a masternode this wallet holds a key or the collateral of, as
 // last listed; null until the first discovery run after startup. A null key
 // index is a key the seed does not derive; importedRoles are held by an imported

@@ -243,6 +243,45 @@ describe('MasternodeService.discover', () => {
     expect(await masternodes.getImportedKeys(walletId)).toHaveLength(1)
   })
 
+  // The check behind an import preview: the same search, storing nothing.
+  it('finds a node by a pasted key without importing it', async () => {
+    const voting = PrivateKey.fromBytes(new Uint8Array(32).fill(7), 'mainnet')
+    current = source([node('f', {votingAddress: voting.getAddress(), status: 'POSE_BANNED'})])
+
+    const found = await masternodes.checkKey(walletId, 'voting', ` ${voting.toWIF()}\n`)
+
+    expect(found!.map(({proTxHash, status}) => [proTxHash, status])).toEqual([['f', 'POSE_BANNED']])
+    expect(await masternodes.getImportedKeys(walletId)).toEqual([])
+  })
+
+  it('finds a shared node by a pasted share owner key', async () => {
+    const owner = PrivateKey.fromBytes(new Uint8Array(32).fill(9), 'mainnet')
+    current = source([node('s', {
+      ownerAddress: null,
+      isShared: true,
+      shares: [{ownerAddress: owner.getAddress(), amountDuffs: 50000000000n}],
+    })])
+
+    const found = await masternodes.checkKey(walletId, 'owner', owner.toWIF())
+
+    expect(found!.map(({proTxHash, isShared}) => [proTxHash, isShared])).toEqual([['s', true]])
+    expect(await masternodes.getImportedKeys(walletId)).toEqual([])
+  })
+
+  it('answers a check with null while the source has no list', async () => {
+    current = source(null)
+    const voting = PrivateKey.fromBytes(new Uint8Array(32).fill(7), 'mainnet')
+
+    expect(await masternodes.checkKey(walletId, 'voting', voting.toWIF())).toBeNull()
+  })
+
+  it('refuses a check of a key that does not parse, and stores nothing', async () => {
+    current = source([])
+    await expect(masternodes.checkKey(walletId, 'operator', 'not hex')).rejects.toThrow()
+    await expect(masternodes.checkKey(walletId, 'collateral' as never, 'x')).rejects.toThrow('Unknown masternode key role')
+    expect(await masternodes.getImportedKeys(walletId)).toEqual([])
+  })
+
   // A node the p2p index has not read the ProRegTx of yet has no outpoint to keep.
   it('lists a node whose collateral is not known yet without storing one', async () => {
     await discover(source([node('g', {votingAddress: key('voting', 0), collateralTxid: null, collateralVout: null})]))

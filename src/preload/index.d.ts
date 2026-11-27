@@ -165,6 +165,31 @@ interface MasternodeIdentityInfoDTO {
   balance: { amount: bigint; usdAmount: string }
 }
 
+// Mirrors NetworkMasternode in src/main/src/types/Masternode: the network's own
+// entry, with none of the wallet marks a MasternodeDTO adds.
+interface NetworkMasternodeDTO {
+  proTxHash: string
+  type: string
+  status: string
+  posePenaltyScore: number | null
+  collateralTxid: string | null
+  collateralVout: number | null
+  collateralAddress: string | null
+  serviceAddress: string | null
+  payeeAddress: string | null
+  ownerAddress: string | null
+  votingAddress: string
+  operatorPublicKey: string
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+  lastPaidBlock: number | null
+  lastPaidTime: number | null
+  registeredHeight: number | null
+  isShared: boolean | null
+  shares: MasternodeShareDTO[] | null
+}
+
 interface MasternodeDTO {
   proTxHash: string
   type: string
@@ -431,6 +456,7 @@ declare global {
       getMasternodeCollaterals: (walletId: string) => Promise<MasternodeCollateralDTO[]>
       getImportedMasternodeKeys: (walletId: string) => Promise<ImportedMasternodeKeyDTO[]>
       getUnmatchedImportedMasternodeKeys: (walletId: string) => Promise<ImportedMasternodeKeyDTO[] | null>
+      checkMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string) => Promise<NetworkMasternodeDTO[] | null>
       importMasternodeKey: (walletId: string, role: MasternodeKeyRole, privateKey: string, password?: string) => Promise<MasternodeDTO[] | null>
       removeMasternodeKey: (walletId: string, key: ImportedMasternodeKeyDTO) => Promise<void>
       signAndBroadcastMasternodeRegistration: (walletId: string, unsignedHex: string, password: string) => Promise<MasternodeRegistrationResultDTO>

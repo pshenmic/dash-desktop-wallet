@@ -1,6 +1,6 @@
 import { WalletTxDto } from '@renderer/types/WalletTransaction'
 import { TransferOperation } from '../enums/TransferOperation'
-import { AddressKeyInfoDto, UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PaymentRequestDto, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, ListedUtxo, MasternodeDto, MasternodeIdentityInfoDto, ImportedMasternodeKeyDto, MasternodeKeyRole, MasternodeRegistrationDto, MasternodeRegistrationPreviewDto, MasternodeRegistrationResult, MasternodeRegistrarUpdateDto, MasternodeServiceUpdateDto, MasternodeUpdateResult, RevocationReason, SharedRegistrationConsentResultDto, SharedRegistrationFundingResultDto, SharedRegistrationFundingPreviewDto, ProposalDto, ProposalTally, ContestedResourceDto, ContestedResourceVoteRequest, ContestedResourceVoteChoice, VoteOutcome, VoteResult} from './types'
+import { AddressKeyInfoDto, UsernameDto, UsernameSearchResultDto, IdentityKeysUpdateDto, IdentityPrivateKeyDto, DashPayContactDto, DashPayPaymentDto, AssetLockFundingKind, AssetLockFundingState, ConnectionType, Contact, DapiUrlStatus, ExchangeRatesResult, IdentityCreateResult, LogFileContent, LogFileInfo, LogLevel, Network, PaymentRequestDto, PeerInfo, PeerMode, PlatformAddressDto, PlatformSendResult, PreferencesJSON, SendResult, ShieldResult, ShieldedNotesInfo, ShieldedPoolInfo, ShieldedSpendState, ShieldedStatus, ShieldedSyncState, FeeParams, OperationFee, PreviewParams, TransactionPreview, TxLockStatus, WalletHistory, CoreRecipient, CoreSpendSource, PlatformSpendSource, PlatformRecipient, ShieldedRecipient, ShieldedSpendSource, ListedUtxo, MasternodeDto, NetworkMasternodeDto, MasternodeIdentityInfoDto, ImportedMasternodeKeyDto, MasternodeKeyRole, MasternodeRegistrationDto, MasternodeRegistrationPreviewDto, MasternodeRegistrationResult, MasternodeRegistrarUpdateDto, MasternodeServiceUpdateDto, MasternodeUpdateResult, RevocationReason, SharedRegistrationConsentResultDto, SharedRegistrationFundingResultDto, SharedRegistrationFundingPreviewDto, ProposalDto, ProposalTally, ContestedResourceDto, ContestedResourceVoteRequest, ContestedResourceVoteChoice, VoteOutcome, VoteResult} from './types'
 
 export class API {
   private static get api() {
@@ -181,6 +181,12 @@ export class API {
 
   static async getImportedMasternodeKeys(walletId: string): Promise<ImportedMasternodeKeyDto[]> {
     return this.api.getImportedMasternodeKeys(walletId)
+  }
+
+  // Answers the listed nodes carrying the key without storing it, so an import
+  // can show what it is first. Null while no masternode list has arrived.
+  static async checkMasternodeKey(walletId: string, role: MasternodeKeyRole, privateKey: string): Promise<NetworkMasternodeDto[] | null> {
+    return this.api.checkMasternodeKey(walletId, role, privateKey)
   }
 
   // Owner and voting keys are WIF, an operator key the hex BLS secret. Every
