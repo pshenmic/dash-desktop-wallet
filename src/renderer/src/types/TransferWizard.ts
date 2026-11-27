@@ -11,5 +11,9 @@ export interface TransferWizardProps {
   onSubmit: () => void
   submitLabel?: string
   submitDisabled?: boolean
+  submitBusy?: boolean
+  currentStep?: number
+  allowStepClick?: boolean
+  footerNotice?: ReactNode
   onStepChange?: (index: number) => void
 }

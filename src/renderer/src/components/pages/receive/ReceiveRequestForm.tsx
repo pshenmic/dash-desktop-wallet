@@ -18,6 +18,7 @@ export default function ReceiveRequestForm({
   error = null,
   headerExtra,
   extraFields,
+  hasExtraValues = false,
   note,
   submitDisabled = false,
   submitLabel,
@@ -28,7 +29,7 @@ export default function ReceiveRequestForm({
 }: ReceiveRequestFormProps): React.JSX.Element {
   const idPrefix = useId()
   const disabled = busy || submitDisabled
-  const hasValues = label.trim().length > 0 || amount.trim().length > 0
+  const hasValues = label.trim().length > 0 || amount.trim().length > 0 || hasExtraValues
   const amountParam = receiveAmountParam(amount)
   const trimmedLabel = label.trim() || null
   const paymentUri = corePaymentUri(address, amountParam, trimmedLabel)

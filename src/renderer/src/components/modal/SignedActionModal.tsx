@@ -6,6 +6,7 @@ import { ModalSize } from '@renderer/enums/ModalSize'
 import { SignedActionDoneTone } from '@renderer/enums/SignedActionDoneTone'
 import { SignedActionPhase } from '@renderer/enums/SignedActionPhase'
 import { getErrorMessage } from '@renderer/utils/error'
+import CopyableError from '@renderer/components/ui/CopyableError'
 import HashField from '@renderer/components/ui/HashField'
 import Modal from '@renderer/components/ui/Modal'
 import ModalActions from '@renderer/components/ui/ModalActions'
@@ -33,6 +34,7 @@ export default function SignedActionModal<R>({
   shortfall,
   confirmLabel,
   confirmDisabled = false,
+  inlineErrors = false,
   pendingLabel,
   run,
   renderDone,
@@ -46,6 +48,7 @@ export default function SignedActionModal<R>({
   const [phase, setPhase] = useState<SignedActionPhase>(firstPhase)
   const [password, setPassword] = useState('')
   const [passwordInvalid, setPasswordInvalid] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [verifying, setVerifying] = useState(false)
   const [result, setResult] = useState<SignedActionResult<R> | null>(null)
   const [seenOpen, setSeenOpen] = useState(false)
@@ -56,6 +59,7 @@ export default function SignedActionModal<R>({
       setPhase(firstPhase)
       setPassword('')
       setPasswordInvalid(false)
+      setActionError(null)
       setVerifying(false)
       setResult(null)
     }
@@ -77,6 +81,7 @@ export default function SignedActionModal<R>({
   const toConfirm = (): void => {
     setPassword('')
     setPasswordInvalid(false)
+    setActionError(null)
     setResult(null)
     setPhase(SignedActionPhase.Confirm)
   }
@@ -84,19 +89,26 @@ export default function SignedActionModal<R>({
   const toEdit = (): void => {
     setPassword('')
     setPasswordInvalid(false)
+    setActionError(null)
     setPhase(SignedActionPhase.Edit)
   }
 
   const controls: SignedActionControls = { restart: toConfirm, close: finish }
 
   const fail = (error: unknown): void => {
-    toast.error(`**${title} ${SIGNED_ACTION_COPY.failed}** ${getErrorMessage(error)}`)
+    const message = getErrorMessage(error)
+    if (inlineErrors) {
+      setActionError(message)
+      return
+    }
+    toast.error(`**${title} ${SIGNED_ACTION_COPY.failed}** ${message}`)
   }
 
   const submit = async (): Promise<void> => {
     if (!walletId || password.length === 0 || busy || blocked) return
     setVerifying(true)
     setPasswordInvalid(false)
+    setActionError(null)
     let valid: boolean
     try {
       valid = await API.verifyWalletPassword(walletId, password)
@@ -146,10 +158,15 @@ export default function SignedActionModal<R>({
         )}
         <div className={"mt-4"}>{summary}</div>
         {shortfall && <div className={"mt-2"}>{shortfall}</div>}
+        {inlineErrors && actionError != null && (
+          <div className={"mt-3"}>
+            <CopyableError message={actionError} />
+          </div>
+        )}
         <PasswordField
           id={passwordId}
           value={password}
-          onChange={(value) => { setPasswordInvalid(false); setPassword(value) }}
+          onChange={(value) => { setPasswordInvalid(false); setActionError(null); setPassword(value) }}
           onSubmit={submit}
           error={passwordInvalid ? INVALID_WALLET_PASSWORD_MESSAGE : null}
           disabled={verifying}

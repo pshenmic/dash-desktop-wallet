@@ -1,5 +1,5 @@
 import type {Knex} from 'knex'
-import {ImportedMasternodeKey, MasternodeKeys} from '../types/Masternode'
+import {ImportedMasternodeKey, MasternodeKeyChain, MasternodeKeys} from '../types/Masternode'
 
 export class MasternodeKeyDAO {
   knex: Knex
@@ -63,16 +63,42 @@ export class MasternodeKeyDAO {
 
   getImportedKeys = async (walletId: string): Promise<ImportedMasternodeKey[]> => {
     const rows = await this.knex('masternode_imported_keys')
-      .select('role', 'public_key')
+      .select('role', 'public_key', 'encrypted_private_key')
       .where('wallet_id', walletId)
-    return rows.map(({role, public_key}) => ({role, publicKey: public_key}))
+    return rows.map(({role, public_key, encrypted_private_key}) => ({
+      role,
+      publicKey: public_key,
+      hasPrivateKey: encrypted_private_key != null,
+    }))
   }
 
-  saveImportedKey = async (walletId: string, {role, publicKey}: ImportedMasternodeKey): Promise<void> => {
+  // A null secret leaves an existing one alone: an owner or operator re-import
+  // must not erase a voting secret stored under the same role and public key.
+  saveImportedKey = async (
+    walletId: string,
+    {role, publicKey}: Pick<ImportedMasternodeKey, 'role' | 'publicKey'>,
+    encryptedPrivateKey: string | null = null,
+  ): Promise<void> => {
+    const row = {wallet_id: walletId, role, public_key: publicKey, encrypted_private_key: encryptedPrivateKey}
+    if (encryptedPrivateKey == null) {
+      await this.knex('masternode_imported_keys')
+        .insert(row)
+        .onConflict(['wallet_id', 'role', 'public_key'])
+        .ignore()
+      return
+    }
     await this.knex('masternode_imported_keys')
-      .insert({wallet_id: walletId, role, public_key: publicKey})
+      .insert(row)
       .onConflict(['wallet_id', 'role', 'public_key'])
-      .ignore()
+      .merge(['encrypted_private_key'])
+  }
+
+  getImportedKeySecret = async (walletId: string, role: MasternodeKeyChain, publicKey: string): Promise<string | null> => {
+    const row = await this.knex('masternode_imported_keys')
+      .select('encrypted_private_key')
+      .where({wallet_id: walletId, role, public_key: publicKey})
+      .first()
+    return row?.encrypted_private_key ?? null
   }
 
   removeImportedKey = async (walletId: string, {role, publicKey}: ImportedMasternodeKey): Promise<void> => {

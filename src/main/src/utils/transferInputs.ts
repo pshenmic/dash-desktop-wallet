@@ -31,10 +31,12 @@ export function requireCoreRecipients(recipients: CoreRecipient[]): bigint {
 // address and then to a receiving one, so it never leaves by accident.
 export function pickChangeAddress(grouped: GroupedAddresses, requested?: string): string {
   if (requested != null) return requested
-  const unusedChange = grouped.change.find(a => !a.isUsed)
+  const change = grouped.change.filter(a => !a.isLocked)
+  const unusedChange = change.find(a => !a.isUsed)
   if (unusedChange) return unusedChange.address
-  if (grouped.change.length > 0) return grouped.change[grouped.change.length - 1].address
-  if (grouped.receiving.length > 0) return grouped.receiving[0].address
+  if (change.length > 0) return change[change.length - 1].address
+  const receiving = grouped.receiving.find(a => !a.isLocked)
+  if (receiving) return receiving.address
   throw new Error('Wallet has no change address')
 }
 
@@ -44,9 +46,10 @@ export function pickCreditChangeAddress(
   grouped: GroupedAddresses,
   changeAddress: string,
 ): {address: string; derivationPath: string} {
-  const credit = grouped.change.find(a => !a.isUsed && a.address !== changeAddress)
-    ?? grouped.change.find(a => !a.isUsed)
-    ?? grouped.change[grouped.change.length - 1]
+  const change = grouped.change.filter(a => !a.isLocked)
+  const credit = change.find(a => !a.isUsed && a.address !== changeAddress)
+    ?? change.find(a => !a.isUsed)
+    ?? change[change.length - 1]
   if (credit == null) {
     throw new Error('Wallet has no change address for the asset lock credit output')
   }
@@ -79,6 +82,10 @@ export function selectableTransferUtxos(
     }))
 }
 
+export function addressPaths(grouped: GroupedAddresses): Map<string, string> {
+  return new Map([...grouped.receiving, ...grouped.change, ...grouped.dashPay ?? []].map(a => [a.address, a.derivationPath]))
+}
+
 export function selectTransferInputs(
   grouped: GroupedAddresses,
   utxos: UTXO[],
@@ -87,7 +94,7 @@ export function selectTransferInputs(
   source?: CoreSpendSource,
   changeTo?: string,
 ): TransferInputSelection {
-  const pathByAddress = new Map([...grouped.receiving, ...grouped.change, ...grouped.dashPay ?? []].map(a => [a.address, a.derivationPath]))
+  const pathByAddress = addressPaths(grouped)
 
   const selectable = selectableTransferUtxos(grouped, utxos, source).filter(utxo => !utxo.isLocked)
 

@@ -152,7 +152,7 @@ describe('reserved addresses read as used', () => {
     requests = new PaymentRequestDAO(knex)
     await addressDAO.insertAddresses([{
       walletId: WALLET, accountId: 0, address: CORE, derivationPath: "m/44'/1'/0'/0/0", index: 0,
-      isChange: false, isUsed: false, label: null,
+      isChange: false, isUsed: false, isLocked: false, label: null,
     }])
     await platformAddressDAO.insertAddresses([{
       walletId: WALLET, index: 0, address: PLATFORM, derivationPath: "m/9'/1'/17'/0'/0'/0", isUsed: false,

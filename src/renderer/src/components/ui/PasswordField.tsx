@@ -10,15 +10,18 @@ export default function PasswordField({
   onSubmit,
   error = null,
   label = WALLET_PASSWORD_LABEL,
+  hideLabel = false,
   disabled = false,
   autoFocus = true,
   className = '',
 }: PasswordFieldProps): React.JSX.Element {
   return (
     <div className={`flex flex-col ${className}`}>
-      <label htmlFor={id} className={"mb-2"}>
-        <Text size={14} weight={"medium"} color={"brand"} opacity={50}>{label}</Text>
-      </label>
+      {!hideLabel && (
+        <label htmlFor={id} className={"mb-2"}>
+          <Text size={14} weight={"medium"} color={"brand"} opacity={50}>{label}</Text>
+        </label>
+      )}
       <Input
         id={id}
         type={"password"}

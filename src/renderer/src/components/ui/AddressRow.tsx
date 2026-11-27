@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, ExternalLinkIcon, HighlightedIdentifier, KeyIcon, PencilIcon, Text, Tooltip } from '@renderer/components/dash-ui-kit-extended'
+import { Button, ExternalLinkIcon, HighlightedIdentifier, KeyIcon, LockIcon, PencilIcon, Text, Tooltip } from '@renderer/components/dash-ui-kit-extended'
 import CopyButton from '@renderer/components/ui/CopyButton'
 import CustomBadge from '@renderer/components/ui/CustomBadge'
 import QrButton from '@renderer/components/ui/QrButton'
@@ -15,6 +15,9 @@ import {
   ADDRESS_ROW_FIAT_CLASS,
   ADDRESS_ROW_ICON_BUTTON_CLASS,
   ADDRESS_ROW_IDENTIFIER_CLASS,
+  ADDRESS_ROW_LOCKED_BADGE,
+  ADDRESS_ROW_LOCK_LABEL,
+  ADDRESS_ROW_UNLOCK_LABEL,
   ADDRESS_ROW_LABEL_LOCKED_TOOLTIP,
   ADDRESS_ROW_LABEL_PLACEHOLDER,
   ADDRESS_ROW_LABEL_SAVE_ERROR,
@@ -40,6 +43,9 @@ export default function AddressRow({
   explorerUrl,
   onQr,
   onExportKey,
+  isLocked = false,
+  lockBusy = false,
+  onToggleLock,
   hidden = false,
 }: AddressRowProps): React.JSX.Element {
   const { format: formatFiat, rateReady } = useFiat()
@@ -47,6 +53,7 @@ export default function AddressRow({
   const [draftLabel, setDraftLabel] = useState('')
   const [saving, setSaving] = useState(false)
   const trimmedLabel = label?.trim() ?? ''
+  const lockLabel = isLocked ? ADDRESS_ROW_UNLOCK_LABEL : ADDRESS_ROW_LOCK_LABEL
 
   useEffect(() => {
     if (labelLocked) setEditing(false)
@@ -84,8 +91,28 @@ export default function AddressRow({
             {trimmedLabel !== '' && (
               <CustomBadge text={trimmedLabel} variant={"accent"} size={"xs"} className={"shrink-0"} />
             )}
+            {isLocked && (
+              <CustomBadge text={ADDRESS_ROW_LOCKED_BADGE} variant={"warning"} size={"xs"} className={"shrink-0"} />
+            )}
             <CopyButton text={address} className={"shrink-0"} />
             {onQr && <QrButton onClick={onQr} className={"shrink-0"} />}
+            {onToggleLock && (
+              <Tooltip label={lockLabel}>
+                <button
+                  type={"button"}
+                  disabled={lockBusy}
+                  onClick={onToggleLock}
+                  title={lockLabel}
+                  aria-label={`${lockLabel} ${address}`}
+                  aria-pressed={isLocked}
+                  className={`size-5 shrink-0 rounded-[.3125rem] flex items-center justify-center ${
+                    isLocked ? 'dash-block-accent-25 dash-text-primary' : 'dash-block-5 dash-text-default'
+                  } hover:opacity-80 transition-opacity duration-200 cursor-pointer disabled:pointer-events-none disabled:opacity-40`}
+                >
+                  <LockIcon size={10} color={"currentColor"} className={isLocked ? '' : 'opacity-50'} />
+                </button>
+              </Tooltip>
+            )}
             {labelLocked ? (
               <Tooltip label={labelLockedTooltip}>
                 <span className={"inline-flex shrink-0"}>

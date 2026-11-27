@@ -30,6 +30,7 @@ export type WalletAddressDto = {
   index: number
   isChange: number
   isUsed: boolean
+  isLocked: boolean
   balance: bigint
   txCount: number
   label: string | null
@@ -218,19 +219,92 @@ export interface ListedUtxo extends SelectableUtxo {
 
 export type MasternodeKeyRole = 'owner' | 'voting' | 'operator'
 
+export interface MasternodeShareDto {
+  ownerAddress: string
+  amountDuffs: bigint
+}
+
+export interface OwnedMasternodeShareDto extends MasternodeShareDto {
+  keyIndex: number | null
+  imported: boolean
+  canSign: boolean
+}
+
+export interface MasternodeCollateralDto {
+  proTxHash: string
+  txid: string
+  vout: number
+  address: string | null
+}
+
 // publicKey is what the list carries for the role: the address for owner and
-// voting, the hex public key for operator.
+// voting, the hex public key for operator. hasPrivateKey is true when the
+// secret is stored, which is what lets the key sign.
 export interface ImportedMasternodeKeyDto {
   role: MasternodeKeyRole
   publicKey: string
+  hasPrivateKey: boolean
+}
+
+// Mirrors SharedRegistrationPreview and its rows in src/main/src/types/Masternode.
+export interface SharedRegistrationShareDto {
+  index: number
+  amountDuffs: bigint
+  ownerAddress: string
+  refundAddress: string | null
+  rewardAddress: string | null
+}
+
+export interface SharedRegistrationFundingInputDto {
+  index: number
+  address: string
+  amountDuffs: bigint
+}
+
+export interface SharedRegistrationOutputDto {
+  address: string | null
+  amountDuffs: bigint
+  collateral: boolean
+}
+
+export interface SharedRegistrationPreviewDto {
+  consentHash: string
+  shares: SharedRegistrationShareDto[]
+  signableShares: number[]
+  outputs: SharedRegistrationOutputDto[]
+  collateralDuffs: bigint
+  warning: string | null
+}
+
+export interface SharedRegistrationFundingPreviewDto extends SharedRegistrationPreviewDto {
+  fundingInputs: SharedRegistrationFundingInputDto[]
+  fundingTotalDuffs: bigint
+  unresolvedInputs: number
+}
+
+export interface SharedRegistrationSignatureDto {
+  shareIndex: number
+  signature: string
+}
+
+export interface SharedRegistrationConsentResultDto {
+  preview: SharedRegistrationPreviewDto
+  signatures: SharedRegistrationSignatureDto[]
+}
+
+export interface SharedRegistrationFundingResultDto {
+  preview: SharedRegistrationFundingPreviewDto
+  signedHex: string
+  signedInputs: number[]
 }
 
 // getMasternodes — a masternode this wallet holds a key or the collateral of, as
 // last listed; null until the first discovery run after startup. A null key
 // index is a key the seed does not derive; importedRoles are held by an imported
-// key. Times are unix seconds, 0 = never. A null field is one the connection
-// mode cannot give: p2p has no PoSe score (an evonode reports its own) and no
-// payments, and the ProRegTx fields fill in once the registration is indexed.
+// key, importedSigningRoles the subset whose stored secret can sign. Times are
+// unix seconds, 0 = never. A null field is one the connection mode cannot give:
+// p2p has no PoSe score (an evonode reports its own) and no payments, and the
+// ProRegTx fields fill in once the registration is indexed.
 export interface MasternodeDto {
   proTxHash: string
   type: string
@@ -248,12 +322,157 @@ export interface MasternodeDto {
   votingKeyIndex: number | null
   operatorKeyIndex: number | null
   importedRoles: MasternodeKeyRole[]
+  importedSigningRoles: MasternodeKeyRole[]
   platformNodeId: string | null
   platformP2PPort: number | null
   platformHttpPort: number | null
   lastPaidBlock: number | null
   lastPaidTime: number | null
   registeredHeight: number | null
+  isShared: boolean | null
+  shares: OwnedMasternodeShareDto[] | null
+}
+
+export type MasternodeIdentityRole = 'owner' | 'voter'
+
+// Not seed-derived, so no index or derivation path; empty until Platform indexes the registration.
+export interface MasternodeIdentityInfoDto {
+  proTxHash: string
+  role: MasternodeIdentityRole
+  identifier: string
+  usernames: string[]
+  keys: IdentityKeyDto[]
+  balance: { amount: bigint; usdAmount: string }
+}
+
+// The platform fields are an Evo's alone, null on a Regular node.
+export interface MasternodePlatformFieldsDto {
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+}
+
+// operatorReward is in hundredths of a percent. A null serviceAddress registers
+// without one; a null key takes the wallet's next unused key on its chain.
+export interface MasternodeRegistrationDto extends MasternodePlatformFieldsDto {
+  type: 'Regular' | 'Evo'
+  collateral: { txid: string; vout: number }
+  serviceAddress: string | null
+  payoutAddress: string
+  operatorReward: number
+  ownerAddress: string | null
+  votingAddress: string | null
+  operatorPublicKey: string | null
+}
+
+// A null key index is a caller-supplied key.
+export interface MasternodeRegistrationPreviewDto {
+  type: 'Regular' | 'Evo'
+  collateral: { txid: string; vout: number }
+  ownerAddress: string
+  votingAddress: string
+  operatorPublicKey: string
+  serviceAddress: string | null
+  payoutAddress: string
+  operatorReward: number
+  platformNodeId: string | null
+  platformP2PPort: number | null
+  platformHttpPort: number | null
+  ownerKeyIndex: number | null
+  votingKeyIndex: number | null
+  operatorKeyIndex: number | null
+  inputs: PreviewEntry[]
+  outputs: PreviewEntry[]
+  feeDuffs: bigint
+  unsignedHex: string
+}
+
+// keep is the node's current key, wallet the lowest unused wallet key. A new operator
+// key PoSe-bans the node until that operator's service update; a null payoutAddress keeps the payout.
+export interface MasternodeRegistrarUpdateDto {
+  operator: { kind: 'keep' } | { kind: 'wallet' } | { kind: 'external'; publicKey: string }
+  voting: { kind: 'keep' } | { kind: 'wallet' } | { kind: 'external'; address: string }
+  payoutAddress: string | null
+}
+
+// Restates the whole service, signed by the operator key the wallet must derive.
+export interface MasternodeServiceUpdateDto extends MasternodePlatformFieldsDto {
+  serviceAddress: string
+  operatorPayoutAddress: string | null
+}
+
+export type RevocationReason = 'notSpecified' | 'termination' | 'compromisedKeys' | 'changeOfKeys'
+
+export interface MasternodeUpdateResult {
+  txid: string
+  fee: bigint
+  peersAcked: number
+}
+
+export interface MasternodeRegistrationResult {
+  proTxHash: string
+  fee: bigint
+  peersAcked: number
+}
+
+// Epochs and createdAt are unix seconds.
+export interface ProposalDto {
+  hash: string
+  name: string
+  url: string
+  paymentAddress: string
+  paymentDuffs: bigint
+  startEpoch: number
+  endEpoch: number
+  createdAt: number
+  collateralHash: string
+}
+
+// Funding votes, an evonode's counted four times.
+export interface ProposalTally {
+  yes: number
+  no: number
+  abstain: number
+}
+
+// One open Platform vote poll, with the tally a vote would face. Index values
+// stay base64 of their serialized form, which is what a vote transition carries.
+export interface ContestedResourceDto {
+  contractId: string
+  documentTypeName: string
+  indexName: string
+  indexValues: string[]
+  // Text-decoded index values, null where the value is not text.
+  indexValuesText: Array<string | null>
+  endsAt: number
+  vote: {
+    contenders: Array<{identifier: string; votes: number}>
+    lockVotes: number
+    abstainVotes: number
+    outcome: 'WonByIdentity' | 'Locked' | 'NoWinner' | null
+    winner: string | null
+  }
+}
+
+export interface ContestedResourceVoteRequest {
+  contractId: string
+  documentTypeName: string
+  indexName: string
+  indexValues: string[]
+}
+
+export type ContestedResourceVoteChoice =
+  | {kind: 'towardsIdentity'; identifier: string}
+  | {kind: 'lock'}
+  | {kind: 'abstain'}
+
+export type VoteOutcome = 'yes' | 'no' | 'abstain'
+
+// peers asked for the vote; accepted of them kept it, and 0 is a vote Core dropped.
+export interface VoteResult {
+  proTxHash: string
+  peers: number
+  accepted: number
 }
 
 // the backend's business; this carries only what the user chose.

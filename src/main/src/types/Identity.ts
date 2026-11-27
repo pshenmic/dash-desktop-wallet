@@ -19,3 +19,11 @@ export interface IdentityInfo {
   derivationPath: string
   assetLockTxid: string | null
 }
+
+// What Platform serves for one identifier; one it does not know is omitted.
+export interface PlatformIdentityInfo {
+  identifier: string
+  balance: bigint
+  usernames: string[]
+  keys: IdentityKey[]
+}

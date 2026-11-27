@@ -55,6 +55,9 @@ export const RECEIVE_FORM_COPY = {
   generateButton: 'Save address',
   generatingButton: 'Saving…',
   clearButton: 'Clear',
+  lockIncomingLabel: 'Lock incoming funds',
+  lockIncomingTooltip: 'Funds received on this address cannot be spent until you unlock the address.',
+  lockIncomingTooltipAria: 'About locking incoming funds',
   clickToCopyTooltip: 'Click to copy',
   copiedTooltip: 'Copied!',
 } as const

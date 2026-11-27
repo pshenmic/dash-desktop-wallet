@@ -60,4 +60,6 @@ export {
   SendIcon,
   ReceiveIcon,
   NotificationIcon,
+  ServerIcon,
+  EvoServerIcon,
 } from './icons'

@@ -9,6 +9,14 @@ export const ADDRESS_ROW_EXPLORER_LABEL = 'Open in explorer'
 
 export const ADDRESS_ROW_EXPORT_KEY_LABEL = 'Export private key'
 
+export const ADDRESS_ROW_LOCK_LABEL = 'Lock address'
+
+export const ADDRESS_ROW_UNLOCK_LABEL = 'Unlock address'
+
+export const ADDRESS_ROW_LOCKED_BADGE = 'Locked'
+
+export const ADDRESS_LOCK_TOGGLE_FAILED = 'Failed to update address lock'
+
 export const ADDRESS_ROW_ADD_LABEL = 'Add label'
 
 export const ADDRESS_ROW_EDIT_LABEL = 'Edit label'

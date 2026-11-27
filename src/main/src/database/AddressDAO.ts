@@ -5,7 +5,7 @@ import {GroupedAddresses} from "../types/GroupedAddresses";
 import {INSERT_CHUNK_SIZE, SELECT_CHUNK_SIZE} from '../constants/database'
 import {chunk} from '../utils/chunk'
 
-function fromRow({wallet_id, account_id, address, derivation_path, index, is_change, is_used, label}): Address {
+function fromRow({wallet_id, account_id, address, derivation_path, index, is_change, is_used, is_locked, label}): Address {
   return {
     walletId: wallet_id,
     accountId: account_id,
@@ -14,6 +14,7 @@ function fromRow({wallet_id, account_id, address, derivation_path, index, is_cha
     index,
     isChange: Boolean(is_change),
     isUsed: Boolean(is_used),
+    isLocked: Boolean(is_locked),
     balance: null,
     label
   }
@@ -51,7 +52,7 @@ export class AddressDAO {
       .leftJoin('payment_requests as pr', function () {
         this.on('pr.wallet_id', '=', 'addresses.wallet_id').andOn('pr.address', '=', 'addresses.address')
       })
-      .select('addresses.wallet_id', 'account_id', 'addresses.address', 'derivation_path', 'index', 'is_change', 'addresses.label',
+      .select('addresses.wallet_id', 'account_id', 'addresses.address', 'derivation_path', 'index', 'is_change', 'addresses.label', 'is_locked',
         this.knex.raw('CASE WHEN pr.id IS NOT NULL THEN 1 ELSE addresses.is_used END as is_used'))
       .where('addresses.wallet_id', walletId)
       .orderBy('index', 'asc')
@@ -59,7 +60,7 @@ export class AddressDAO {
     const dashPay = [...this.dashPayCache.wallet(walletId).chains.values()].flat()
       .filter(address => address.direction === 'receiving')
       .map(({address, derivationPath, index, isUsed}): Address => ({
-        walletId, accountId: 0, address, derivationPath, index, isChange: false, isUsed, label: null,
+        walletId, accountId: 0, address, derivationPath, index, isChange: false, isUsed, isLocked: false, label: null,
       }))
 
     return rows.reduce((acc, row) => {
@@ -99,5 +100,22 @@ export class AddressDAO {
     if (result === 0) {
       throw new Error('address or wallet not found')
     }
+  }
+
+  setAddressLocked = async (walletId: string, address: string, locked: boolean): Promise<void> => {
+    const result = await this.knex('addresses')
+      .where({wallet_id: walletId, address})
+      .update({is_locked: locked})
+
+    if (result === 0) {
+      throw new Error('address or wallet not found')
+    }
+  }
+
+  getLockedAddresses = async (walletId: string): Promise<Set<string>> => {
+    const rows = await this.knex('addresses')
+      .select('address')
+      .where({wallet_id: walletId, is_locked: true})
+    return new Set(rows.map(({address}) => address as string))
   }
 }

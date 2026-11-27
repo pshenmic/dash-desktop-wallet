@@ -24,6 +24,7 @@ const address = (name: string, index: number, isChange: boolean, isUsed = false)
   index,
   isChange,
   isUsed,
+  isLocked: false,
   label: null,
 })
 
@@ -163,6 +164,33 @@ describe('choosing where the leftovers go', () => {
     expect(pickChangeAddress(wallet, FOREIGN)).toBe(FOREIGN)
   })
 
+  it('keeps change off a locked address', () => {
+    const locked = grouped(wallet.receiving, [
+      {...address('chg-0', 0, true), isLocked: true},
+      address('chg-1', 1, true),
+    ])
+
+    expect(pickChangeAddress(locked)).toBe('chg-1')
+  })
+
+  it('never falls back to a locked receiving address', () => {
+    const locked = grouped([
+      {...address('recv-0', 0, false), isLocked: true},
+      address('recv-1', 1, false),
+    ], [])
+
+    expect(pickChangeAddress(locked)).toBe('recv-1')
+  })
+
+  it('throws when every change and receiving address is locked', () => {
+    const locked = grouped(
+      [{...address('recv-0', 0, false), isLocked: true}],
+      [{...address('chg-0', 0, true), isLocked: true}],
+    )
+
+    expect(() => pickChangeAddress(locked)).toThrow('no change address')
+  })
+
   it('takes the named address through the selection without narrowing the inputs', () => {
     const {transferInputs, changeAddress} = selectTransferInputs(
       wallet,
@@ -191,6 +219,23 @@ describe('choosing the asset lock credit address', () => {
 
   it('throws when the wallet has no change chain at all', () => {
     expect(() => pickCreditChangeAddress(grouped(wallet.receiving, []), 'chg-0'))
+      .toThrow('no change address for the asset lock credit output')
+  })
+
+  it('skips a locked change address', () => {
+    const locked = grouped(wallet.receiving, [
+      {...address('chg-0', 0, true), isLocked: true},
+      address('chg-1', 1, true),
+      address('chg-2', 2, true),
+    ])
+
+    expect(pickCreditChangeAddress(locked, 'chg-2').address).toBe('chg-1')
+  })
+
+  it('throws when every change address is locked', () => {
+    const locked = grouped(wallet.receiving, [{...address('chg-0', 0, true), isLocked: true}])
+
+    expect(() => pickCreditChangeAddress(locked, 'chg-0'))
       .toThrow('no change address for the asset lock credit output')
   })
 })

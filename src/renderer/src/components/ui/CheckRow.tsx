@@ -1,10 +1,19 @@
 import Checkbox from '@renderer/components/ui/Checkbox'
 import type { CheckRowProps } from '@renderer/types/CheckRow'
 
-export default function CheckRow({label, checked, onChange, children, below, title, disabled = false, dimChildren = true}: CheckRowProps): React.JSX.Element {
-  let surface = 'dash-block hover:dash-block-accent-5'
-  if (checked) surface = 'dash-block-accent-5'
-  else if (disabled) surface = 'dash-block opacity-40'
+export default function CheckRow({label, checked, onChange, children, below, title, disabled = false, dimChildren = true, tone = 'default'}: CheckRowProps): React.JSX.Element {
+  let surface = tone === 'success'
+    ? 'border border-dash-green/35 bg-dash-green-5 hover:bg-dash-green-15'
+    : 'dash-block hover:dash-block-accent-5'
+  if (checked) {
+    surface = tone === 'success'
+      ? 'border border-dash-green/60 bg-dash-green-15'
+      : 'dash-block-accent-5'
+  } else if (disabled) {
+    surface = tone === 'success'
+      ? 'border border-dash-green/25 bg-dash-green-5 opacity-50'
+      : 'dash-block opacity-40'
+  }
   return (
     <div title={title} className={'relative min-w-0 rounded-[.875rem]'}>
       <div className={`pointer-events-none absolute inset-0 rounded-[.875rem] transition-colors ${surface}`} />

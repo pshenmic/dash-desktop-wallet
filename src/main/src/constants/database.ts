@@ -21,6 +21,7 @@ export const WALLET_SCOPED_TABLES = [
   'masternode_keys',
   'masternode_platform_keys',
   'masternodes',
+  'masternode_identities',
   'masternode_imported_keys',
 ] as const
 

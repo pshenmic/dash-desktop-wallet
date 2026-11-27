@@ -16,6 +16,8 @@ import IdentityAddKeysPage from "./pages/IdentityAddKeys"
 import DashPayPage from "./pages/DashPay"
 import DashPayRegisterUsernamePage from "./pages/DashPayRegisterUsername"
 import DashPayAddContactPage from "./pages/DashPayAddContact"
+import DaoPage from "./pages/Dao"
+import MasternodesPage from "./pages/Masternodes"
 import AddressesPage from "./pages/Addresses"
 import SettingsPage from "./pages/Settings"
 import LogsPage from "./pages/Logs"
@@ -24,8 +26,10 @@ import { useAuth } from "./contexts/AuthContext"
 import { useDebugMode } from "./hooks/useDebugMode"
 import { ConnectionModeProvider } from "./contexts/ConnectionModeContext"
 import { LOCK_FADE_MS } from "./constants"
+import { DAO_ROUTE } from "./constants/dao"
 import { DASHPAY_ROUTES } from "./constants/dashPay"
 import { IDENTITIES_ROUTES } from "./constants/identities"
+import { MASTERNODES_ROUTE } from "./constants/masternodes"
 
 function App(): React.JSX.Element {
   const { isAuthenticated, isLockingOut } = useAuth()
@@ -78,6 +82,8 @@ function App(): React.JSX.Element {
             <Route path={DASHPAY_ROUTES.root} element={<DashPayPage />} />
             <Route path={DASHPAY_ROUTES.registerUsername} element={<DashPayRegisterUsernamePage />} />
             <Route path={DASHPAY_ROUTES.addContact} element={<DashPayAddContactPage />} />
+            <Route path={MASTERNODES_ROUTE} element={<MasternodesPage />} />
+            <Route path={DAO_ROUTE} element={<DaoPage />} />
             <Route path={"/settings"} element={<SettingsPage />} />
             <Route path={"/settings/logs"} element={<LogsPage />} />
             <Route path={"/connection-settings"} element={<ConnectionSettingsPage />} />

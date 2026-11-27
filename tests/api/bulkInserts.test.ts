@@ -56,6 +56,7 @@ describe('bulk inserts past the compound-select limit', () => {
       index,
       isChange: true,
       isUsed: false,
+      isLocked: false,
       label: null,
     })))
 
@@ -160,6 +161,7 @@ describe('address batches past the bind-variable limit', () => {
       index,
       isChange: false,
       isUsed: false,
+      isLocked: false,
       label: null,
     })))
 

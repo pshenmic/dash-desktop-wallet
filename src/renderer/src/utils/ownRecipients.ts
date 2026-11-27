@@ -10,8 +10,8 @@ import { addressLabelsByAddress } from './receiveDefaults'
 
 export function walletAddressLabels(
   requests: ReadonlyArray<Pick<ReceiveRequestDto, 'address' | 'label'>> | undefined,
-  receiving: WalletAddressDto[],
-  change: WalletAddressDto[],
+  receiving: WalletAddressDto[] = [],
+  change: WalletAddressDto[] = [],
 ): Map<string, string> {
   const labels = addressLabelsByAddress(requests ?? [])
   for (const address of [...receiving, ...change]) {

@@ -11,7 +11,7 @@ import KeyTableRow from './KeyTableRow'
 import PrivateKeysModal from './PrivateKeysModal'
 import UpdateKeyModal from './UpdateKeyModal'
 
-export default function IdentityKeysSection({ walletId, identity }: IdentityKeysSectionProps): React.JSX.Element {
+export default function IdentityKeysSection({ walletId, identity, readOnly = false }: IdentityKeysSectionProps): React.JSX.Element {
   const keys = useMemo(() => sortedIdentityKeys(identity.keys), [identity.keys])
   const [pending, setPending] = useState<PendingKeyAction | null>(null)
   const [privateKeysOpen, setPrivateKeysOpen] = useState(false)
@@ -21,7 +21,7 @@ export default function IdentityKeysSection({ walletId, identity }: IdentityKeys
       <div className={'flex items-center gap-2 px-1'}>
         <DashboardHeading as={'h2'}>{IDENTITY_KEYS_COPY.title}</DashboardHeading>
         <CustomBadge variant={'muted'} text={String(keys.length)} />
-        {keys.length > 0 && (
+        {!readOnly && keys.length > 0 && (
           <button type={'button'} className={`ml-auto ${CHIP_ACTION}`} onClick={() => setPrivateKeysOpen(true)}>
             {IDENTITY_KEYS_COPY.privateKeys}
           </button>
@@ -37,12 +37,23 @@ export default function IdentityKeysSection({ walletId, identity }: IdentityKeys
                 <Text key={header} size={12} weight={'normal'} color={'brand'} opacity={50}>{header}</Text>
               ))}
             </div>
-            {keys.map(key => <KeyTableRow key={key.keyId} identityKey={key} onAction={(identityKey, action) => setPending({ identityKey, action })} />)}
+            {keys.map(key => (
+              <KeyTableRow
+                key={key.keyId}
+                identityKey={key}
+                readOnly={readOnly}
+                onAction={(identityKey, action) => setPending({ identityKey, action })}
+              />
+            ))}
           </div>
         </div>
       )}
-      <UpdateKeyModal walletId={walletId} identity={identity} pending={pending} onClose={() => setPending(null)} />
-      <PrivateKeysModal open={privateKeysOpen} onClose={() => setPrivateKeysOpen(false)} walletId={walletId} identity={identity} />
+      {!readOnly && (
+        <>
+          <UpdateKeyModal walletId={walletId} identity={identity} pending={pending} onClose={() => setPending(null)} />
+          <PrivateKeysModal open={privateKeysOpen} onClose={() => setPrivateKeysOpen(false)} walletId={walletId} identity={identity} />
+        </>
+      )}
     </section>
   )
 }

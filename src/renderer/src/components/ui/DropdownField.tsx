@@ -31,6 +31,7 @@ export default function DropdownField({
   highlightValue = false,
   valueAvatar = false,
   valueBadge,
+  hideValueBadge = false,
   hasExtraMatches,
   minAutocompleteChars = RECIPIENT_AUTOCOMPLETE_MIN_CHARS,
   disableMenuToggle = false,
@@ -44,6 +45,7 @@ export default function DropdownField({
 }: DropdownFieldProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [focused, setFocused] = useState(false)
+  const [menuLayout, setMenuLayout] = useState<{ openUpward: boolean; maxHeight?: number }>({ openUpward: false })
   const ref = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const trimmedValue = value.trim()
@@ -53,7 +55,7 @@ export default function DropdownField({
     ? matchingOwnOptions(options, trimmedValue, minAutocompleteChars)
     : []
   const extraMatches = editable && trimmedValue !== '' && !exactMatch && Boolean(hasExtraMatches?.(value))
-  const activeBadge = !inputInvalid
+  const activeBadge = !inputInvalid && !hideValueBadge
     ? (valueBadge?.trim() || selected?.badge?.trim() || undefined)
     : undefined
   const showValue = highlightValue && !focused && trimmedValue !== ''
@@ -70,6 +72,20 @@ export default function DropdownField({
   const showPopover = open && (visibleOptions.length > 0 || Boolean(children))
 
   const changeOpen = (next: boolean): void => {
+    if (next && ref.current) {
+      const dialog = ref.current.closest('[role="dialog"]')
+      if (dialog) {
+        const dialogRect = dialog.getBoundingClientRect()
+        const triggerRect = ref.current.getBoundingClientRect()
+        const spaceBelow = dialogRect.bottom - triggerRect.bottom - 20
+        const spaceAbove = triggerRect.top - dialogRect.top - 20
+        const openUpward = spaceBelow < 130 && spaceAbove > spaceBelow
+        const available = openUpward ? spaceAbove : spaceBelow
+        setMenuLayout({ openUpward, maxHeight: Math.max(96, Math.min(240, Math.floor(available))) })
+      } else {
+        setMenuLayout({ openUpward: false })
+      }
+    }
     setOpen(next)
     onOpenChange?.(next)
   }
@@ -163,7 +179,10 @@ export default function DropdownField({
       </button>}
 
       {showPopover && (
-        <div className={`absolute left-0 right-0 top-[calc(100%+.375rem)] z-30 max-h-60 overflow-y-auto scrollbar-custom ${POPOVER}`}>
+        <div
+          style={menuLayout.maxHeight != null ? { maxHeight: `${menuLayout.maxHeight}px` } : undefined}
+          className={`absolute left-0 right-0 ${menuLayout.openUpward ? 'bottom-[calc(100%+.375rem)]' : 'top-[calc(100%+.375rem)]'} z-30 max-h-60 overflow-y-auto scrollbar-custom ${POPOVER}`}
+        >
           {children}
           {menuHeading && visibleOptions.length > 0 && <div role="heading" aria-level={3} className="px-[.625rem] pt-1.5 pb-2">
             <Text size={12} weight="medium" color="brand" opacity={50}>{menuHeading}</Text>

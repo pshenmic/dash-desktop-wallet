@@ -3,8 +3,11 @@ import { RefreshIcon } from '@renderer/components/dash-ui-kit-extended/icons'
 import { useRipple } from '@renderer/hooks/useRipple'
 import { useLocation } from 'react-router-dom'
 import { refreshActiveAsyncCaches, useAsyncRefreshFailures } from '@renderer/hooks/useAsyncWithCache'
+import { refreshContestedResources } from '@renderer/hooks/useContestedResources'
 import { refreshDashPay } from '@renderer/hooks/useDashPayRefresh'
+import { refreshGovernanceProposals } from '@renderer/hooks/useGovernanceProposals'
 import { useAuth } from '@renderer/contexts/AuthContext'
+import { DAO_ROUTE } from '@renderer/constants/dao'
 import { DASHPAY_ROUTES } from '@renderer/constants/dashPay'
 import { toast } from '@renderer/components/ui/Toast'
 import { REFRESH_DATA_LABEL, REFRESH_FAILED_MESSAGE } from '@renderer/constants/connection'
@@ -18,6 +21,7 @@ export default function RefreshButton(): React.JSX.Element {
   const { status } = useAuth()
   const walletId = status?.selectedWalletId ?? null
   const onDashPay = pathname.startsWith(DASHPAY_ROUTES.root)
+  const onDao = pathname.startsWith(DAO_ROUTE)
 
   useEffect(() => {
     if (refreshing || unreportedFailures.current === 0) return
@@ -29,8 +33,14 @@ export default function RefreshButton(): React.JSX.Element {
     if (refreshing) return
     setRefreshing(true)
     try {
-      const dashPayFailures = walletId != null && onDashPay ? await refreshDashPay(walletId).then(() => 0, () => 1) : 0
-      unreportedFailures.current = dashPayFailures + await refreshActiveAsyncCaches()
+      const dashPayFailures = walletId != null && (onDashPay || onDao) ? await refreshDashPay(walletId).then(() => 0, () => 1) : 0
+      const govFailures = walletId != null && onDao
+        ? await Promise.all([
+          refreshGovernanceProposals(walletId).then(() => 0, () => 1),
+          refreshContestedResources(walletId).then(() => 0, () => 1),
+        ]).then(([a, b]) => a + b)
+        : 0
+      unreportedFailures.current = dashPayFailures + govFailures + await refreshActiveAsyncCaches()
     } finally {
       setRefreshing(false)
     }

@@ -9,4 +9,5 @@ export interface CheckRowProps {
   title?: string
   disabled?: boolean
   dimChildren?: boolean
+  tone?: 'default' | 'success'
 }

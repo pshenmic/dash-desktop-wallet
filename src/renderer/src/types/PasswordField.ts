@@ -5,6 +5,7 @@ export interface PasswordFieldProps {
   onSubmit: () => void
   error?: string | null
   label?: string
+  hideLabel?: boolean
   disabled?: boolean
   autoFocus?: boolean
   className?: string

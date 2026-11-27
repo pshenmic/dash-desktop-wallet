@@ -30,6 +30,7 @@ export interface RecipientFieldStyle {
 export interface RecipientInputProps {
   value: string
   valueBadge?: string
+  hideValueBadge?: boolean
   onChange: (value: string) => void
   data: TransferPageType['recipient']
   destination?: DestinationKind
@@ -44,6 +45,7 @@ export interface RecipientInputProps {
   ownOptionsLoading?: boolean
   ownOptionsError?: string | null
   onRetryOwnOptions?: () => void
+  hideAddressBook?: boolean
 }
 
 export interface SendRecipientError {

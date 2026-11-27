@@ -1,4 +1,4 @@
-import type {Message, MnListDiff, Peer} from 'dash-core-p2p'
+import type {GovObjMessage, GovObjVoteMessage, Message, MnListDiff, Peer} from 'dash-core-p2p'
 import type {PeerRegistry} from '../net/peerRegistry'
 
 // 'static' dials `peers` and nothing else; 'dynamic' augments DNS and gossip
@@ -79,5 +79,8 @@ export interface PoolServiceEventMap {
   peerclsig: (peer: Peer, message: Message & { height?: number; blockHash?: string }) => void
   peergetheaders: (peer: Peer, message: Message & { starts?: Uint8Array[] }) => void
   peermnlistdiff: (peer: Peer, message: Message & { mnlistdiff?: MnListDiff }) => void
+  peergetdata: (peer: Peer, message: Message & { inventory?: Array<{ type: number; hash: Uint8Array }> }) => void
+  peergovobj: (peer: Peer, message: GovObjMessage) => void
+  peergovobjvote: (peer: Peer, message: GovObjVoteMessage) => void
   seederror: (err: Error) => void
 }

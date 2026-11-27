@@ -16,9 +16,9 @@ import { isIdentityKeyActive } from '@renderer/utils/identities'
 import { identityKeyAction } from '@renderer/utils/identityKeyActions'
 import { keyBoundsLabel, keyLabel } from '@renderer/utils/identityKeyRequests'
 
-export default function KeyTableRow({ identityKey, onAction }: KeyTableRowProps): React.JSX.Element {
+export default function KeyTableRow({ identityKey, readOnly = false, onAction }: KeyTableRowProps): React.JSX.Element {
   const active = isIdentityKeyActive(identityKey)
-  const action = identityKeyAction(identityKey)
+  const action = readOnly ? null : identityKeyAction(identityKey)
   const bounds = keyBoundsLabel(identityKey.contractBounds)
   let boundsCell = <Text size={14} weight={"medium"} color={"brand"} opacity={50}>{IDENTITY_KEYS_COPY.unbound}</Text>
   if (bounds?.isDashPay) {

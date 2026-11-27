@@ -1,6 +1,5 @@
 import {Input, Output, Script, Transaction} from 'dash-core-sdk'
 import {CORE_FEE_PER_BYTE} from '../constants/fee/core'
-import {getCompactVariableSize} from "dash-core-sdk/src/utils.js";
 
 // Consensus rejects a withdrawal whose coreFeePerByte is not a non-zero
 // Fibonacci number, so a multiplied rate has to be snapped onto the sequence.
@@ -24,24 +23,16 @@ export function coreFeeDuffsFor(multiplier: number, inputsCount: number, outputs
   // dummy script which bigger than 99% of sigs
   const dummyScript = new Script(`OP_PUSHDATA1 ${'0'.repeat(288)}`)
 
-
-  const dummyInput = new Input('0'.repeat(64), 1, dummyScript, 0)
-  const dummyOutput = new Output(1n, dummyScript)
-
   const tx = new Transaction(
-    [dummyInput],
-    [dummyOutput],
+    Array.from({length: inputsCount}, () => new Input('0'.repeat(64), 1, dummyScript, 0)),
+    Array.from({length: outputsCount}, () => new Output(1n, dummyScript)),
     0,
     0,
   )
 
-  if(withChange) {
+  if (withChange) {
     tx.outputs.push(Output.createP2PKH(1n, '111111111111111111111111133izVn'))
   }
 
-  // one already in tx
-  const inputsSize = dummyInput.bytes().length * (inputsCount - 1) + getCompactVariableSize(inputsCount) - 1
-  const outputsSize = dummyOutput.bytes().length * (outputsCount - 1) + getCompactVariableSize(outputsCount) - 1
-
-  return BigInt((tx.bytes().length + inputsSize + outputsSize + payloadBytes) * feePerByte)
+  return BigInt((tx.signedSize() + payloadBytes) * feePerByte)
 }

@@ -23,6 +23,7 @@ import { matchingOwnOptions, recipientAddressBadge } from '@renderer/utils/ownRe
 export default function RecipientInput({
   value,
   valueBadge,
+  hideValueBadge = false,
   onChange,
   data,
   destination = DestinationKind.CoreAddress,
@@ -37,6 +38,7 @@ export default function RecipientInput({
   ownOptionsLoading = false,
   ownOptionsError = null,
   onRetryOwnOptions,
+  hideAddressBook = false,
 }: RecipientInputProps): React.JSX.Element {
   const [bookOpen, setBookOpen] = useState(false)
   const [menuKey, setMenuKey] = useState(0)
@@ -46,15 +48,16 @@ export default function RecipientInput({
   const isValid = validate ?? ((address: string) => isValidDestinationAddress(destination, address, network ?? null))
 
   const trimmedValue = value.trim()
-  const filteredContacts = autocompleteContacts(contacts, value, isValid)
+  const filteredContacts = hideAddressBook ? [] : autocompleteContacts(contacts, value, isValid)
   const isValidRecipient = isValid(trimmedValue)
+  const hasOwnOptions = ownOptions != null && ownOptions.length > 0
   const hasOwnMatches = ownOptions != null && matchingOwnOptions(ownOptions, value).length > 0
   const hasQueryMatches =
     trimmedValue.length >= RECIPIENT_AUTOCOMPLETE_MIN_CHARS
     && !isValidRecipient
     && (hasOwnMatches || filteredContacts.length > 0)
   const invalidRecipient = !hasQueryMatches && (invalid || (trimmedValue.length > 0 && !isValidRecipient))
-  const resolvedBadge = valueBadge?.trim() || recipientAddressBadge(value, undefined, contacts)
+  const resolvedBadge = valueBadge?.trim() || (hideAddressBook ? undefined : recipientAddressBadge(value, undefined, contacts))
 
   const handleSelectAddress = (address: string): void => {
     onChange(address)
@@ -95,12 +98,13 @@ export default function RecipientInput({
       <DropdownField
         key={menuKey}
         editable
-        disableMenuToggle
+        disableMenuToggle={!hideAddressBook}
         minAutocompleteChars={RECIPIENT_AUTOCOMPLETE_MIN_CHARS}
         highlightValue
         valueAvatar={valueAvatar}
         valueBadge={resolvedBadge}
-        hasExtraMatches={query => autocompleteContacts(contacts, query, isValid).length > 0}
+        hideValueBadge={hideValueBadge}
+        hasExtraMatches={query => !hideAddressBook && autocompleteContacts(contacts, query, isValid).length > 0}
         ariaLabel={ariaLabel ?? data.label}
         value={value}
         onChange={onChange}
@@ -111,10 +115,10 @@ export default function RecipientInput({
         triggerClassName={`${style.field} ${invalidRecipient ? FIELD_INVALID : ''}`}
         inputInvalid={invalidRecipient}
         inputSuffix={ownOptionsStatus}
-        onActionClick={() => setBookOpen(true)}
-        actionAriaLabel={ADDRESS_BOOK_COPY.openAction}
-        actionTitle={ADDRESS_BOOK_COPY.openAction}
-        actionIcon={<AddressBookIcon size={style.bookIconSize} className="dash-text-default opacity-60" />}
+        onActionClick={hideAddressBook ? undefined : () => setBookOpen(true)}
+        actionAriaLabel={hideAddressBook ? undefined : ADDRESS_BOOK_COPY.openAction}
+        actionTitle={hideAddressBook ? undefined : ADDRESS_BOOK_COPY.openAction}
+        actionIcon={hideAddressBook ? undefined : <AddressBookIcon size={style.bookIconSize} className="dash-text-default opacity-60" />}
       >
         {filteredContacts.length > 0 ? (
           <div className={`flex flex-col ${hasOwnMatches ? 'mb-1.5 border-b border-dash-primary-dark-blue/8 pb-1.5 dark:border-white/8' : ''}`}>
@@ -139,23 +143,31 @@ export default function RecipientInput({
               </button>
             ))}
           </div>
+        ) : hideAddressBook && !ownOptionsLoading && !hasOwnOptions ? (
+          <div className="px-[.625rem] py-2">
+            <Text size={12} weight="medium" color="brand" opacity={50}>
+              {data.noResults}
+            </Text>
+          </div>
         ) : null}
       </DropdownField>
 
-      <AddressBookModal
-        open={bookOpen}
-        onClose={() => setBookOpen(false)}
-        destination={destination}
-        network={network ?? null}
-        currentValue={value}
-        onSelect={handleSelectAddress}
-        ownOptions={ownOptions}
-        ownOptionsHeading={ownOptionsHeading}
-        ownOptionsLoading={ownOptionsLoading}
-        ownOptionsError={ownOptionsError}
-        onRetryOwnOptions={onRetryOwnOptions}
-        valueAvatar={valueAvatar}
-      />
+      {!hideAddressBook && (
+        <AddressBookModal
+          open={bookOpen}
+          onClose={() => setBookOpen(false)}
+          destination={destination}
+          network={network ?? null}
+          currentValue={value}
+          onSelect={handleSelectAddress}
+          ownOptions={ownOptions}
+          ownOptionsHeading={ownOptionsHeading}
+          ownOptionsLoading={ownOptionsLoading}
+          ownOptionsError={ownOptionsError}
+          onRetryOwnOptions={onRetryOwnOptions}
+          valueAvatar={valueAvatar}
+        />
+      )}
     </div>
   )
 }

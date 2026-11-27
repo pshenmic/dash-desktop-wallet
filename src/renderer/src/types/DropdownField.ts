@@ -27,6 +27,7 @@ export interface DropdownFieldProps {
   highlightValue?: boolean
   valueAvatar?: boolean
   valueBadge?: string
+  hideValueBadge?: boolean
   hasExtraMatches?: (query: string) => boolean
   minAutocompleteChars?: number
   disableMenuToggle?: boolean
