@@ -61,6 +61,7 @@ import {
   requireCollateral,
   requirePayout,
   revocableNode,
+  storedMasternodes,
   unmatchedImportedKeys,
   unusedKeyIndex,
   withoutCollaterals,
@@ -136,6 +137,16 @@ export class MasternodeService {
   // null until the first discovery run since startup has answered.
   async getMasternodes(walletId: string): Promise<Masternode[] | null> {
     return this.listed.get(walletId) ?? null
+  }
+
+  // What the screen reads: this run's list once it has one, otherwise the rows a
+  // previous run stored, with the network fields still unknown. A vote or an
+  // update reads the discovery answer instead, so a stored row never signs.
+  async getMasternodesForDisplay(walletId: string): Promise<Masternode[] | null> {
+    const listed = this.listed.get(walletId)
+    if (listed != null) return listed
+    const stored = await this.masternodeDAO.getCollaterals(walletId)
+    return stored.length > 0 ? storedMasternodes(stored) : null
   }
 
   // From the stored rows, so a list outage still answers what sends must not spend.

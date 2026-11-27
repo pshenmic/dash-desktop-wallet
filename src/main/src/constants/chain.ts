@@ -40,6 +40,9 @@ export const MASTERNODE_VOTE_WEIGHT: Record<MasternodeType, number> = {Regular: 
 export const GOVERNANCE_UPDATE_MIN_SECONDS = 60 * 60
 // Both lists' status for a PoSe-banned node, which Core's wallet refuses to vote with.
 export const POSE_BANNED_STATUS = 'POSE_BANNED'
+// What a stored node shows as until this run's list answers. Not a Core status.
+export const UNKNOWN_MASTERNODE_STATUS = 'Unknown'
+export const UNKNOWN_MASTERNODE_TYPE = 'Unknown'
 // One superblock cycle (nSuperblockCycle × the 2.5-minute target). A proposal
 // that ended before the current cycle began can be paid by no superblock left.
 export const SUPERBLOCK_CYCLE_SECONDS: Record<Network, number> = {mainnet: 16_616 * 150, testnet: 24 * 150}

@@ -52,6 +52,7 @@ describe('MasternodeService.discover', () => {
   let walletId: string
   let keys: MasternodeKeys
   let current: WalletProviderFactory
+  let providers: WalletProviderFactory
   let masternodes: MasternodeService
   let masternodeIdentities: MasternodeIdentityDAO
   // The lock pool's list; null until one arrives.
@@ -62,23 +63,28 @@ describe('MasternodeService.discover', () => {
     wired = await harness()
     walletId = await wired.createWalletHandler.handle(null as never, VALID_SEEDPHRASE, 'mainnet', PASSWORD)
     keys = (await wired.masternodeKeyDAO.getKeys(walletId))!
-    const providers = {forWallet: (...args) => current.forWallet(...args)} as WalletProviderFactory
+    providers = {forWallet: (...args) => current.forWallet(...args)} as WalletProviderFactory
     network = null
     refreshes = vi.fn()
-    const walletSync = {getListedMasternodes: () => network, refreshListedMasternodes: refreshes} as unknown as WalletSyncService
-    masternodes = new MasternodeService(
-      wired.walletDAO, wired.masternodeKeyDAO, new MasternodeDAO(wired.knex), new MasternodeIdentityDAO(wired.knex), providers,
-      wired.addressDAO, new CoreTransactionService(), walletSync, Preferences.default(),
-    )
+    masternodes = newService()
     masternodeIdentities = new MasternodeIdentityDAO(wired.knex)
     watched = []
   })
 
+  // A service that shares the database but none of the previous run's memory.
+  function newService(): MasternodeService {
+    const walletSync = {getListedMasternodes: () => network, refreshListedMasternodes: refreshes} as unknown as WalletSyncService
+    return new MasternodeService(
+      wired.walletDAO, wired.masternodeKeyDAO, new MasternodeDAO(wired.knex), new MasternodeIdentityDAO(wired.knex), providers,
+      wired.addressDAO, new CoreTransactionService(), walletSync, Preferences.default(),
+    )
+  }
+
   const key = (chain: MasternodeKeyFilter, index: number): string =>
     masternodeKeyDeriver(keys, 'mainnet', chain).derive(index).address
 
-  async function discover(providers: WalletProviderFactory): Promise<void> {
-    current = providers
+  async function discover(sourceProviders: WalletProviderFactory): Promise<void> {
+    current = sourceProviders
     await masternodes.discover(walletId)
   }
 
@@ -209,6 +215,22 @@ describe('MasternodeService.discover', () => {
 
   it('answers null, not an empty list, before the first run', async () => {
     expect(await masternodes.getMasternodes(walletId)).toBeNull()
+    expect(await masternodes.getMasternodesForDisplay(walletId)).toBeNull()
+  })
+
+  it('shows the nodes a previous run stored, unknown, until this run has a list', async () => {
+    await discover(source([node('a', {ownerAddress: key('owner', 0)})]))
+
+    const restarted = newService()
+    expect((await restarted.getMasternodesForDisplay(walletId))!.map(
+      ({proTxHash, type, status, collateralTxid, collateralVout, serviceAddress, importedRoles}) =>
+        [proTxHash, type, status, collateralTxid, collateralVout, serviceAddress, importedRoles]))
+      .toEqual([['a', 'Unknown', 'Unknown', 'a'.repeat(64), 0, null, []]])
+    expect(await restarted.getMasternodes(walletId)).toBeNull()
+
+    await restarted.discover(walletId)
+    expect((await restarted.getMasternodesForDisplay(walletId))!.map(({proTxHash, status}) => [proTxHash, status]))
+      .toEqual([['a', 'ENABLED']])
   })
 
   it('finds a node by an imported key, keeps a key no node carries yet, and forgets a removed one', async () => {

@@ -1,7 +1,7 @@
 import {bytesToHex, hexToBytes} from '@noble/hashes/utils.js'
 import {bls} from 'dash-core-sdk'
 import {MASTERNODE_KEY_CHAINS} from '../constants/addresses'
-import {DUFFS_PER_DASH, MASTERNODE_COLLATERAL_DUFFS} from '../constants/chain'
+import {DUFFS_PER_DASH, MASTERNODE_COLLATERAL_DUFFS, UNKNOWN_MASTERNODE_STATUS, UNKNOWN_MASTERNODE_TYPE} from '../constants/chain'
 import {DerivedAddress} from '../types/AddressWindow'
 import {DashscanMasternode} from '../types/Dashscan'
 import {CoreSpendSource, ListedUtxo, SelectableUtxo} from '../types/CoinSelection'
@@ -193,6 +193,38 @@ export function collateralsToStore(owned: Masternode[], stored: MasternodeCollat
 export function ownedCollaterals(stored: MasternodeCollateral[], listed: Masternode[]): OwnedCollateral[] {
   const addresses = new Map(listed.map(node => [`${node.collateralTxid}:${node.collateralVout}`, node.collateralAddress]))
   return stored.map(({proTxHash, txid, vout}) => ({proTxHash, txid, vout, address: addresses.get(`${txid}:${vout}`) ?? null}))
+}
+
+// The nodes a previous run stored, for display while this run's list has not
+// answered. The status and service are the network's to give: unknown, not stale.
+export function storedMasternodes(stored: MasternodeCollateral[]): Masternode[] {
+  return stored.map(({proTxHash, txid, vout}) => ({
+    proTxHash,
+    type: UNKNOWN_MASTERNODE_TYPE,
+    status: UNKNOWN_MASTERNODE_STATUS,
+    posePenaltyScore: null,
+    collateralTxid: txid,
+    collateralVout: vout,
+    collateralAddress: null,
+    serviceAddress: null,
+    payeeAddress: null,
+    ownerAddress: null,
+    votingAddress: '',
+    operatorPublicKey: '',
+    platformNodeId: null,
+    platformP2PPort: null,
+    platformHttpPort: null,
+    lastPaidBlock: null,
+    lastPaidTime: null,
+    registeredHeight: null,
+    isShared: null,
+    shares: null,
+    ownerKeyIndex: null,
+    votingKeyIndex: null,
+    operatorKeyIndex: null,
+    importedRoles: [],
+    importedSigningRoles: [],
+  }))
 }
 
 // By outpoint: another output of the same transaction is an ordinary coin.

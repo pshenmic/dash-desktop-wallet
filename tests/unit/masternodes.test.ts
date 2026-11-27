@@ -19,6 +19,7 @@ import {
   requireCollateral,
   requirePayout,
   revocableNode,
+  storedMasternodes,
   unmatchedImportedKeys,
   collateralsToStore,
   withCollateralFlag,
@@ -227,6 +228,19 @@ describe('ownedMasternodes', () => {
       {proTxHash: 'a', txid: 'c'.repeat(64), vout: 0, address: 'Xheld'},
       {proTxHash: 'b', txid: 'c'.repeat(64), vout: 1, address: null},
     ])
+  })
+})
+
+describe('storedMasternodes', () => {
+  it('keeps the stored collateral and leaves every network field unknown', () => {
+    expect(storedMasternodes([{proTxHash: 'p'.repeat(64), txid: 'c'.repeat(64), vout: 1, followed: false}])).toEqual([{
+      proTxHash: 'p'.repeat(64), type: 'Unknown', status: 'Unknown', posePenaltyScore: null,
+      collateralTxid: 'c'.repeat(64), collateralVout: 1, collateralAddress: null,
+      serviceAddress: null, payeeAddress: null, ownerAddress: null, votingAddress: '', operatorPublicKey: '',
+      platformNodeId: null, platformP2PPort: null, platformHttpPort: null,
+      lastPaidBlock: null, lastPaidTime: null, registeredHeight: null, isShared: null, shares: null,
+      ownerKeyIndex: null, votingKeyIndex: null, operatorKeyIndex: null, importedRoles: [], importedSigningRoles: [],
+    }])
   })
 })
 
