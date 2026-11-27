@@ -2,8 +2,7 @@ import {KeyPairController} from 'dash-platform-sdk/src/keyPair/index.js'
 import {Network} from '../types/Network'
 import {AddressDeriver} from '../types/AddressWindow'
 import {COIN_TYPE, SHIELDED_ACCOUNT} from '../constants/addresses'
-import {DashPlatformShielded} from "dash-platform-shielded";
-
+import {DashPlatformShielded} from 'dash-platform-shielded'
 
 const keyPair = new KeyPairController(new DashPlatformShielded())
 
