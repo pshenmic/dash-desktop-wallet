@@ -16,3 +16,9 @@ export const PLATFORM_TX_CARD_STATUSES: Record<NonNullable<PlatformTransaction['
   FAIL: 'failed',
   unknown: 'unknown',
 }
+
+export const SHIELDED_FEE_RECONCILED_TYPES: ReadonlySet<string> = new Set([
+  'UNSHIELD',
+  'SHIELD',
+  'SHIELDED_TRANSFER',
+])

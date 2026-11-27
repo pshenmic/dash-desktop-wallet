@@ -1,6 +1,6 @@
 import type { Network, PlatformTransaction } from '../api/types'
 import type { PresentedPlatformTransaction, TransactionCardItem, WalletTransactionOwnership } from '../types/WalletTransaction'
-import { PLATFORM_TX_CARD_STATUSES } from '../constants/platformTransactions'
+import { PLATFORM_TX_CARD_STATUSES, SHIELDED_FEE_RECONCILED_TYPES } from '../constants/platformTransactions'
 import { formatCreationDate, timePart } from './date'
 import { identityUrl, platformAddressUrl } from './explorer'
 import { isValidPlatformAddress } from './platformAddress'
@@ -50,6 +50,20 @@ export function platformInternalTransferFee(transaction: PlatformTransaction, ow
       if (!transaction.recipient.some(end => ownership.platform.has(end.source))) return null
       if (!transaction.recipient.every(end => ownership.platform.has(end.source) || ownership.shielded.has(end.source))) return null
       break
+    case 'SHIELD':
+      if (!transaction.sender.every(end => ownership.platform.has(end.source))) return null
+      if (!transaction.recipient.some(end => ownership.shielded.has(end.source))) return null
+      if (!transaction.recipient.every(end => ownership.shielded.has(end.source) || ownership.platform.has(end.source))) return null
+      break
+    case 'SHIELDED_TRANSFER':
+      if (!transaction.sender.every(end => ownership.shielded.has(end.source))) return null
+      if (!transaction.recipient.every(end => ownership.shielded.has(end.source))) return null
+      break
+    case 'IDENTITY_CREATE_FROM_SHIELDED_POOL':
+      if (!transaction.sender.every(end => ownership.shielded.has(end.source))) return null
+      if (transaction.recipient.filter(end => ownership.identities.has(end.source)).length !== 1) return null
+      if (!transaction.recipient.every(end => ownership.identities.has(end.source) || ownership.shielded.has(end.source))) return null
+      break
     case 'IDENTITY_TOP_UP_FROM_ADDRESSES':
     case 'IDENTITY_CREATE_FROM_ADDRESSES':
       if (!transaction.sender.every(end => ownership.platform.has(end.source))) return null
@@ -68,7 +82,9 @@ export function platformInternalTransferFee(transaction: PlatformTransaction, ow
   const sent = transaction.sender.reduce((total, end) => total + end.amount, 0n)
   const received = transaction.recipient.reduce((total, end) => total + end.amount, 0n)
   const difference = sent - received
-  if (transaction.type === 'UNSHIELD') return difference === transaction.gasCredits ? transaction.gasCredits : null
+  if (SHIELDED_FEE_RECONCILED_TYPES.has(transaction.type)) {
+    return difference === transaction.gasCredits ? transaction.gasCredits : null
+  }
   return difference === 0n || difference === transaction.gasCredits ? transaction.gasCredits : null
 }
 
@@ -77,6 +93,7 @@ export function mapPlatformTransaction(transaction: PresentedPlatformTransaction
   let direction: TransactionCardItem['direction'] = 'neutral'
   if (transaction.netCredits > 0n) direction = 'in'
   if (transaction.netCredits < 0n) direction = 'out'
+  const netAmount = transaction.netCredits < 0n ? -transaction.netCredits : transaction.netCredits
 
   // An address transition names only our own end, so the card shows whichever
   // end the source named rather than the one the direction asks for.
@@ -93,7 +110,7 @@ export function mapPlatformTransaction(transaction: PresentedPlatformTransaction
     labelValue: participants.length > 1
       ? `${participants.length} ${fromSender ? 'inputs' : 'outputs'}`
       : participants.map(end => end.source).join(', ') || 'Unavailable',
-    amount: transaction.amountCredits,
+    amount: netAmount === 0n ? transaction.amountCredits : netAmount,
     date: platformTransactionDateValue(transaction.date),
     direction,
   }

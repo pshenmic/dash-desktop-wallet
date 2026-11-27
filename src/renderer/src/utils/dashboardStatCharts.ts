@@ -26,7 +26,7 @@ export function buildStatFlows(core: StatsTx[], platform: PlatformTransaction[],
     .filter(tx => tx.netCredits !== 0n)
     // Explorer amounts include applied fees even when a transition failed.
     .map(tx => ({
-      amount: tx.amountCredits,
+      amount: tx.netCredits < 0n ? -tx.netCredits : tx.netCredits,
       direction: tx.netCredits > 0n ? 'in' : 'out',
       status: 'success',
       date: tx.date,
