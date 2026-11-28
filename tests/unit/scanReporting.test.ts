@@ -111,4 +111,39 @@ describe('scan completion reporting', () => {
     expect(completions()).toHaveLength(2)
     expect(completions()[1]).toContain('utxos=2 balance=1250 sats')
   })
+
+  // The cursor is what the next scan resumes from, so finishing while a drain
+  // still holds a matched block writes a height whose block never reached SQL.
+  it('does not finish while another drain is applying a matched block', async () => {
+    let release!: () => void
+    const applying = new Promise<void>(resolve => { release = resolve })
+    const internals = worker as unknown as {
+      phase: string
+      applyBlock: () => Promise<void>
+      matchedBlocks: Map<number, unknown>
+      watchSet: {exhaustedChain: () => null}
+      maybeDrainAndFinish: () => Promise<void>
+    }
+    internals.phase = 'cfilters'
+    internals.applyBlock = () => applying
+    internals.watchSet.exhaustedChain = () => null
+    internals.matchedBlocks.set(2, {})
+
+    const statuses: string[] = []
+    let advances = 0
+    worker.on('status', (status: {phase: string}) => statuses.push(status.phase))
+    worker.on('cursorAdvanced', () => advances++)
+
+    const first = internals.maybeDrainAndFinish()
+    await internals.maybeDrainAndFinish()
+
+    expect(advances).toBe(0)
+    expect(statuses).not.toContain('synced')
+
+    release()
+    await first
+
+    expect(statuses.filter(phase => phase === 'synced')).toHaveLength(1)
+    expect(advances).toBeGreaterThan(0)
+  })
 })

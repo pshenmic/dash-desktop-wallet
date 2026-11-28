@@ -9,6 +9,12 @@ import ShieldedNotesAlert from '@renderer/components/ui/ShieldedNotesAlert'
 import { API } from '@renderer/api'
 import { useReceiveRequests } from '@renderer/hooks/useReceiveRequests'
 import { useShieldedSyncState } from '@renderer/hooks/useShielded'
+import {
+  setShieldedAddresses,
+  startShieldedSyncWithAddressPool,
+  topUpShieldedAddresses,
+  useShieldedAddresses,
+} from '@renderer/hooks/useShieldedAddresses'
 import { shieldedBalancesByAddress } from '@renderer/utils/shieldedBalances'
 import { creditsToDuffs } from '@renderer/utils/balance'
 import { ShieldedSyncPhase } from '@renderer/enums/ShieldedSyncPhase'
@@ -22,8 +28,7 @@ import {
 import { useBalanceVisibility } from '@renderer/hooks/useBalanceVisibility'
 
 export default function ShieldedAddressTab({ walletId }: { walletId: string | undefined }): React.JSX.Element {
-  const [addresses, setAddresses] = useState<string[] | null>(null)
-  const [checking, setChecking] = useState(true)
+  const { addresses, loading: checking } = useShieldedAddresses(walletId)
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -38,21 +43,9 @@ export default function ShieldedAddressTab({ walletId }: { walletId: string | un
   const balances = useMemo(() => shieldedBalancesByAddress(sync.notes), [sync.notes])
 
   useEffect(() => {
-    setAddresses(null)
     setPassword('')
     setError(null)
     setShowPasswordForm(false)
-    if (!walletId) {
-      setChecking(false)
-      return
-    }
-    let dead = false
-    setChecking(true)
-    API.getShieldedAddresses(walletId)
-      .then((cached) => { if (!dead) setAddresses(cached) })
-      .catch(() => { /* fall through to unlock form */ })
-      .finally(() => { if (!dead) setChecking(false) })
-    return () => { dead = true }
   }, [walletId])
 
   const withPassword = async (action: (pwd: string) => Promise<void>, failureMessage: string): Promise<void> => {
@@ -76,14 +69,16 @@ export default function ShieldedAddressTab({ walletId }: { walletId: string | un
   }
 
   const handleReveal = (): Promise<void> => withPassword(async (pwd) => {
-    setAddresses(await API.getShieldedAddresses(walletId!, pwd))
+    setShieldedAddresses(walletId!, await API.getShieldedAddresses(walletId!, pwd))
     if (!synced && !syncRunning) {
-      API.startShieldedSync(walletId!, pwd).catch(() => {})
+      startShieldedSyncWithAddressPool(walletId!, pwd).catch(() => {})
+    } else if (synced) {
+      await topUpShieldedAddresses(walletId!, pwd, sync.notes)
     }
   }, addressFormCopy.loadFailed)
 
   const handleConfirmAdd = (): Promise<void> => withPassword(async (pwd) => {
-    setAddresses(await API.addShieldedAddress(walletId!, pwd))
+    setShieldedAddresses(walletId!, await API.addShieldedAddress(walletId!, pwd))
   }, addressFormCopy.addFailed)
 
   // Every reveal derives from the seed, so every reveal asks. Nothing holds the
@@ -100,7 +95,7 @@ export default function ShieldedAddressTab({ walletId }: { walletId: string | un
     setPassword(value)
   }
 
-  if (checking) {
+  if (checking && addresses === null) {
     return <ListSkeleton rows={3} rowClassName="h-[2.5rem] rounded-[.875rem]" />
   }
 

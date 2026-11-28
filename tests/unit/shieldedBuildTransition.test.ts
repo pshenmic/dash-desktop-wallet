@@ -1,8 +1,7 @@
 import {describe, it, expect, vi} from 'vitest'
 
-vi.mock('pshenmic-dpp', () => ({
+vi.mock('dash-platform-shielded', () => ({
   OrchardAddressWASM: {fromBech32m: (address: string) => ({address})},
-  ShieldedMemoWASM: {empty: () => ({memo: 'empty'})},
   ShieldedOutputWASM: class {
     constructor(public address: {address: string}, public amount: bigint, public memo: unknown) {}
   },

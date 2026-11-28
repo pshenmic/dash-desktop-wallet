@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { entropyToMnemonic, generateMnemonic } from '@scure/bip39'
 import { wordlist } from '@scure/bip39/wordlists/english.js'
 import { toast } from '../components/ui/Toast'
+import { startShieldedSyncWithAddressPool } from './useShieldedAddresses'
 import { API } from '../api'
 import { messages } from '@renderer/constants'
 import { CONNECTION_MODE_PREVIOUS_STEPS, CREATE_WALLET_PREVIOUS_STEPS } from '@renderer/constants/auth'
@@ -179,7 +180,7 @@ export function useCreateWallet(passphrasePreview = false): UseCreateWalletState
       setCreating(false)
     }
 
-    API.startShieldedSync(walletId, password).catch(error => toast.error(getErrorMessage(error)))
+    startShieldedSyncWithAddressPool(walletId, password).catch(error => toast.error(getErrorMessage(error)))
 
     const syncEnabled = connectionMode === 'p2p' || backgroundSyncEnabled
     saveWalletConnectionSettings(connectionMode, syncEnabled)

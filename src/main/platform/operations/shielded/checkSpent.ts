@@ -1,5 +1,5 @@
 import {DashPlatformSDK} from 'dash-platform-sdk'
-import {RecoveredNoteWASM} from 'pshenmic-dpp'
+import {RecoveredNoteWASM} from 'dash-platform-shielded'
 
 import {CheckedNote} from '../../types/service'
 import {nullifierStatuses} from './reads/nullifierStatuses'

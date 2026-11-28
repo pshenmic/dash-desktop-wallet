@@ -309,15 +309,7 @@
     minimatch "^9.0.3"
     plist "^3.1.0"
 
-"@emnapi/core@1.9.0":
-  version "1.9.0"
-  resolved "https://registry.yarnpkg.com/@emnapi/core/-/core-1.9.0.tgz#4a54213b208fcf288cce25076c74e0f7613e6100"
-  integrity sha512-0DQ98G9ZQZOxfUcQn1waV2yS8aWdZ6kJMbYCJB3oUBecjWYO1fqJ+a1DRfPF3O5JEkwqwP1A9QEN/9mYm2Yd0w==
-  dependencies:
-    "@emnapi/wasi-threads" "1.2.0"
-    tslib "^2.4.0"
-
-"@emnapi/core@^1.11.3":
+"@emnapi/core@1.11.3", "@emnapi/core@^1.11.3":
   version "1.11.3"
   resolved "https://registry.yarnpkg.com/@emnapi/core/-/core-1.11.3.tgz#5e95348a42cd1e06f0b9aa380cd74091daa4d520"
   integrity sha512-zLpS5asjEb7lq8jYLq37N6XKaE41DIexlY1rF/z4/tIl3wo13Sqm28fRyfIsKZD+NZ8mM5RoKkpW/rBcuoSZSg==
@@ -333,14 +325,7 @@
     "@emnapi/wasi-threads" "1.2.0"
     tslib "^2.4.0"
 
-"@emnapi/runtime@1.9.0":
-  version "1.9.0"
-  resolved "https://registry.yarnpkg.com/@emnapi/runtime/-/runtime-1.9.0.tgz#91c54a6e77c36154c125e873409472e2b70efd5b"
-  integrity sha512-QN75eB0IH2ywSpRpNddCRfQIhmJYBCJ1x5Lb3IscKAL8bMnVAKnRg8dCoXbHzVLLH7P38N2Z3mtulB7W0J0FKw==
-  dependencies:
-    tslib "^2.4.0"
-
-"@emnapi/runtime@^1.11.3":
+"@emnapi/runtime@1.11.3", "@emnapi/runtime@^1.11.3":
   version "1.11.3"
   resolved "https://registry.yarnpkg.com/@emnapi/runtime/-/runtime-1.11.3.tgz#84257ae3b0531eb2aec1ffa23d70700da007ba95"
   integrity sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA==
@@ -2841,10 +2826,10 @@ dash-core-sdk@1.1.6-dev.1:
     typescript "^5.9.2"
     ws "^8.18.3"
 
-dash-platform-sdk@1.6.4:
-  version "1.6.4"
-  resolved "https://registry.yarnpkg.com/dash-platform-sdk/-/dash-platform-sdk-1.6.4.tgz#50104df13985b639aff284a173e83b7a466817c1"
-  integrity sha512-SLhuYxuCfLLccL76mlP3ZsE0IdaAUlWysll/drSP5c0IV67oGaQSrqcdRnkZQgpV+LCLg+xchLzLdMje09cdrA==
+dash-platform-sdk@1.7.0-dev.3:
+  version "1.7.0-dev.3"
+  resolved "https://registry.yarnpkg.com/dash-platform-sdk/-/dash-platform-sdk-1.7.0-dev.3.tgz#b3d2ef82882660ea5df104dfcd88f46606cf0b40"
+  integrity sha512-8t6fFdPJqEWANDDePdIf83PsLlmMaFLPfGXsaKsF13T286u1hWdouX3CmMJJ6/mNZwZ+4IQZABuOyhJ+EfOnBQ==
   dependencies:
     "@bufbuild/protobuf" "^2.6.0"
     "@protobuf-ts/grpcweb-transport" "^2.11.1"
@@ -2852,7 +2837,17 @@ dash-platform-sdk@1.6.4:
     "@scure/bip32" "^2.0.0"
     "@scure/bip39" "^2.0.0"
     "@scure/btc-signer" "^2.0.1"
-    pshenmic-dpp "2.0.1-dev.6"
+    pshenmic-dpp "2.1.1"
+
+dash-platform-shielded@0.0.4:
+  version "0.0.4"
+  resolved "https://registry.yarnpkg.com/dash-platform-shielded/-/dash-platform-shielded-0.0.4.tgz#371b30c050f943fec0bb6f8f535be7748f0ef83d"
+  integrity sha512-O7LDOAtdY0WRvQj0AnHeHtcUddNdwXcA5lSWXqDgbUWAQ2j0wWQP3n8bwDiGAnAqG06S+Axz2nYv3329+/UchA==
+  dependencies:
+    "@emnapi/core" "1.11.3"
+    "@emnapi/runtime" "1.11.3"
+    "@tybys/wasm-util" "^0.10.1"
+    fflate "^0.8.3"
 
 dash-ui-kit@1.0.94:
   version "1.0.94"
@@ -5017,13 +5012,13 @@ protoc@^32.1.0:
   resolved "https://registry.npmjs.org/protoc/-/protoc-32.1.0.tgz"
   integrity sha512-yICJJCGHJLM9ao5W2V4CGp1d7xuBsdHzgVDw6L8mdDtoIcqzN3arNPOm9Jx4Ufp5vfhQfJGkNUDo6mm/SLPdXw==
 
-pshenmic-dpp@2.0.1-dev.6:
-  version "2.0.1-dev.6"
-  resolved "https://registry.yarnpkg.com/pshenmic-dpp/-/pshenmic-dpp-2.0.1-dev.6.tgz#acb8f84f152e469433b2c160eb2374149b628b31"
-  integrity sha512-ODFFBAzzCiVKKp1Wbikpxv0ba3b249a1a/Nqy/dhQEnfoPOYupGURX4DFO9zxotgnHXnSw87jemkayFFR02c1w==
+pshenmic-dpp@2.1.1:
+  version "2.1.1"
+  resolved "https://registry.yarnpkg.com/pshenmic-dpp/-/pshenmic-dpp-2.1.1.tgz#22e5ad6141fd3d00b64815fc5554ed230acb0fde"
+  integrity sha512-xfH8KDrpWuGc24cDwHFRL4LCT6/FsXsA6l8LnUCho3mDZNA5ltO/1hd92GvZV3P8FcxMcSGVWmLy3vlyBwyPYQ==
   dependencies:
-    "@emnapi/core" "1.9.0"
-    "@emnapi/runtime" "1.9.0"
+    "@emnapi/core" "1.11.3"
+    "@emnapi/runtime" "1.11.3"
     "@tybys/wasm-util" "^0.10.1"
     fflate "^0.8.3"
 

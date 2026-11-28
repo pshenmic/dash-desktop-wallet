@@ -8,6 +8,7 @@ export interface ChangeAddressFieldProps {
   loading: boolean
   error: string | null
   previewOnly: boolean
+  addressLabels?: ReadonlyMap<string, string>
   onChange: (address: string) => void
   onRetry: () => void
 }

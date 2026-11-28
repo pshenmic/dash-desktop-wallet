@@ -2,9 +2,10 @@ const {readdir, rm} = require('node:fs/promises')
 const path = require('node:path')
 const {Arch} = require('builder-util')
 
-// pshenmic-dpp and crypto-toothpick ship a build for every target and pick one
-// at runtime, so electron-builder cannot tell which are dead weight. Only a
-// pack knows both the platform and the architecture it is producing.
+// pshenmic-dpp, dash-platform-shielded and crypto-toothpick ship a build for
+// every target and pick one at runtime, so electron-builder cannot tell which
+// are dead weight. Only a pack knows both the platform and the architecture it
+// is producing.
 module.exports = async function pruneForeignBinaries(context) {
   const arch = Arch[context.arch]
 
@@ -28,7 +29,7 @@ module.exports = async function pruneForeignBinaries(context) {
   const keep = new Set(prefixes.flatMap(prefix => suffixes.map(suffix => `${prefix}-${suffix}`)))
   const modules = path.join(context.packager.getResourcesDir(context.appOutDir), 'app.asar.unpacked', 'node_modules')
 
-  for (const pkg of ['pshenmic-dpp', 'crypto-toothpick']) {
+  for (const pkg of ['pshenmic-dpp', 'dash-platform-shielded', 'crypto-toothpick']) {
     const dir = path.join(modules, pkg, 'dist', 'binaries', 'native')
 
     // A missing directory means the package layout or the asar unpacking moved;

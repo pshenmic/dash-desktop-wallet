@@ -1,4 +1,4 @@
-import {OrchardAddressWASM, ShieldedMemoWASM} from 'pshenmic-dpp'
+import {OrchardAddressWASM} from 'dash-platform-shielded'
 import {PlatformOperations} from '../../types/messages'
 import {OperationContext, OperationError} from '../types'
 import {broadcast} from '../broadcast'
@@ -32,7 +32,6 @@ export async function shield(payload: Payload, ctx: OperationContext): Promise<R
     privateKeys,
     feeStrategy: DEDUCT_FROM_FIRST,
     userFeeIncrease: 0,
-    memo: ShieldedMemoWASM.empty() as unknown as string,
     senderOvk,
     platformVersion: version,
   })

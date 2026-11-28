@@ -1,4 +1,4 @@
-import type {RecoveredNoteWASM} from 'pshenmic-dpp'
+import type {RecoveredNoteWASM} from 'dash-platform-shielded'
 
 export interface InFlight {
   controller: AbortController

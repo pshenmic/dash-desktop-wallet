@@ -1,11 +1,11 @@
-import type { Network } from '../api/types'
+import type { Network, PlatformAddressDto, ShieldedNoteInfo, WalletAddressDto } from '../api/types'
 import type { DestinationKind } from '../enums/DestinationKind'
 import type { TransferOperation } from '../enums/TransferOperation'
 import type { SendRecipientDraft } from './SendDraft'
 import type { TransferPageType } from '../constants'
 import type { ReactNode } from 'react'
 import type { DropdownFieldOption, DropdownTextSize } from './DropdownField'
-import type { PlatformAddressDto, ShieldedNoteInfo, WalletAddressDto } from '../api/types'
+import type { ReceiveRequestDto } from './ReceiveRequest'
 import type { IdentityApiDto } from '../hooks/useIdentities'
 
 export interface OwnRecipientInventory {
@@ -15,6 +15,8 @@ export interface OwnRecipientInventory {
   shieldedAddresses: string[]
   shieldedNotes: ShieldedNoteInfo[] | null
   identities: IdentityApiDto[]
+  labelsByAddress?: ReadonlyMap<string, string>
+  receiveRequests?: ReadonlyArray<Pick<ReceiveRequestDto, 'address' | 'label' | 'kind'>>
 }
 
 export type RecipientInputAppearance = 'default' | 'subtle'
@@ -22,13 +24,15 @@ export type RecipientInputAppearance = 'default' | 'subtle'
 export interface RecipientFieldStyle {
   field: string
   textSize: DropdownTextSize
-  searchIconSize: number
+  bookIconSize: number
 }
 
 export interface RecipientInputProps {
   value: string
+  valueBadge?: string
   onChange: (value: string) => void
   data: TransferPageType['recipient']
+  destination?: DestinationKind
   compact?: boolean
   appearance?: RecipientInputAppearance
   ariaLabel?: string
@@ -36,6 +40,7 @@ export interface RecipientInputProps {
   invalid?: boolean
   valueAvatar?: boolean
   ownOptions?: DropdownFieldOption[]
+  ownOptionsHeading?: string
   ownOptionsLoading?: boolean
   ownOptionsError?: string | null
   onRetryOwnOptions?: () => void
@@ -59,7 +64,6 @@ export interface SendRecipientValidation {
 export interface SendRecipientsEditorProps {
   headerAction?: ReactNode
   beforeRecipients?: ReactNode
-  footer?: ReactNode
   recipients: SendRecipientDraft[]
   errors: SendRecipientError[]
   limit: number
@@ -69,5 +73,10 @@ export interface SendRecipientsEditorProps {
   feeCredits: bigint | null
   budgetIsEstimate: boolean
   amountDenominations?: readonly bigint[]
+  ownOptions?: DropdownFieldOption[]
+  ownOptionsLoading?: boolean
+  ownOptionsError?: string | null
+  onRetryOwnOptions?: () => void
+  addressLabels?: ReadonlyMap<string, string>
   onChange: (recipients: SendRecipientDraft[]) => void
 }

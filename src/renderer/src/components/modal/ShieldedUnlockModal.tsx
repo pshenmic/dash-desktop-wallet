@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { API } from '@renderer/api'
 import { INVALID_WALLET_PASSWORD_MESSAGE } from '@renderer/constants'
+import { startShieldedSyncWithAddressPool } from '@renderer/hooks/useShieldedAddresses'
 import { ModalSize } from '@renderer/enums/ModalSize'
 import Modal from '@renderer/components/ui/Modal'
 import ModalActions from '@renderer/components/ui/ModalActions'
@@ -42,7 +43,7 @@ export default function ShieldedUnlockModal({
         setLoading(false)
         return
       }
-      await API.startShieldedSync(walletId, password)
+      await startShieldedSyncWithAddressPool(walletId, password)
       onStarted?.()
       onClose()
     } catch (e) {

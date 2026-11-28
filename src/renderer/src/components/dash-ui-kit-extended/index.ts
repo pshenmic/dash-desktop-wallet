@@ -30,6 +30,8 @@ export {
   TurnOffIcon,
   FilterIcon,
   EditIcon,
+  PencilIcon,
+  AddressBookIcon,
   DeleteIcon,
   DocumentIcon,
   ChevronIcon,

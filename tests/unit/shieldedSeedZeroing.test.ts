@@ -20,7 +20,7 @@ vi.mock('dash-platform-sdk/src/keyPair/index.js', () => ({
   },
 }))
 
-vi.mock('pshenmic-dpp', () => ({OrchardAddressWASM: class {}}))
+vi.mock('dash-platform-shielded', () => ({OrchardAddressWASM: class {}, DashPlatformShielded: class {}}))
 
 import {ShieldedService} from '../../src/main/src/services/platform/ShieldedService'
 import {WalletDAO} from '../../src/main/src/database/WalletDAO'

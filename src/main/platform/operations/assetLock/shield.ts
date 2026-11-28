@@ -1,4 +1,5 @@
-import {OrchardAddressWASM, PrivateKeyWASM, ShieldedMemoWASM} from 'pshenmic-dpp'
+import {OrchardAddressWASM} from 'dash-platform-shielded'
+import {PrivateKeyWASM} from 'pshenmic-dpp'
 import {PlatformOperations} from '../../types/messages'
 import {OperationContext, OperationError} from '../types'
 import {broadcast} from '../broadcast'
@@ -26,7 +27,6 @@ export async function shieldFromAssetLock(payload: Payload, ctx: OperationContex
     shieldAmount: payload.shieldAmountCredits,
     assetLockProof: buildAssetLockProof(payload.assetLockProof, txid, outputIndex),
     privateKey,
-    memo: ShieldedMemoWASM.empty() as unknown as string,
     dummyOutputs: SHIELD_FUNDING_DUMMY_OUTPUTS,
     senderOvk,
     platformVersion: await ctx.sdk.node.getProtocolVersion(),

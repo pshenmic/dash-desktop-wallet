@@ -1,6 +1,9 @@
 import {describe, it, expect} from 'vitest'
-import {merkleRoot} from '../../src/main/p2p/utils/merkle'
+import {hexToBytes} from '@noble/hashes/utils.js'
+import {Block, BlockHeader, Transaction} from 'dash-core-sdk'
+import {merkleRoot, txsMatchMerkleRoot} from '../../src/main/p2p/utils/merkle'
 import {displayHexToWire, wireToDisplayHex} from '../../src/main/p2p/utils/byteOrder'
+import {doubleSHA256} from '../../src/main/p2p/utils/hash'
 
 // Real mainnet blocks, pulled over p2p. Between them they cover a row that
 // needs no padding, a power-of-two tree, and two odd trees whose tail is
@@ -112,6 +115,16 @@ const BLOCKS = [
   },
 ]
 
+// testnet h=1599114, the first v2 asset unlock this wallet fetched. Its txid
+// zeroes the trailing quorum fields, so it is not the hash of its bytes.
+const V2_UNLOCK_HEX =
+  '03000900000182410f00000000001976a914eb47ffeb287d70d4b10357d16372d7603fa4de2088ac000000009102ac1a000000000000be000000896618001452dc1104f453de4008e61a7ff31bd93160e1bffbfd67f9b05a5f4e1d010000a3cc9c22ddd6ff910bb99d1068a4dccfacd6a882e44b8a563907fb36b0dc57224759a273c3428160c27fc945c01d8f870582090d7ba2b2d91c270c35bf28651fb93e8a49dc314765e8383a6978482c8bc535d5c92657b2ef00962c29fb3f88db'
+
+const blockOver = (txs: Transaction[]): Block => {
+  const root = wireToDisplayHex(merkleRoot(txs.map(t => displayHexToWire(t.hash())))!)
+  return new Block(new BlockHeader(2, '0'.repeat(64), root, 1_795_732_115, 0x1e00db4b, 934_786), txs.length, txs)
+}
+
 const leaves = (txids: string[]): Uint8Array[] => txids.map(displayHexToWire)
 
 describe('merkleRoot', () => {
@@ -143,5 +156,15 @@ describe('merkleRoot', () => {
     const mutated = [...txids]
     mutated[1] = mutated[0]!
     expect(merkleRoot(leaves(mutated))).toBeNull()
+  })
+})
+
+describe('txsMatchMerkleRoot', () => {
+  it('accepts a v2 asset unlock whose txid differs from its byte hash', () => {
+    const unlock = Transaction.fromBytes(hexToBytes(V2_UNLOCK_HEX))
+
+    expect(unlock.hash()).not.toBe(unlock.instanceHash())
+    expect(wireToDisplayHex(merkleRoot([doubleSHA256(unlock.bytes())])!)).not.toBe(unlock.hash())
+    expect(txsMatchMerkleRoot(blockOver([unlock]))).toBe(true)
   })
 })
