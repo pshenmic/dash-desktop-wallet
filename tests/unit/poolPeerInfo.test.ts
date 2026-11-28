@@ -4,7 +4,9 @@ vi.mock('dash-core-p2p', async () => {
   const {EventEmitter} = await import('events')
   let counter = 0
   return {
+    Message: class {},
     Messages: class {
+      add = (): void => undefined
       GetAddr = (): {command: string} => ({command: 'getaddr'})
       Ping = (): {command: string; nonce: Uint8Array} =>
         ({command: 'ping', nonce: Uint8Array.from([0, 0, 0, 0, 0, 0, 0, ++counter])})
@@ -43,6 +45,7 @@ interface FakePeer {
   sent: Array<{command: string; nonce?: Uint8Array}>
   sendMessage: (message: {command: string; nonce?: Uint8Array}) => void
   disconnect: () => void
+  on: () => void
   disconnects: number
 }
 
@@ -50,6 +53,7 @@ const fakePeer = (host: string, subversion: string | null = '/Dash Core:22.1.0/'
   const peer: FakePeer = {
     host, port: 19999, subversion, sent: [], disconnects: 0,
     disconnect: () => { peer.disconnects++ },
+    on: () => undefined,
     sendMessage: message => { peer.sent.push(message) },
   }
   return peer

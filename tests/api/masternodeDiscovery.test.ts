@@ -1,11 +1,18 @@
-import {beforeEach, describe, expect, it} from 'vitest'
+import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {PrivateKey, Script} from 'dash-core-sdk'
 import {MasternodeDAO} from '../../src/main/src/database/MasternodeDAO'
+import {MasternodeIdentityDAO} from '../../src/main/src/database/MasternodeIdentityDAO'
+import {Preferences} from '../../src/main/src/preferences'
 import {WalletProviderFactory} from '../../src/main/src/providers/WalletProviderFactory'
+import {CoreTransactionService} from '../../src/main/src/services/core/CoreTransactionService'
 import {MasternodeService} from '../../src/main/src/services/core/MasternodeService'
-import {Masternode, MasternodeKeyFilter, MasternodeKeys, NetworkMasternode} from '../../src/main/src/types/Masternode'
+import {WalletSyncService} from '../../src/main/src/services/core/WalletSyncService'
+import {ListedMasternodes, Masternode, MasternodeKeyFilter, MasternodeKeys, NetworkMasternode} from '../../src/main/src/types/Masternode'
 import {UTXO} from '../../src/main/src/types/UTXO'
 import {masternodeKeyDeriver} from '../../src/main/src/utils/masternodeKeys'
+import {decryptImportedKey} from '../../src/main/src/utils/importedKeyEncryption'
+import {withUnlockedWallet} from '../../src/main/src/utils/walletSeed'
+import {masternodeIdentityIds} from '../../src/main/src/utils/masternodeIdentities'
 import {nodeKeyValues} from '../../src/main/src/utils/masternodes'
 import {Harness, harness, PASSWORD, VALID_SEEDPHRASE} from './harness'
 
@@ -40,27 +47,50 @@ function source(list: NetworkMasternode[] | null | Error, utxos: UTXO[] = [], fo
   return {forWallet: () => provider} as unknown as WalletProviderFactory
 }
 
+// A source whose UTXO read waits for `gate`, so a run can be held in flight.
+function gatedSource(list: NetworkMasternode[] | null, gate: Promise<void>): WalletProviderFactory {
+  const provider = source(list).forWallet('w', 'mainnet')
+  return {forWallet: () => ({...provider, getWalletUtxos: async () => { await gate; return [] }})} as unknown as WalletProviderFactory
+}
+
 describe('MasternodeService.discover', () => {
   let wired: Harness
   let walletId: string
   let keys: MasternodeKeys
   let current: WalletProviderFactory
+  let providers: WalletProviderFactory
   let masternodes: MasternodeService
+  let masternodeIdentities: MasternodeIdentityDAO
+  // The lock pool's list; null until one arrives.
+  let network: ListedMasternodes | null
+  let refreshes: ReturnType<typeof vi.fn>
 
   beforeEach(async () => {
     wired = await harness()
     walletId = await wired.createWalletHandler.handle(null as never, VALID_SEEDPHRASE, 'mainnet', PASSWORD)
     keys = (await wired.masternodeKeyDAO.getKeys(walletId))!
-    const providers = {forWallet: (...args) => current.forWallet(...args)} as WalletProviderFactory
-    masternodes = new MasternodeService(wired.walletDAO, wired.masternodeKeyDAO, new MasternodeDAO(wired.knex), providers)
+    providers = {forWallet: (...args) => current.forWallet(...args)} as WalletProviderFactory
+    network = null
+    refreshes = vi.fn()
+    masternodes = newService()
+    masternodeIdentities = new MasternodeIdentityDAO(wired.knex)
     watched = []
   })
+
+  // A service that shares the database but none of the previous run's memory.
+  function newService(): MasternodeService {
+    const walletSync = {getListedMasternodes: () => network, refreshListedMasternodes: refreshes} as unknown as WalletSyncService
+    return new MasternodeService(
+      wired.walletDAO, wired.masternodeKeyDAO, new MasternodeDAO(wired.knex), new MasternodeIdentityDAO(wired.knex), providers,
+      wired.addressDAO, new CoreTransactionService(), walletSync, Preferences.default(),
+    )
+  }
 
   const key = (chain: MasternodeKeyFilter, index: number): string =>
     masternodeKeyDeriver(keys, 'mainnet', chain).derive(index).address
 
-  async function discover(providers: WalletProviderFactory): Promise<void> {
-    current = providers
+  async function discover(sourceProviders: WalletProviderFactory): Promise<void> {
+    current = sourceProviders
     await masternodes.discover(walletId)
   }
 
@@ -106,6 +136,31 @@ describe('MasternodeService.discover', () => {
     expect(await storedCollaterals()).toEqual(['a:aa:0', 'e:ee:0'])
   })
 
+  it('stores the owner and voter identities Platform creates for a discovered evonode', async () => {
+    const proTxHash = 'ab'.repeat(32)
+    const votingAddress = key('voting', 0)
+    await discover(source([node(proTxHash, {type: 'Evo', votingAddress, ownerAddress: key('owner', 0)})]))
+
+    expect(await masternodeIdentities.getByWalletId(walletId)).toEqual(
+      masternodeIdentityIds(proTxHash, votingAddress).map(({role, identifier}) => ({walletId, proTxHash, role, identifier})),
+    )
+  })
+
+  it('stores no identities for a discovered regular node', async () => {
+    await discover(source([node('cd'.repeat(32), {ownerAddress: key('owner', 0)})]))
+    expect(await masternodeIdentities.getByWalletId(walletId)).toEqual([])
+  })
+
+  it('drops the identities of a node the wallet no longer owns', async () => {
+    const proTxHash = 'ab'.repeat(32)
+    await discover(source([node(proTxHash, {type: 'Evo', votingAddress: key('voting', 0), ownerAddress: key('owner', 0)})]))
+    expect(await masternodeIdentities.getByWalletId(walletId)).toHaveLength(2)
+
+    await discover(source([]))
+
+    expect(await masternodeIdentities.getByWalletId(walletId)).toEqual([])
+  })
+
   // DashSync pays a collateral its ProRegTx creates to the reserved 3'/0' chain.
   it('owns a node whose collateral address is on the collateral chain', async () => {
     await discover(source([
@@ -134,6 +189,26 @@ describe('MasternodeService.discover', () => {
     expect(await storedCollaterals()).toEqual(['b:bb:0'])
   })
 
+  // Dashscan keeps the row of a node whose collateral was spent, frozen in its last state.
+  it('drops a node the network list no longer carries, once that list postdates it', async () => {
+    const gone = node('a', {ownerAddress: key('owner', 0), status: 'POSE_BANNED'})
+    await discover(source([gone, node('b', {ownerAddress: key('owner', 1)})]))
+    expect(await listed()).toEqual(['a', 'b'])
+    expect(refreshes).toHaveBeenCalled()
+
+    network = {proTxHashes: new Set(['b']), askedAt: Date.now() + 1, v24Active: false}
+    await discover(source([gone, node('b', {ownerAddress: key('owner', 1)})]))
+    expect(await listed()).toEqual(['b'])
+    expect(await storedCollaterals()).toEqual(['b:bb:0'])
+  })
+
+  it('keeps a node an older list could not know of, and asks for a newer one', async () => {
+    network = {proTxHashes: new Set(), askedAt: 0, v24Active: false}
+    await discover(source([node('a', {ownerAddress: key('owner', 0)})]))
+    expect(await listed()).toEqual(['a'])
+    expect(refreshes).toHaveBeenCalled()
+  })
+
   it('keeps what it knew when the source has no list or fails', async () => {
     await discover(source([node('a', {ownerAddress: key('owner', 0)})]))
 
@@ -146,6 +221,22 @@ describe('MasternodeService.discover', () => {
 
   it('answers null, not an empty list, before the first run', async () => {
     expect(await masternodes.getMasternodes(walletId)).toBeNull()
+    expect(await masternodes.getMasternodesForDisplay(walletId)).toBeNull()
+  })
+
+  it('shows the nodes a previous run stored, unknown, until this run has a list', async () => {
+    await discover(source([node('a', {ownerAddress: key('owner', 0)})]))
+
+    const restarted = newService()
+    expect((await restarted.getMasternodesForDisplay(walletId))!.map(
+      ({proTxHash, type, status, collateralTxid, collateralVout, serviceAddress, importedRoles}) =>
+        [proTxHash, type, status, collateralTxid, collateralVout, serviceAddress, importedRoles]))
+      .toEqual([['a', 'Unknown', 'Unknown', 'a'.repeat(64), 0, null, []]])
+    expect(await restarted.getMasternodes(walletId)).toBeNull()
+
+    await restarted.discover(walletId)
+    expect((await restarted.getMasternodesForDisplay(walletId))!.map(({proTxHash, status}) => [proTxHash, status]))
+      .toEqual([['a', 'ENABLED']])
   })
 
   it('finds a node by an imported key, keeps a key no node carries yet, and forgets a removed one', async () => {
@@ -153,14 +244,22 @@ describe('MasternodeService.discover', () => {
     const unregistered = PrivateKey.fromBytes(new Uint8Array(32).fill(8), 'mainnet')
     current = source([node('f', {votingAddress: voting.getAddress()})])
 
-    const found = await masternodes.importKey(walletId, 'voting', ` ${voting.toWIF()}\n`)
+    const found = await masternodes.importKey(walletId, 'voting', ` ${voting.toWIF()}\n`, PASSWORD)
     expect(found!.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['f', ['voting']]])
-    expect(await masternodes.importKey(walletId, 'owner', unregistered.toWIF())).toEqual([])
+    expect(await masternodes.importKey(walletId, 'owner', unregistered.toWIF(), PASSWORD)).toEqual([])
     expect(await masternodes.getImportedKeys(walletId)).toHaveLength(2)
+    expect(await masternodes.getImportedKeys(walletId)).toEqual(expect.arrayContaining([
+      {role: 'voting', publicKey: voting.getAddress(), hasPrivateKey: true},
+      {role: 'owner', publicKey: unregistered.getAddress(), hasPrivateKey: true},
+    ]))
+    const secret = await masternodes.getImportedKeySecret(walletId, 'voting', voting.getAddress())
+    expect(secret).not.toBeNull()
+    expect(await withUnlockedWallet(wired.walletDAO, walletId, PASSWORD, async ({seed}) =>
+      decryptImportedKey(secret!, seed))).toBe(voting.toWIF())
 
-    await masternodes.removeKey(walletId, {role: 'voting', publicKey: voting.getAddress()})
+    await masternodes.removeKey(walletId, {role: 'voting', publicKey: voting.getAddress(), hasPrivateKey: true})
     expect(await listed()).toEqual([])
-    expect(await masternodes.getImportedKeys(walletId)).toEqual([{role: 'owner', publicKey: unregistered.getAddress()}])
+    expect(await masternodes.getImportedKeys(walletId)).toEqual([{role: 'owner', publicKey: unregistered.getAddress(), hasPrivateKey: true}])
   })
 
   // Not an empty answer: p2p before its first proven list has searched nothing.
@@ -168,8 +267,47 @@ describe('MasternodeService.discover', () => {
     current = source(null)
     const voting = PrivateKey.fromBytes(new Uint8Array(32).fill(7), 'mainnet')
 
-    expect(await masternodes.importKey(walletId, 'voting', voting.toWIF())).toBeNull()
+    expect(await masternodes.importKey(walletId, 'voting', voting.toWIF(), PASSWORD)).toBeNull()
     expect(await masternodes.getImportedKeys(walletId)).toHaveLength(1)
+  })
+
+  // The check behind an import preview: the same search, storing nothing.
+  it('finds a node by a pasted key without importing it', async () => {
+    const voting = PrivateKey.fromBytes(new Uint8Array(32).fill(7), 'mainnet')
+    current = source([node('f', {votingAddress: voting.getAddress(), status: 'POSE_BANNED'})])
+
+    const found = await masternodes.checkKey(walletId, 'voting', ` ${voting.toWIF()}\n`)
+
+    expect(found!.map(({proTxHash, status}) => [proTxHash, status])).toEqual([['f', 'POSE_BANNED']])
+    expect(await masternodes.getImportedKeys(walletId)).toEqual([])
+  })
+
+  it('finds a shared node by a pasted share owner key', async () => {
+    const owner = PrivateKey.fromBytes(new Uint8Array(32).fill(9), 'mainnet')
+    current = source([node('s', {
+      ownerAddress: null,
+      isShared: true,
+      shares: [{ownerAddress: owner.getAddress(), amountDuffs: 50000000000n}],
+    })])
+
+    const found = await masternodes.checkKey(walletId, 'owner', owner.toWIF())
+
+    expect(found!.map(({proTxHash, isShared}) => [proTxHash, isShared])).toEqual([['s', true]])
+    expect(await masternodes.getImportedKeys(walletId)).toEqual([])
+  })
+
+  it('answers a check with null while the source has no list', async () => {
+    current = source(null)
+    const voting = PrivateKey.fromBytes(new Uint8Array(32).fill(7), 'mainnet')
+
+    expect(await masternodes.checkKey(walletId, 'voting', voting.toWIF())).toBeNull()
+  })
+
+  it('refuses a check of a key that does not parse, and stores nothing', async () => {
+    current = source([])
+    await expect(masternodes.checkKey(walletId, 'operator', 'not hex')).rejects.toThrow()
+    await expect(masternodes.checkKey(walletId, 'collateral' as never, 'x')).rejects.toThrow('Unknown masternode key role')
+    expect(await masternodes.getImportedKeys(walletId)).toEqual([])
   })
 
   // A node the p2p index has not read the ProRegTx of yet has no outpoint to keep.
@@ -217,8 +355,8 @@ describe('MasternodeService.discover', () => {
     const [found] = await owned()
     expect(found).toMatchObject({proTxHash: 's', ownerKeyIndex: 2, isShared: true})
     expect(found.shares).toEqual([
-      {ownerAddress: shareOwner, amountDuffs: 20000000000n, keyIndex: 2, imported: false},
-      {ownerAddress: 'Xother', amountDuffs: 80000000000n, keyIndex: null, imported: false},
+      {ownerAddress: shareOwner, amountDuffs: 20000000000n, keyIndex: 2, imported: false, canSign: true},
+      {ownerAddress: 'Xother', amountDuffs: 80000000000n, keyIndex: null, imported: false, canSign: false},
     ])
     expect(await storedCollaterals()).toEqual(['s:ss:3'])
   })
@@ -253,14 +391,75 @@ describe('MasternodeService.discover', () => {
       {ownerAddress: owner.getAddress(), amountDuffs: 20000000000n},
       {ownerAddress: 'Xother', amountDuffs: 80000000000n},
     ]})])
-    const found = await masternodes.importKey(walletId, 'owner', owner.toWIF())
+    const found = await masternodes.importKey(walletId, 'owner', owner.toWIF(), PASSWORD)
     expect(found!.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['s', ['owner']]])
     expect(found![0].shares!.map(({keyIndex, imported}) => [keyIndex, imported])).toEqual([[null, true], [null, false]])
+  })
+
+  it('finds a shared node by an imported voting key', async () => {
+    const voting = PrivateKey.fromBytes(new Uint8Array(32).fill(11), 'mainnet')
+    current = source([node('s', {
+      votingAddress: voting.getAddress(),
+      ownerAddress: null,
+      isShared: true,
+      shares: [
+        {ownerAddress: 'Xother', amountDuffs: 50000000000n},
+        {ownerAddress: 'Xanother', amountDuffs: 50000000000n},
+      ],
+    })])
+
+    const found = await masternodes.importKey(walletId, 'voting', voting.toWIF(), PASSWORD)
+
+    expect(found!.map(({proTxHash, importedRoles, isShared}) => [proTxHash, importedRoles, isShared])).toEqual([['s', ['voting'], true]])
   })
 
   it('refuses a key that does not parse, and stores nothing for it', async () => {
     current = source([])
     await expect(masternodes.importKey(walletId, 'operator', 'not hex')).rejects.toThrow()
     expect(await masternodes.getImportedKeys(walletId)).toEqual([])
+  })
+
+  // A tick, a new list and a key change can all ask at once; each run is a set
+  // of list requests, so the second ask joins the first.
+  it('answers concurrent discovery asks from one run', async () => {
+    current = source([node('a', {ownerAddress: key('owner', 0)})])
+
+    await Promise.all([
+      masternodes.discover(walletId),
+      masternodes.discover(walletId),
+      masternodes.discover(walletId),
+    ])
+
+    expect(watched).toHaveLength(1)
+    expect(await listed()).toEqual(['a'])
+  })
+
+  it('searches a key imported while a run is in flight in the pass behind it', async () => {
+    const voting = PrivateKey.fromBytes(new Uint8Array(32).fill(7), 'mainnet')
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    current = gatedSource([node('f', {votingAddress: voting.getAddress()})], gate)
+
+    const first = masternodes.discover(walletId)
+    const importing = masternodes.importKey(walletId, 'voting', voting.toWIF(), PASSWORD)
+    release()
+
+    await first
+    expect((await importing)!.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['f', ['voting']]])
+    expect(watched).toHaveLength(2)
+  })
+
+  // The panel reads this on open; a run already under way answers shortly.
+  it('answers an unmatched-keys read with no list while a run is in flight', async () => {
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    current = gatedSource([node('a', {ownerAddress: key('owner', 0)})], gate)
+
+    const first = masternodes.discover(walletId)
+    expect(await masternodes.getUnmatchedImportedKeys(walletId)).toBeNull()
+
+    release()
+    await first
+    expect(await masternodes.getUnmatchedImportedKeys(walletId)).toEqual([])
   })
 })

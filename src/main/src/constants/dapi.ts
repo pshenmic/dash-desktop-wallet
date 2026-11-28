@@ -8,3 +8,7 @@ export const DAPI_URLS_WAIT_MS = 20_000
 
 // Longest an evonode gets to report its own PoSe score before it is shown without one
 export const EVONODE_STATUS_TIMEOUT_MS = 5_000
+
+// A PoSe score moves with block activity, not seconds; re-asking over DAPI on
+// every discovery tick would put an HTTPS request on each evonode every two minutes.
+export const EVONODE_STATUS_REFRESH_MS = 10 * 60_000

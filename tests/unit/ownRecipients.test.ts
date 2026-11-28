@@ -10,7 +10,7 @@ import {
 } from '../../src/renderer/src/utils/ownRecipients'
 
 function inventory(): OwnRecipientInventory {
-  const address = { walletId: 'wallet', accountId: 0, derivationPath: '', index: 0, isUsed: false, balance: 0n, txCount: 0, label: null, usdBalance: null }
+  const address = { walletId: 'wallet', accountId: 0, derivationPath: '', index: 0, isUsed: false, isLocked: false, balance: 0n, txCount: 0, label: null, usdBalance: null }
   return {
     receiving: [
       { ...address, address: 'receive-empty', isChange: 0, label: 'Savings' },

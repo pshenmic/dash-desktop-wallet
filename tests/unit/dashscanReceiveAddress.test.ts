@@ -10,8 +10,13 @@ const receiving = [
   {address: 'addr-2', isUsed: false},
 ]
 
-const provider = (): DashscanWalletProvider => {
-  const addressDAO = {getAddressesByWalletId: async () => ({receiving, change: []})} as unknown as AddressDAO
+const provider = (locked: string[] = []): DashscanWalletProvider => {
+  const addressDAO = {
+    getAddressesByWalletId: async () => ({
+      receiving: receiving.map(address => ({...address, isLocked: locked.includes(address.address)})),
+      change: [],
+    }),
+  } as unknown as AddressDAO
   return new DashscanWalletProvider('testnet', 'w1', addressDAO, {} as unknown as WalletDAO, {} as unknown as TransactionDAO)
 }
 
@@ -22,5 +27,14 @@ describe('nextUnusedAddress on the indexer store', () => {
 
   it('skips addresses reserved by payment requests', async () => {
     expect(await provider().nextUnusedAddress(new Set(['addr-1']))).toBe('addr-2')
+  })
+
+  it('skips locked addresses', async () => {
+    expect(await provider(['addr-1']).nextUnusedAddress()).toBe('addr-2')
+  })
+
+  it('refuses when every receiving address is locked', async () => {
+    await expect(provider(receiving.map(a => a.address)).nextUnusedAddress())
+      .rejects.toThrow('Every receiving address is locked')
   })
 })

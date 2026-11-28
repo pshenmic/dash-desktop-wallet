@@ -41,7 +41,7 @@ export function nextReceivePlatformAddress(
 }
 
 export function receiveCoreAddresses(addresses: WalletAddressDto[]): WalletAddressDto[] {
-  return addresses.filter((address) => !address.isUsed && address.txCount === 0 && address.balance === 0n)
+  return addresses.filter((address) => !address.isLocked && !address.isUsed && address.txCount === 0 && address.balance === 0n)
 }
 
 export function defaultReceiveCoreAddress(

@@ -54,6 +54,19 @@ process hears locks even in the default `rpc` mode.
   timeoutMs)`, which `AssetLockService` uses as a backstop; they also feed
   `markChainlockedUpTo`.
 
+## Locked addresses
+
+A user lock (`setAddressLocked`) is the `addresses.is_locked` column. Both
+providers read the set when they assemble UTXOs, so every coin on a locked
+address is listed with `isLocked: true` — including coins that arrive after the
+lock — and every selection path (`selectCoins`, `maxSelectableAmount`,
+`selectTransferInputs`) already skips locked coins. Unlocking one outpoint does
+not lift an address lock; the address must be unlocked.
+
+Locked addresses are also skipped when picking a change address, the asset-lock
+credit address, or the next receive address. A wallet whose change and receiving
+chains are all locked refuses rather than placing new funds on one.
+
 ## Incoming mempool txs (lock pool)
 
 Payments are spotted before any block carries them: `SyncService` matches TX invs

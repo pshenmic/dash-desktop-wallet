@@ -89,6 +89,15 @@ export interface DashscanAddressInfo {
   txCount: number
 }
 
+// One participant's collateral contribution, in duffs. refundAddress is the
+// immutable principal refund; rewardAddress falls back to it.
+export interface DashscanMasternodeShare {
+  ownerAddress: string
+  amountDuffs: number
+  refundAddress: string | null
+  rewardAddress: string | null
+}
+
 // /masternodes, straight from Core's `masternodelist json`. `outpoint` is the
 // collateral as `txid-vout`; `lastPaidTime` is an ISO date, the epoch for never.
 export interface DashscanMasternode {
@@ -100,12 +109,34 @@ export interface DashscanMasternode {
   posPenaltyScore: number
   lastPaidTime: string
   lastPaidBlock: number
-  ownerAddress: string
+  // An array when a shared node has several owners; an indexer without the
+  // share table serves them comma-joined instead.
+  ownerAddress: string | string[] | null
   votingAddress: string
   collateralAddress: string
   pubKeyOperator: string
-  outpoint: string
+  outpoint: string | null
   platformNodeId: string | null
   platformP2PPort: number | null
   platformHTTPPort: number | null
+  // Absent until the shared-masternode index is deployed; empty for a regular node.
+  shares?: DashscanMasternodeShare[] | null
+}
+
+// /governance/proposals, every governance object Core holds, unpaged. Counts are
+// funding votes, weighted; creationTime is an ISO date.
+export interface DashscanProposal {
+  hash: string
+  objectType: string
+  name: string
+  url: string
+  paymentAddress: string
+  paymentAmount: number
+  startEpoch: number
+  endEpoch: number
+  creationTime: string
+  collateralHash: string
+  yesCount: number
+  noCount: number
+  abstainCount: number
 }

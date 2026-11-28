@@ -3,7 +3,9 @@ import {describe, it, expect, beforeEach, afterEach, vi} from 'vitest'
 vi.mock('dash-core-p2p', async () => {
   const {EventEmitter} = await import('events')
   return {
+    Message: class {},
     Messages: class {
+      add = (): void => undefined
       GetAddr = (): {command: string} => ({command: 'getaddr'})
       Ping = (): {command: string; nonce: Uint8Array} => ({command: 'ping', nonce: new Uint8Array(8)})
     },
@@ -42,6 +44,7 @@ interface FakePeer {
   sent: Array<{command: string; nonce?: Uint8Array}>
   sendMessage: (message: {command: string; nonce?: Uint8Array}) => void
   disconnect: () => void
+  on: () => void
 }
 
 const fakePeer = (host: string): FakePeer => {
@@ -49,6 +52,7 @@ const fakePeer = (host: string): FakePeer => {
     host, port: 19999, disconnects: 0, sent: [],
     sendMessage: (message: {command: string; nonce?: Uint8Array}) => { peer.sent.push(message) },
     disconnect: () => { peer.disconnects++ },
+    on: () => undefined,
   }
   return peer
 }
@@ -148,6 +152,7 @@ describe('pool recovery from a dead link', () => {
   it('asks the OS to probe peer sockets', () => {
     const calls: Array<[boolean, number]> = []
     raw(service).emit('peerconnect', {
+      on: () => undefined,
       socket: {
         setNoDelay: () => undefined,
         setKeepAlive: (on: boolean, delay: number) => { calls.push([on, delay]) },

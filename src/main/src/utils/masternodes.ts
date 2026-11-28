@@ -1,35 +1,47 @@
 import {bytesToHex, hexToBytes} from '@noble/hashes/utils.js'
+import {bls} from 'dash-core-sdk'
 import {MASTERNODE_KEY_CHAINS} from '../constants/addresses'
-import {MASTERNODE_COLLATERAL_DUFFS} from '../constants/chain'
+import {DUFFS_PER_DASH, MASTERNODE_COLLATERAL_DUFFS, UNKNOWN_MASTERNODE_STATUS, UNKNOWN_MASTERNODE_TYPE} from '../constants/chain'
 import {DerivedAddress} from '../types/AddressWindow'
 import {DashscanMasternode} from '../types/Dashscan'
 import {CoreSpendSource, ListedUtxo, SelectableUtxo} from '../types/CoinSelection'
 import {
   ImportedMasternodeKey,
+  ListedMasternodes,
   Masternode,
   MasternodeCollateral,
+  MasternodeKeyChain,
   MasternodeKeyFilter,
+  MasternodeRegistration,
+  MasternodeShare,
   NetworkMasternode,
   OwnedCollateral,
+  OwnedMasternodeShare,
 } from '../types/Masternode'
 import {UTXO} from '../types/UTXO'
-import {legacyG1} from './masternodeKeys'
 
 export function networkMasternode(row: DashscanMasternode): NetworkMasternode {
-  const [collateralTxid, collateralVout] = row.outpoint.split('-')
-  // A shared node's owner and payee are comma-joined share lists; no amounts are served.
-  const shared = row.ownerAddress.includes(',')
+  const [collateralTxid, collateralVout] = row.outpoint?.split('-') ?? []
+  const owners = row.ownerAddress == null ? []
+    : typeof row.ownerAddress === 'string'
+      ? row.ownerAddress.split(',').map(owner => owner.trim()).filter(Boolean)
+      : row.ownerAddress
+  const shares = row.shares?.map(({ownerAddress, amountDuffs}) => ({ownerAddress, amountDuffs: BigInt(amountDuffs)})) ?? null
+  // An indexer without the share table serves a shared node's owners
+  // comma-joined, which still tells a shared node from a regular one.
+  const shared = owners.length > 1 || (shares?.length ?? 0) > 0
   return {
     proTxHash: row.proTxHash,
     type: row.type,
     status: row.status,
     posePenaltyScore: row.posPenaltyScore,
-    collateralTxid,
-    collateralVout: Number(collateralVout),
+    collateralTxid: collateralTxid ?? null,
+    collateralVout: collateralVout == null ? null : Number(collateralVout),
     collateralAddress: row.collateralAddress,
     serviceAddress: row.address,
     payeeAddress: shared ? null : row.payee,
-    ownerAddress: shared ? null : row.ownerAddress,
+    // A shared registration has no top-level owner key.
+    ownerAddress: shared ? null : owners[0] ?? null,
     votingAddress: row.votingAddress,
     operatorPublicKey: row.pubKeyOperator.toLowerCase(),
     platformNodeId: row.platformNodeId,
@@ -39,14 +51,14 @@ export function networkMasternode(row: DashscanMasternode): NetworkMasternode {
     lastPaidTime: Math.floor(Date.parse(row.lastPaidTime) / 1000),
     registeredHeight: null,
     isShared: shared,
-    shares: null,
+    shares,
   }
 }
 
 // What a derived key is listed as. An operator key may be registered in either
 // BLS encoding, so both are searched.
 export function masternodeFilterValues(chain: MasternodeKeyFilter, address: string): string[] {
-  return chain === 'operator' ? [address, bytesToHex(legacyG1(hexToBytes(address)))] : [address]
+  return chain === 'operator' ? [address, bytesToHex(bls.basicToLegacyPublicKey(hexToBytes(address)))] : [address]
 }
 
 // The values a filter searches the node by. The owner chain also searches the
@@ -82,13 +94,93 @@ export function matchMasternodeKeys(chain: MasternodeKeyFilter, derived: Derived
   return matches
 }
 
-export function carriesKey(node: NetworkMasternode, {role, publicKey}: ImportedMasternodeKey): boolean {
+// The iOS wallet's rule: the lowest index no listed node carries on any of `chains`.
+// Every node carrying a derived key is one of ours, so ours are the ones to read.
+export function unusedKeyIndex(owned: Masternode[], ...chains: MasternodeKeyChain[]): number {
+  const used = new Set(owned.flatMap(node => chains.map(chain => node[`${chain}KeyIndex` as const])))
+  let index = 0
+  while (used.has(index)) index++
+  return index
+}
+
+// Dashscan keeps a row for every node it ever listed, so the network's own list
+// decides. Only one asked for after the node was first seen can say it is gone.
+export function existingMasternodes(
+  owned: Masternode[],
+  listed: ListedMasternodes | null,
+  firstSeen: Map<string, number>,
+): {existing: Masternode[]; unsettled: boolean} {
+  const isListed = (node: Masternode): boolean => listed?.proTxHashes.has(node.proTxHash) ?? false
+  const decided = (node: Masternode): boolean => listed != null && listed.askedAt > (firstSeen.get(node.proTxHash) ?? Infinity)
+  const existing = owned.filter(node => isListed(node) || !decided(node))
+  return {existing, unsettled: existing.some(node => !isListed(node))}
+}
+
+// Core takes a collateral from the UTXO set alone, never the mempool, and only
+// at the exact amount of the node's type.
+export function requireCollateral(
+  utxos: UTXO[],
+  collaterals: MasternodeCollateral[],
+  {type, collateral: {txid, vout}}: Pick<MasternodeRegistration, 'type' | 'collateral'>,
+): UTXO {
+  const coin = utxos.find(({txId, vOut}) => txId === txid && vOut === vout)
+  if (coin == null) throw new Error('The collateral is not an unspent coin of this wallet')
+  if (coin.height === 0) throw new Error('The collateral needs a confirmation first: Core does not accept a mempool output as collateral')
+  if (coin.satoshis !== MASTERNODE_COLLATERAL_DUFFS[type]) {
+    throw new Error(`A ${type} masternode's collateral is exactly ${MASTERNODE_COLLATERAL_DUFFS[type] / DUFFS_PER_DASH} DASH`)
+  }
+  if (collaterals.some(row => row.txid === txid && row.vout === vout)) throw new Error('This coin is already a masternode collateral')
+  return coin
+}
+
+// Null is a payout the list has not given yet, which an update would have to restate.
+export function requirePayout(payoutAddress: string | null, ownerAddress: string, votingAddress: string): string {
+  if (payoutAddress == null) throw new Error('The current payout is not known yet; pass a payout address')
+  if (payoutAddress === ownerAddress || payoutAddress === votingAddress) throw new Error('The payout may not pay the owner or voting key')
+  return payoutAddress
+}
+
+// A node whose owner key the wallet derives, which is what lets it sign as owner.
+// A shared node's registrar rotates only by every share owner signing together.
+export function ownerNode(owned: Masternode[], proTxHash: string): Masternode & {ownerKeyIndex: number} {
+  const node = owned.find(entry => entry.proTxHash === proTxHash)
+  if (node == null) throw new Error('Not a masternode of this wallet')
+  const {ownerKeyIndex} = node
+  if (ownerKeyIndex == null) throw new Error("This wallet does not derive the masternode's owner key")
+  if (node.isShared) throw new Error('A shared masternode needs every share owner to sign an update')
+  return {...node, ownerKeyIndex}
+}
+
+// A node whose service the operator signs for. The key may be seed-derived or
+// imported, so the index is not required here; the signer decides.
+export function operatedNode(owned: Masternode[], proTxHash: string): Masternode {
+  const node = owned.find(entry => entry.proTxHash === proTxHash)
+  if (node == null) throw new Error('Not a masternode of this wallet')
+  return node
+}
+
+// A revoked shared node's registrar comes back only by every share owner
+// signing a ProUpSharedRegTx, which this wallet cannot do.
+export function revocableNode(owned: Masternode[], proTxHash: string): Masternode {
+  const node = operatedNode(owned, proTxHash)
+  if (node.isShared) throw new Error('A shared masternode cannot be revoked: restoring it needs every share owner')
+  return node
+}
+
+export function carriesKey(node: NetworkMasternode, {role, publicKey}: Pick<ImportedMasternodeKey, 'role' | 'publicKey'>): boolean {
   const values = masternodeFilterValues(role, publicKey)
   return nodeKeyValues(role, node).some(key => values.includes(key))
 }
 
+// The imported keys none of the listed nodes carries. A key can be unmatched
+// while its registration is still indexing, so this is advisory — the UI offers
+// removal rather than dropping the key silently.
+export function unmatchedImportedKeys(imported: ImportedMasternodeKey[], nodes: NetworkMasternode[]): ImportedMasternodeKey[] {
+  return imported.filter(key => !nodes.some(node => carriesKey(node, key)))
+}
+
 export function collateralUtxos(utxos: UTXO[]): UTXO[] {
-  return utxos.filter(utxo => MASTERNODE_COLLATERAL_DUFFS.includes(utxo.satoshis))
+  return utxos.filter(utxo => Object.values(MASTERNODE_COLLATERAL_DUFFS).includes(utxo.satoshis))
 }
 
 // What a discovery run stores for each owned node. A p2p list knows a node's
@@ -110,6 +202,38 @@ export function collateralsToStore(owned: Masternode[], stored: MasternodeCollat
 export function ownedCollaterals(stored: MasternodeCollateral[], listed: Masternode[]): OwnedCollateral[] {
   const addresses = new Map(listed.map(node => [`${node.collateralTxid}:${node.collateralVout}`, node.collateralAddress]))
   return stored.map(({proTxHash, txid, vout}) => ({proTxHash, txid, vout, address: addresses.get(`${txid}:${vout}`) ?? null}))
+}
+
+// The nodes a previous run stored, for display while this run's list has not
+// answered. The status and service are the network's to give: unknown, not stale.
+export function storedMasternodes(stored: MasternodeCollateral[]): Masternode[] {
+  return stored.map(({proTxHash, txid, vout}) => ({
+    proTxHash,
+    type: UNKNOWN_MASTERNODE_TYPE,
+    status: UNKNOWN_MASTERNODE_STATUS,
+    posePenaltyScore: null,
+    collateralTxid: txid,
+    collateralVout: vout,
+    collateralAddress: null,
+    serviceAddress: null,
+    payeeAddress: null,
+    ownerAddress: null,
+    votingAddress: '',
+    operatorPublicKey: '',
+    platformNodeId: null,
+    platformP2PPort: null,
+    platformHttpPort: null,
+    lastPaidBlock: null,
+    lastPaidTime: null,
+    registeredHeight: null,
+    isShared: null,
+    shares: null,
+    ownerKeyIndex: null,
+    votingKeyIndex: null,
+    operatorKeyIndex: null,
+    importedRoles: [],
+    importedSigningRoles: [],
+  }))
 }
 
 // By outpoint: another output of the same transaction is an ordinary coin.
@@ -141,21 +265,32 @@ export function ownedMasternodes(
   ownerIndexes: Map<string, number>,
 ): Masternode[] {
   const outpoints = new Set(collateral.map(({txId, vOut}) => `${txId}:${vOut}`))
+  const matched = new Set(Object.values(matches).flatMap(byNode => [...byNode.keys()]))
+  const importedOwners = new Map(imported
+    .filter(({role}) => role === 'owner')
+    .map(key => [key.publicKey, key]))
+
+  const ownedShare = (share: MasternodeShare): OwnedMasternodeShare => {
+    const keyIndex = ownerIndexes.get(share.ownerAddress) ?? null
+    const importedKey = importedOwners.get(share.ownerAddress)
+    return {...share, keyIndex, imported: importedKey != null, canSign: keyIndex != null || importedKey?.hasPrivateKey === true}
+  }
+
   const unique = new Map(nodes.map(node => [node.proTxHash, node]))
   return [...unique.values()]
-    .map(node => ({
-      ...node,
-      ownerKeyIndex: matches.owner.get(node.proTxHash) ?? null,
-      votingKeyIndex: matches.voting.get(node.proTxHash) ?? null,
-      operatorKeyIndex: matches.operator.get(node.proTxHash) ?? null,
-      importedRoles: MASTERNODE_KEY_CHAINS.filter(role => imported.some(key => key.role === role && carriesKey(node, key))),
-      shares: node.shares?.map(share => ({
-        ...share,
-        keyIndex: ownerIndexes.get(share.ownerAddress) ?? null,
-        imported: imported.some(key => key.role === 'owner' && key.publicKey === share.ownerAddress),
-      })) ?? null,
-    }))
+    .map(node => {
+      const carried = imported.filter(key => carriesKey(node, key))
+      return {
+        ...node,
+        ownerKeyIndex: matches.owner.get(node.proTxHash) ?? null,
+        votingKeyIndex: matches.voting.get(node.proTxHash) ?? null,
+        operatorKeyIndex: matches.operator.get(node.proTxHash) ?? null,
+        importedRoles: MASTERNODE_KEY_CHAINS.filter(role => carried.some(key => key.role === role)),
+        importedSigningRoles: MASTERNODE_KEY_CHAINS.filter(role => carried.some(key => key.role === role && key.hasPrivateKey)),
+        shares: node.shares?.map(ownedShare) ?? null,
+      }
+    })
     .filter(node => outpoints.has(`${node.collateralTxid}:${node.collateralVout}`)
       || node.importedRoles.length > 0
-      || Object.values(matches).some(chainMatches => chainMatches.has(node.proTxHash)))
+      || matched.has(node.proTxHash))
 }
