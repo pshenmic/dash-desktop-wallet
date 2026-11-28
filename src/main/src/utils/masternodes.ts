@@ -13,8 +13,10 @@ import {
   MasternodeKeyChain,
   MasternodeKeyFilter,
   MasternodeRegistration,
+  MasternodeShare,
   NetworkMasternode,
   OwnedCollateral,
+  OwnedMasternodeShare,
 } from '../types/Masternode'
 import {UTXO} from '../types/UTXO'
 
@@ -263,22 +265,32 @@ export function ownedMasternodes(
   ownerIndexes: Map<string, number>,
 ): Masternode[] {
   const outpoints = new Set(collateral.map(({txId, vOut}) => `${txId}:${vOut}`))
+  const matched = new Set(Object.values(matches).flatMap(byNode => [...byNode.keys()]))
+  const importedOwners = new Map(imported
+    .filter(({role}) => role === 'owner')
+    .map(key => [key.publicKey, key]))
+
+  const ownedShare = (share: MasternodeShare): OwnedMasternodeShare => {
+    const keyIndex = ownerIndexes.get(share.ownerAddress) ?? null
+    const importedKey = importedOwners.get(share.ownerAddress)
+    return {...share, keyIndex, imported: importedKey != null, canSign: keyIndex != null || importedKey?.hasPrivateKey === true}
+  }
+
   const unique = new Map(nodes.map(node => [node.proTxHash, node]))
   return [...unique.values()]
-    .map(node => ({
-      ...node,
-      ownerKeyIndex: matches.owner.get(node.proTxHash) ?? null,
-      votingKeyIndex: matches.voting.get(node.proTxHash) ?? null,
-      operatorKeyIndex: matches.operator.get(node.proTxHash) ?? null,
-      importedRoles: MASTERNODE_KEY_CHAINS.filter(role => imported.some(key => key.role === role && carriesKey(node, key))),
-      importedSigningRoles: MASTERNODE_KEY_CHAINS.filter(role => imported.some(key => key.role === role && key.hasPrivateKey && carriesKey(node, key))),
-      shares: node.shares?.map(share => {
-        const keyIndex = ownerIndexes.get(share.ownerAddress) ?? null
-        const importedKey = imported.find(key => key.role === 'owner' && key.publicKey === share.ownerAddress)
-        return {...share, keyIndex, imported: importedKey != null, canSign: keyIndex != null || importedKey?.hasPrivateKey === true}
-      }) ?? null,
-    }))
+    .map(node => {
+      const carried = imported.filter(key => carriesKey(node, key))
+      return {
+        ...node,
+        ownerKeyIndex: matches.owner.get(node.proTxHash) ?? null,
+        votingKeyIndex: matches.voting.get(node.proTxHash) ?? null,
+        operatorKeyIndex: matches.operator.get(node.proTxHash) ?? null,
+        importedRoles: MASTERNODE_KEY_CHAINS.filter(role => carried.some(key => key.role === role)),
+        importedSigningRoles: MASTERNODE_KEY_CHAINS.filter(role => carried.some(key => key.role === role && key.hasPrivateKey)),
+        shares: node.shares?.map(ownedShare) ?? null,
+      }
+    })
     .filter(node => outpoints.has(`${node.collateralTxid}:${node.collateralVout}`)
       || node.importedRoles.length > 0
-      || Object.values(matches).some(chainMatches => chainMatches.has(node.proTxHash)))
+      || matched.has(node.proTxHash))
 }
