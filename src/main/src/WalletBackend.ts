@@ -220,7 +220,7 @@ export class WalletBackend {
     }
 
     registerHandler('createWallet', new CreateWalletHandler(this.walletService, this.shieldedService).handle)
-    registerHandler('deleteWallet', new DeleteWalletHandler(this.walletService).handle)
+    registerHandler('deleteWallet', new DeleteWalletHandler(this.walletService, this.masternodeService).handle)
     registerHandler('getAllWallets', new GetAllWalletsHandler(this.walletService).handle)
     registerHandler('selectWallet', new SelectWallet(this.walletService, this.coreDiscoveryService).handle)
     registerHandler('getWalletBalance', new GetWalletBalance(this.walletService).handle)
@@ -469,7 +469,7 @@ export class WalletBackend {
     // A p2p list arrives on its own schedule, with the block that changed a node, so it is matched at once.
     const rediscoverMasternodes = (network: Network): void => {
       walletDAO.getSelectedWallet()
-        .then(selected => selected?.network === network ? masternodeService.discover(selected.walletId) : undefined)
+        .then(selected => selected?.network === network ? masternodeService.rediscover(selected.walletId) : undefined)
         .catch(err => discoveryLog.error('masternode discovery failed:', err))
     }
     this.walletSyncService.onMasternodeList = rediscoverMasternodes

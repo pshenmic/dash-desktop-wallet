@@ -87,7 +87,7 @@ import {
   sharedRegistrationShares,
   signSharedRegistrationConsent,
 } from '../../utils/sharedMasternodeSigning'
-import {EVONODE_STATUS_TIMEOUT_MS} from '../../constants/dapi'
+import {EVONODE_STATUS_REFRESH_MS, EVONODE_STATUS_TIMEOUT_MS} from '../../constants/dapi'
 import {Network} from '../../types/Network'
 import {coreSDK} from '../../utils/coreSDK'
 import {Logger} from '../../utils/logger'
@@ -111,6 +111,14 @@ export class MasternodeService {
   // Registrations still in the mempool: their identity rows must survive passes
   // that do not carry the node yet.
   private pendingIdentities = new Map<string, Set<string>>()
+  // One run per wallet: a tick, a new list and a key change can all ask at once.
+  private discoveryInflight = new Map<string, Promise<void>>()
+  // Wallet ids are random, never reused, so a deleted one can stay here. A run
+  // that started before the delete must not publish its answer after it.
+  private deletedWallets = new Set<string>()
+  // The PoSe score each evonode last reported over DAPI, with when it reported
+  // it: a p2p list carries none, so a fresh check is an HTTPS request per node.
+  private evonodeScores = new Map<string, {checkedAt: number; score: number | null}>()
 
   constructor(
     walletDAO: WalletDAO,
@@ -171,7 +179,7 @@ export class MasternodeService {
     await this.masternodeKeyDAO.saveImportedKey(walletId, key, encryptedPrivateKey)
 
     log.info(`wallet ${walletId}: imported a ${role} key`)
-    await this.discover(walletId)
+    await this.rediscover(walletId)
 
     return this.listed.get(walletId)?.filter(node => carriesKey(node, key)) ?? null
   }
@@ -190,9 +198,10 @@ export class MasternodeService {
   }
 
   // Imported keys no listed node carries, surfaced so the user can remove stale
-  // keys. Null while no list has arrived — not "all unmatched".
+  // keys. Null while no list has arrived — not "all unmatched". A run in flight
+  // answers shortly, and holding the panel for its requests buys nothing.
   async getUnmatchedImportedKeys(walletId: string): Promise<ImportedMasternodeKey[] | null> {
-    if (!this.listed.has(walletId)) await this.discover(walletId)
+    if (!this.listed.has(walletId) && !this.discoveryInflight.has(walletId)) await this.discover(walletId)
     const listed = this.listed.get(walletId)
     if (listed == null) return null
     return unmatchedImportedKeys(await this.masternodeKeyDAO.getImportedKeys(walletId), listed)
@@ -442,7 +451,7 @@ export class MasternodeService {
   async removeKey(walletId: string, key: ImportedMasternodeKey): Promise<void> {
     await this.masternodeKeyDAO.removeImportedKey(walletId, key)
     log.info(`wallet ${walletId}: removed a ${key.role} key`)
-    await this.discover(walletId)
+    await this.rediscover(walletId)
   }
 
   // Rebuilds the registration from this wallet's own coins and refuses unless it
@@ -887,9 +896,34 @@ export class MasternodeService {
     }
   }
 
+  // A run in flight already answers this ask, so a second one would only repeat
+  // its requests.
+  discover(walletId: string): Promise<void> {
+    const existing = this.discoveryInflight.get(walletId)
+    if (existing != null) return existing
+    const run = this.runDiscovery(walletId).finally(() => this.discoveryInflight.delete(walletId))
+    this.discoveryInflight.set(walletId, run)
+    return run
+  }
+
+  // After a key change or a newly arrived list, the run in flight may have read
+  // the state from before it: queue a fresh pass behind it instead of joining it.
+  rediscover(walletId: string): Promise<void> {
+    const existing = this.discoveryInflight.get(walletId)
+    if (existing == null) return this.discover(walletId)
+    return existing.catch(() => {}).then(() => this.discover(walletId))
+  }
+
+  forgetWallet(walletId: string): void {
+    this.deletedWallets.add(walletId)
+    this.listed.delete(walletId)
+    this.pendingIdentities.delete(walletId)
+    this.discoveryInflight.delete(walletId)
+  }
+
   // Leaves the stored collaterals as they are when the source has no masternode
   // list or a request fails, so a known collateral is never forgotten by an outage.
-  async discover(walletId: string): Promise<void> {
+  private async runDiscovery(walletId: string): Promise<void> {
     const wallet = await requireWallet(this.walletDAO, walletId)
     const [keys, imported] = await Promise.all([
       this.masternodeKeyDAO.getKeys(walletId),
@@ -898,31 +932,19 @@ export class MasternodeService {
 
     const provider = this.providers.forWallet(walletId, wallet.network)
     const collateral = collateralUtxos(await provider.getWalletUtxos())
-    const found = await provider.getMasternodes('collateral', [...new Set(collateral.map(({address}) => address))])
+    const [found, walks] = await Promise.all([
+      provider.getMasternodes('collateral', [...new Set(collateral.map(({address}) => address))]),
+      Promise.all(MASTERNODE_WALKED_CHAINS.map(chain => this.walkKeyChain(provider, wallet.network, keys, imported, chain))),
+    ])
     if (found == null) return
 
     const nodes: NetworkMasternode[] = [...found]
     const matches = {} as Record<MasternodeKeyFilter, Map<string, number>>
     const ownerIndexes = new Map<string, number>()
-    for (const chain of MASTERNODE_WALKED_CHAINS) {
-      const chainMatches = matches[chain] = new Map<string, number>()
-      const importedValues = imported.filter(({role}) => role === chain)
-        .flatMap(({publicKey}) => masternodeFilterValues(chain, publicKey))
-      nodes.push(...await provider.getMasternodes(chain, importedValues) ?? [])
-      // A wallet created before the key tables gets its keys at the next password check.
-      if (keys == null) continue
-      await runAddressWindow(masternodeKeyDeriver(keys, wallet.network, chain), {
-        scan: async () => null,
-        probe: async derived => {
-          if (chain === 'owner') for (const {index, address} of derived) ownerIndexes.set(address, index)
-          const listed = await provider.getMasternodes(chain, derived.flatMap(({address}) => masternodeFilterValues(chain, address))) ?? []
-          nodes.push(...listed)
-          const probeMatches = matchMasternodeKeys(chain, derived, listed)
-          probeMatches.forEach((index, proTxHash) => chainMatches.set(proTxHash, index))
-          const used = new Set(probeMatches.values())
-          return derived.map(({index}) => ({index, isUsed: used.has(index)}))
-        },
-      }, memoryWindowStore(), MASTERNODE_KEY_WINDOW)
+    for (const {chain, nodes: chainNodes, matches: chainMatches, ownerIndexes: chainOwners} of walks) {
+      nodes.push(...chainNodes)
+      matches[chain] = chainMatches
+      chainOwners.forEach((index, address) => ownerIndexes.set(address, index))
     }
 
     const candidates = ownedMasternodes(nodes, matches, imported, collateral, ownerIndexes)
@@ -931,6 +953,7 @@ export class MasternodeService {
     const {existing, unsettled} = existingMasternodes(candidates, this.walletSyncService.getListedMasternodes(wallet.network), this.firstSeen)
     if (unsettled) this.walletSyncService.refreshListedMasternodes()
     const owned = await Promise.all(existing.map(node => this.withEvonodeStatus(node, wallet.network)))
+    if (this.deletedWallets.has(walletId)) return
     const stored = await this.masternodeDAO.getCollaterals(walletId)
     const followed = new Set(stored.filter(row => row.followed).map(({proTxHash}) => proTxHash))
     const followedNow = await provider.watchMasternodes(owned, owned.filter(({proTxHash}) => !followed.has(proTxHash)))
@@ -948,18 +971,60 @@ export class MasternodeService {
     log.debug(`wallet ${walletId}: ${owned.length} masternode(s)`)
   }
 
+  // One key chain's search: the imported values in one filter, then the account's
+  // own gap walk. Each chain runs beside the others, since they only share the
+  // owner chain's index map.
+  private async walkKeyChain(
+    provider: WalletProvider,
+    network: Network,
+    keys: MasternodeKeys | null,
+    imported: ImportedMasternodeKey[],
+    chain: MasternodeKeyFilter,
+  ): Promise<{chain: MasternodeKeyFilter; nodes: NetworkMasternode[]; matches: Map<string, number>; ownerIndexes: Map<string, number>}> {
+    const nodes: NetworkMasternode[] = []
+    const matches = new Map<string, number>()
+    const ownerIndexes = new Map<string, number>()
+    const importedValues = imported.filter(({role}) => role === chain)
+      .flatMap(({publicKey}) => masternodeFilterValues(chain, publicKey))
+    nodes.push(...await provider.getMasternodes(chain, importedValues) ?? [])
+    // A wallet created before the key tables gets its keys at the next password check.
+    if (keys != null) {
+      await runAddressWindow(masternodeKeyDeriver(keys, network, chain), {
+        scan: async () => null,
+        probe: async derived => {
+          if (chain === 'owner') for (const {index, address} of derived) ownerIndexes.set(address, index)
+          const listed = await provider.getMasternodes(chain, derived.flatMap(({address}) => masternodeFilterValues(chain, address))) ?? []
+          nodes.push(...listed)
+          const probeMatches = matchMasternodeKeys(chain, derived, listed)
+          probeMatches.forEach((index, proTxHash) => matches.set(proTxHash, index))
+          const used = new Set(probeMatches.values())
+          return derived.map(({index}) => ({index, isUsed: used.has(index)}))
+        },
+      }, memoryWindowStore(), MASTERNODE_KEY_WINDOW)
+    }
+    return {chain, nodes, matches, ownerIndexes}
+  }
+
   // A list without PoSe scores (p2p) leaves an evonode to report its own over
   // DAPI. Unverifiable, which is acceptable for a node the wallet holds a key of.
   private async withEvonodeStatus(node: Masternode, network: Network): Promise<Masternode> {
     if (node.type !== 'Evo' || node.posePenaltyScore != null || node.serviceAddress == null || node.platformHttpPort == null) return node
+    const key = `${node.proTxHash}:${node.serviceAddress}:${node.platformHttpPort}`
+    const cached = this.evonodeScores.get(key)
+    if (cached != null && Date.now() - cached.checkedAt < EVONODE_STATUS_REFRESH_MS) {
+      return cached.score == null ? node : {...node, posePenaltyScore: cached.score}
+    }
     const host = node.serviceAddress.slice(0, node.serviceAddress.lastIndexOf(':'))
     try {
       const {response} = await createCoreClient(`https://${host}:${node.platformHttpPort}`)
         .getMasternodeStatus({}, {timeout: EVONODE_STATUS_TIMEOUT_MS})
-      return bytesToHex(response.proTxHash) === node.proTxHash ? {...node, posePenaltyScore: response.posePenalty} : node
+      const score = bytesToHex(response.proTxHash) === node.proTxHash ? response.posePenalty : null
+      this.evonodeScores.set(key, {checkedAt: Date.now(), score})
+      return score == null ? node : {...node, posePenaltyScore: score}
     } catch (err) {
       log.debug(`${network} evonode ${node.proTxHash} did not report its status:`, err)
-      return node
+      this.evonodeScores.set(key, {checkedAt: Date.now(), score: cached?.score ?? null})
+      return cached?.score == null ? node : {...node, posePenaltyScore: cached.score}
     }
   }
 }

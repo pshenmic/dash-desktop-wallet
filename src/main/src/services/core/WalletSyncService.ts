@@ -127,6 +127,9 @@ export class WalletSyncService {
   // The peer settings the child is already running, per network, so an edit it
   // cannot read costs no rebuild.
   private sentPeerOverrides = new Map<Network, string>()
+  // The watchProviders command each wallet's child already holds, so a discovery
+  // tick that found nothing new costs no IPC.
+  private watchedProviderCommands = new Map<string, string>()
   // The worker emits cursorAdvanced at the end of every scan regardless of what
   // landed, so without this the resume marker steps over a block that failed to
   // reach SQL and its coins are gone until a full resetSync.
@@ -396,6 +399,9 @@ export class WalletSyncService {
     this.gapHeld.delete(walletId)
     this.activeWalletId = walletId
     this.activeNetwork = network
+    // The start command carries only the followed nodes, so the full watch set
+    // has to be sent again.
+    this.watchedProviderCommands.delete(walletId)
     // The persisted cursor is already capped below any gap, so this scan
     // re-covers it — the previous session's failures stop applying here.
     this.cursorGate.clear(walletId)
@@ -451,6 +457,7 @@ export class WalletSyncService {
   // Events and queued writes still in flight for the wallet would recreate its rows.
   forgetWallet = async (walletId: string): Promise<void> => {
     this.deletedWalletIds.add(walletId)
+    this.watchedProviderCommands.delete(walletId)
     if (this.activeWalletId === walletId) this.stopSync()
     if (this.lockListenWalletId === walletId && this.lockListenNetwork && this.child) {
       await this.sendLockListen(this.lockListenNetwork)
@@ -520,6 +527,9 @@ export class WalletSyncService {
       })
     }
     if (!this.child) return
+    const command = `${rewindToHeight ?? ''}:${[...new Set(proTxHashes)].sort().join(',')}`
+    if (this.watchedProviderCommands.get(walletId) === command) return
+    this.watchedProviderCommands.set(walletId, command)
     this.send({type: 'watchProviders', walletId, proTxHashes, rewindToHeight})
   }
 

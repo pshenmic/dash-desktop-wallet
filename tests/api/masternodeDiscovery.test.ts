@@ -412,4 +412,50 @@ describe('MasternodeService.discover', () => {
     await expect(masternodes.importKey(walletId, 'operator', 'not hex')).rejects.toThrow()
     expect(await masternodes.getImportedKeys(walletId)).toEqual([])
   })
+
+  // A tick, a new list and a key change can all ask at once; each run is a set
+  // of list requests, so the second ask joins the first.
+  it('answers concurrent discovery asks from one run', async () => {
+    current = source([node('a', {ownerAddress: key('owner', 0)})])
+
+    await Promise.all([
+      masternodes.discover(walletId),
+      masternodes.discover(walletId),
+      masternodes.discover(walletId),
+    ])
+
+    expect(watched).toHaveLength(1)
+    expect(await listed()).toEqual(['a'])
+  })
+
+  it('searches a key imported while a run is in flight in the pass behind it', async () => {
+    const voting = PrivateKey.fromBytes(new Uint8Array(32).fill(7), 'mainnet')
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    const inner = source([node('f', {votingAddress: voting.getAddress()})]).forWallet('w', 'mainnet')
+    current = {forWallet: () => ({...inner, getWalletUtxos: async () => { await gate; return [] }})} as unknown as WalletProviderFactory
+
+    const first = masternodes.discover(walletId)
+    const importing = masternodes.importKey(walletId, 'voting', voting.toWIF(), PASSWORD)
+    release()
+
+    await first
+    expect((await importing)!.map(({proTxHash, importedRoles}) => [proTxHash, importedRoles])).toEqual([['f', ['voting']]])
+    expect(watched).toHaveLength(2)
+  })
+
+  // The panel reads this on open; a run already under way answers shortly.
+  it('answers an unmatched-keys read with no list while a run is in flight', async () => {
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    const inner = source([node('a', {ownerAddress: key('owner', 0)})]).forWallet('w', 'mainnet')
+    current = {forWallet: () => ({...inner, getWalletUtxos: async () => { await gate; return [] }})} as unknown as WalletProviderFactory
+
+    const first = masternodes.discover(walletId)
+    expect(await masternodes.getUnmatchedImportedKeys(walletId)).toBeNull()
+
+    release()
+    await first
+    expect(await masternodes.getUnmatchedImportedKeys(walletId)).toEqual([])
+  })
 })
