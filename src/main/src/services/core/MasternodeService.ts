@@ -952,8 +952,8 @@ export class MasternodeService {
     for (const {proTxHash} of candidates) if (!this.firstSeen.has(proTxHash)) this.firstSeen.set(proTxHash, now)
     const {existing, unsettled} = existingMasternodes(candidates, this.walletSyncService.getListedMasternodes(wallet.network), this.firstSeen)
     if (unsettled) this.walletSyncService.refreshListedMasternodes()
-    const owned = await Promise.all(existing.map(node => this.withEvonodeStatus(node, wallet.network)))
     if (this.deletedWallets.has(walletId)) return
+    const owned = await Promise.all(existing.map(node => this.withEvonodeStatus(node, wallet.network)))
     const stored = await this.masternodeDAO.getCollaterals(walletId)
     const followed = new Set(stored.filter(row => row.followed).map(({proTxHash}) => proTxHash))
     const followedNow = await provider.watchMasternodes(owned, owned.filter(({proTxHash}) => !followed.has(proTxHash)))
@@ -1011,20 +1011,20 @@ export class MasternodeService {
     if (node.type !== 'Evo' || node.posePenaltyScore != null || node.serviceAddress == null || node.platformHttpPort == null) return node
     const key = `${node.proTxHash}:${node.serviceAddress}:${node.platformHttpPort}`
     const cached = this.evonodeScores.get(key)
-    if (cached != null && Date.now() - cached.checkedAt < EVONODE_STATUS_REFRESH_MS) {
-      return cached.score == null ? node : {...node, posePenaltyScore: cached.score}
-    }
+    const withScore = (score: number | null): Masternode =>
+      score == null ? node : {...node, posePenaltyScore: score}
+    if (cached != null && Date.now() - cached.checkedAt < EVONODE_STATUS_REFRESH_MS) return withScore(cached.score)
     const host = node.serviceAddress.slice(0, node.serviceAddress.lastIndexOf(':'))
     try {
       const {response} = await createCoreClient(`https://${host}:${node.platformHttpPort}`)
         .getMasternodeStatus({}, {timeout: EVONODE_STATUS_TIMEOUT_MS})
       const score = bytesToHex(response.proTxHash) === node.proTxHash ? response.posePenalty : null
       this.evonodeScores.set(key, {checkedAt: Date.now(), score})
-      return score == null ? node : {...node, posePenaltyScore: score}
+      return withScore(score)
     } catch (err) {
       log.debug(`${network} evonode ${node.proTxHash} did not report its status:`, err)
       this.evonodeScores.set(key, {checkedAt: Date.now(), score: cached?.score ?? null})
-      return cached?.score == null ? node : {...node, posePenaltyScore: cached.score}
+      return withScore(cached?.score ?? null)
     }
   }
 }

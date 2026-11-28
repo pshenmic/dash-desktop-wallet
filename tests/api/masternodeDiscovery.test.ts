@@ -47,6 +47,12 @@ function source(list: NetworkMasternode[] | null | Error, utxos: UTXO[] = [], fo
   return {forWallet: () => provider} as unknown as WalletProviderFactory
 }
 
+// A source whose UTXO read waits for `gate`, so a run can be held in flight.
+function gatedSource(list: NetworkMasternode[] | null, gate: Promise<void>): WalletProviderFactory {
+  const provider = source(list).forWallet('w', 'mainnet')
+  return {forWallet: () => ({...provider, getWalletUtxos: async () => { await gate; return [] }})} as unknown as WalletProviderFactory
+}
+
 describe('MasternodeService.discover', () => {
   let wired: Harness
   let walletId: string
@@ -432,8 +438,7 @@ describe('MasternodeService.discover', () => {
     const voting = PrivateKey.fromBytes(new Uint8Array(32).fill(7), 'mainnet')
     let release!: () => void
     const gate = new Promise<void>(resolve => { release = resolve })
-    const inner = source([node('f', {votingAddress: voting.getAddress()})]).forWallet('w', 'mainnet')
-    current = {forWallet: () => ({...inner, getWalletUtxos: async () => { await gate; return [] }})} as unknown as WalletProviderFactory
+    current = gatedSource([node('f', {votingAddress: voting.getAddress()})], gate)
 
     const first = masternodes.discover(walletId)
     const importing = masternodes.importKey(walletId, 'voting', voting.toWIF(), PASSWORD)
@@ -448,8 +453,7 @@ describe('MasternodeService.discover', () => {
   it('answers an unmatched-keys read with no list while a run is in flight', async () => {
     let release!: () => void
     const gate = new Promise<void>(resolve => { release = resolve })
-    const inner = source([node('a', {ownerAddress: key('owner', 0)})]).forWallet('w', 'mainnet')
-    current = {forWallet: () => ({...inner, getWalletUtxos: async () => { await gate; return [] }})} as unknown as WalletProviderFactory
+    current = gatedSource([node('a', {ownerAddress: key('owner', 0)})], gate)
 
     const first = masternodes.discover(walletId)
     expect(await masternodes.getUnmatchedImportedKeys(walletId)).toBeNull()
